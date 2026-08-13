@@ -1,0 +1,179 @@
+// Copyright 2026 David Cornejo
+// SPDX-License-Identifier: Apache-2.0
+
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <optional>
+
+#include <gtest/gtest.h>
+
+#include "yang/compiler.h"
+#include "yang/module_resolver.h"
+#include "yang/netconf_persistence.h"
+#include "yang/source_file.h"
+
+namespace yang::netconf {
+namespace {
+
+struct PersistenceFixture {
+  config::RuntimeSchema schema;
+  config::ConfigDocument initial;
+};
+
+std::optional<PersistenceFixture> BuildPersistenceFixture(
+    VectorDiagnosticSink* diagnostics) {
+  auto source = SourceFile::Create("persist.yang", R"yang(module persist {
+    yang-version 1.1; namespace "urn:persist"; prefix p;
+    leaf value { type string; mandatory true; }
+  })yang", *diagnostics);
+  if (!source) return std::nullopt;
+  InMemoryModuleRepository repository;
+  Compiler compiler(repository, *diagnostics);
+  auto compilation = compiler.Compile(source);
+  if (!compilation) return std::nullopt;
+  config::RuntimeSchema schema =
+      config::RuntimeSchemaBuilder::FromCompilation(*compilation);
+  auto initial = config::ParseDatastoreXml(
+      schema, R"xml(<value xmlns="urn:persist">old</value>)xml").document;
+  if (!initial) return std::nullopt;
+  return PersistenceFixture{std::move(schema), std::move(*initial)};
+}
+
+config::EditDocument ValueEdit(const config::RuntimeSchema& schema,
+                               std::string_view value) {
+  return *config::ParseEditXml(
+      schema, "<value xmlns=\"urn:persist\">" + std::string(value) +
+                  "</value>").document;
+}
+
+TEST(NetconfPersistenceTest, SavesAndRestoresAllDatastores) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildPersistenceFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager source(fixture->schema, fixture->initial);
+  ASSERT_TRUE(source.EditConfig(
+      {"one", Datastore::kCandidate,
+       {ValueEdit(fixture->schema, "candidate")}}).ok);
+  const std::filesystem::path path =
+      std::filesystem::temp_directory_path() / "yang-netconf-snapshot-test.json";
+  ASSERT_TRUE(SaveDatastoreSnapshot(path, source).ok);
+
+  DatastoreManager restored(fixture->schema, fixture->initial);
+  ASSERT_TRUE(LoadDatastoreSnapshot(path, restored).ok);
+  EXPECT_NE(restored.Read(Datastore::kCandidate).ToXml().find("candidate"),
+            std::string::npos);
+  EXPECT_NE(restored.Read(Datastore::kRunning).ToXml().find("old"),
+            std::string::npos);
+  std::error_code ignored;
+  std::filesystem::remove(path, ignored);
+}
+
+TEST(NetconfPersistenceTest, RestoresOrExpiresConfirmedCommitSafely) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildPersistenceFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  ASSERT_TRUE(stores.EditConfig(
+      {"one", Datastore::kCandidate,
+       {ValueEdit(fixture->schema, "temporary")}}).ok);
+  ConfirmedCommitOptions options;
+  options.persist = "token";
+  ASSERT_TRUE(stores.Commit("one", options).ok);
+  PersistentDatastoreState state = stores.ExportPersistentState();
+  ASSERT_TRUE(state.rollback_running_xml);
+  state.confirmation_expiry_unix_seconds =
+      std::chrono::duration_cast<std::chrono::seconds>(
+          std::chrono::system_clock::now().time_since_epoch()).count() - 1;
+  DatastoreManager restored(fixture->schema, fixture->initial);
+  ASSERT_TRUE(restored.RestorePersistentState(state).ok);
+  EXPECT_NE(restored.Read(Datastore::kRunning).ToXml().find("old"),
+            std::string::npos);
+  EXPECT_FALSE(restored.ExportPersistentState().rollback_running_xml);
+}
+
+TEST(NetconfPersistenceTest, RejectsCorruptAndSchemaInvalidSnapshots) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildPersistenceFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  const std::filesystem::path path =
+      std::filesystem::temp_directory_path() / "yang-netconf-corrupt-test.json";
+  {
+    std::ofstream output(path);
+    output << "not-json";
+  }
+  EXPECT_FALSE(LoadDatastoreSnapshot(path, stores).ok);
+  PersistentDatastoreState invalid = stores.ExportPersistentState();
+  invalid.running_xml = "<unknown/>";
+  EXPECT_FALSE(stores.RestorePersistentState(invalid).ok);
+  EXPECT_NE(stores.Read(Datastore::kRunning).ToXml().find("old"),
+            std::string::npos);
+  std::error_code ignored;
+  std::filesystem::remove(path, ignored);
+}
+
+TEST(NetconfPersistenceTest, RestoresSnapshotFromMemoryWithoutFilesystemIo) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildPersistenceFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  EXPECT_TRUE(LoadDatastoreSnapshotJson(R"json({
+    "version": 1,
+    "running": "<value xmlns=\"urn:persist\">memory</value>",
+    "candidate": "<value xmlns=\"urn:persist\">memory</value>",
+    "startup": "<value xmlns=\"urn:persist\">memory</value>"
+  })json", stores).ok);
+  EXPECT_NE(stores.Read(Datastore::kRunning).ToXml().find("memory"),
+            std::string::npos);
+  EXPECT_FALSE(LoadDatastoreSnapshotJson("not-json", stores).ok);
+}
+
+TEST(NetconfPersistenceTest, AtomicSnapshotSurvivesEveryInterruptedSaveStage) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildPersistenceFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager old_stores(fixture->schema, fixture->initial);
+  DatastoreManager new_stores(fixture->schema, fixture->initial);
+  ASSERT_TRUE(new_stores.EditConfig(
+      {"one", Datastore::kCandidate,
+       {ValueEdit(fixture->schema, "new")}}).ok);
+
+  const std::filesystem::path directory =
+      std::filesystem::temp_directory_path() /
+      ("yang-snapshot-faults-" +
+       std::to_string(std::chrono::steady_clock::now()
+                          .time_since_epoch().count()));
+  ASSERT_TRUE(std::filesystem::create_directory(directory));
+  const std::filesystem::path path = directory / "state.json";
+  ASSERT_TRUE(SaveDatastoreSnapshot(path, old_stores).ok);
+
+  const SnapshotSaveStage stages[] = {
+      SnapshotSaveStage::kTemporaryWritten,
+      SnapshotSaveStage::kTemporarySynchronized,
+      SnapshotSaveStage::kSnapshotReplaced,
+      SnapshotSaveStage::kDirectorySynchronized};
+  for (const SnapshotSaveStage interrupted_stage : stages) {
+    ASSERT_TRUE(SaveDatastoreSnapshot(path, old_stores).ok);
+    const PersistenceResult result = SaveDatastoreSnapshot(
+        path, new_stores, [interrupted_stage](SnapshotSaveStage stage) {
+          return stage != interrupted_stage;
+        });
+    EXPECT_FALSE(result.ok);
+
+    DatastoreManager recovered(fixture->schema, fixture->initial);
+    ASSERT_TRUE(LoadDatastoreSnapshot(path, recovered).ok);
+    const std::string candidate = recovered.Read(Datastore::kCandidate).ToXml();
+    if (interrupted_stage == SnapshotSaveStage::kTemporaryWritten ||
+        interrupted_stage == SnapshotSaveStage::kTemporarySynchronized) {
+      EXPECT_NE(candidate.find("old"), std::string::npos);
+    } else {
+      EXPECT_NE(candidate.find("new"), std::string::npos);
+    }
+  }
+  std::error_code ignored;
+  std::filesystem::remove_all(directory, ignored);
+}
+
+}  // namespace
+}  // namespace yang::netconf

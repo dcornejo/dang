@@ -1,0 +1,434 @@
+// Copyright 2026 David Cornejo
+// SPDX-License-Identifier: Apache-2.0
+
+#include "yang/netconf_datastore.h"
+
+#include <algorithm>
+#include <utility>
+
+namespace yang::netconf {
+namespace {
+
+TransactionResult Failure(config::ValidationCode code, std::string message,
+                          std::string tag, std::string path = {}) {
+  config::ValidationFinding finding;
+  finding.code = code;
+  finding.state = config::FindingState::kInvalid;
+  finding.message = std::move(message);
+  finding.netconf_error_tag = std::move(tag);
+  finding.instance_path = std::move(path);
+  return {false, {std::move(finding)}, {}};
+}
+
+}  // namespace
+
+DatastoreManager::DatastoreManager(
+    const config::RuntimeSchema& schema, config::ConfigDocument running,
+    std::optional<config::ConfigDocument> startup)
+    : schema_(schema), running_(std::move(running)), candidate_(running_),
+      startup_(startup.value_or(running_)) {}
+
+config::ConfigDocument DatastoreManager::Read(Datastore datastore) const {
+  std::lock_guard lock(mutex_);
+  return Get(datastore);
+}
+
+TransactionResult DatastoreManager::Lock(Datastore datastore,
+                                         std::string_view session) {
+  std::lock_guard lock(mutex_);
+  if (session.empty())
+    return Failure(config::ValidationCode::kInvalidValue,
+                   "a non-empty NETCONF session identifier is required",
+                   "invalid-value");
+  const auto found = locks_.find(datastore);
+  if (found != locks_.end() && found->second != session)
+    return Failure(config::ValidationCode::kInvalidValue,
+                   "datastore is locked by another session", "lock-denied");
+  locks_[datastore] = std::string(session);
+  return {true, {}, {}};
+}
+
+TransactionResult DatastoreManager::Unlock(Datastore datastore,
+                                           std::string_view session) {
+  std::lock_guard lock(mutex_);
+  const auto found = locks_.find(datastore);
+  if (found == locks_.end() || found->second != session)
+    return Failure(config::ValidationCode::kInvalidValue,
+                   "session does not own the datastore lock", "lock-denied");
+  locks_.erase(found);
+  return {true, {}, {}};
+}
+
+TransactionResult DatastoreManager::CheckWriteAccess(
+    Datastore datastore, std::string_view session) const {
+  const auto found = locks_.find(datastore);
+  if (found != locks_.end() && found->second != session)
+    return Failure(config::ValidationCode::kInvalidValue,
+                   "datastore is locked by another session", "lock-denied");
+  return {true, {}, {}};
+}
+
+TransactionResult DatastoreManager::ValidateDocument(
+    const config::ConfigDocument& document) const {
+  config::ConfigValidator validator;
+  config::ValidationResult checked = validator.Validate({schema_, document});
+  return {checked.valid && checked.complete, std::move(checked.findings), {}};
+}
+
+TransactionResult DatastoreManager::Validate(Datastore datastore) const {
+  std::lock_guard lock(mutex_);
+  return ValidateDocument(Get(datastore));
+}
+
+TransactionResult DatastoreManager::EditConfig(
+    const EditConfigRequest& request) {
+  std::lock_guard lock(mutex_);
+  if (TransactionResult access = CheckWriteAccess(request.target, request.session);
+      !access.ok) return access;
+  const config::ConfigDocument original = Get(request.target);
+  config::ConfigDocument working = original;
+  TransactionResult result{true, {}, {}};
+  config::ConfigEditor editor;
+  for (const config::EditDocument& edit : request.edits) {
+    const bool validate_each = request.test_option != TestOption::kSet;
+    config::EditResult applied = editor.Apply(
+        {schema_, working, edit, request.default_operation, nullptr,
+         validate_each});
+    if (!applied.candidate) {
+      result.ok = false;
+      result.errors.insert(result.errors.end(), applied.errors.begin(),
+                           applied.errors.end());
+      if (request.error_option == ErrorOption::kRollbackOnError) {
+        result.changes.clear();
+        working = original;
+        break;
+      }
+      if (request.error_option == ErrorOption::kStopOnError) break;
+      continue;
+    }
+    std::vector<config::ChangeEvent> exact_changes =
+        config::DiffConfigDocuments(schema_, working, *applied.candidate);
+    if (request.authorize_change) {
+      const auto denied = std::ranges::find_if(
+          exact_changes, [&](const config::ChangeEvent& change) {
+            return !request.authorize_change(change);
+          });
+      if (denied != applied.changes.end()) {
+        result.ok = false;
+        config::ValidationFinding finding;
+        finding.code = config::ValidationCode::kInvalidValue;
+        finding.state = config::FindingState::kInvalid;
+        finding.message = "access to the proposed datastore change is denied";
+        finding.instance_path = denied->instance_path;
+        finding.netconf_error_tag = "access-denied";
+        result.errors.push_back(std::move(finding));
+        if (request.error_option == ErrorOption::kRollbackOnError) {
+          result.changes.clear();
+          working = original;
+          break;
+        }
+        if (request.error_option == ErrorOption::kStopOnError) break;
+        continue;
+      }
+    }
+    working = std::move(*applied.candidate);
+    result.changes.insert(result.changes.end(), exact_changes.begin(),
+                          exact_changes.end());
+  }
+  if (request.test_option == TestOption::kTestThenSet && result.ok) {
+    TransactionResult checked = ValidateDocument(working);
+    if (!checked.ok) {
+      result.ok = false;
+      result.errors = std::move(checked.errors);
+      result.changes.clear();
+      working = original;
+    }
+  }
+  if (request.test_option != TestOption::kTestOnly &&
+      (result.ok || request.error_option != ErrorOption::kRollbackOnError)) {
+    Mutable(request.target) = std::move(working);
+  }
+  std::ranges::sort(result.changes, {}, &config::ChangeEvent::instance_path);
+  return result;
+}
+
+TransactionResult DatastoreManager::Commit(
+    std::string_view session,
+    std::optional<ConfirmedCommitOptions> confirmed,
+    std::function<bool(const config::ChangeEvent&)> authorize_change) {
+  std::lock_guard lock(mutex_);
+  if (TransactionResult access = CheckWriteAccess(Datastore::kCandidate, session);
+      !access.ok) return access;
+  if (TransactionResult access = CheckWriteAccess(Datastore::kRunning, session);
+      !access.ok) return access;
+  TransactionResult checked = ValidateDocument(candidate_);
+  if (!checked.ok) return checked;
+  std::vector<config::ChangeEvent> changes =
+      config::DiffConfigDocuments(schema_, running_, candidate_);
+  if (authorize_change) {
+    const auto denied = std::ranges::find_if(
+        changes, [&](const config::ChangeEvent& change) {
+          return !authorize_change(change);
+        });
+    if (denied != changes.end()) {
+      return Failure(config::ValidationCode::kInvalidValue,
+                     "access to the proposed commit change is denied",
+                     "access-denied", denied->instance_path);
+    }
+  }
+  if (confirmed) {
+    if (confirmed->timeout <= std::chrono::seconds::zero())
+      return Failure(config::ValidationCode::kInvalidValue,
+                     "confirmed-commit timeout must be positive",
+                     "invalid-value");
+    if (!rollback_running_) rollback_running_ = running_;
+    confirmation_deadline_ = Clock::now() + confirmed->timeout;
+    confirming_session_ = std::string(session);
+    persist_token_ = confirmed->persist;
+  } else {
+    rollback_running_.reset();
+    confirmation_deadline_.reset();
+    confirming_session_.reset();
+    persist_token_.reset();
+  }
+  running_ = candidate_;
+  return {true, {}, std::move(changes)};
+}
+
+TransactionResult DatastoreManager::ConfirmCommit(
+    std::string_view session, std::optional<std::string_view> persist_id) {
+  std::lock_guard lock(mutex_);
+  if (!rollback_running_)
+    return Failure(config::ValidationCode::kInvalidValue,
+                   "there is no pending confirmed commit", "operation-failed");
+  const bool authorized = persist_token_
+      ? persist_id && *persist_id == *persist_token_
+      : confirming_session_ && *confirming_session_ == session && !persist_id;
+  if (!authorized)
+    return Failure(config::ValidationCode::kInvalidValue,
+                   "confirmed-commit token or session does not match",
+                   "invalid-value");
+  rollback_running_.reset();
+  confirmation_deadline_.reset();
+  confirming_session_.reset();
+  persist_token_.reset();
+  candidate_ = running_;
+  return {true, {}, {}};
+}
+
+TransactionResult DatastoreManager::ContinueConfirmedCommit(
+    std::string_view session, std::string_view persist_id,
+    std::chrono::seconds timeout) {
+  std::lock_guard lock(mutex_);
+  if (!rollback_running_ || !persist_token_ || *persist_token_ != persist_id)
+    return Failure(config::ValidationCode::kInvalidValue,
+                   "confirmed-commit persist-id does not match",
+                   "invalid-value");
+  if (timeout <= std::chrono::seconds::zero())
+    return Failure(config::ValidationCode::kInvalidValue,
+                   "confirmed-commit timeout must be positive",
+                   "invalid-value");
+  if (TransactionResult access = CheckWriteAccess(Datastore::kCandidate, session);
+      !access.ok) return access;
+  if (TransactionResult access = CheckWriteAccess(Datastore::kRunning, session);
+      !access.ok) return access;
+  TransactionResult checked = ValidateDocument(candidate_);
+  if (!checked.ok) return checked;
+  running_ = candidate_;
+  confirmation_deadline_ = Clock::now() + timeout;
+  confirming_session_ = std::string(session);
+  return {true, {}, {}};
+}
+
+TransactionResult DatastoreManager::CancelCommit(
+    std::string_view session, std::optional<std::string_view> persist_id) {
+  std::lock_guard lock(mutex_);
+  if (!rollback_running_)
+    return Failure(config::ValidationCode::kInvalidValue,
+                   "there is no pending confirmed commit", "operation-failed");
+  const bool authorized = persist_token_
+      ? persist_id && *persist_id == *persist_token_
+      : confirming_session_ && *confirming_session_ == session && !persist_id;
+  if (!authorized)
+    return Failure(config::ValidationCode::kInvalidValue,
+                   "confirmed-commit token or session does not match",
+                   "invalid-value");
+  running_ = *rollback_running_;
+  candidate_ = running_;
+  rollback_running_.reset();
+  confirmation_deadline_.reset();
+  confirming_session_.reset();
+  persist_token_.reset();
+  return {true, {}, {}};
+}
+
+TransactionResult DatastoreManager::DiscardChanges(std::string_view session) {
+  std::lock_guard lock(mutex_);
+  if (TransactionResult access = CheckWriteAccess(Datastore::kCandidate, session);
+      !access.ok) return access;
+  candidate_ = running_;
+  return {true, {}, {}};
+}
+
+TransactionResult DatastoreManager::CopyConfig(std::string_view session,
+                                               Datastore source,
+                                               Datastore target,
+    std::function<bool(const config::ChangeEvent&)> authorize_change) {
+  std::lock_guard lock(mutex_);
+  if (source == target)
+    return Failure(config::ValidationCode::kInvalidValue,
+                   "copy-config source and target must be different",
+                   "invalid-value");
+  if (TransactionResult access = CheckWriteAccess(target, session); !access.ok)
+    return access;
+  std::vector<config::ChangeEvent> changes =
+      config::DiffConfigDocuments(schema_, Get(target), Get(source));
+  if (authorize_change) {
+    const auto denied = std::ranges::find_if(
+        changes, [&](const config::ChangeEvent& change) {
+          return !authorize_change(change);
+        });
+    if (denied != changes.end()) {
+      return Failure(config::ValidationCode::kInvalidValue,
+                     "access to the proposed copy-config change is denied",
+                     "access-denied", denied->instance_path);
+    }
+  }
+  Mutable(target) = Get(source);
+  return {true, {}, std::move(changes)};
+}
+
+TransactionResult DatastoreManager::DeleteConfig(std::string_view session,
+                                                 Datastore target) {
+  std::lock_guard lock(mutex_);
+  if (target != Datastore::kStartup)
+    return Failure(config::ValidationCode::kInvalidValue,
+                   "only the startup datastore can be deleted",
+                   "operation-not-supported");
+  if (TransactionResult access = CheckWriteAccess(target, session); !access.ok)
+    return access;
+  startup_ = config::ConfigDocument();
+  return {true, {}, {}};
+}
+
+void DatastoreManager::CloseSession(std::string_view session) {
+  std::lock_guard lock(mutex_);
+  for (auto iterator = locks_.begin(); iterator != locks_.end();) {
+    if (iterator->second == session) {
+      iterator = locks_.erase(iterator);
+    } else {
+      ++iterator;
+    }
+  }
+  if (rollback_running_ && !persist_token_ && confirming_session_ == session) {
+    running_ = *rollback_running_;
+    candidate_ = running_;
+    rollback_running_.reset();
+    confirmation_deadline_.reset();
+    confirming_session_.reset();
+  }
+}
+
+bool DatastoreManager::ProcessTimeouts(Clock::time_point now) {
+  std::lock_guard lock(mutex_);
+  if (!confirmation_deadline_ || now < *confirmation_deadline_) return false;
+  running_ = *rollback_running_;
+  candidate_ = running_;
+  rollback_running_.reset();
+  confirmation_deadline_.reset();
+  confirming_session_.reset();
+  persist_token_.reset();
+  return true;
+}
+
+PersistentDatastoreState DatastoreManager::ExportPersistentState() const {
+  std::lock_guard lock(mutex_);
+  PersistentDatastoreState state;
+  state.running_xml = running_.ToXml();
+  state.candidate_xml = candidate_.ToXml();
+  state.startup_xml = startup_.ToXml();
+  if (rollback_running_) state.rollback_running_xml = rollback_running_->ToXml();
+  if (confirmation_deadline_) {
+    const auto remaining = *confirmation_deadline_ - Clock::now();
+    const auto expiry = std::chrono::system_clock::now() + remaining;
+    state.confirmation_expiry_unix_seconds =
+        std::chrono::duration_cast<std::chrono::seconds>(
+            expiry.time_since_epoch()).count();
+  }
+  state.confirming_session = confirming_session_;
+  state.persist_token = persist_token_;
+  return state;
+}
+
+TransactionResult DatastoreManager::RestorePersistentState(
+    const PersistentDatastoreState& state) {
+  const auto parse = [&](std::string_view xml)
+      -> std::optional<config::ConfigDocument> {
+    if (xml.empty()) return config::ConfigDocument();
+    return config::ParseDatastoreXml(schema_, xml).document;
+  };
+  auto running = parse(state.running_xml);
+  auto candidate = parse(state.candidate_xml);
+  auto startup = parse(state.startup_xml);
+  auto rollback = state.rollback_running_xml
+      ? parse(*state.rollback_running_xml)
+      : std::optional<config::ConfigDocument>();
+  if (!running || !candidate || !startup ||
+      (state.rollback_running_xml && !rollback)) {
+    return Failure(config::ValidationCode::kMalformedXml,
+                   "persistent datastore snapshot cannot be parsed",
+                   "operation-failed");
+  }
+  if (!ValidateDocument(*running).ok ||
+      (!startup->roots().empty() && !ValidateDocument(*startup).ok) ||
+      (rollback && !ValidateDocument(*rollback).ok)) {
+    return Failure(config::ValidationCode::kInvalidValue,
+                   "persistent datastore snapshot fails schema validation",
+                   "operation-failed");
+  }
+  const bool pending = rollback.has_value();
+  if (pending != state.confirmation_expiry_unix_seconds.has_value()) {
+    return Failure(config::ValidationCode::kInvalidValue,
+                   "persistent confirmed-commit state is incomplete",
+                   "operation-failed");
+  }
+  std::lock_guard lock(mutex_);
+  locks_.clear();
+  running_ = std::move(*running);
+  candidate_ = std::move(*candidate);
+  startup_ = std::move(*startup);
+  rollback_running_ = std::move(rollback);
+  confirming_session_ = state.confirming_session;
+  persist_token_ = state.persist_token;
+  confirmation_deadline_.reset();
+  if (state.confirmation_expiry_unix_seconds) {
+    const auto expiry = std::chrono::system_clock::time_point(
+        std::chrono::seconds(*state.confirmation_expiry_unix_seconds));
+    const auto remaining = expiry - std::chrono::system_clock::now();
+    if (remaining <= std::chrono::system_clock::duration::zero()) {
+      running_ = *rollback_running_;
+      candidate_ = running_;
+      rollback_running_.reset();
+      confirming_session_.reset();
+      persist_token_.reset();
+    } else {
+      confirmation_deadline_ = Clock::now() +
+          std::chrono::duration_cast<Clock::duration>(remaining);
+    }
+  }
+  return {true, {}, {}};
+}
+
+config::ConfigDocument& DatastoreManager::Mutable(Datastore datastore) {
+  if (datastore == Datastore::kRunning) return running_;
+  if (datastore == Datastore::kCandidate) return candidate_;
+  return startup_;
+}
+
+const config::ConfigDocument& DatastoreManager::Get(Datastore datastore) const {
+  if (datastore == Datastore::kRunning) return running_;
+  if (datastore == Datastore::kCandidate) return candidate_;
+  return startup_;
+}
+
+}  // namespace yang::netconf

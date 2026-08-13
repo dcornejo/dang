@@ -1,0 +1,384 @@
+// Copyright 2026 David Cornejo
+// SPDX-License-Identifier: Apache-2.0
+
+#include <filesystem>
+#include <fstream>
+#include <map>
+#include <optional>
+
+#include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
+
+#include "yang/compiler.h"
+#include "yang/module_resolver.h"
+#include "yang/netconf_server.h"
+#include "yang/source_file.h"
+
+namespace yang::netconf {
+namespace {
+
+class MemoryUrlProvider final : public UrlDatastoreProvider {
+ public:
+  std::vector<std::string> Schemes() const override { return {"memory"}; }
+  UrlResult Read(std::string_view url) override {
+    const auto found = values.find(std::string(url));
+    return found == values.end() ? UrlResult{{}, "not found"}
+                                 : UrlResult{found->second, {}};
+  }
+  UrlResult Write(std::string_view url, std::string_view xml) override {
+    values[std::string(url)] = std::string(xml);
+    return {};
+  }
+  UrlResult Delete(std::string_view url) override {
+    values.erase(std::string(url));
+    return {};
+  }
+  std::map<std::string, std::string> values;
+};
+
+struct ServerFixture {
+  config::RuntimeSchema schema;
+  config::ConfigDocument initial;
+};
+
+std::optional<ServerFixture> BuildServerFixture(
+    VectorDiagnosticSink* diagnostics) {
+  auto source = SourceFile::Create("rpc.yang", R"yang(module rpc {
+    yang-version 1.1; namespace "urn:rpc-test"; prefix r;
+    container system { leaf hostname { type string; mandatory true; } }
+  })yang", *diagnostics);
+  if (!source) return std::nullopt;
+  InMemoryModuleRepository repository;
+  Compiler compiler(repository, *diagnostics);
+  auto compilation = compiler.Compile(source);
+  if (!compilation) return std::nullopt;
+  config::RuntimeSchema schema =
+      config::RuntimeSchemaBuilder::FromCompilation(*compilation);
+  auto initial = config::ParseDatastoreXml(
+      schema, R"xml(<system xmlns="urn:rpc-test"><hostname>old</hostname></system>)xml")
+                     .document;
+  if (!initial) return std::nullopt;
+  return ServerFixture{std::move(schema), std::move(*initial)};
+}
+
+TEST(NetconfServerTest, AdvertisesImplementedCapabilities) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NetconfServer server(stores);
+  const std::string hello = server.ServerHello(42);
+  EXPECT_NE(hello.find("<session-id>42</session-id>"), std::string::npos);
+  EXPECT_NE(hello.find("capability:candidate:1.0"), std::string::npos);
+  EXPECT_NE(hello.find("capability:confirmed-commit:1.1"), std::string::npos);
+  EXPECT_NE(hello.find("capability:xpath:1.0"), std::string::npos);
+}
+
+TEST(NetconfServerTest, AppliesXPathRetrievalFilter) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NetconfServer server(stores);
+  const RpcResponse selected = server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="xpath">
+      <get><filter type="xpath" xmlns:r="urn:rpc-test"
+                   select="/r:system/r:hostname"/></get>
+    </rpc>)xml");
+  EXPECT_NE(selected.xml.find("<r:hostname>old</r:hostname>"),
+            std::string::npos) << selected.xml;
+  const RpcResponse invalid = server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="bad-xpath">
+      <get><filter type="xpath" select="count(/*)"/></get>
+    </rpc>)xml");
+  EXPECT_NE(invalid.xml.find("invalid-value"), std::string::npos);
+}
+
+TEST(NetconfServerTest, DispatchesEditCommitAndGetConfig) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NetconfServer server(stores);
+  const RpcResponse edited = server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="101">
+      <edit-config><target><candidate/></target><config>
+        <system xmlns="urn:rpc-test"><hostname>new</hostname></system>
+      </config></edit-config>
+    </rpc>)xml");
+  EXPECT_NE(edited.xml.find("message-id=\"101\""), std::string::npos);
+  EXPECT_NE(edited.xml.find("<ok/>"), std::string::npos) << edited.xml;
+  EXPECT_NE(server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="102">
+      <commit/>
+    </rpc>)xml").xml.find("<ok/>"), std::string::npos);
+  const RpcResponse read = server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="103">
+      <get-config><source><running/></source></get-config>
+    </rpc>)xml");
+  EXPECT_NE(read.xml.find("<data>"), std::string::npos);
+  EXPECT_NE(read.xml.find(">new</"), std::string::npos);
+}
+
+TEST(NetconfServerTest, SerializesErrorsAndClosesSession) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NetconfServer server(stores);
+  const RpcResponse unsupported = server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="bad&amp;id">
+      <unknown/>
+    </rpc>)xml");
+  EXPECT_NE(unsupported.xml.find("message-id=\"bad&amp;id\""),
+            std::string::npos);
+  EXPECT_NE(unsupported.xml.find("operation-not-supported"), std::string::npos);
+  const RpcResponse close = server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="104">
+      <close-session/>
+    </rpc>)xml");
+  EXPECT_TRUE(close.close_session);
+  EXPECT_NE(close.xml.find("<ok/>"), std::string::npos);
+}
+
+TEST(NetconfServerTest, RejectsMalformedRpcAndInvalidOptions) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NetconfServer server(stores);
+  EXPECT_NE(server.Process("17", "<rpc>").xml.find("malformed-message"),
+            std::string::npos);
+  const RpcResponse invalid = server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="105">
+      <edit-config><target><candidate/></target>
+        <default-operation>bogus</default-operation><config/>
+      </edit-config>
+    </rpc>)xml");
+  EXPECT_NE(invalid.xml.find("invalid-value"), std::string::npos);
+  const RpcResponse wrong_namespace = server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="106">
+      <get xmlns="urn:not-netconf"/>
+    </rpc>)xml");
+  EXPECT_NE(wrong_namespace.xml.find("unknown-namespace"), std::string::npos);
+  const RpcResponse filtered = server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="107">
+      <get><filter/></get>
+    </rpc>)xml");
+  EXPECT_NE(filtered.xml.find("<data"), std::string::npos);
+  EXPECT_EQ(filtered.xml.find("<system"), std::string::npos);
+}
+
+TEST(NetconfServerTest, ReplaysRfc6241InteroperabilityVectors) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NetconfServer server(stores);
+  const std::filesystem::path path =
+      std::filesystem::path(YANG_TEST_SOURCE_DIR) / "fixtures" / "netconf" /
+      "rfc6241-vectors.json";
+  std::ifstream input(path);
+  ASSERT_TRUE(input);
+  const nlohmann::json corpus = nlohmann::json::parse(input);
+  for (const auto& vector : corpus.at("vectors")) {
+    SCOPED_TRACE(vector.at("name").get<std::string>());
+    const RpcResponse response = server.Process(
+        "interop-session", vector.at("request").get<std::string>());
+    for (const auto& expected : vector.at("expected")) {
+      EXPECT_NE(response.xml.find(expected.get<std::string>()), std::string::npos)
+          << response.xml;
+    }
+  }
+}
+
+TEST(NetconfServerTest, ContinuesPersistentConfirmedCommitSequence) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NetconfServer server(stores);
+  ASSERT_NE(server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="201">
+      <edit-config><target><candidate/></target><config>
+        <system xmlns="urn:rpc-test"><hostname>first</hostname></system>
+      </config></edit-config>
+    </rpc>)xml").xml.find("<ok/>"), std::string::npos);
+  ASSERT_NE(server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="202">
+      <commit><confirmed/><persist>token</persist></commit>
+    </rpc>)xml").xml.find("<ok/>"), std::string::npos);
+  ASSERT_NE(server.Process("18", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="203">
+      <edit-config><target><candidate/></target><config>
+        <system xmlns="urn:rpc-test"><hostname>second</hostname></system>
+      </config></edit-config>
+    </rpc>)xml").xml.find("<ok/>"), std::string::npos);
+  EXPECT_NE(server.Process("18", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="204">
+      <commit><confirmed/><persist-id>token</persist-id></commit>
+    </rpc>)xml").xml.find("<ok/>"), std::string::npos);
+  EXPECT_NE(server.Process("19", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="205">
+      <commit><persist-id>token</persist-id></commit>
+    </rpc>)xml").xml.find("<ok/>"), std::string::npos);
+  EXPECT_NE(stores.Read(Datastore::kRunning).ToXml().find(">second</"),
+            std::string::npos);
+}
+
+TEST(NetconfServerTest, CopiesCompleteInlineConfigurationAtomically) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NetconfServer server(stores);
+  const RpcResponse copied = server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="copy">
+      <copy-config><target><candidate/></target><source><config>
+        <system xmlns="urn:rpc-test"><hostname>inline</hostname></system>
+      </config></source></copy-config>
+    </rpc>)xml");
+  EXPECT_NE(copied.xml.find("<ok/>"), std::string::npos) << copied.xml;
+  EXPECT_NE(stores.Read(Datastore::kCandidate).ToXml().find(">inline</"),
+            std::string::npos);
+
+  const RpcResponse invalid = server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="invalid">
+      <copy-config><target><candidate/></target><source><config>
+        <system xmlns="urn:rpc-test"/>
+      </config></source></copy-config>
+    </rpc>)xml");
+  EXPECT_NE(invalid.xml.find("rpc-error"), std::string::npos);
+  EXPECT_NE(stores.Read(Datastore::kCandidate).ToXml().find(">inline</"),
+            std::string::npos);
+}
+
+TEST(NetconfServerTest, RejectsCopyToSameDatastore) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NetconfServer server(stores);
+  const RpcResponse response = server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="same">
+      <copy-config><target><running/></target><source><running/></source>
+      </copy-config>
+    </rpc>)xml");
+  EXPECT_NE(response.xml.find("invalid-value"), std::string::npos);
+}
+
+TEST(NetconfServerTest, UsesHostSuppliedUrlDatastores) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  MemoryUrlProvider urls;
+  urls.values["memory:incoming"] = R"xml(
+    <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <system xmlns="urn:rpc-test"><hostname>remote</hostname></system>
+    </config>)xml";
+  NetconfServer server(stores, nullptr, &urls);
+  EXPECT_NE(server.ServerHello(1).find("capability:url:1.0?scheme=memory"),
+            std::string::npos);
+  EXPECT_NE(server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="read-url">
+      <copy-config><target><candidate/></target>
+        <source><url>memory:incoming</url></source></copy-config></rpc>)xml")
+                .xml.find("<ok/>"), std::string::npos);
+  EXPECT_NE(stores.Read(Datastore::kCandidate).ToXml().find("remote"),
+            std::string::npos);
+  EXPECT_NE(server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="write-url">
+      <copy-config><target><url>memory:out</url></target>
+        <source><running/></source></copy-config></rpc>)xml")
+                .xml.find("<ok/>"), std::string::npos);
+  EXPECT_TRUE(urls.values.contains("memory:out"));
+
+  urls.values["memory:edit"] = R"xml(
+    <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <system xmlns="urn:rpc-test"><hostname>edited-url</hostname></system>
+    </config>)xml";
+  EXPECT_NE(server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="edit-url">
+      <edit-config><target><candidate/></target><url>memory:edit</url>
+      </edit-config></rpc>)xml").xml.find("<ok/>"), std::string::npos);
+  EXPECT_NE(stores.Read(Datastore::kCandidate).ToXml().find("edited-url"),
+            std::string::npos);
+  EXPECT_NE(server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="validate-url">
+      <validate><source><url>memory:edit</url></source></validate></rpc>)xml")
+                .xml.find("<ok/>"), std::string::npos);
+  EXPECT_NE(server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="same-url">
+      <copy-config><target><url>memory:edit</url></target>
+        <source><url>memory:edit</url></source></copy-config></rpc>)xml")
+                .xml.find("invalid-value"), std::string::npos);
+  urls.values["memory:invalid"] = "<config/>";
+  const RpcResponse invalid_remote = server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="invalid-remote">
+      <copy-config><target><url>memory:must-not-write</url></target>
+        <source><url>memory:invalid</url></source></copy-config></rpc>)xml");
+  EXPECT_NE(invalid_remote.xml.find("rpc-error"), std::string::npos);
+  EXPECT_FALSE(urls.values.contains("memory:must-not-write"));
+  EXPECT_NE(server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="missing-url">
+      <validate><source><url>memory:missing</url></source></validate></rpc>)xml")
+                .xml.find("operation-failed"), std::string::npos);
+  EXPECT_NE(server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="bad-scheme">
+      <validate><source><url>file:/forbidden</url></source></validate></rpc>)xml")
+                .xml.find("invalid-value"), std::string::npos);
+}
+
+TEST(NetconfServerTest, EnforcesNacmBeforePublishingWrites) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NacmPolicy policy;
+  policy.AddUserToGroup("guest", "guests");
+  NetconfServer server(stores, &policy);
+  const RpcResponse denied = server.Process("guest", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="301">
+      <edit-config><target><candidate/></target><config>
+        <system xmlns="urn:rpc-test"><hostname>forbidden</hostname></system>
+      </config></edit-config>
+    </rpc>)xml");
+  EXPECT_NE(denied.xml.find("access-denied"), std::string::npos);
+  EXPECT_EQ(stores.Read(Datastore::kCandidate).ToXml().find("forbidden"),
+            std::string::npos);
+}
+
+TEST(NetconfServerTest, AuthorizesUrlTargetReplacementBeforeWriting) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  MemoryUrlProvider urls;
+  urls.values["memory:protected"] = R"xml(
+    <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <system xmlns="urn:rpc-test"><hostname>remote-old</hostname></system>
+    </config>)xml";
+  NacmPolicy policy;
+  policy.set_write_default(AccessAction::kPermit);
+  policy.AddUserToGroup("guest", "guests");
+  policy.AddRule({"deny-hostname", "guests", "",
+                  "/{urn:rpc-test}system/{urn:rpc-test}hostname",
+                  static_cast<std::uint8_t>(
+                      AccessMask(AccessOperation::kCreate) |
+                      AccessMask(AccessOperation::kUpdate) |
+                      AccessMask(AccessOperation::kDelete)),
+                  AccessAction::kDeny});
+  NetconfServer server(stores, &policy, &urls);
+  const RpcResponse denied = server.Process("guest", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="url-nacm">
+      <copy-config><target><url>memory:protected</url></target>
+        <source><running/></source></copy-config>
+    </rpc>)xml");
+  EXPECT_NE(denied.xml.find("access-denied"), std::string::npos) << denied.xml;
+  EXPECT_NE(urls.values["memory:protected"].find("remote-old"),
+            std::string::npos);
+}
+
+}  // namespace
+}  // namespace yang::netconf

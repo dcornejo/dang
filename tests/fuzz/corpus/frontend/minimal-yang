@@ -1,0 +1,3 @@
+f// Copyright 2026 David Cornejo
+// SPDX-License-Identifier: Apache-2.0
+module m { namespace "urn:m"; prefix m; }

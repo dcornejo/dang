@@ -1,0 +1,74 @@
+# Copyright 2026 David Cornejo
+# SPDX-License-Identifier: Apache-2.0
+
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Verify release version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          grep -Eq "project\(yang_cpp VERSION ${version//./\\.} LANGUAGES CXX\)" CMakeLists.txt
+      - name: Install build dependencies
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          cmake ninja-build doxygen graphviz make texlive-latex-base
+          texlive-latex-extra libfmt-dev libpugixml-dev nlohmann-json3-dev
+          libxml2-dev libgtest-dev
+      - name: Build and test
+        run: |
+          cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-release
+          ctest --test-dir build-release --output-on-failure
+      - name: Verify installed package
+        run: |
+          cmake --install build-release --prefix "$RUNNER_TEMP/yang-install"
+          cmake -S tests/package_consumer -B build-consumer -G Ninja \
+            -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/yang-install"
+          cmake --build build-consumer
+          ./build-consumer/yang_package_consumer
+      - name: Build documentation
+        run: |
+          cmake -S . -B build-docs -DYANG_BUILD_DOCS=ON \
+            -DYANG_BUILD_TESTS=OFF -DYANG_BUILD_TOOLS=OFF
+          cmake --build build-docs --target yang_docs
+      - name: Create reproducible release assets
+        run: |
+          epoch="$(git show -s --format=%ct HEAD)"
+          export SOURCE_DATE_EPOCH="$epoch"
+          version="${GITHUB_REF_NAME#v}"
+          python3 scripts/create_source_archive.py --version "$version" --output-dir release-a
+          python3 scripts/create_source_archive.py --version "$version" --output-dir release-b
+          cmp "release-a/yang-cpp-${version}.tar.gz" "release-b/yang-cpp-${version}.tar.gz"
+          mkdir release
+          cp "release-a/yang-cpp-${version}.tar.gz" release/
+          cp release-a/SHA256SUMS release/
+          cp build-docs/docs/latex/refman.pdf "release/yang-cpp-${version}-reference.pdf"
+          tar -C build-docs/docs -czf "release/yang-cpp-${version}-html.tar.gz" html
+      - name: Sign provenance attestations
+        uses: actions/attest@v4
+        with:
+          subject-path: release/*
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          body_path: CHANGELOG.md
+          files: release/*
+          fail_on_unmatched_files: true

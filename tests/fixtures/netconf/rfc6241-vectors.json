@@ -1,0 +1,22 @@
+{
+  "copyright": "Copyright 2026 David Cornejo",
+  "license": "Apache-2.0",
+  "description": "Prefix-independent NETCONF base:1.0 request vectors derived from RFC 6241 operation examples.",
+  "vectors": [
+    {
+      "name": "get-config with alternate NETCONF prefix",
+      "request": "<nc:rpc xmlns:nc=\"urn:ietf:params:xml:ns:netconf:base:1.0\" message-id=\"interop-1\"><nc:get-config><nc:source><nc:running/></nc:source></nc:get-config></nc:rpc>",
+      "expected": ["message-id=\"interop-1\"", "<data>", ">old</"]
+    },
+    {
+      "name": "unsupported operation error",
+      "request": "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" message-id=\"interop-2\"><vendor-operation xmlns=\"urn:example:vendor\"/></rpc>",
+      "expected": ["message-id=\"interop-2\"", "unknown-namespace"]
+    },
+    {
+      "name": "malformed message",
+      "request": "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">",
+      "expected": ["malformed-message"]
+    }
+  ]
+}

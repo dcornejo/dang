@@ -1,0 +1,65 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "sanitizers",
+      "displayName": "ASan and UBSan",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-sanitizers",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "YANG_BUILD_DOCS": "OFF",
+        "YANG_BUILD_TESTS": "ON",
+        "YANG_ENABLE_SANITIZERS": "ON"
+      }
+    },
+    {
+      "name": "fuzzers",
+      "displayName": "libFuzzer targets with ASan and UBSan",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-fuzzers",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "YANG_BUILD_DOCS": "OFF",
+        "YANG_BUILD_FUZZERS": "ON",
+        "YANG_BUILD_TESTS": "OFF",
+        "YANG_BUILD_TOOLS": "OFF",
+        "YANG_ENABLE_SANITIZERS": "ON",
+        "YANG_FUZZ_STANDALONE": "ON"
+      }
+    },
+    {
+      "name": "benchmarks",
+      "displayName": "Deterministic release benchmarks",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-benchmarks",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "YANG_BUILD_BENCHMARKS": "ON",
+        "YANG_BUILD_DOCS": "OFF",
+        "YANG_BUILD_TESTS": "OFF",
+        "YANG_BUILD_TOOLS": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "sanitizers", "configurePreset": "sanitizers", "jobs": 4 },
+    { "name": "fuzzers", "configurePreset": "fuzzers", "jobs": 4 },
+    { "name": "benchmarks", "configurePreset": "benchmarks", "jobs": 4 }
+  ],
+  "testPresets": [
+    {
+      "name": "sanitizers",
+      "configurePreset": "sanitizers",
+      "environment": {
+        "ASAN_OPTIONS": "detect_container_overflow=0"
+      },
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}

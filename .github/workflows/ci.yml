@@ -1,0 +1,77 @@
+# Copyright 2026 David Cornejo
+# SPDX-License-Identifier: Apache-2.0
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          cmake ninja-build libfmt-dev libpugixml-dev nlohmann-json3-dev
+          libxml2-dev libgtest-dev
+      - name: Install Homebrew dependencies
+        if: runner.os == 'macOS'
+        run: >-
+          brew install cmake ninja fmt pugixml nlohmann-json libxml2 googletest
+      - name: Configure
+        run: cmake -S . -B build-ci -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build-ci
+      - name: Test
+        run: ctest --test-dir build-ci --output-on-failure
+      - name: Install
+        run: cmake --install build-ci --prefix "${{ runner.temp }}/yang-install"
+      - name: Configure installed-package consumer
+        run: >-
+          cmake -S tests/package_consumer -B build-consumer -G Ninja
+          -DCMAKE_PREFIX_PATH="${{ runner.temp }}/yang-install"
+      - name: Build and run installed-package consumer
+        run: cmake --build build-consumer && ./build-consumer/yang_package_consumer
+
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: >-
+          sudo apt-get update && sudo apt-get install -y
+          cmake libfmt-dev libpugixml-dev nlohmann-json3-dev libxml2-dev
+          libgtest-dev
+      - run: cmake --preset sanitizers
+      - run: cmake --build --preset sanitizers
+      - run: ctest --preset sanitizers
+
+  documentation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: >-
+          sudo apt-get update && sudo apt-get install -y
+          cmake doxygen graphviz make texlive-latex-base texlive-latex-extra
+          libfmt-dev libpugixml-dev nlohmann-json3-dev libxml2-dev
+      - run: >-
+          cmake -S . -B build-docs -DYANG_BUILD_DOCS=ON
+          -DYANG_BUILD_TESTS=OFF -DYANG_BUILD_TOOLS=OFF
+      - run: cmake --build build-docs --target yang_docs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: yang-cpp-documentation
+          path: |
+            build-docs/docs/html
+            build-docs/docs/latex/refman.pdf
+          if-no-files-found: error

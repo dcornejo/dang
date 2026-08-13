@@ -1,0 +1,727 @@
+// Copyright 2026 David Cornejo
+// SPDX-License-Identifier: Apache-2.0
+
+#include "yang/netconf_server.h"
+
+#include "yang/netconf_filter.h"
+#include "yang/resource_limits.h"
+
+#include <charconv>
+#include <optional>
+#include <ranges>
+#include <sstream>
+
+#include <pugixml.hpp>
+
+namespace yang::netconf {
+namespace {
+
+constexpr std::string_view kNetconfNamespace =
+    "urn:ietf:params:xml:ns:netconf:base:1.0";
+constexpr std::string_view kNotificationNamespace =
+    "urn:ietf:params:xml:ns:netconf:notification:1.0";
+
+std::string_view LocalName(std::string_view name) {
+  const std::size_t colon = name.find(':');
+  return colon == std::string_view::npos ? name : name.substr(colon + 1);
+}
+
+std::optional<std::string> NamespaceFor(const pugi::xml_node& node) {
+  const std::string_view name = node.name();
+  const std::size_t colon = name.find(':');
+  const std::string attribute_name = colon == std::string_view::npos
+      ? "xmlns" : "xmlns:" + std::string(name.substr(0, colon));
+  for (pugi::xml_node current = node; current; current = current.parent()) {
+    if (const pugi::xml_attribute attribute =
+            current.attribute(attribute_name.c_str())) {
+      return std::string(attribute.value());
+    }
+  }
+  return std::nullopt;
+}
+
+std::string Escape(std::string_view value) {
+  std::string result;
+  for (char character : value) {
+    if (character == '&') result += "&amp;";
+    else if (character == '<') result += "&lt;";
+    else if (character == '>') result += "&gt;";
+    else if (character == '"') result += "&quot;";
+    else if (character == '\'') result += "&apos;";
+    else result += character;
+  }
+  return result;
+}
+
+std::optional<Datastore> ParseDatastore(const pugi::xml_node& parent) {
+  const pugi::xml_node selection = parent.first_child();
+  if (!selection || selection.next_sibling()) return std::nullopt;
+  const std::string_view name = LocalName(selection.name());
+  if (name == "running") return Datastore::kRunning;
+  if (name == "candidate") return Datastore::kCandidate;
+  if (name == "startup") return Datastore::kStartup;
+  return std::nullopt;
+}
+
+std::optional<config::EditOperation> ParseDefaultOperation(
+    std::string_view value) {
+  if (value.empty() || value == "merge") return config::EditOperation::kMerge;
+  if (value == "replace") return config::EditOperation::kReplace;
+  if (value == "none") return config::EditOperation::kNone;
+  return std::nullopt;
+}
+
+std::optional<TestOption> ParseTestOption(std::string_view value) {
+  if (value.empty() || value == "test-then-set") return TestOption::kTestThenSet;
+  if (value == "set") return TestOption::kSet;
+  if (value == "test-only") return TestOption::kTestOnly;
+  return std::nullopt;
+}
+
+std::optional<ErrorOption> ParseErrorOption(std::string_view value) {
+  if (value.empty() || value == "stop-on-error") return ErrorOption::kStopOnError;
+  if (value == "continue-on-error") return ErrorOption::kContinueOnError;
+  if (value == "rollback-on-error") return ErrorOption::kRollbackOnError;
+  return std::nullopt;
+}
+
+pugi::xml_node Child(const pugi::xml_node& parent, std::string_view local) {
+  for (const pugi::xml_node child : parent.children()) {
+    if (child.type() == pugi::node_element && LocalName(child.name()) == local)
+      return child;
+  }
+  return {};
+}
+
+std::string Serialize(const pugi::xml_node& node) {
+  std::ostringstream stream;
+  node.print(stream, "", pugi::format_raw);
+  return stream.str();
+}
+
+std::string SerializeConfig(const pugi::xml_node& config) {
+  std::string result = "<config xmlns=\"" + std::string(kNetconfNamespace) +
+                       "\">";
+  for (const pugi::xml_node child : config.children()) {
+    if (child.type() == pugi::node_element) result += Serialize(child);
+  }
+  return result + "</config>";
+}
+
+std::string SerializeSelfContained(const pugi::xml_node& node) {
+  pugi::xml_document document;
+  pugi::xml_node copy = document.append_copy(node);
+  for (pugi::xml_node ancestor = node.parent(); ancestor;
+       ancestor = ancestor.parent()) {
+    for (const pugi::xml_attribute attribute : ancestor.attributes()) {
+      const std::string_view name = attribute.name();
+      if ((name == "xmlns" || name.starts_with("xmlns:")) &&
+          !copy.attribute(attribute.name())) {
+        copy.append_attribute(attribute.name()).set_value(attribute.value());
+      }
+    }
+  }
+  return Serialize(copy);
+}
+
+TransactionResult ProtocolFailure(std::string message, std::string tag) {
+  config::ValidationFinding finding;
+  finding.code = config::ValidationCode::kInvalidValue;
+  finding.state = config::FindingState::kInvalid;
+  finding.message = std::move(message);
+  finding.netconf_error_tag = std::move(tag);
+  return {false, {std::move(finding)}, {}};
+}
+
+bool UrlAllowed(const UrlDatastoreProvider& provider, std::string_view url) {
+  const std::size_t colon = url.find(':');
+  if (colon == std::string_view::npos || colon == 0) return false;
+  const std::string_view scheme = url.substr(0, colon);
+  const std::vector<std::string> schemes = provider.Schemes();
+  return std::ranges::find(schemes, scheme) != schemes.end();
+}
+
+TransactionResult ValidateCompleteConfig(const config::RuntimeSchema& schema,
+                                         std::string_view xml) {
+  config::ConfigParseResult parsed = config::ParseDatastoreXml(schema, xml);
+  if (!parsed.document) return {false, std::move(parsed.findings), {}};
+  config::ConfigValidator validator;
+  config::ValidationResult validated = validator.Validate(
+      {schema, *parsed.document, config::ValidationScope::kComplete});
+  return {validated.valid, std::move(validated.findings), {}};
+}
+
+TransactionResult AuthorizeReplacement(
+    const config::RuntimeSchema& schema, std::string_view before_xml,
+    std::string_view after_xml,
+    const std::function<bool(const config::ChangeEvent&)>& authorize_change) {
+  config::ConfigParseResult before =
+      config::ParseDatastoreXml(schema, before_xml);
+  config::ConfigParseResult after = config::ParseDatastoreXml(schema, after_xml);
+  if (!before.document || !after.document) {
+    std::vector<config::ValidationFinding> findings = std::move(before.findings);
+    findings.insert(findings.end(),
+                    std::make_move_iterator(after.findings.begin()),
+                    std::make_move_iterator(after.findings.end()));
+    return {false, std::move(findings), {}};
+  }
+  std::vector<config::ChangeEvent> changes =
+      config::DiffConfigDocuments(schema, *before.document, *after.document);
+  const auto denied = std::ranges::find_if(
+      changes, [&](const config::ChangeEvent& change) {
+        return !authorize_change(change);
+      });
+  if (denied != changes.end()) {
+    config::ValidationFinding finding;
+    finding.code = config::ValidationCode::kInvalidValue;
+    finding.state = config::FindingState::kInvalid;
+    finding.message = "access to the proposed URL replacement is denied";
+    finding.instance_path = denied->instance_path;
+    finding.netconf_error_tag = "access-denied";
+    return {false, {std::move(finding)}, {}};
+  }
+  return {true, {}, std::move(changes)};
+}
+
+TransactionResult UrlFailure(const UrlResult& result,
+                             std::string_view fallback) {
+  return ProtocolFailure(result.error.value_or(std::string(fallback)),
+                         result.error_tag.value_or("operation-failed"));
+}
+
+std::string Reply(std::string_view message_id, const TransactionResult& result,
+                  std::string_view payload = {}) {
+  std::string xml = "<rpc-reply xmlns=\"" + std::string(kNetconfNamespace) +
+                    "\"";
+  if (!message_id.empty())
+    xml += " message-id=\"" + Escape(message_id) + "\"";
+  xml += ">";
+  if (result.ok) {
+    xml += payload.empty() ? "<ok/>" : std::string(payload);
+  } else {
+    for (const config::ValidationFinding& error : result.errors) {
+      xml += "<rpc-error><error-type>application</error-type>";
+      xml += "<error-tag>" + Escape(error.netconf_error_tag.empty()
+                                        ? "operation-failed"
+                                        : error.netconf_error_tag) +
+             "</error-tag><error-severity>error</error-severity>";
+      if (!error.instance_path.empty())
+        xml += "<error-path>" + Escape(error.instance_path) + "</error-path>";
+      xml += "<error-message xml:lang=\"en\">" + Escape(error.message) +
+             "</error-message></rpc-error>";
+    }
+  }
+  return xml + "</rpc-reply>";
+}
+
+}  // namespace
+
+std::vector<std::string> NetconfServer::Capabilities() {
+  return {
+      "urn:ietf:params:netconf:base:1.0",
+      "urn:ietf:params:netconf:base:1.1",
+      "urn:ietf:params:netconf:capability:writable-running:1.0",
+      "urn:ietf:params:netconf:capability:candidate:1.0",
+      "urn:ietf:params:netconf:capability:startup:1.0",
+      "urn:ietf:params:netconf:capability:validate:1.1",
+      "urn:ietf:params:netconf:capability:xpath:1.0",
+      "urn:ietf:params:netconf:capability:rollback-on-error:1.0",
+      "urn:ietf:params:netconf:capability:confirmed-commit:1.1"};
+}
+
+std::vector<std::string> NetconfServer::AdvertisedCapabilities() const {
+  std::vector<std::string> result = Capabilities();
+  if (urls_ != nullptr && !urls_->Schemes().empty()) {
+    std::string capability = "urn:ietf:params:netconf:capability:url:1.0?scheme=";
+    for (const std::string& scheme : urls_->Schemes()) {
+      if (capability.back() != '=') capability += ',';
+      capability += scheme;
+    }
+    result.push_back(std::move(capability));
+  }
+  if (notifications_ != nullptr && notifications_->configured()) {
+    result.push_back(
+        "urn:ietf:params:netconf:capability:notification:1.0");
+    result.push_back("urn:ietf:params:netconf:capability:interleave:1.0");
+  }
+  if (with_defaults_) {
+    result.push_back(
+        "urn:ietf:params:netconf:capability:with-defaults:1.0?basic-mode="
+        "explicit&also-supported=report-all,report-all-tagged,trim");
+    result.push_back(
+        "urn:ietf:params:xml:ns:yang:ietf-netconf-with-defaults?module="
+        "ietf-netconf-with-defaults&revision=2011-06-01");
+  }
+  return result;
+}
+
+std::string NetconfServer::ServerHello(std::uint32_t session_id) const {
+  std::string xml = "<hello xmlns=\"" + std::string(kNetconfNamespace) +
+                    "\"><capabilities>";
+  for (const std::string& capability : AdvertisedCapabilities())
+    xml += "<capability>" + Escape(capability) + "</capability>";
+  return xml + "</capabilities><session-id>" + std::to_string(session_id) +
+         "</session-id></hello>";
+}
+
+RpcResponse NetconfServer::Process(std::string_view session,
+                                   std::string_view rpc_xml) {
+  return Process({0, session, session, {}}, rpc_xml);
+}
+
+RpcResponse NetconfServer::Process(const RpcSessionContext& session,
+                                   std::string_view rpc_xml) {
+  if (rpc_xml.size() > DefaultResourceLimits().maximum_xml_bytes) {
+    return {Reply("", ProtocolFailure("RPC XML exceeds the byte limit",
+                                      "too-big")),
+            false};
+  }
+  const std::optional<NacmPolicy> policy_snapshot =
+      nacm_ == nullptr ? std::nullopt
+                       : std::optional<NacmPolicy>(*nacm_);
+  const NacmPolicy* const nacm =
+      policy_snapshot ? &*policy_snapshot : nullptr;
+  pugi::xml_document document;
+  const pugi::xml_parse_result parsed =
+      document.load_buffer(rpc_xml.data(), rpc_xml.size(), pugi::parse_default);
+  if (!parsed) {
+    TransactionResult error = ProtocolFailure(
+        std::string("malformed RPC XML: ") + parsed.description(),
+        "malformed-message");
+    return {Reply("", error), false};
+  }
+  std::string resource_error;
+  if (!XmlWithinResourceLimits(document, rpc_xml, DefaultResourceLimits(),
+                               &resource_error)) {
+    return {Reply("", ProtocolFailure(resource_error, "too-big")), false};
+  }
+  const pugi::xml_node rpc = document.document_element();
+  const std::string message_id = rpc.attribute("message-id").value();
+  if (LocalName(rpc.name()) != "rpc" || NamespaceFor(rpc) != kNetconfNamespace ||
+      message_id.empty()) {
+    return {Reply(message_id, ProtocolFailure(
+        "expected an rpc element with a message-id", "missing-attribute")),
+        false};
+  }
+  pugi::xml_node operation;
+  for (const pugi::xml_node child : rpc.children()) {
+    if (child.type() != pugi::node_element) continue;
+    if (operation) {
+      return {Reply(message_id, ProtocolFailure(
+          "an rpc must contain exactly one operation", "malformed-message")),
+          false};
+    }
+    operation = child;
+  }
+  if (!operation) {
+    return {Reply(message_id, ProtocolFailure(
+        "rpc operation is missing", "missing-element")), false};
+  }
+  const std::string operation_namespace = NamespaceFor(operation).value_or("");
+  const bool create_subscription =
+      LocalName(operation.name()) == "create-subscription" &&
+      operation_namespace == kNotificationNamespace &&
+      notifications_ != nullptr && notifications_->configured();
+  if (operation_namespace != kNetconfNamespace && !create_subscription) {
+    return {Reply(message_id, ProtocolFailure(
+        "RPC operation is not in the NETCONF base namespace",
+        "unknown-namespace")), false};
+  }
+  const std::string_view name = LocalName(operation.name());
+  TransactionResult result;
+  std::string payload;
+  bool close_session = false;
+  std::function<bool(const config::ChangeEvent&)> authorize_change;
+  if (nacm != nullptr) {
+    authorize_change = [nacm, schema = &datastores_.schema(),
+                        username = session.username,
+                        groups = session.external_groups](
+                           const config::ChangeEvent& change) {
+      AccessOperation access = AccessOperation::kUpdate;
+      if (change.kind == config::ChangeKind::kCreated)
+        access = AccessOperation::kCreate;
+      else if (change.kind == config::ChangeKind::kDeleted)
+        access = AccessOperation::kDelete;
+      const config::RuntimeSchemaNode* node =
+          change.schema == config::kInvalidRuntimeSchemaNodeId
+              ? nullptr
+              : &schema->Get(change.schema);
+      return nacm->AuthorizeData(
+          username, node == nullptr ? "" : node->module_name, access,
+          change.instance_path, groups,
+          node != nullptr && node->nacm_default_deny_all,
+          node != nullptr && node->nacm_default_deny_write);
+    };
+  }
+  if (nacm != nullptr && !nacm->AuthorizeRpc(
+          session.username,
+          create_subscription ? "notifications" : "ietf-netconf", name,
+          session.external_groups)) {
+    return {Reply(message_id, ProtocolFailure(
+        "execution of the requested RPC is denied", "access-denied")), false};
+  }
+  if (create_subscription) {
+    SubscriptionRequest request;
+    request.session_id = session.session_id;
+    request.username = std::string(session.username);
+    request.external_groups.assign(session.external_groups.begin(),
+                                   session.external_groups.end());
+    if (const pugi::xml_node stream = Child(operation, "stream"))
+      request.stream = stream.text().as_string();
+    if (const pugi::xml_node filter = Child(operation, "filter"))
+      request.filter_xml = SerializeSelfContained(filter);
+    const pugi::xml_node start = Child(operation, "startTime");
+    const pugi::xml_node stop = Child(operation, "stopTime");
+    if (start) request.start_time = ParseNotificationTime(start.text().as_string());
+    if (stop) request.stop_time = ParseNotificationTime(stop.text().as_string());
+    if ((start && !request.start_time) || (stop && !request.stop_time)) {
+      result = ProtocolFailure("invalid RFC 3339 subscription time",
+                               "bad-element");
+    } else {
+      const SubscriptionResult subscribed =
+          notifications_->Subscribe(std::move(request));
+      result = subscribed.ok
+          ? TransactionResult{true, {}, {}}
+          : ProtocolFailure(subscribed.error, subscribed.error_tag);
+    }
+  } else if (name == "get-config" || name == "get") {
+    Datastore source = Datastore::kRunning;
+    WithDefaultsMode defaults_mode = WithDefaultsMode::kExplicit;
+    if (const pugi::xml_node requested = Child(operation, "with-defaults")) {
+      if (!with_defaults_) {
+        result = ProtocolFailure("with-defaults capability is not configured",
+                                 "operation-not-supported");
+      } else if (const auto parsed_mode =
+                     ParseWithDefaultsMode(requested.text().as_string())) {
+        defaults_mode = *parsed_mode;
+      } else {
+        result = ProtocolFailure("invalid with-defaults retrieval mode",
+                                 "invalid-value");
+      }
+    }
+    if (name == "get-config") {
+      const auto parsed_source = ParseDatastore(Child(operation, "source"));
+      if (!parsed_source) result = ProtocolFailure(
+          "get-config requires one valid source datastore", "invalid-value");
+      else source = *parsed_source;
+    }
+    if (result.errors.empty()) {
+      result.ok = true;
+      payload = with_defaults_
+                    ? SerializeWithDefaults(datastores_.schema(),
+                                            datastores_.Read(source),
+                                            defaults_mode)
+                    : "<data>" + datastores_.Read(source).ToXml(false) +
+                          "</data>";
+      if (nacm != nullptr)
+        payload = nacm->FilterReadableData(
+            session.username, payload, session.external_groups,
+            &datastores_.schema());
+      if (const pugi::xml_node filter = Child(operation, "filter")) {
+        const std::string_view type = filter.attribute("type").value();
+        FilterResult filtered = type == "xpath"
+            ? ApplyXPathFilter(payload, SerializeSelfContained(filter))
+            : ApplySubtreeFilter(payload, SerializeSelfContained(filter));
+        if (!filtered.xml) {
+          result = ProtocolFailure(
+              *filtered.error,
+              filtered.error_tag.value_or("operation-not-supported"));
+          payload.clear();
+        } else {
+          payload = std::move(*filtered.xml);
+        }
+      }
+    }
+  } else if (name == "edit-config") {
+    const auto target = ParseDatastore(Child(operation, "target"));
+    const auto default_operation = ParseDefaultOperation(
+        Child(operation, "default-operation").text().as_string());
+    const auto test_option = ParseTestOption(
+        Child(operation, "test-option").text().as_string());
+    const auto error_option = ParseErrorOption(
+        Child(operation, "error-option").text().as_string());
+    pugi::xml_node config = Child(operation, "config");
+    const pugi::xml_node url = Child(operation, "url");
+    std::string url_config;
+    pugi::xml_document url_document;
+    if (!config && url && urls_ != nullptr &&
+        UrlAllowed(*urls_, url.text().as_string())) {
+      UrlResult read = urls_->Read(url.text().as_string());
+      if (!read.config_xml) {
+        result = UrlFailure(read, "URL read failed");
+      } else {
+        url_config = std::move(*read.config_xml);
+        if (url_config.size() > DefaultResourceLimits().maximum_xml_bytes) {
+          result = ProtocolFailure("URL configuration exceeds the byte limit",
+                                   "too-big");
+        } else if (url_document.load_buffer(url_config.data(), url_config.size(),
+                                            pugi::parse_default)) {
+          config = url_document.document_element();
+        }
+      }
+    }
+    if (!result.errors.empty()) {
+      // Preserve the provider failure.
+    } else if (!target || !default_operation || !test_option || !error_option ||
+               !config || (url && Child(operation, "config"))) {
+      result = ProtocolFailure("invalid edit-config parameters", "invalid-value");
+    } else {
+      config::EditParseResult edit =
+          config::ParseEditXml(datastores_.schema(), SerializeConfig(config));
+      if (!edit.document) {
+        result = {false, std::move(edit.findings), {}};
+      } else {
+        EditConfigRequest request{
+            std::string(session.datastore_owner), *target,
+            {std::move(*edit.document)},
+            *default_operation, *test_option, *error_option, {}};
+        request.authorize_change = authorize_change;
+        result = datastores_.EditConfig(request);
+      }
+    }
+  } else if (name == "lock" || name == "unlock") {
+    const auto target = ParseDatastore(Child(operation, "target"));
+    if (!target) result = ProtocolFailure("invalid lock target", "invalid-value");
+    else result = name == "lock"
+        ? datastores_.Lock(*target, session.datastore_owner)
+        : datastores_.Unlock(*target, session.datastore_owner);
+  } else if (name == "validate") {
+    const pugi::xml_node source_node = Child(operation, "source");
+    const auto source = ParseDatastore(source_node);
+    const pugi::xml_node url = Child(source_node, "url");
+    if (source) result = datastores_.Validate(*source);
+    else if (url && urls_ != nullptr && UrlAllowed(*urls_, url.text().as_string())) {
+      UrlResult read = urls_->Read(url.text().as_string());
+      result = read.config_xml
+          ? ValidateCompleteConfig(datastores_.schema(), *read.config_xml)
+          : UrlFailure(read, "URL read failed");
+    } else result = ProtocolFailure("invalid validate source", "invalid-value");
+  } else if (name == "discard-changes") {
+    result = datastores_.DiscardChanges(session.datastore_owner);
+  } else if (name == "commit") {
+    const pugi::xml_node persist_id = Child(operation, "persist-id");
+    if (persist_id && Child(operation, "confirmed")) {
+      std::chrono::seconds timeout(600);
+      if (const pugi::xml_node timeout_node =
+              Child(operation, "confirm-timeout")) {
+        unsigned long seconds = 0;
+        const std::string_view value = timeout_node.text().as_string();
+        const auto converted = std::from_chars(
+            value.data(), value.data() + value.size(), seconds);
+        if (converted.ec != std::errc() ||
+            converted.ptr != value.data() + value.size() || seconds == 0) {
+          result = ProtocolFailure("invalid confirm-timeout", "invalid-value");
+        } else {
+          timeout = std::chrono::seconds(seconds);
+        }
+      }
+      if (result.errors.empty()) {
+        result = datastores_.ContinueConfirmedCommit(
+            session.datastore_owner, persist_id.text().as_string(), timeout);
+      }
+    } else if (persist_id) {
+      result = datastores_.ConfirmCommit(session.datastore_owner,
+                                         persist_id.text().as_string());
+    } else if (Child(operation, "confirmed")) {
+      ConfirmedCommitOptions options;
+      if (const pugi::xml_node timeout = Child(operation, "confirm-timeout")) {
+        unsigned long seconds = 0;
+        const std::string_view value = timeout.text().as_string();
+        const auto converted = std::from_chars(value.data(),
+                                               value.data() + value.size(), seconds);
+        if (converted.ec != std::errc() || converted.ptr != value.data() + value.size() ||
+            seconds == 0) {
+          result = ProtocolFailure("invalid confirm-timeout", "invalid-value");
+        } else {
+          options.timeout = std::chrono::seconds(seconds);
+        }
+      }
+      if (const pugi::xml_node persist = Child(operation, "persist"))
+        options.persist = persist.text().as_string();
+      if (result.errors.empty())
+        result = datastores_.Commit(session.datastore_owner, options,
+                                    authorize_change);
+    } else {
+      result = datastores_.Commit(session.datastore_owner, std::nullopt,
+                                  authorize_change);
+    }
+  } else if (name == "cancel-commit") {
+    const pugi::xml_node persist_id = Child(operation, "persist-id");
+    result = datastores_.CancelCommit(
+        session.datastore_owner,
+        persist_id ? std::optional<std::string_view>(persist_id.text().as_string())
+                   : std::nullopt);
+  } else if (name == "copy-config") {
+    const pugi::xml_node source_node = Child(operation, "source");
+    const auto source = ParseDatastore(source_node);
+    const pugi::xml_node target_node = Child(operation, "target");
+    const auto target = ParseDatastore(target_node);
+    const pugi::xml_node inline_config = Child(source_node, "config");
+    const pugi::xml_node source_url_node = Child(source_node, "url");
+    const pugi::xml_node target_url_node = Child(target_node, "url");
+    if ((!target && !target_url_node) ||
+        (!source && !inline_config && !source_url_node)) {
+      result = ProtocolFailure("invalid copy-config source or target",
+                               "invalid-value");
+    } else if (target_url_node) {
+      if (urls_ == nullptr ||
+          !UrlAllowed(*urls_, target_url_node.text().as_string())) {
+        result = ProtocolFailure("unsupported URL target", "invalid-value");
+      } else {
+        if (source_url_node &&
+            std::string_view(source_url_node.text().as_string()) ==
+                target_url_node.text().as_string()) {
+          result = ProtocolFailure("URL source and target must be different",
+                                   "invalid-value");
+        }
+        std::string config_xml;
+        if (source) config_xml = datastores_.Read(*source).ToXml();
+        else if (inline_config) config_xml = SerializeConfig(inline_config);
+        else if (urls_ != nullptr &&
+                 UrlAllowed(*urls_, source_url_node.text().as_string())) {
+          UrlResult read = urls_->Read(source_url_node.text().as_string());
+          if (read.config_xml) config_xml = std::move(*read.config_xml);
+          else result = UrlFailure(read, "URL read failed");
+        }
+        if (result.errors.empty()) {
+          result = ValidateCompleteConfig(datastores_.schema(), config_xml);
+        }
+        if (result.ok && authorize_change) {
+          UrlResult current =
+              urls_->Read(target_url_node.text().as_string());
+          if (!current.config_xml) {
+            result = UrlFailure(current,
+                                "URL target cannot be read for authorization");
+          } else {
+            result = AuthorizeReplacement(datastores_.schema(),
+                                          *current.config_xml, config_xml,
+                                          authorize_change);
+          }
+        }
+        if (result.ok) {
+          UrlResult written = urls_->Write(target_url_node.text().as_string(),
+                                           config_xml);
+          result = written.error
+              ? UrlFailure(written, "URL write failed")
+              : TransactionResult{true, {}, {}};
+        }
+      }
+    } else if (source) {
+      result = datastores_.CopyConfig(session.datastore_owner, *source, *target,
+                                      authorize_change);
+    } else {
+      std::string source_xml;
+      if (source_url_node) {
+        if (urls_ == nullptr ||
+            !UrlAllowed(*urls_, source_url_node.text().as_string())) {
+          result = ProtocolFailure("unsupported URL source", "invalid-value");
+        } else {
+          UrlResult read = urls_->Read(source_url_node.text().as_string());
+          if (read.config_xml) source_xml = std::move(*read.config_xml);
+          else result = UrlFailure(read, "URL read failed");
+        }
+      } else {
+        source_xml = SerializeConfig(inline_config);
+      }
+      bool has_edit_attributes = false;
+      std::function<void(pugi::xml_node)> inspect = [&](pugi::xml_node parent) {
+        for (const pugi::xml_node child : parent.children()) {
+          if (child.type() != pugi::node_element) continue;
+          for (const pugi::xml_attribute attribute : child.attributes()) {
+            const std::string_view attribute_name = LocalName(attribute.name());
+            if (attribute_name == "operation" || attribute_name == "insert" ||
+                attribute_name == "key" || attribute_name == "value") {
+              has_edit_attributes = true;
+            }
+          }
+          inspect(child);
+        }
+      };
+      if (inline_config) inspect(inline_config);
+      if (has_edit_attributes) {
+        result = ProtocolFailure(
+            "inline copy-config source cannot contain edit attributes",
+            "invalid-value");
+      } else {
+        config::EditParseResult edit = config::ParseEditXml(
+            datastores_.schema(), source_xml);
+        if (!edit.document) {
+          result = {false, std::move(edit.findings), {}};
+        } else {
+          EditConfigRequest request{
+              std::string(session.datastore_owner), *target,
+              {std::move(*edit.document)}, config::EditOperation::kReplace,
+              TestOption::kTestThenSet, ErrorOption::kRollbackOnError, {}};
+          request.authorize_change = authorize_change;
+          result = datastores_.EditConfig(request);
+        }
+      }
+    }
+  } else if (name == "delete-config") {
+    const pugi::xml_node target_node = Child(operation, "target");
+    const auto target = ParseDatastore(target_node);
+    const pugi::xml_node url = Child(target_node, "url");
+    if (target) result = datastores_.DeleteConfig(session.datastore_owner, *target);
+    else if (url && urls_ != nullptr && UrlAllowed(*urls_, url.text().as_string())) {
+      UrlResult deleted = urls_->Delete(url.text().as_string());
+      result = deleted.error ? UrlFailure(deleted, "URL delete failed")
+                             : TransactionResult{true, {}, {}};
+    } else result = ProtocolFailure("invalid delete-config target", "invalid-value");
+  } else if (name == "close-session") {
+    datastores_.CloseSession(session.datastore_owner);
+    result.ok = true;
+    close_session = true;
+  } else if (name == "kill-session") {
+    const pugi::xml_node session_id_node = Child(operation, "session-id");
+    const std::string_view value = session_id_node.text().as_string();
+    std::uint32_t target = 0;
+    const auto converted = std::from_chars(
+        value.data(), value.data() + value.size(), target);
+    if (!session_id_node || session_id_node.next_sibling() || value.empty() ||
+        converted.ec != std::errc() ||
+        converted.ptr != value.data() + value.size() || target == 0) {
+      result = ProtocolFailure("kill-session requires one valid session-id",
+                               "invalid-value");
+    } else if (target == session.session_id) {
+      result = ProtocolFailure("a session cannot terminate itself",
+                               "invalid-value");
+    } else if (!sessions_.RequestClose(target)) {
+      result = ProtocolFailure("the requested session is not active",
+                               "invalid-value");
+    } else {
+      datastores_.CloseSession(std::to_string(target));
+      result.ok = true;
+    }
+  } else {
+    result = ProtocolFailure("unsupported RPC operation", "operation-not-supported");
+  }
+  return {Reply(message_id, result, payload), close_session};
+}
+
+bool NetconfServer::RegisterSession(std::uint32_t session_id,
+                                    std::string username) {
+  return sessions_.Register(session_id, std::move(username));
+}
+
+void NetconfServer::SessionClosed(std::uint32_t session_id,
+                                  std::string_view datastore_owner) {
+  datastores_.CloseSession(datastore_owner);
+  if (notifications_ != nullptr) notifications_->RemoveSession(session_id);
+  sessions_.Unregister(session_id);
+}
+
+std::vector<std::string> NetconfServer::DrainNotifications(
+    std::uint32_t session_id) {
+  return notifications_ == nullptr ? std::vector<std::string>{}
+                                   : notifications_->Drain(session_id);
+}
+
+bool NetconfServer::CloseRequested(std::uint32_t session_id) const {
+  return sessions_.CloseRequested(session_id);
+}
+
+std::vector<SessionInfo> NetconfServer::Sessions() const {
+  return sessions_.List();
+}
+
+}  // namespace yang::netconf

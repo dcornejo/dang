@@ -1,0 +1,20 @@
+// Copyright 2026 David Cornejo
+// SPDX-License-Identifier: Apache-2.0
+
+module xml-schema-patterns {
+  yang-version 1.1;
+  namespace "urn:yang-cpp:test:xml-schema-patterns";
+  prefix xsp;
+
+  leaf unicode-label {
+    type string { pattern "\\p{L}+"; }
+  }
+  leaf consonants {
+    type string { pattern "[a-z-[aeiou]]+"; }
+  }
+  leaf excluded {
+    type string {
+      pattern "blocked" { modifier invert-match; }
+    }
+  }
+}

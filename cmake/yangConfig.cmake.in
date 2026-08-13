@@ -1,0 +1,13 @@
+# Copyright 2026 David Cornejo
+# SPDX-License-Identifier: Apache-2.0
+
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(fmt CONFIG)
+find_dependency(pugixml CONFIG)
+find_dependency(nlohmann_json CONFIG)
+find_dependency(LibXml2)
+
+include("${CMAKE_CURRENT_LIST_DIR}/yangTargets.cmake")
+check_required_components(yang)

@@ -1,0 +1,10 @@
+# Copyright 2026 David Cornejo
+# SPDX-License-Identifier: Apache-2.0
+
+.DS_Store
+/CMakeFiles/
+/build*/
+/work/
+/outputs/
+*.pyc
+__pycache__/

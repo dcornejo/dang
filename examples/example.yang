@@ -1,0 +1,20 @@
+// Copyright 2026 David Cornejo
+// SPDX-License-Identifier: Apache-2.0
+
+module example {
+  yang-version 1.1;
+  namespace "urn:example";
+  prefix ex;
+
+  identity interface-kind;
+  identity ethernet { base interface-kind; }
+
+  container interfaces {
+    list interface {
+      key name;
+      leaf name { type string; }
+      leaf kind { type identityref { base interface-kind; } default ethernet; }
+      leaf mtu { type uint16 { range "576..9216"; } default 1500; }
+    }
+  }
+}
