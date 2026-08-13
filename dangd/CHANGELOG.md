@@ -21,3 +21,9 @@
 
 - Deferred GoogleTest discovery for sanitizer builds on macOS so the existing
   prebuilt-library compatibility workaround also covers `dangd_tests`.
+
+### Tests
+
+- Added end-to-end NETCONF failures for an invalid edit target and for a
+  schema-invalid candidate commit, verifying that failed operations preserve
+  the running and backend working configurations and emit no backend deltas.

@@ -159,5 +159,66 @@ TEST(DangdApplicationTest, CommitReplacesBackendAndDescribesDeltaInEnglish) {
             std::string::npos);
 }
 
+TEST(DangdApplicationTest, FailedCommitPreservesRunningAndBackendConfiguration) {
+  TemporaryInputs inputs;
+  auto loaded = Application::Load(Options(inputs));
+  ASSERT_NE(loaded.application, nullptr);
+  const auto edit = loaded.application->server().Process("one", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="10">
+      <edit-config><target><candidate/></target><test-option>set</test-option>
+        <config><system xmlns="urn:example:appliance">
+          <hostname xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0"
+                    nc:operation="delete">edge-1</hostname>
+        </system></config>
+      </edit-config>
+    </rpc>)xml");
+  ASSERT_NE(edit.xml.find("<ok/>"), std::string::npos);
+  EXPECT_EQ(loaded.application->datastores()
+                .Read(yang::netconf::Datastore::kCandidate)
+                .ToXml()
+                .find("hostname"),
+            std::string::npos);
+
+  const auto commit = loaded.application->server().Process("one", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="11">
+      <commit/>
+    </rpc>)xml");
+  EXPECT_NE(commit.xml.find("<rpc-error>"), std::string::npos);
+  EXPECT_NE(commit.xml.find("<error-tag>missing-element</error-tag>"),
+            std::string::npos);
+  EXPECT_NE(commit.xml.find("mandatory data node is absent"),
+            std::string::npos);
+  EXPECT_NE(loaded.application->datastores()
+                .Read(yang::netconf::Datastore::kRunning)
+                .ToXml()
+                .find(">edge-1</"),
+            std::string::npos);
+  EXPECT_NE(loaded.application->working_configuration().ToXml().find(
+                ">edge-1</"),
+            std::string::npos);
+  EXPECT_TRUE(loaded.application->DrainBackendDeltas().empty());
+}
+
+TEST(DangdApplicationTest, InvalidEditTargetReturnsNetconfError) {
+  TemporaryInputs inputs;
+  auto loaded = Application::Load(Options(inputs));
+  ASSERT_NE(loaded.application, nullptr);
+  const auto response = loaded.application->server().Process("one", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="12">
+      <edit-config><target><unknown/></target><config>
+        <system xmlns="urn:example:appliance"><hostname>edge-2</hostname></system>
+      </config></edit-config>
+    </rpc>)xml");
+  EXPECT_NE(response.xml.find("<rpc-error>"), std::string::npos);
+  EXPECT_NE(response.xml.find("<error-tag>invalid-value</error-tag>"),
+            std::string::npos);
+  EXPECT_NE(response.xml.find("invalid edit-config parameters"),
+            std::string::npos);
+  EXPECT_NE(loaded.application->working_configuration().ToXml().find(
+                ">edge-1</"),
+            std::string::npos);
+  EXPECT_TRUE(loaded.application->DrainBackendDeltas().empty());
+}
+
 }  // namespace
 }  // namespace dangd

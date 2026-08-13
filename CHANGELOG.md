@@ -29,6 +29,11 @@ and releases follow Semantic Versioning.
 - Corrected edit authorization to compare its iterator against the exact
   change set being searched, avoiding undefined behavior for denied edits.
 
+### Tests
+
+- Added NETCONF error-interaction coverage proving that invalid edit targets
+  and schema-invalid candidate commits fail without publishing backend state.
+
 ## [0.1.0] - 2026-08-13
 
 ### Added
