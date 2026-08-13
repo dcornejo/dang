@@ -29,3 +29,9 @@
   the running and backend working configurations and emit no backend deltas.
 - Extended the invalid-commit interaction to verify that the NETCONF error
   identifies both the defining YANG module and the failing instance path.
+
+### Documentation
+
+- Documented the planned separation of YANG desired-state validation, platform
+  preflight, and dependency-ordered transactional hardware application, and
+  recorded its implementation and failure-testing work in the project TODO.

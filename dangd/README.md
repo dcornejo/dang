@@ -35,3 +35,73 @@ state, and a device-specific backend that can fail and roll back application
 steps remain future `dangd` work. The current English backend is deliberately
 in-memory: it establishes the commit boundary and delta vocabulary without
 pretending to configure an external system.
+
+## Safe hardware application ordering
+
+A valid final configuration does not imply that every transition to it is
+safe. For example, an interface and its ACL references may satisfy every YANG
+constraint after a commit, while applying the interface's enabled state before
+programming and attaching the ACL would briefly expose unfiltered traffic.
+The deterministic, path-sorted configuration delta is therefore a reporting
+format, not a hardware execution order.
+
+Safe application should be divided into three layers:
+
+1. **Desired-state validation.** YANG describes the valid final state. A
+   `leafref` can require an interface's referenced ACL to exist, a `must`
+   expression can require protection when an interface is enabled, and
+   features, deviations, and constraints such as `max-elements` can describe
+   static platform capabilities.
+2. **Platform preflight.** Before changing hardware, the backend checks whether
+   the complete transition is feasible. This includes dynamic limits such as
+   available ACL or TCAM entries, whether old and new resources can coexist,
+   atomic-swap support, and expected disruption. Dynamic resource availability
+   belongs in operational state and backend policy rather than fixed YANG
+   constraints. A failed preflight must leave hardware and the NETCONF running
+   configuration unchanged.
+3. **Ordered execution.** The backend converts the before/after configurations
+   into actions connected by dependencies. It topologically orders that graph
+   instead of executing the raw delta order.
+
+The action vocabulary should distinguish creating, populating, binding,
+activating, deactivating, unbinding, and destroying resources. Activation is
+last and deactivation is first. An ACL-protected interface would normally be
+applied as:
+
+```text
+create ACL -> program rules -> attach ACL -> enable interface
+```
+
+Removal reverses the safety boundary:
+
+```text
+disable or block interface -> detach ACL -> remove ACL
+```
+
+On hardware with staging support, replacement can program a new ACL in an
+inactive slot, atomically switch the interface binding, and then remove the old
+ACL.
+
+Some dependencies are generic and can be inferred from the schema and trees:
+parents precede children on creation, children precede parents on deletion,
+referenced objects precede referring objects, and obsolete targets remain until
+new references are attached. Other dependencies are platform-specific, such as
+ACL programming before interface activation, VLAN creation before port
+membership, or routing policy installation before enabling a peer. Those rules
+belong in the device backend or a backend policy module. Optional YANG
+extensions may annotate lifecycle roles, but should provide planning metadata
+rather than attempt to encode an imperative hardware program.
+
+A production backend boundary will consequently need two explicit stages:
+
+```text
+plan(before, after, changes) -> execution plan or preflight error
+apply(plan)                  -> success or failure with rollback status
+```
+
+The plan must record dependencies, preconditions, rollback actions,
+reversibility, disruption, and module/path context for failures. The running
+datastore advances only after successful hardware application. On failure, the
+backend rolls back completed actions; if rollback is incomplete, the NETCONF
+error must explicitly report possible divergence between hardware and the
+intended configuration.
