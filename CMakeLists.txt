@@ -11,6 +11,7 @@ option(YANG_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSani
 option(YANG_BUILD_FUZZERS "Build libFuzzer hardening targets" OFF)
 option(YANG_FUZZ_STANDALONE "Use the deterministic fuzz smoke driver" OFF)
 option(YANG_BUILD_BENCHMARKS "Build deterministic performance benchmarks" OFF)
+option(YANG_BUILD_DANGD "Build the dangd NETCONF server application" ON)
 
 if(YANG_ENABLE_SANITIZERS)
   if(NOT CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang|GNU")
@@ -98,6 +99,24 @@ install(FILES examples/example.yang examples/library_example.cc
   examples/config_validation_example.cc
   DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/yang/examples)
 
+if(YANG_BUILD_DANGD)
+  add_library(dangd_core dangd/application.cc)
+  target_compile_features(dangd_core PUBLIC cxx_std_20)
+  target_include_directories(dangd_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_link_libraries(dangd_core PUBLIC yang::yang)
+  target_compile_options(dangd_core PRIVATE
+    -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+
+  add_executable(dangd dangd/main.cc)
+  target_compile_features(dangd PRIVATE cxx_std_20)
+  target_link_libraries(dangd PRIVATE dangd_core)
+  target_compile_options(dangd PRIVATE
+    -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+  install(TARGETS dangd RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  install(FILES dangd/README.md dangd/CHANGELOG.md
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/yang/dangd)
+endif()
+
 if(YANG_BUILD_TOOLS)
   add_executable(yangc src/yangc.cc)
   target_compile_features(yangc PRIVATE cxx_std_20)
@@ -173,6 +192,19 @@ if(YANG_BUILD_TESTS)
     gtest_discover_tests(yang_tests DISCOVERY_MODE PRE_TEST)
   else()
     gtest_discover_tests(yang_tests)
+  endif()
+
+  if(YANG_BUILD_DANGD)
+    add_executable(dangd_tests dangd/application_test.cc)
+    target_compile_features(dangd_tests PRIVATE cxx_std_20)
+    target_link_libraries(dangd_tests PRIVATE dangd_core GTest::gtest_main)
+    target_compile_options(dangd_tests PRIVATE
+      -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+    if(YANG_ENABLE_SANITIZERS AND APPLE)
+      gtest_discover_tests(dangd_tests DISCOVERY_MODE PRE_TEST)
+    else()
+      gtest_discover_tests(dangd_tests)
+    endif()
   endif()
 endif()
 

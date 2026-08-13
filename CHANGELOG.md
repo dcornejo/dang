@@ -10,11 +10,20 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- A separate `dangd` server-application foundation with startup model and
+  configuration validation, datastore snapshot lifecycle support, and a
+  supervised stream integration mode.
 - Initial C++20 YANG/YIN compiler, effective-schema model, configuration
   validation and editing libraries, and transport-neutral NETCONF stack.
 - RFC 6241 datastores and operations, RFC 6242 framing, RFC 6243 defaults,
   RFC 5277 notifications, RFC 8341 NACM, persistence, filters, resource limits,
   fuzzing, sanitizers, and deterministic benchmarks.
+
+### Fixed
+
+- Applied deferred GoogleTest discovery to every sanitizer-instrumented test
+  target on macOS, avoiding false container-overflow failures from linking an
+  instrumented executable with Homebrew's prebuilt GoogleTest.
 
 ## [0.1.0] - 2026-08-13
 

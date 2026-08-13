@@ -29,6 +29,7 @@
         "YANG_BUILD_FUZZERS": "ON",
         "YANG_BUILD_TESTS": "OFF",
         "YANG_BUILD_TOOLS": "OFF",
+        "YANG_BUILD_DANGD": "OFF",
         "YANG_ENABLE_SANITIZERS": "ON",
         "YANG_FUZZ_STANDALONE": "ON"
       }
@@ -43,7 +44,8 @@
         "YANG_BUILD_BENCHMARKS": "ON",
         "YANG_BUILD_DOCS": "OFF",
         "YANG_BUILD_TESTS": "OFF",
-        "YANG_BUILD_TOOLS": "OFF"
+        "YANG_BUILD_TOOLS": "OFF",
+        "YANG_BUILD_DANGD": "OFF"
       }
     }
   ],
