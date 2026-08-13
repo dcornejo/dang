@@ -154,7 +154,16 @@ if(YANG_BUILD_DOCS)
   set(DOXYGEN_MAKEINDEX_CMD_NAME ${YANG_MAKEINDEX_EXECUTABLE})
   set(DOXYGEN_PDF_HYPERLINKS YES)
   set(DOXYGEN_GENERATE_MAN NO)
-  doxygen_add_docs(yang_docs_generate include README.md docs)
+  # Generate a complete public API index, including simple value members and
+  # accessors whose names are self-describing, while retaining detailed
+  # comments for contracts, ownership, failure modes, and host obligations.
+  set(DOXYGEN_EXTRACT_ALL YES)
+  set(DOXYGEN_WARN_IF_UNDOCUMENTED YES)
+  set(DOXYGEN_WARN_AS_ERROR FAIL_ON_WARNINGS)
+  set(DOXYGEN_WARN_LOGFILE
+    ${CMAKE_CURRENT_BINARY_DIR}/docs/doxygen-warnings.log)
+  doxygen_add_docs(yang_docs_generate include src dangd README.md TODO.md
+    CHANGELOG.md docs)
   add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/docs/latex/refman.pdf
     COMMAND ${YANG_MAKE_EXECUTABLE}

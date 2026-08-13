@@ -44,6 +44,8 @@ and releases follow Semantic Versioning.
 - Added a users guide that explains the library and host-application layers,
   then walks through model loading, validation, NETCONF edits and commits,
   diagnostics, persistence, and integration using `dangd` as the example.
+- Expanded Doxygen across all library and `dangd` source files, completed the
+  daemon's public API contracts, and made documentation warnings fail the build.
 
 ## [0.1.0] - 2026-08-13
 
