@@ -188,6 +188,15 @@ TEST(DangdApplicationTest, FailedCommitPreservesRunningAndBackendConfiguration) 
             std::string::npos);
   EXPECT_NE(commit.xml.find("mandatory data node is absent"),
             std::string::npos);
+  EXPECT_NE(commit.xml.find(
+                "mandatory data node is absent (module: appliance, path: "
+                "/{urn:example:appliance}system/"
+                "{urn:example:appliance}hostname)"),
+            std::string::npos);
+  EXPECT_NE(commit.xml.find(
+                "<error-path>/{urn:example:appliance}system/"
+                "{urn:example:appliance}hostname</error-path>"),
+            std::string::npos);
   EXPECT_NE(loaded.application->datastores()
                 .Read(yang::netconf::Datastore::kRunning)
                 .ToXml()

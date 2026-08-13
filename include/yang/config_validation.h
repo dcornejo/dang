@@ -267,6 +267,8 @@ struct ValidationFinding {
   std::string netconf_error_app_tag;
   std::optional<SourceRange> source_range;
   std::optional<ConfigNodeId> config_node;
+  /** YANG module defining the schema node responsible for this finding. */
+  std::string module_name;
 };
 
 struct ConfigParseOptions {

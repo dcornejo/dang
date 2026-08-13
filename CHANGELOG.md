@@ -34,6 +34,11 @@ and releases follow Semantic Versioning.
 - Added NETCONF error-interaction coverage proving that invalid edit targets
   and schema-invalid candidate commits fail without publishing backend state.
 
+### Changed
+
+- NETCONF validation error messages now include the defining YANG module and
+  instance path when available, making model failures directly actionable.
+
 ## [0.1.0] - 2026-08-13
 
 ### Added

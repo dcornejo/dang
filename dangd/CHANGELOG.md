@@ -27,3 +27,5 @@
 - Added end-to-end NETCONF failures for an invalid edit target and for a
   schema-invalid candidate commit, verifying that failed operations preserve
   the running and backend working configurations and emit no backend deltas.
+- Extended the invalid-commit interaction to verify that the NETCONF error
+  identifies both the defining YANG module and the failing instance path.

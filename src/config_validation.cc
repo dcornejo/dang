@@ -58,11 +58,13 @@ std::string PathComponent(const QualifiedXmlName& name) {
 }
 ValidationFinding Finding(ValidationCode code, FindingState state,
                           std::string message, std::string path,
-                          std::string tag = "invalid-value") {
+                          std::string tag = "invalid-value",
+                          std::string module_name = {}) {
   ValidationFinding result;
   result.code = code;
   result.state = state;
   result.message = std::move(message);
+  result.module_name = std::move(module_name);
   result.instance_path = std::move(path);
   result.netconf_error_tag = std::move(tag);
   return result;
@@ -1991,17 +1993,21 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
       const std::string path = std::string(parent_path) + PathComponent(node.name);
       if (node.kind != SchemaNodeKind::kList && node.kind != SchemaNodeKind::kLeafList && count > 1)
         result.findings.push_back(Finding(ValidationCode::kDuplicateNode, FindingState::kInvalid,
-            "a singleton data node occurs more than once", path, "data-exists"));
+            "a singleton data node occurs more than once", path, "data-exists",
+            node.module_name));
       const std::uint64_t numeric_count = static_cast<std::uint64_t>(count);
       if (node.min_elements && numeric_count < *node.min_elements)
         result.findings.push_back(Finding(ValidationCode::kElementCount, omission_state(collection_coverage),
-            "fewer entries than min-elements", path, "too-few-elements"));
+            "fewer entries than min-elements", path, "too-few-elements",
+            node.module_name));
       if (node.max_elements && numeric_count > *node.max_elements)
         result.findings.push_back(Finding(ValidationCode::kElementCount, FindingState::kInvalid,
-            "more entries than max-elements", path, "too-many-elements"));
+            "more entries than max-elements", path, "too-many-elements",
+            node.module_name));
       if (node.mandatory && count == 0)
         result.findings.push_back(Finding(ValidationCode::kMissingMandatoryNode,
-            omission_state(collection_coverage), "mandatory data node is absent", path, "missing-element"));
+            omission_state(collection_coverage), "mandatory data node is absent", path,
+            "missing-element", node.module_name));
     }
     for (RuntimeSchemaNodeId candidate : schema_children) {
       const RuntimeSchemaNode& choice = request.schema.Get(candidate);
@@ -2014,11 +2020,12 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
       const std::string path = std::string(parent_path) + PathComponent(choice.name);
       if (active_cases.size() > 1)
         result.findings.push_back(Finding(ValidationCode::kChoiceConflict, FindingState::kInvalid,
-            "data nodes from more than one case of a choice are present", path, "bad-element"));
+            "data nodes from more than one case of a choice are present", path,
+            "bad-element", choice.module_name));
       if (choice.mandatory && active_cases.empty())
         result.findings.push_back(Finding(ValidationCode::kMissingMandatoryChoice,
             omission_state(coverage), "no case of a mandatory choice is present", path,
-            "missing-choice"));
+            "missing-choice", choice.module_name));
     }
   };
   std::function<void(ConfigNodeId)> validate_node = [&](ConfigNodeId id) {
@@ -2229,7 +2236,7 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
         });
         if (!found) result.findings.push_back(Finding(ValidationCode::kMissingKey,
             FindingState::kInvalid, "list entry is missing a key leaf", paths.at(id),
-            "missing-element"));
+            "missing-element", request.schema.Get(key).module_name));
       }
     }
     validate_children(schema.children, config.children, config.child_coverage,
@@ -2321,6 +2328,11 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
         best_length = candidate_path.size();
       }
     }
+    if (finding.module_name.empty() && finding.config_node)
+      finding.module_name = request.schema
+                                .Get(request.document.Get(*finding.config_node)
+                                         .schema)
+                                .module_name;
   }
   std::ranges::sort(result.findings, [](const ValidationFinding& left,
                                         const ValidationFinding& right) {

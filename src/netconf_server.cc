@@ -207,7 +207,18 @@ std::string Reply(std::string_view message_id, const TransactionResult& result,
              "</error-tag><error-severity>error</error-severity>";
       if (!error.instance_path.empty())
         xml += "<error-path>" + Escape(error.instance_path) + "</error-path>";
-      xml += "<error-message xml:lang=\"en\">" + Escape(error.message) +
+      std::string message = error.message;
+      if (!error.module_name.empty() || !error.instance_path.empty()) {
+        message += " (";
+        if (!error.module_name.empty())
+          message += "module: " + error.module_name;
+        if (!error.module_name.empty() && !error.instance_path.empty())
+          message += ", ";
+        if (!error.instance_path.empty())
+          message += "path: " + error.instance_path;
+        message += ")";
+      }
+      xml += "<error-message xml:lang=\"en\">" + Escape(message) +
              "</error-message></rpc-error>";
     }
   }
