@@ -1,0 +1,7 @@
+<!-- Copyright 2026 David Cornejo -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <system xmlns="urn:example:appliance">
+    <hostname>edge-1</hostname>
+  </system>
+</config>

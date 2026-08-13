@@ -171,6 +171,26 @@ TEST(NetconfTransportTest, EnforcesTimeoutCancellationAndEofCleanup) {
   EXPECT_TRUE(server.Sessions().empty());
 }
 
+TEST(NetconfTransportTest, FlushesCloseSessionReplyBeforeClosingTransport) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NetconfServer server(stores);
+  MemoryStream stream;
+  NetconfTransportAdapter adapter(server, stream, 211, SshIdentity());
+  adapter.Receive(
+      "<hello xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
+      "<capabilities><capability>urn:ietf:params:netconf:base:1.0"
+      "</capability></capabilities></hello>]]>]]>"
+      "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+      "message-id=\"9\"><close-session/></rpc>]]>]]>");
+  ASSERT_GE(stream.writes.size(), 2U);
+  EXPECT_NE(stream.writes.back().find("message-id=\"9\"><ok/>"),
+            std::string::npos);
+  EXPECT_TRUE(stream.closed);
+}
+
 TEST(NetconfTransportTest, SelectsCallHomeDefaultPortsAndValidatesTarget) {
   CallHomeTarget observed;
   const CallHomeConnector connector = [&](const CallHomeTarget& target,

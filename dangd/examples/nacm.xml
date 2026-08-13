@@ -1,0 +1,31 @@
+<!-- Copyright 2026 David Cornejo -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+  <enable-nacm>true</enable-nacm>
+  <read-default>permit</read-default>
+  <write-default>deny</write-default>
+  <exec-default>deny</exec-default>
+  <groups>
+    <group>
+      <name>administrators</name>
+      <user-name>alice</user-name>
+    </group>
+  </groups>
+  <rule-list>
+    <name>administrator-access</name>
+    <group>administrators</group>
+    <rule>
+      <name>allow-netconf-operations</name>
+      <module-name>ietf-netconf</module-name>
+      <rpc-name>*</rpc-name>
+      <access-operations>exec</access-operations>
+      <action>permit</action>
+    </rule>
+    <rule>
+      <name>allow-appliance-data</name>
+      <module-name>appliance</module-name>
+      <access-operations>*</access-operations>
+      <action>permit</action>
+    </rule>
+  </rule-list>
+</nacm>

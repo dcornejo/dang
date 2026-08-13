@@ -1,3 +1,7 @@
 Copyright 2026 David Cornejo
 
 This product includes software developed by David Cornejo.
+
+The example model directory includes IETF YANG modules published in RFC 6991
+and RFC 8341. Those modules retain the IETF Trust copyright and redistribution
+terms embedded in their source text.

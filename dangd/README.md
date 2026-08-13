@@ -105,3 +105,58 @@ datastore advances only after successful hardware application. On failure, the
 backend rolls back completed actions; if rollback is incomplete, the NETCONF
 error must explicitly report possible divergence between hardware and the
 intended configuration.
+
+## Mutual-TLS console example
+
+`dangd` can expose its NETCONF session over a blocking mutual-TLS listener.
+The server validates client certificates against the configured CA and maps
+the verified certificate common name to the NETCONF username used by NACM.
+The example certificate for `alice` therefore selects the `alice` rules in
+`examples/nacm.xml`.
+
+The material under `testdata/tls` is public, test-only cryptographic material.
+Never deploy those keys or trust their CA outside a local demonstration.
+
+Start the server from the repository root:
+
+```sh
+./build/dangd \
+  --model dangd/examples/appliance.yang \
+  --config dangd/examples/config.xml \
+  --nacm dangd/examples/nacm.xml \
+  --tls-listen 127.0.0.1 --tls-port 6513 \
+  --tls-cert dangd/testdata/tls/server-cert.pem \
+  --tls-key dangd/testdata/tls/server-key.pem \
+  --tls-ca dangd/testdata/tls/ca-cert.pem
+```
+
+In another terminal window, start the deliberately simple client:
+
+```sh
+./build/dangctl \
+  --host localhost --port 6513 \
+  --cert dangd/testdata/tls/alice-cert.pem \
+  --key dangd/testdata/tls/alice-key.pem \
+  --ca dangd/testdata/tls/ca-cert.pem
+```
+
+The client prints the server hello. Paste one XML RPC, then enter a blank line:
+
+```xml
+<rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="1">
+  <get-config><source><running/></source></get-config>
+</rpc>
+```
+
+`dangctl` frames the document, sends it over TLS, and prints the decoded
+`rpc-reply`. It negotiates NETCONF base 1.0 so the interactive boundary remains
+easy to see. End the session with `<close-session/>` or EOF.
+
+The listener requires TLS 1.2 or newer, a trusted client certificate, and a
+nonempty certificate common name. The client requires a trusted server chain
+and verifies `--host` against the server certificate. The current CN mapping is
+an explicit demonstration policy, not the configurable certificate-to-name
+mapping defined by RFC 7589. The listener handles connections synchronously and
+is intended for local integration and tests; production work still needs an
+event-loop TLS service, revocation policy, configurable identity mapping,
+operational monitoring, and protected deployment credentials.

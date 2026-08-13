@@ -1,0 +1,27 @@
+// Copyright 2026 David Cornejo
+// SPDX-License-Identifier: Apache-2.0
+
+module appliance {
+  yang-version 1.1;
+  namespace "urn:example:appliance";
+  prefix appliance;
+
+  organization "dangd example";
+  description
+    "Small configuration model used by the mutual-TLS walkthrough.";
+
+  revision "2026-08-13" {
+    description "Initial example.";
+  }
+
+  container system {
+    description "Basic appliance configuration.";
+    leaf hostname {
+      type string {
+        length "1..253";
+      }
+      mandatory true;
+      description "Administrative hostname.";
+    }
+  }
+}

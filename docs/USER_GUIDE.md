@@ -347,6 +347,12 @@ The last item is intentionally not claimed by the current `RunningConfigBackend`
 interface. `dangd` is a working protocol and integration example, not yet a
 production hardware agent.
 
+For a directly usable secure demonstration, follow the
+[mutual-TLS console example](../dangd/README.md#mutual-tls-console-example).
+It connects the included `dangctl` paste-and-reply client to `dangd`, maps a
+verified client certificate identity into NACM, and clearly identifies the
+test-only trust material and production limitations.
+
 ## Where to go next
 
 - [Configuration validation](CONFIG_VALIDATION.md)

@@ -101,12 +101,14 @@ install(FILES examples/example.yang examples/library_example.cc
   DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/yang/examples)
 
 if(YANG_BUILD_DANGD)
+  find_package(OpenSSL REQUIRED)
   add_library(dangd_core
     dangd/application.cc
-    dangd/configuration_backend.cc)
+    dangd/configuration_backend.cc
+    dangd/tls_transport.cc)
   target_compile_features(dangd_core PUBLIC cxx_std_20)
   target_include_directories(dangd_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-  target_link_libraries(dangd_core PUBLIC yang::yang)
+  target_link_libraries(dangd_core PUBLIC yang::yang OpenSSL::SSL OpenSSL::Crypto)
   target_compile_options(dangd_core PRIVATE
     -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 
@@ -115,8 +117,15 @@ if(YANG_BUILD_DANGD)
   target_link_libraries(dangd PRIVATE dangd_core)
   target_compile_options(dangd PRIVATE
     -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
-  install(TARGETS dangd RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  add_executable(dangctl dangd/client_main.cc)
+  target_compile_features(dangctl PRIVATE cxx_std_20)
+  target_link_libraries(dangctl PRIVATE dangd_core)
+  target_compile_options(dangctl PRIVATE
+    -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+  install(TARGETS dangd dangctl RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
   install(FILES dangd/README.md dangd/CHANGELOG.md
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/yang/dangd)
+  install(DIRECTORY dangd/examples dangd/models dangd/testdata
     DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/yang/dangd)
 endif()
 
@@ -207,9 +216,13 @@ if(YANG_BUILD_TESTS)
   endif()
 
   if(YANG_BUILD_DANGD)
-    add_executable(dangd_tests dangd/application_test.cc)
+    add_executable(dangd_tests dangd/application_test.cc
+      dangd/tls_transport_test.cc)
     target_compile_features(dangd_tests PRIVATE cxx_std_20)
-    target_link_libraries(dangd_tests PRIVATE dangd_core GTest::gtest_main)
+    target_link_libraries(dangd_tests PRIVATE dangd_core GTest::gtest_main
+      Threads::Threads)
+    target_compile_definitions(dangd_tests PRIVATE
+      DANG_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_options(dangd_tests PRIVATE
       -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
     if(YANG_ENABLE_SANITIZERS AND APPLE)

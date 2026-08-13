@@ -7,13 +7,16 @@
 #include <string>
 
 #include "dangd/application.h"
+#include "dangd/tls_transport.h"
 
 namespace {
 
 void Usage() {
   std::cerr
       << "usage: dangd --model FILE --config FILE [--search DIR] [--state FILE]"
-         " [--check | --stdio --username USER [--session-id ID]]\n";
+         " [--nacm FILE] [--check | --stdio --username USER [--session-id ID]"
+         " | --tls-listen ADDRESS --tls-port PORT --tls-cert FILE --tls-key "
+         "FILE --tls-ca FILE]\n";
 }
 
 }  // namespace
@@ -21,8 +24,10 @@ void Usage() {
 int main(int argc, char* argv[]) {
   dangd::ApplicationOptions options;
   bool stream_mode = false;
+  bool tls_mode = false;
   std::string username;
   std::uint32_t session_id = 1;
+  dangd::TlsServerOptions tls;
   for (int index = 1; index < argc; ++index) {
     const std::string argument = argv[index];
     if (argument == "--model" && index + 1 < argc) {
@@ -33,6 +38,8 @@ int main(int argc, char* argv[]) {
       options.search_paths.emplace_back(argv[++index]);
     } else if (argument == "--state" && index + 1 < argc) {
       options.state_file = std::filesystem::path(argv[++index]);
+    } else if (argument == "--nacm" && index + 1 < argc) {
+      options.nacm_configuration = std::filesystem::path(argv[++index]);
     } else if (argument == "--username" && index + 1 < argc) {
       username = argv[++index];
     } else if (argument == "--session-id" && index + 1 < argc) {
@@ -49,15 +56,38 @@ int main(int argc, char* argv[]) {
       }
     } else if (argument == "--stdio") {
       stream_mode = true;
+      tls_mode = false;
+    } else if (argument == "--tls-listen" && index + 1 < argc) {
+      tls.address = argv[++index];
+      tls_mode = true;
+      stream_mode = false;
+    } else if (argument == "--tls-port" && index + 1 < argc) {
+      try {
+        const unsigned long port = std::stoul(argv[++index]);
+        if (port == 0 || port > UINT16_MAX) throw std::out_of_range("port");
+        tls.port = static_cast<std::uint16_t>(port);
+      } catch (const std::exception&) {
+        Usage();
+        return 2;
+      }
+    } else if (argument == "--tls-cert" && index + 1 < argc) {
+      tls.certificate = argv[++index];
+    } else if (argument == "--tls-key" && index + 1 < argc) {
+      tls.private_key = argv[++index];
+    } else if (argument == "--tls-ca" && index + 1 < argc) {
+      tls.trust_anchor = argv[++index];
     } else if (argument == "--check") {
       stream_mode = false;
+      tls_mode = false;
     } else {
       Usage();
       return 2;
     }
   }
   if (options.model.empty() || options.configuration.empty() ||
-      (stream_mode && username.empty())) {
+      (stream_mode && username.empty()) ||
+      (tls_mode && (tls.certificate.empty() || tls.private_key.empty() ||
+                    tls.trust_anchor.empty()))) {
     Usage();
     return 2;
   }
@@ -68,6 +98,8 @@ int main(int argc, char* argv[]) {
       std::cerr << "dangd: " << error << '\n';
     return 1;
   }
+  if (tls_mode)
+    return dangd::RunTlsServer(*loaded.application, tls, std::cerr);
   if (!stream_mode) {
     std::cout << "dangd: configuration is valid\n";
     return 0;

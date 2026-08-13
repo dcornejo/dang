@@ -105,7 +105,12 @@ void NetconfTransportAdapter::Flush() {
 void NetconfTransportAdapter::Consume(SessionOutput output) {
   for (std::string& bytes : output.bytes_to_send) Enqueue(std::move(bytes));
   if (output.error) error_ = std::move(*output.error);
-  if (output.close_transport) Fail(error_.value_or("NETCONF session closed"));
+  if (output.close_transport) {
+    // A successful close-session reply must reach the peer before TLS/SSH is
+    // closed. Receive()'s normal trailing Flush cannot run after Fail().
+    Flush();
+    Fail(error_.value_or("NETCONF session closed"));
+  }
 }
 void NetconfTransportAdapter::Fail(std::string message) {
   if (closed_) return;

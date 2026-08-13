@@ -69,6 +69,39 @@ TEST(DangdApplicationTest, LoadsModelAndCompleteConfiguration) {
   EXPECT_EQ(loaded.application->schema().roots().size(), 1u);
 }
 
+TEST(DangdApplicationTest, LoadsNacmAndUsesAuthenticatedSessionIdentity) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.nacm_configuration = inputs.Write("nacm.xml", R"xml(
+    <nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+      <read-default>permit</read-default><write-default>deny</write-default>
+      <exec-default>deny</exec-default>
+      <groups><group><name>admins</name><user-name>alice</user-name>
+      </group></groups>
+      <rule-list><name>admin</name><group>admins</group>
+        <rule><name>netconf</name><module-name>ietf-netconf</module-name>
+          <rpc-name>*</rpc-name><access-operations>exec</access-operations>
+          <action>permit</action></rule>
+        <rule><name>data</name><module-name>appliance</module-name>
+          <access-operations>*</access-operations><action>permit</action></rule>
+      </rule-list>
+    </nacm>)xml");
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr);
+
+  const std::string commit =
+      "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+      "message-id=\"nacm\"><commit/></rpc>";
+  yang::netconf::RpcSessionContext alice{1, "alice", "alice", {}};
+  yang::netconf::RpcSessionContext bob{2, "bob", "bob", {}};
+  EXPECT_NE(loaded.application->server().Process(alice, commit).xml.find(
+                "<ok/>"),
+            std::string::npos);
+  EXPECT_NE(loaded.application->server().Process(bob, commit).xml.find(
+                "access-denied"),
+            std::string::npos);
+}
+
 TEST(DangdApplicationTest, RejectsSchemaInvalidConfiguration) {
   TemporaryInputs inputs;
   auto options = Options(inputs);

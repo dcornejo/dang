@@ -16,6 +16,11 @@
 - An in-memory running-configuration backend that atomically replaces its
   working configuration and expresses created, deleted, changed, and replaced
   schema-aware deltas in English.
+- A mutual-TLS listener that requires trusted client certificates, maps the
+  verified certificate common name to the NETCONF/NACM username, and loads an
+  optional RFC 8341 policy at startup.
+- The `dangctl` interactive TLS client, sample appliance and NACM inputs,
+  normative NACM model dependencies, and test-only server/Alice credentials.
 
 ### Fixed
 

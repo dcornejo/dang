@@ -20,6 +20,9 @@ and releases follow Semantic Versioning.
 - RFC 6241 datastores and operations, RFC 6242 framing, RFC 6243 defaults,
   RFC 5277 notifications, RFC 8341 NACM, persistence, filters, resource limits,
   fuzzing, sanitizers, and deterministic benchmarks.
+- Mutual-TLS `dangd` listening, certificate-to-NETCONF identity handoff, NACM
+  policy loading, and the interactive `dangctl` XML paste-and-reply client,
+  with test-only certificates and RFC 8341 model fixtures.
 
 ### Fixed
 
@@ -28,6 +31,8 @@ and releases follow Semantic Versioning.
   instrumented executable with Homebrew's prebuilt GoogleTest.
 - Corrected edit authorization to compare its iterator against the exact
   change set being searched, avoiding undefined behavior for denied edits.
+- Ensured transport adapters flush a successful `close-session` reply before
+  shutting down the underlying SSH or TLS stream.
 
 ### Tests
 

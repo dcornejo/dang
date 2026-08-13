@@ -75,11 +75,13 @@ bool WriteAll(std::ostream& output, const std::string& bytes) {
 
 Application::Application(yang::config::RuntimeSchema schema,
                          yang::config::ConfigDocument configuration,
-                         std::optional<std::filesystem::path> state_file)
+                         std::optional<std::filesystem::path> state_file,
+                         std::optional<yang::netconf::NacmPolicy> nacm)
     : schema_(std::move(schema)),
       backend_(configuration),
       datastores_(schema_, std::move(configuration), std::nullopt, &backend_),
-      server_(datastores_),
+      nacm_(std::move(nacm)),
+      server_(datastores_, nacm_ ? &*nacm_ : nullptr),
       state_file_(std::move(state_file)) {}
 
 LoadResult Application::Load(const ApplicationOptions& options) {
@@ -96,7 +98,15 @@ LoadResult Application::Load(const ApplicationOptions& options) {
   const auto configuration_text = ReadFile(
       options.configuration, yang::DefaultResourceLimits().maximum_xml_bytes,
       "XML configuration", &result.errors);
-  if (!model_text || !configuration_text) return result;
+  std::optional<std::string> nacm_text;
+  if (options.nacm_configuration) {
+    nacm_text = ReadFile(*options.nacm_configuration,
+                         yang::DefaultResourceLimits().maximum_xml_bytes,
+                         "NACM configuration", &result.errors);
+  }
+  if (!model_text || !configuration_text ||
+      (options.nacm_configuration && !nacm_text))
+    return result;
 
   yang::VectorDiagnosticSink diagnostics;
   auto source = yang::SourceFile::Create(options.model.string(), *model_text,
@@ -129,8 +139,20 @@ LoadResult Application::Load(const ApplicationOptions& options) {
     return result;
   }
 
+  std::optional<yang::netconf::NacmPolicy> nacm;
+  if (nacm_text) {
+    auto loaded_nacm = yang::netconf::LoadNacmPolicy(*nacm_text);
+    if (!loaded_nacm.policy) {
+      for (const std::string& error : loaded_nacm.errors)
+        result.errors.push_back("invalid NACM configuration: " + error);
+      return result;
+    }
+    nacm = std::move(*loaded_nacm.policy);
+  }
+
   result.application = std::unique_ptr<Application>(new Application(
-      std::move(schema), std::move(*parsed.document), options.state_file));
+      std::move(schema), std::move(*parsed.document), options.state_file,
+      std::move(nacm)));
   if (options.state_file) {
     std::error_code exists_error;
     const bool exists =

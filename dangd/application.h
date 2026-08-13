@@ -15,6 +15,7 @@
 #include "dangd/configuration_backend.h"
 
 #include "yang/config_validation.h"
+#include "yang/nacm.h"
 #include "yang/netconf_datastore.h"
 #include "yang/netconf_server.h"
 
@@ -32,6 +33,8 @@ struct ApplicationOptions {
   std::filesystem::path configuration;
   /** Optional atomic datastore snapshot restored and updated by the host. */
   std::optional<std::filesystem::path> state_file;
+  /** Optional RFC 8341 NACM XML configuration loaded at startup. */
+  std::optional<std::filesystem::path> nacm_configuration;
 };
 
 struct LoadResult;
@@ -75,11 +78,13 @@ class Application {
  private:
   Application(yang::config::RuntimeSchema schema,
               yang::config::ConfigDocument configuration,
-              std::optional<std::filesystem::path> state_file);
+              std::optional<std::filesystem::path> state_file,
+              std::optional<yang::netconf::NacmPolicy> nacm);
 
   yang::config::RuntimeSchema schema_;
   EnglishConfigurationBackend backend_;
   yang::netconf::DatastoreManager datastores_;
+  std::optional<yang::netconf::NacmPolicy> nacm_;
   yang::netconf::NetconfServer server_;
   std::optional<std::filesystem::path> state_file_;
 };
