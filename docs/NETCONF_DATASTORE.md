@@ -63,6 +63,15 @@ persist files, transport NETCONF RPCs, or authenticate sessions; those belong
 to the embedding server. Call `ProcessTimeouts` from its event loop and persist
 the returned datastore documents using the server's storage policy.
 
+An embedding server can provide a `RunningConfigBackend` to the constructor.
+It receives the previous and replacement documents plus the exact,
+schema-aware `ChangeEvent` delta whenever `running` is replaced by an edit,
+commit, copy, confirmed-commit continuation or rollback, timeout, session
+cleanup, or snapshot restore. The callback runs under the datastore lock and
+must not call back into the same manager. The base interface is an infallible
+publication boundary; applications that configure fallible external systems
+should stage and validate those actions before invoking the datastore change.
+
 ## Ordered-by-user editing
 
 The edit parser accepts RFC 7950 insertion attributes in

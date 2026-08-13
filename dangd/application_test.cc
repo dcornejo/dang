@@ -130,5 +130,34 @@ TEST(DangdApplicationTest, RunsFramedBase10SessionOverStreams) {
             std::string::npos);
 }
 
+TEST(DangdApplicationTest, CommitReplacesBackendAndDescribesDeltaInEnglish) {
+  TemporaryInputs inputs;
+  auto loaded = Application::Load(Options(inputs));
+  ASSERT_NE(loaded.application, nullptr);
+  const auto edit = loaded.application->server().Process("one", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="8">
+      <edit-config><target><candidate/></target><config>
+        <system xmlns="urn:example:appliance"><hostname>edge-2</hostname></system>
+      </config></edit-config>
+    </rpc>)xml");
+  ASSERT_NE(edit.xml.find("<ok/>"), std::string::npos);
+  EXPECT_TRUE(loaded.application->DrainBackendDeltas().empty());
+
+  const auto commit = loaded.application->server().Process("one", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="9">
+      <commit/>
+    </rpc>)xml");
+  ASSERT_NE(commit.xml.find("<ok/>"), std::string::npos);
+  const auto deltas = loaded.application->DrainBackendDeltas();
+  ASSERT_EQ(deltas.size(), 1u);
+  EXPECT_NE(deltas.front().find("Changed "), std::string::npos);
+  EXPECT_NE(deltas.front().find("hostname"), std::string::npos);
+  EXPECT_NE(deltas.front().find("\"edge-1\" to \"edge-2\""),
+            std::string::npos);
+  EXPECT_NE(loaded.application->working_configuration().ToXml().find(
+                ">edge-2</"),
+            std::string::npos);
+}
+
 }  // namespace
 }  // namespace dangd

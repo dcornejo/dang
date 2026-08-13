@@ -13,6 +13,9 @@
   integration transport.
 - Build-matrix isolation for fuzzing and benchmark configurations, strict
   session-ID parsing, and installed `dangd` documentation.
+- An in-memory running-configuration backend that atomically replaces its
+  working configuration and expresses created, deleted, changed, and replaced
+  schema-aware deltas in English.
 
 ### Fixed
 

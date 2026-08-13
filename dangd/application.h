@@ -12,6 +12,8 @@
 #include <string>
 #include <vector>
 
+#include "dangd/configuration_backend.h"
+
 #include "yang/config_validation.h"
 #include "yang/netconf_datastore.h"
 #include "yang/netconf_server.h"
@@ -49,6 +51,12 @@ class Application {
   }
   /** Saves all persistent datastore state when a state path was configured. */
   [[nodiscard]] std::optional<std::string> SaveState() const;
+  [[nodiscard]] std::vector<std::string> DrainBackendDeltas() {
+    return backend_.DrainDeltas();
+  }
+  [[nodiscard]] yang::config::ConfigDocument working_configuration() const {
+    return backend_.Working();
+  }
 
  private:
   Application(yang::config::RuntimeSchema schema,
@@ -56,6 +64,7 @@ class Application {
               std::optional<std::filesystem::path> state_file);
 
   yang::config::RuntimeSchema schema_;
+  EnglishConfigurationBackend backend_;
   yang::netconf::DatastoreManager datastores_;
   yang::netconf::NetconfServer server_;
   std::optional<std::filesystem::path> state_file_;

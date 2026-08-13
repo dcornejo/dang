@@ -24,9 +24,18 @@ TransactionResult Failure(config::ValidationCode code, std::string message,
 
 DatastoreManager::DatastoreManager(
     const config::RuntimeSchema& schema, config::ConfigDocument running,
-    std::optional<config::ConfigDocument> startup)
+    std::optional<config::ConfigDocument> startup,
+    RunningConfigBackend* backend)
     : schema_(schema), running_(std::move(running)), candidate_(running_),
-      startup_(startup.value_or(running_)) {}
+      startup_(startup.value_or(running_)), backend_(backend) {}
+
+void DatastoreManager::ReplaceRunning(
+    config::ConfigDocument replacement,
+    std::vector<config::ChangeEvent> changes) {
+  if (backend_ != nullptr)
+    backend_->Replace(schema_, running_, replacement, changes);
+  running_ = std::move(replacement);
+}
 
 config::ConfigDocument DatastoreManager::Read(Datastore datastore) const {
   std::lock_guard lock(mutex_);
@@ -113,7 +122,7 @@ TransactionResult DatastoreManager::EditConfig(
           exact_changes, [&](const config::ChangeEvent& change) {
             return !request.authorize_change(change);
           });
-      if (denied != applied.changes.end()) {
+      if (denied != exact_changes.end()) {
         result.ok = false;
         config::ValidationFinding finding;
         finding.code = config::ValidationCode::kInvalidValue;
@@ -146,7 +155,13 @@ TransactionResult DatastoreManager::EditConfig(
   }
   if (request.test_option != TestOption::kTestOnly &&
       (result.ok || request.error_option != ErrorOption::kRollbackOnError)) {
-    Mutable(request.target) = std::move(working);
+    if (request.target == Datastore::kRunning) {
+      std::vector<config::ChangeEvent> final_changes =
+          config::DiffConfigDocuments(schema_, original, working);
+      ReplaceRunning(std::move(working), std::move(final_changes));
+    } else {
+      Mutable(request.target) = std::move(working);
+    }
   }
   std::ranges::sort(result.changes, {}, &config::ChangeEvent::instance_path);
   return result;
@@ -191,7 +206,7 @@ TransactionResult DatastoreManager::Commit(
     confirming_session_.reset();
     persist_token_.reset();
   }
-  running_ = candidate_;
+  ReplaceRunning(candidate_, changes);
   return {true, {}, std::move(changes)};
 }
 
@@ -234,10 +249,12 @@ TransactionResult DatastoreManager::ContinueConfirmedCommit(
       !access.ok) return access;
   TransactionResult checked = ValidateDocument(candidate_);
   if (!checked.ok) return checked;
-  running_ = candidate_;
+  std::vector<config::ChangeEvent> changes =
+      config::DiffConfigDocuments(schema_, running_, candidate_);
+  ReplaceRunning(candidate_, changes);
   confirmation_deadline_ = Clock::now() + timeout;
   confirming_session_ = std::string(session);
-  return {true, {}, {}};
+  return {true, {}, std::move(changes)};
 }
 
 TransactionResult DatastoreManager::CancelCommit(
@@ -253,13 +270,15 @@ TransactionResult DatastoreManager::CancelCommit(
     return Failure(config::ValidationCode::kInvalidValue,
                    "confirmed-commit token or session does not match",
                    "invalid-value");
-  running_ = *rollback_running_;
+  std::vector<config::ChangeEvent> changes =
+      config::DiffConfigDocuments(schema_, running_, *rollback_running_);
+  ReplaceRunning(*rollback_running_, changes);
   candidate_ = running_;
   rollback_running_.reset();
   confirmation_deadline_.reset();
   confirming_session_.reset();
   persist_token_.reset();
-  return {true, {}, {}};
+  return {true, {}, std::move(changes)};
 }
 
 TransactionResult DatastoreManager::DiscardChanges(std::string_view session) {
@@ -294,7 +313,11 @@ TransactionResult DatastoreManager::CopyConfig(std::string_view session,
                      "access-denied", denied->instance_path);
     }
   }
-  Mutable(target) = Get(source);
+  if (target == Datastore::kRunning) {
+    ReplaceRunning(Get(source), changes);
+  } else {
+    Mutable(target) = Get(source);
+  }
   return {true, {}, std::move(changes)};
 }
 
@@ -321,7 +344,9 @@ void DatastoreManager::CloseSession(std::string_view session) {
     }
   }
   if (rollback_running_ && !persist_token_ && confirming_session_ == session) {
-    running_ = *rollback_running_;
+    std::vector<config::ChangeEvent> changes =
+        config::DiffConfigDocuments(schema_, running_, *rollback_running_);
+    ReplaceRunning(*rollback_running_, std::move(changes));
     candidate_ = running_;
     rollback_running_.reset();
     confirmation_deadline_.reset();
@@ -332,7 +357,9 @@ void DatastoreManager::CloseSession(std::string_view session) {
 bool DatastoreManager::ProcessTimeouts(Clock::time_point now) {
   std::lock_guard lock(mutex_);
   if (!confirmation_deadline_ || now < *confirmation_deadline_) return false;
-  running_ = *rollback_running_;
+  std::vector<config::ChangeEvent> changes =
+      config::DiffConfigDocuments(schema_, running_, *rollback_running_);
+  ReplaceRunning(*rollback_running_, std::move(changes));
   candidate_ = running_;
   rollback_running_.reset();
   confirmation_deadline_.reset();
@@ -394,7 +421,7 @@ TransactionResult DatastoreManager::RestorePersistentState(
   }
   std::lock_guard lock(mutex_);
   locks_.clear();
-  running_ = std::move(*running);
+  config::ConfigDocument restored_running = std::move(*running);
   candidate_ = std::move(*candidate);
   startup_ = std::move(*startup);
   rollback_running_ = std::move(rollback);
@@ -406,8 +433,8 @@ TransactionResult DatastoreManager::RestorePersistentState(
         std::chrono::seconds(*state.confirmation_expiry_unix_seconds));
     const auto remaining = expiry - std::chrono::system_clock::now();
     if (remaining <= std::chrono::system_clock::duration::zero()) {
-      running_ = *rollback_running_;
-      candidate_ = running_;
+      restored_running = *rollback_running_;
+      candidate_ = restored_running;
       rollback_running_.reset();
       confirming_session_.reset();
       persist_token_.reset();
@@ -416,6 +443,9 @@ TransactionResult DatastoreManager::RestorePersistentState(
           std::chrono::duration_cast<Clock::duration>(remaining);
     }
   }
+  std::vector<config::ChangeEvent> changes =
+      config::DiffConfigDocuments(schema_, running_, restored_running);
+  ReplaceRunning(std::move(restored_running), std::move(changes));
   return {true, {}, {}};
 }
 

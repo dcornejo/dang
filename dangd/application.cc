@@ -77,7 +77,8 @@ Application::Application(yang::config::RuntimeSchema schema,
                          yang::config::ConfigDocument configuration,
                          std::optional<std::filesystem::path> state_file)
     : schema_(std::move(schema)),
-      datastores_(schema_, std::move(configuration)),
+      backend_(configuration),
+      datastores_(schema_, std::move(configuration), std::nullopt, &backend_),
       server_(datastores_),
       state_file_(std::move(state_file)) {}
 
@@ -192,6 +193,8 @@ int RunStreamSession(Application& application, std::istream& input,
       }
     }
     if (response.error) errors << "dangd: " << *response.error << '\n';
+    for (const std::string& delta : application.DrainBackendDeltas())
+      errors << "dangd: configuration delta: " << delta << '\n';
     if (application.has_state_file()) {
       if (const auto persistence_error = application.SaveState()) {
         errors << "dangd: cannot persist datastore state: "

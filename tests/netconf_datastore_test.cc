@@ -19,6 +19,22 @@ struct FixtureData {
   config::ConfigDocument initial;
 };
 
+class RecordingBackend final : public RunningConfigBackend {
+ public:
+  void Replace(const config::RuntimeSchema&,
+               const config::ConfigDocument& before,
+               const config::ConfigDocument& after,
+               std::span<const config::ChangeEvent> observed) override {
+    before_xml = before.ToXml();
+    working_xml = after.ToXml();
+    changes.assign(observed.begin(), observed.end());
+  }
+
+  std::string before_xml;
+  std::string working_xml;
+  std::vector<config::ChangeEvent> changes;
+};
+
 std::optional<FixtureData> BuildFixture(VectorDiagnosticSink* diagnostics) {
   auto source = SourceFile::Create("store.yang", R"yang(module store {
     yang-version 1.1; namespace "urn:store"; prefix s;
@@ -64,6 +80,27 @@ TEST(NetconfDatastoreTest, LocksEditsCandidateAndCommitsAtomically) {
   EXPECT_TRUE(stores.Commit("one").ok);
   EXPECT_NE(stores.Read(Datastore::kRunning).ToXml().find(">new</"),
             std::string::npos);
+}
+
+TEST(NetconfDatastoreTest, PublishesExactCommitChangesToRunningBackend) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  RecordingBackend backend;
+  DatastoreManager stores(fixture->schema, fixture->initial, std::nullopt,
+                          &backend);
+  ASSERT_TRUE(stores.EditConfig(
+      {"one", Datastore::kCandidate,
+       {HostnameEdit(fixture->schema, "new")}}).ok);
+  const TransactionResult committed = stores.Commit("one");
+  ASSERT_TRUE(committed.ok);
+  ASSERT_EQ(backend.changes.size(), 1u);
+  EXPECT_EQ(backend.changes.front().kind,
+            config::ChangeKind::kValueChanged);
+  EXPECT_EQ(backend.changes.front().before, "old");
+  EXPECT_EQ(backend.changes.front().after, "new");
+  EXPECT_NE(backend.before_xml.find(">old</"), std::string::npos);
+  EXPECT_NE(backend.working_xml.find(">new</"), std::string::npos);
 }
 
 TEST(NetconfDatastoreTest, SupportsTestOnlyDiscardAndRollbackOnError) {

@@ -9,6 +9,7 @@
 #include <map>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -61,6 +62,20 @@ struct PersistentDatastoreState {
 };
 
 /**
+ * Receives each atomic replacement of the effective running configuration.
+ * Implementations are called under the datastore lock and must not reenter it.
+ */
+class RunningConfigBackend {
+ public:
+  virtual ~RunningConfigBackend() = default;
+  virtual void Replace(
+      const config::RuntimeSchema& schema,
+      const config::ConfigDocument& before,
+      const config::ConfigDocument& after,
+      std::span<const config::ChangeEvent> changes) = 0;
+};
+
+/**
  * In-memory RFC 6241 datastore transaction manager.
  *
  * All methods are serialized. Documents returned by Read are immutable copies.
@@ -72,7 +87,8 @@ class DatastoreManager {
 
   DatastoreManager(const config::RuntimeSchema& schema,
                    config::ConfigDocument running,
-                   std::optional<config::ConfigDocument> startup = std::nullopt);
+                   std::optional<config::ConfigDocument> startup = std::nullopt,
+                   RunningConfigBackend* backend = nullptr);
 
   [[nodiscard]] const config::RuntimeSchema& schema() const noexcept {
     return schema_;
@@ -121,6 +137,8 @@ class DatastoreManager {
       Datastore datastore, std::string_view session) const;
   [[nodiscard]] TransactionResult ValidateDocument(
       const config::ConfigDocument& document) const;
+  void ReplaceRunning(config::ConfigDocument replacement,
+                      std::vector<config::ChangeEvent> changes);
 
   const config::RuntimeSchema& schema_;
   mutable std::mutex mutex_;
@@ -132,6 +150,7 @@ class DatastoreManager {
   std::optional<Clock::time_point> confirmation_deadline_;
   std::optional<std::string> confirming_session_;
   std::optional<std::string> persist_token_;
+  RunningConfigBackend* backend_ = nullptr;
 };
 
 }  // namespace yang::netconf

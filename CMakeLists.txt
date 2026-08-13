@@ -100,7 +100,9 @@ install(FILES examples/example.yang examples/library_example.cc
   DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/yang/examples)
 
 if(YANG_BUILD_DANGD)
-  add_library(dangd_core dangd/application.cc)
+  add_library(dangd_core
+    dangd/application.cc
+    dangd/configuration_backend.cc)
   target_compile_features(dangd_core PUBLIC cxx_std_20)
   target_include_directories(dangd_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
   target_link_libraries(dangd_core PUBLIC yang::yang)
