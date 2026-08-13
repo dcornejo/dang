@@ -13,6 +13,9 @@ Release compatibility, reproducibility, checksums, and signature verification
 are documented in [docs/RELEASING.md](docs/RELEASING.md). Release history is
 maintained in [CHANGELOG.md](CHANGELOG.md).
 
+Start with the [users guide](docs/USER_GUIDE.md) for the conceptual architecture
+and a concrete end-to-end example built around `dangd`.
+
 The separately owned [`dangd`](dangd/README.md) directory contains the
 host-application foundation for building a runnable NETCONF configuration
 server while keeping transport and deployment policy out of this library.

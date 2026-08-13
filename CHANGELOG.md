@@ -39,6 +39,12 @@ and releases follow Semantic Versioning.
 - NETCONF validation error messages now include the defining YANG module and
   instance path when available, making model failures directly actionable.
 
+### Documentation
+
+- Added a users guide that explains the library and host-application layers,
+  then walks through model loading, validation, NETCONF edits and commits,
+  diagnostics, persistence, and integration using `dangd` as the example.
+
 ## [0.1.0] - 2026-08-13
 
 ### Added
