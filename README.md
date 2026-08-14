@@ -1,7 +1,7 @@
 <!-- Copyright 2026 David Cornejo -->
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# yang-cpp
+# dang - YANG + NETCONF
 
 Copyright 2026 David Cornejo. Licensed under the Apache License, Version 2.0.
 See [LICENSE](LICENSE) for the complete terms. Bundled third-party and IETF
