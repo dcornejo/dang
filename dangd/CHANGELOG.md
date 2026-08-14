@@ -7,6 +7,13 @@
 
 ### Added
 
+- The versioned POSIX plugin loader, plugin-supplied YANG schema composition,
+  runtime dependencies, two-pass validation, ordered apply, reverse rollback,
+  reference plugin, and comprehensive plugin author guide.
+- Datastore-managed NACM with seed-only `--nacm` migration and atomic active
+  policy replacement after successful backend application.
+- RFC 8525 YANG Library operational responses covering core, application,
+  plugin, deviation, and import-only modules.
 - Initial `dangd` application boundary with model and configuration loading,
   complete startup validation, datastore ownership, optional snapshot restore
   and save, a validation-only command, and a supervised stdin/stdout NETCONF

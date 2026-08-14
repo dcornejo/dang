@@ -10,6 +10,16 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- A POSIX dynamic-plugin ABI whose providers supply implemented and dependency
+  YANG sources and participate in prepare, validate, apply, rollback, and
+  release phases, with a loadable reference implementation and author guide.
+- RFC 8525 YANG Library operational data, including plugin-provided modules,
+  datastore schema mappings, and deterministic content identifiers.
+- Core-managed RFC 8341 NACM datastore configuration; `--nacm` seeds an absent
+  policy, successful commits atomically replace the active policy, and denial
+  counters remain continuous core-provided operational state.
+- A running-backend preflight and failure boundary so external validation or
+  application failure leaves the running datastore unchanged.
 - A separate `dangd` server-application foundation with startup model and
   configuration validation, datastore snapshot lifecycle support, and a
   supervised stream integration mode.
@@ -25,6 +35,9 @@ and releases follow Semantic Versioning.
   with test-only certificates and RFC 8341 model fixtures.
 
 ### Fixed
+
+- Configuration validation no longer requires mandatory `config false` nodes
+  or mandatory children belonging to inactive choice cases.
 
 - Applied deferred GoogleTest discovery to every sanitizer-instrumented test
   target on macOS, avoiding false container-overflow failures from linking an

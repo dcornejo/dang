@@ -27,5 +27,11 @@
       <access-operations>*</access-operations>
       <action>permit</action>
     </rule>
+    <rule>
+      <name>allow-nacm-administration</name>
+      <module-name>ietf-netconf-acm</module-name>
+      <access-operations>*</access-operations>
+      <action>permit</action>
+    </rule>
   </rule-list>
 </nacm>

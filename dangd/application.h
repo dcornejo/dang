@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "dangd/configuration_backend.h"
+#include "dangd/plugin_manager.h"
 
 #include "yang/config_validation.h"
 #include "yang/nacm.h"
@@ -20,6 +21,22 @@
 #include "yang/netconf_server.h"
 
 namespace dangd {
+
+/** Immutable RFC 8525 operational data supplied to NETCONF get. */
+class DangdOperationalData final
+    : public yang::netconf::OperationalDataProvider {
+ public:
+  DangdOperationalData(std::string yang_library_xml,
+                       const yang::netconf::NacmPolicy* nacm)
+      : yang_library_xml_(std::move(yang_library_xml)), nacm_(nacm) {}
+  [[nodiscard]] std::string AugmentDataXml(
+      std::string_view configuration_data_xml) const override;
+  [[nodiscard]] std::vector<std::string> Capabilities() const override;
+
+ private:
+  std::string yang_library_xml_;
+  const yang::netconf::NacmPolicy* nacm_ = nullptr;
+};
 
 /**
  * Filesystem inputs and optional persistence used to construct an Application.
@@ -35,6 +52,8 @@ struct ApplicationOptions {
   std::optional<std::filesystem::path> state_file;
   /** Optional RFC 8341 NACM XML configuration loaded at startup. */
   std::optional<std::filesystem::path> nacm_configuration;
+  /** POSIX shared libraries implementing versioned dangd plugin ABI v1. */
+  std::vector<std::filesystem::path> plugins;
 };
 
 struct LoadResult;
@@ -79,12 +98,16 @@ class Application {
   Application(yang::config::RuntimeSchema schema,
               yang::config::ConfigDocument configuration,
               std::optional<std::filesystem::path> state_file,
-              std::optional<yang::netconf::NacmPolicy> nacm);
+              yang::netconf::NacmPolicy nacm, bool managed_nacm,
+              std::unique_ptr<PluginManager> plugins,
+              std::string yang_library_xml);
 
   yang::config::RuntimeSchema schema_;
+  std::unique_ptr<PluginManager> plugins_;
+  yang::netconf::NacmPolicy nacm_;
+  DangdOperationalData operational_;
   EnglishConfigurationBackend backend_;
   yang::netconf::DatastoreManager datastores_;
-  std::optional<yang::netconf::NacmPolicy> nacm_;
   yang::netconf::NetconfServer server_;
   std::optional<std::filesystem::path> state_file_;
 };

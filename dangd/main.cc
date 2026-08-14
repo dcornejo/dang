@@ -14,7 +14,7 @@ namespace {
 void Usage() {
   std::cerr
       << "usage: dangd --model FILE --config FILE [--search DIR] [--state FILE]"
-         " [--nacm FILE] [--check | --stdio --username USER [--session-id ID]"
+         " [--nacm FILE] [--plugin FILE]... [--check | --stdio --username USER [--session-id ID]"
          " | --tls-listen ADDRESS --tls-port PORT --tls-cert FILE --tls-key "
          "FILE --tls-ca FILE]\n";
 }
@@ -23,6 +23,15 @@ void Usage() {
 
 int main(int argc, char* argv[]) {
   dangd::ApplicationOptions options;
+  std::error_code executable_error;
+  const std::filesystem::path executable =
+      std::filesystem::weakly_canonical(
+          std::filesystem::absolute(argv[0], executable_error),
+          executable_error);
+  if (!executable_error) {
+    options.search_paths.push_back(
+        executable.parent_path().parent_path() / "share/doc/yang/dangd/models");
+  }
   bool stream_mode = false;
   bool tls_mode = false;
   std::string username;
@@ -40,6 +49,8 @@ int main(int argc, char* argv[]) {
       options.state_file = std::filesystem::path(argv[++index]);
     } else if (argument == "--nacm" && index + 1 < argc) {
       options.nacm_configuration = std::filesystem::path(argv[++index]);
+    } else if (argument == "--plugin" && index + 1 < argc) {
+      options.plugins.emplace_back(argv[++index]);
     } else if (argument == "--username" && index + 1 < argc) {
       username = argv[++index];
     } else if (argument == "--session-id" && index + 1 < argc) {

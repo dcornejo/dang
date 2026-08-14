@@ -18,6 +18,19 @@
 
 namespace yang::netconf {
 
+/** Supplies config-false XML children for NETCONF get responses. */
+class OperationalDataProvider {
+ public:
+  virtual ~OperationalDataProvider() = default;
+  /** Returns a complete data element augmented with operational state. */
+  [[nodiscard]] virtual std::string AugmentDataXml(
+      std::string_view configuration_data_xml) const = 0;
+  /** Returns NETCONF capabilities associated with the supplied state. */
+  [[nodiscard]] virtual std::vector<std::string> Capabilities() const {
+    return {};
+  }
+};
+
 /** Result of processing one complete NETCONF RPC message. */
 struct RpcResponse {
   std::string xml;
@@ -43,9 +56,11 @@ class NetconfServer {
                          const NacmPolicy* nacm = nullptr,
                          UrlDatastoreProvider* urls = nullptr,
                          NotificationManager* notifications = nullptr,
-                         std::optional<WithDefaultsConfig> with_defaults = std::nullopt)
+                         std::optional<WithDefaultsConfig> with_defaults = std::nullopt,
+                         OperationalDataProvider* operational = nullptr)
       : datastores_(datastores), nacm_(nacm), urls_(urls),
-        notifications_(notifications), with_defaults_(with_defaults) {}
+        notifications_(notifications), with_defaults_(with_defaults),
+        operational_(operational) {}
 
   /** Returns a server hello with the supported capability URIs. */
   [[nodiscard]] std::string ServerHello(std::uint32_t session_id) const;
@@ -80,6 +95,7 @@ class NetconfServer {
   UrlDatastoreProvider* urls_ = nullptr;
   NotificationManager* notifications_ = nullptr;
   std::optional<WithDefaultsConfig> with_defaults_;
+  OperationalDataProvider* operational_ = nullptr;
 };
 
 }  // namespace yang::netconf

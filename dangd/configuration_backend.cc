@@ -3,7 +3,10 @@
 
 #include "dangd/configuration_backend.h"
 
+#include <sstream>
 #include <utility>
+
+#include <pugixml.hpp>
 
 namespace dangd {
 namespace {
@@ -38,16 +41,96 @@ std::string Describe(const yang::config::ChangeEvent& change) {
          ".";
 }
 
+std::string ManagedNacmXml(const yang::config::ConfigDocument& document) {
+  pugi::xml_document parsed;
+  const std::string xml = document.ToXml();
+  if (!parsed.load_buffer(xml.data(), xml.size())) return {};
+  constexpr std::string_view kNamespace =
+      "urn:ietf:params:xml:ns:yang:ietf-netconf-acm";
+  for (const pugi::xml_node child : parsed.document_element().children()) {
+    const std::string_view name = child.name();
+    const std::size_t colon = name.find(':');
+    const std::string_view local =
+        colon == std::string_view::npos ? name : name.substr(colon + 1);
+    if (local != "nacm") continue;
+    std::string namespace_uri;
+    if (colon == std::string_view::npos) {
+      namespace_uri = child.attribute("xmlns").as_string();
+    } else {
+      const std::string attribute = "xmlns:" + std::string(name.substr(0, colon));
+      namespace_uri = child.attribute(attribute.c_str()).as_string();
+    }
+    if (namespace_uri != kNamespace) continue;
+    std::ostringstream output;
+    child.print(output, "  ", pugi::format_raw);
+    return output.str();
+  }
+  return {};
+}
+
 }  // namespace
 
-void EnglishConfigurationBackend::Replace(
+std::optional<yang::config::ValidationFinding>
+EnglishConfigurationBackend::PrepareReplacement(
+    const yang::config::RuntimeSchema& schema,
+    const yang::config::ConfigDocument& before,
+    const yang::config::ConfigDocument& after,
+    std::span<const yang::config::ChangeEvent> changes) {
+  prepared_nacm_.reset();
+  if (plugins_) {
+    if (auto error = plugins_->Prepare(schema, before, after, changes))
+      return error;
+  }
+  if (managed_nacm_) {
+    const std::string xml = ManagedNacmXml(after);
+    if (xml.empty()) {
+      yang::netconf::NacmPolicy disabled;
+      disabled.set_enabled(false);
+      if (nacm_) disabled.PreserveCountersFrom(*nacm_);
+      prepared_nacm_ = std::move(disabled);
+      return std::nullopt;
+    }
+    auto loaded = yang::netconf::LoadNacmPolicy(xml);
+    if (!loaded.policy) {
+      yang::config::ValidationFinding finding;
+      finding.code = yang::config::ValidationCode::kInvalidValue;
+      finding.state = yang::config::FindingState::kInvalid;
+      finding.message = loaded.errors.empty()
+                            ? "NACM configuration cannot be compiled"
+                            : loaded.errors.front();
+      finding.instance_path = "/nacm:nacm";
+      finding.module_name = "ietf-netconf-acm";
+      finding.netconf_error_tag = "invalid-value";
+      finding.netconf_error_app_tag = "invalid-nacm-policy";
+      if (plugins_) plugins_->Abort();
+      return finding;
+    }
+    if (nacm_) loaded.policy->PreserveCountersFrom(*nacm_);
+    prepared_nacm_ = std::move(*loaded.policy);
+  }
+  return std::nullopt;
+}
+
+std::optional<yang::config::ValidationFinding>
+EnglishConfigurationBackend::Replace(
     const yang::config::RuntimeSchema&,
     const yang::config::ConfigDocument&,
     const yang::config::ConfigDocument& after,
     std::span<const yang::config::ChangeEvent> changes) {
+  if (plugins_) {
+    if (auto error = plugins_->Apply()) return error;
+  }
   std::lock_guard lock(mutex_);
   for (const auto& change : changes) deltas_.push_back(Describe(change));
   working_ = after;
+  if (prepared_nacm_ && nacm_) *nacm_ = std::move(*prepared_nacm_);
+  prepared_nacm_.reset();
+  return std::nullopt;
+}
+
+void EnglishConfigurationBackend::AbortPreparedReplacement() noexcept {
+  if (plugins_) plugins_->Abort();
+  prepared_nacm_.reset();
 }
 
 yang::config::ConfigDocument EnglishConfigurationBackend::Working() const {

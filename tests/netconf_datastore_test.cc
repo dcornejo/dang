@@ -21,18 +21,45 @@ struct FixtureData {
 
 class RecordingBackend final : public RunningConfigBackend {
  public:
-  void Replace(const config::RuntimeSchema&,
-               const config::ConfigDocument& before,
-               const config::ConfigDocument& after,
-               std::span<const config::ChangeEvent> observed) override {
+  std::optional<config::ValidationFinding> Replace(
+      const config::RuntimeSchema&,
+      const config::ConfigDocument& before,
+      const config::ConfigDocument& after,
+      std::span<const config::ChangeEvent> observed) override {
     before_xml = before.ToXml();
     working_xml = after.ToXml();
     changes.assign(observed.begin(), observed.end());
+    return std::nullopt;
   }
 
   std::string before_xml;
   std::string working_xml;
   std::vector<config::ChangeEvent> changes;
+};
+
+class RejectingBackend final : public RunningConfigBackend {
+ public:
+  std::optional<config::ValidationFinding> PrepareReplacement(
+      const config::RuntimeSchema&, const config::ConfigDocument&,
+      const config::ConfigDocument&,
+      std::span<const config::ChangeEvent>) override {
+    config::ValidationFinding finding;
+    finding.code = config::ValidationCode::kInvalidValue;
+    finding.state = config::FindingState::kInvalid;
+    finding.message = "backend rejected the proposed configuration";
+    finding.netconf_error_tag = "operation-failed";
+    return finding;
+  }
+  std::optional<config::ValidationFinding> Replace(
+      const config::RuntimeSchema&, const config::ConfigDocument&,
+      const config::ConfigDocument&,
+      std::span<const config::ChangeEvent>) override {
+    applied = true;
+    return std::nullopt;
+  }
+  void AbortPreparedReplacement() noexcept override { aborted = true; }
+  bool applied = false;
+  bool aborted = false;
 };
 
 std::optional<FixtureData> BuildFixture(VectorDiagnosticSink* diagnostics) {
@@ -101,6 +128,30 @@ TEST(NetconfDatastoreTest, PublishesExactCommitChangesToRunningBackend) {
   EXPECT_EQ(backend.changes.front().after, "new");
   EXPECT_NE(backend.before_xml.find(">old</"), std::string::npos);
   EXPECT_NE(backend.working_xml.find(">new</"), std::string::npos);
+}
+
+TEST(NetconfDatastoreTest, BackendPreflightFailureDoesNotPublishOrArmRollback) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  RejectingBackend backend;
+  DatastoreManager stores(fixture->schema, fixture->initial, std::nullopt,
+                          &backend);
+  ASSERT_TRUE(stores.EditConfig({
+      .session = "one",
+      .target = Datastore::kCandidate,
+      .edits = {*config::ParseEditXml(fixture->schema, R"xml(
+        <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+          <system xmlns="urn:store"><hostname>edge-2</hostname></system>
+        </config>)xml").document}}).ok);
+  ConfirmedCommitOptions confirmed;
+  const TransactionResult result = stores.Commit("one", confirmed);
+  EXPECT_FALSE(result.ok);
+  EXPECT_TRUE(backend.aborted);
+  EXPECT_FALSE(backend.applied);
+  EXPECT_NE(stores.Read(Datastore::kRunning).ToXml().find("old"),
+            std::string::npos);
+  EXPECT_FALSE(stores.CancelCommit("one").ok);
 }
 
 TEST(NetconfDatastoreTest, SupportsTestOnlyDiscardAndRollbackOnError) {

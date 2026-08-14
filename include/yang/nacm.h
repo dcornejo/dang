@@ -92,6 +92,10 @@ class NacmPolicy {
       bool default_deny_all = false) const;
   /** Returns an atomic snapshot of RFC 8341 operational counters. */
   [[nodiscard]] NacmCounters counters() const noexcept;
+  /** Retains denial counters while atomically replacing policy configuration. */
+  void PreserveCountersFrom(const NacmPolicy& previous) noexcept {
+    counters_ = previous.counters_;
+  }
   /** Silently removes read-denied data nodes, as required by RFC 8341. */
   [[nodiscard]] std::string FilterReadableData(std::string_view user,
       std::string_view data_xml,

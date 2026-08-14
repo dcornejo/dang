@@ -8,6 +8,8 @@
 #include <sstream>
 #include <string>
 
+#include <dlfcn.h>
+
 #include <gtest/gtest.h>
 
 namespace dangd {
@@ -66,7 +68,13 @@ TEST(DangdApplicationTest, LoadsModelAndCompleteConfiguration) {
   auto loaded = Application::Load(Options(inputs));
   ASSERT_NE(loaded.application, nullptr);
   EXPECT_TRUE(loaded.errors.empty());
-  EXPECT_EQ(loaded.application->schema().roots().size(), 1u);
+  EXPECT_TRUE(loaded.application->schema()
+                  .FindRoot({"urn:example:appliance", "system"})
+                  .has_value());
+  EXPECT_TRUE(loaded.application->schema()
+                  .FindRoot({"urn:ietf:params:xml:ns:yang:ietf-yang-library",
+                             "yang-library"})
+                  .has_value());
 }
 
 TEST(DangdApplicationTest, LoadsNacmAndUsesAuthenticatedSessionIdentity) {
@@ -100,6 +108,161 @@ TEST(DangdApplicationTest, LoadsNacmAndUsesAuthenticatedSessionIdentity) {
   EXPECT_NE(loaded.application->server().Process(bob, commit).xml.find(
                 "access-denied"),
             std::string::npos);
+}
+
+TEST(DangdApplicationTest, SeedsAndCommitsDatastoreManagedNacm) {
+  TemporaryInputs inputs;
+  constexpr std::string_view model = R"yang(module managed-appliance {
+    yang-version 1.1; namespace "urn:managed-appliance"; prefix ma;
+    import ietf-netconf-acm { prefix nacm; revision-date "2018-02-14"; }
+    container system { leaf hostname { type string; mandatory true; } }
+  })yang";
+  const std::filesystem::path source = DANG_TEST_SOURCE_DIR;
+  ApplicationOptions options{
+      .model = inputs.Write("managed-appliance.yang", model),
+      .search_paths = {source / "dangd/models"},
+      .configuration = inputs.Write(
+          "config.xml",
+          "<config xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
+          "<system xmlns=\"urn:managed-appliance\"><hostname>edge</hostname>"
+          "</system></config>"),
+      .nacm_configuration = source / "dangd/examples/nacm.xml"};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  EXPECT_NE(loaded.application->datastores()
+                .Read(yang::netconf::Datastore::kRunning)
+                .ToXml()
+                .find("<nacm"),
+            std::string::npos);
+
+  yang::netconf::RpcSessionContext alice{1, "alice", "alice", {}};
+  yang::netconf::RpcSessionContext bob{2, "bob", "bob", {}};
+  const std::string commit =
+      "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+      "message-id=\"c\"><commit/></rpc>";
+  EXPECT_NE(loaded.application->server().Process(bob, commit).xml.find(
+                "access-denied"),
+            std::string::npos);
+  ASSERT_NE(loaded.application->server().Process(alice, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="e">
+      <edit-config><target><candidate/></target><config>
+        <nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+          <exec-default>permit</exec-default>
+        </nacm>
+      </config></edit-config>
+    </rpc>)xml").xml.find("<ok/>"), std::string::npos);
+  ASSERT_NE(loaded.application->server().Process(alice, commit).xml.find(
+                "<ok/>"),
+            std::string::npos);
+  EXPECT_NE(loaded.application->server().Process(bob, commit).xml.find(
+                "<ok/>"),
+            std::string::npos);
+}
+
+TEST(DangdApplicationTest, LoadsPluginModelAndRejectsPluginInvalidCommit) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  EXPECT_TRUE(loaded.application->schema()
+                  .FindRoot({"urn:dangd:example-plugin", "plugin-settings"})
+                  .has_value());
+
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+  const auto edit = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="1">
+      <edit-config><target><candidate/></target><config>
+        <plugin-settings xmlns="urn:dangd:example-plugin">
+          <mode>reject</mode>
+        </plugin-settings>
+      </config></edit-config>
+    </rpc>)xml");
+  ASSERT_NE(edit.xml.find("<ok/>"), std::string::npos) << edit.xml;
+  const auto validate = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="v">
+      <validate><source><candidate/></source></validate>
+    </rpc>)xml");
+  EXPECT_NE(validate.xml.find("dangd-example-plugin"), std::string::npos)
+      << validate.xml;
+  const auto commit = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="2">
+      <commit/>
+    </rpc>)xml");
+  EXPECT_NE(commit.xml.find("operation-failed"), std::string::npos) << commit.xml;
+  EXPECT_NE(commit.xml.find("dangd-example-plugin"), std::string::npos)
+      << commit.xml;
+  EXPECT_EQ(loaded.application->datastores()
+                .Read(yang::netconf::Datastore::kRunning)
+                .ToXml()
+                .find("plugin-settings"),
+            std::string::npos);
+}
+
+TEST(DangdApplicationTest, RollsPluginBackWithCancelledConfirmedCommit) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr);
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+  ASSERT_NE(loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="1">
+      <edit-config><target><candidate/></target><config>
+        <plugin-settings xmlns="urn:dangd:example-plugin"><mode>active</mode>
+        </plugin-settings>
+      </config></edit-config>
+    </rpc>)xml").xml.find("<ok/>"), std::string::npos);
+  ASSERT_NE(loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="2">
+      <commit><confirmed/><confirm-timeout>60</confirm-timeout></commit>
+    </rpc>)xml").xml.find("<ok/>"), std::string::npos);
+
+  void* handle = dlopen(DANG_TEST_PLUGIN_PATH, RTLD_NOW | RTLD_LOCAL);
+  ASSERT_NE(handle, nullptr);
+  using ActiveConfiguration = const char* (*)();
+  auto active = reinterpret_cast<ActiveConfiguration>(
+      dlsym(handle, "dang_example_active_configuration"));
+  ASSERT_NE(active, nullptr);
+  EXPECT_NE(std::string(active()).find("<mode>active</mode>"),
+            std::string::npos);
+
+  ASSERT_NE(loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="3">
+      <cancel-commit/>
+    </rpc>)xml").xml.find("<ok/>"), std::string::npos);
+  EXPECT_EQ(std::string(active()).find("plugin-settings"), std::string::npos);
+  dlclose(handle);
+}
+
+TEST(DangdApplicationTest, AdvertisesPluginSourceThroughYangLibraryGet) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr);
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+  const auto get = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="1">
+      <get/>
+    </rpc>)xml");
+  EXPECT_NE(get.xml.find("ietf-yang-library"), std::string::npos) << get.xml;
+  EXPECT_NE(get.xml.find("dangd-example-plugin"), std::string::npos) << get.xml;
+  EXPECT_NE(get.xml.find("plugin:dangd-example-plugin"), std::string::npos)
+      << get.xml;
+  EXPECT_NE(get.xml.find("<content-id>"), std::string::npos) << get.xml;
+  EXPECT_NE(get.xml.find("<denied-operations>0</denied-operations>"),
+            std::string::npos) << get.xml;
+  EXPECT_NE(loaded.application->server().ServerHello(9).find(
+                "capability:yang-library:1.1?revision=2019-01-04&amp;content-id="),
+            std::string::npos);
+
+  const auto get_config = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="2">
+      <get-config><source><running/></source></get-config>
+    </rpc>)xml");
+  EXPECT_EQ(get_config.xml.find("<yang-library"), std::string::npos)
+      << get_config.xml;
 }
 
 TEST(DangdApplicationTest, RejectsSchemaInvalidConfiguration) {

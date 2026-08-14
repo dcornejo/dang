@@ -642,5 +642,36 @@ TEST(ConfigValidationTest, PreservesNacmAnnotationsFromYin) {
   EXPECT_TRUE(schema->Get(*password).nacm_default_deny_all);
 }
 
+TEST(ConfigValidationTest,
+     DoesNotRequireOperationalOrInactiveCaseMandatoryNodes) {
+  VectorDiagnosticSink diagnostics;
+  auto source = SourceFile::Create("conditional.yang", R"yang(
+    module conditional {
+      yang-version 1.1; namespace "urn:conditional"; prefix c;
+      container settings {
+        leaf counter { config false; type uint32; mandatory true; }
+        choice selector {
+          case named { leaf name { type string; } }
+          case targeted { leaf path { type string; mandatory true; } }
+        }
+      }
+    })yang", diagnostics);
+  ASSERT_TRUE(source);
+  InMemoryModuleRepository repository;
+  Compiler compiler(repository, diagnostics);
+  auto compilation = compiler.Compile(source);
+  ASSERT_TRUE(compilation);
+  const RuntimeSchema schema =
+      RuntimeSchemaBuilder::FromCompilation(*compilation);
+  auto parsed = ParseDatastoreXml(schema, R"xml(
+    <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <settings xmlns="urn:conditional"><name>selected</name></settings>
+    </config>)xml");
+  ASSERT_TRUE(parsed.document);
+  const ValidationResult result =
+      ConfigValidator().Validate({schema, *parsed.document});
+  EXPECT_TRUE(result.valid) << testing::PrintToString(result.findings);
+}
+
 }  // namespace
 }  // namespace yang::config

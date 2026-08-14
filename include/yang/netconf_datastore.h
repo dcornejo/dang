@@ -68,11 +68,20 @@ struct PersistentDatastoreState {
 class RunningConfigBackend {
  public:
   virtual ~RunningConfigBackend() = default;
-  virtual void Replace(
+  [[nodiscard]] virtual std::optional<config::ValidationFinding>
+  PrepareReplacement(
+      const config::RuntimeSchema&,
+      const config::ConfigDocument&,
+      const config::ConfigDocument&,
+      std::span<const config::ChangeEvent>) {
+    return std::nullopt;
+  }
+  [[nodiscard]] virtual std::optional<config::ValidationFinding> Replace(
       const config::RuntimeSchema& schema,
       const config::ConfigDocument& before,
       const config::ConfigDocument& after,
       std::span<const config::ChangeEvent> changes) = 0;
+  virtual void AbortPreparedReplacement() noexcept {}
 };
 
 /**
@@ -99,7 +108,7 @@ class DatastoreManager {
   [[nodiscard]] TransactionResult Unlock(Datastore datastore,
                                          std::string_view session);
   [[nodiscard]] TransactionResult EditConfig(const EditConfigRequest& request);
-  [[nodiscard]] TransactionResult Validate(Datastore datastore) const;
+  [[nodiscard]] TransactionResult Validate(Datastore datastore);
   [[nodiscard]] TransactionResult Commit(
       std::string_view session,
       std::optional<ConfirmedCommitOptions> confirmed = std::nullopt,
@@ -137,8 +146,9 @@ class DatastoreManager {
       Datastore datastore, std::string_view session) const;
   [[nodiscard]] TransactionResult ValidateDocument(
       const config::ConfigDocument& document) const;
-  void ReplaceRunning(config::ConfigDocument replacement,
-                      std::vector<config::ChangeEvent> changes);
+  [[nodiscard]] TransactionResult ReplaceRunning(
+      config::ConfigDocument replacement,
+      std::vector<config::ChangeEvent> changes);
 
   const config::RuntimeSchema& schema_;
   mutable std::mutex mutex_;

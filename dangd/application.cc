@@ -6,8 +6,13 @@
 #include <array>
 #include <fstream>
 #include <iterator>
+#include <set>
+#include <sstream>
 #include <system_error>
 #include <utility>
+
+#include <pugixml.hpp>
+#include <openssl/evp.h>
 
 #include "yang/compiler.h"
 #include "yang/diagnostic.h"
@@ -19,6 +24,28 @@
 
 namespace dangd {
 namespace {
+
+class OverlayRepository final : public yang::ModuleSourceRepository {
+ public:
+  explicit OverlayRepository(std::vector<std::filesystem::path> search_paths)
+      : filesystem_(std::move(search_paths)) {}
+
+  void Add(const PluginYangSource& source) {
+    memory_.Add(source.module_name, source.source, source.revision);
+  }
+
+  std::shared_ptr<const yang::SourceFile> Load(
+      std::string_view name, std::optional<std::string_view> revision,
+      yang::ModuleKind kind, yang::DiagnosticSink& diagnostics) override {
+    yang::VectorDiagnosticSink ignored;
+    if (auto source = memory_.Load(name, revision, kind, ignored)) return source;
+    return filesystem_.Load(name, revision, kind, diagnostics);
+  }
+
+ private:
+  yang::InMemoryModuleRepository memory_;
+  yang::FilesystemModuleRepository filesystem_;
+};
 
 std::optional<std::string> ReadFile(const std::filesystem::path& path,
                                     std::uintmax_t maximum_bytes,
@@ -71,17 +98,217 @@ bool WriteAll(std::ostream& output, const std::string& bytes) {
   return output.good();
 }
 
+bool HasManagedNacm(const yang::config::RuntimeSchema& schema) {
+  return schema.FindRoot({
+      "urn:ietf:params:xml:ns:yang:ietf-netconf-acm", "nacm"}).has_value();
+}
+
+std::string NamespaceFor(pugi::xml_node node, std::string_view prefix) {
+  const std::string attribute =
+      prefix.empty() ? "xmlns" : "xmlns:" + std::string(prefix);
+  for (pugi::xml_node current = node; current;
+       current = current.parent()) {
+    if (const pugi::xml_attribute found = current.attribute(attribute.c_str()))
+      return found.as_string();
+  }
+  return {};
+}
+
+std::string SeedNacm(std::string configuration, std::string_view nacm) {
+  pugi::xml_document config_document;
+  pugi::xml_document nacm_document;
+  if (!config_document.load_buffer(configuration.data(), configuration.size()) ||
+      !nacm_document.load_buffer(nacm.data(), nacm.size())) return configuration;
+  pugi::xml_node root = config_document.document_element();
+  for (const pugi::xml_node child : root.children()) {
+    const std::string_view name = child.name();
+    const std::size_t colon = name.find(':');
+    const std::string_view prefix =
+        colon == std::string_view::npos ? std::string_view() : name.substr(0, colon);
+    const std::string_view local =
+        colon == std::string_view::npos ? name : name.substr(colon + 1);
+    if (local == "nacm" &&
+        NamespaceFor(child, prefix) ==
+            "urn:ietf:params:xml:ns:yang:ietf-netconf-acm")
+      return configuration;
+  }
+  root.append_copy(nacm_document.document_element());
+  std::ostringstream output;
+  config_document.save(output, "  ", pugi::format_raw);
+  return output.str();
+}
+
+std::string NacmSubtree(const yang::config::ConfigDocument& configuration) {
+  pugi::xml_document document;
+  const std::string xml = configuration.ToXml();
+  if (!document.load_buffer(xml.data(), xml.size())) return {};
+  for (const pugi::xml_node child : document.document_element().children()) {
+    const std::string_view name = child.name();
+    const std::size_t colon = name.find(':');
+    const std::string_view local =
+        colon == std::string_view::npos ? name : name.substr(colon + 1);
+    if (local != "nacm") continue;
+    const std::string_view prefix =
+        colon == std::string_view::npos ? std::string_view() : name.substr(0, colon);
+    if (NamespaceFor(child, prefix) !=
+        "urn:ietf:params:xml:ns:yang:ietf-netconf-acm")
+      continue;
+    std::ostringstream output;
+    child.print(output, "  ", pugi::format_raw);
+    return output.str();
+  }
+  return {};
+}
+
+std::string Sha256(std::string_view input) {
+  std::array<unsigned char, EVP_MAX_MD_SIZE> digest{};
+  unsigned int size = 0;
+  EVP_Digest(input.data(), input.size(), digest.data(), &size, EVP_sha256(),
+             nullptr);
+  constexpr char hex[] = "0123456789abcdef";
+  std::string result;
+  result.reserve(static_cast<std::size_t>(size) * 2);
+  for (unsigned int index = 0; index < size; ++index) {
+    result += hex[digest[index] >> 4];
+    result += hex[digest[index] & 0x0f];
+  }
+  return result;
+}
+
+std::string BuildYangLibraryXml(
+    const yang::Compilation& compilation,
+    const std::set<std::string>& implemented,
+    const std::vector<PluginYangSource>& plugin_sources) {
+  pugi::xml_document document;
+  pugi::xml_node library = document.append_child("yang-library");
+  library.append_attribute("xmlns") =
+      "urn:ietf:params:xml:ns:yang:ietf-yang-library";
+  library.append_attribute("xmlns:ds") =
+      "urn:ietf:params:xml:ns:yang:ietf-datastores";
+  pugi::xml_node set = library.append_child("module-set");
+  set.append_child("name").text() = "dangd-modules";
+  std::vector<const yang::ResolvedModule*> modules = compilation.schemas.modules();
+  std::ranges::sort(modules, {}, [](const yang::ResolvedModule* module) {
+    return std::pair(module->name, module->revision.value_or(""));
+  });
+  for (const yang::ResolvedModule* module : modules) {
+    if (module->name == "dangd-aggregate") continue;
+    const bool is_implemented = implemented.contains(module->name);
+    pugi::xml_node entry = set.append_child(
+        is_implemented ? "module" : "import-only-module");
+    entry.append_child("name").text() = module->name;
+    if (module->revision)
+      entry.append_child("revision").text() = *module->revision;
+    else if (!is_implemented)
+      entry.append_child("revision").text() = "";
+    entry.append_child("namespace").text() = module->namespace_uri;
+    const auto source = std::ranges::find_if(
+        plugin_sources, [&](const PluginYangSource& candidate) {
+          return candidate.module_name == module->name &&
+                 candidate.revision == module->revision;
+        });
+    if (source != plugin_sources.end() && !source->source_uri.empty())
+      entry.append_child("location").text() = source->source_uri;
+    if (source != plugin_sources.end() && is_implemented) {
+      for (const std::string& feature : source->enabled_features)
+        entry.append_child("feature").text() = feature;
+    }
+    for (const auto& submodule : module->includes) {
+      pugi::xml_node child = entry.append_child("submodule");
+      child.append_child("name").text() = submodule->name;
+      if (submodule->revision)
+        child.append_child("revision").text() = *submodule->revision;
+    }
+  }
+  pugi::xml_node schema = library.append_child("schema");
+  schema.append_child("name").text() = "dangd-schema";
+  schema.append_child("module-set").text() = "dangd-modules";
+  for (const char* datastore : {"running", "candidate", "startup",
+                                "operational"}) {
+    pugi::xml_node entry = library.append_child("datastore");
+    entry.append_child("name").text() =
+        (std::string("ds:") + datastore).c_str();
+    entry.append_child("schema").text() = "dangd-schema";
+  }
+  std::ostringstream without_id;
+  library.print(without_id, "  ", pugi::format_raw);
+  library.append_child("content-id").text() = Sha256(without_id.str());
+  std::ostringstream output;
+  library.print(output, "  ", pugi::format_raw);
+  return output.str();
+}
+
 }  // namespace
+
+std::string DangdOperationalData::AugmentDataXml(
+    std::string_view configuration_data_xml) const {
+  pugi::xml_document document;
+  if (!document.load_buffer(configuration_data_xml.data(),
+                            configuration_data_xml.size()))
+    return {};
+  pugi::xml_node data = document.document_element();
+  pugi::xml_document library;
+  if (library.load_buffer(yang_library_xml_.data(), yang_library_xml_.size()))
+    data.append_copy(library.document_element());
+  pugi::xml_node nacm;
+  for (const pugi::xml_node child : data.children()) {
+    const std::string_view name = child.name();
+    const std::size_t colon = name.find(':');
+    const std::string_view prefix = colon == std::string_view::npos
+                                        ? std::string_view()
+                                        : name.substr(0, colon);
+    const std::string_view local = colon == std::string_view::npos
+                                       ? name
+                                       : name.substr(colon + 1);
+    if (local == "nacm" && NamespaceFor(child, prefix) ==
+                               "urn:ietf:params:xml:ns:yang:ietf-netconf-acm") {
+      nacm = child;
+      break;
+    }
+  }
+  if (!nacm) {
+    nacm = data.append_child("nacm");
+    nacm.append_attribute("xmlns") =
+        "urn:ietf:params:xml:ns:yang:ietf-netconf-acm";
+  }
+  const yang::netconf::NacmCounters counters = nacm_->counters();
+  nacm.append_child("denied-operations").text() =
+      counters.denied_operations;
+  nacm.append_child("denied-data-writes").text() =
+      counters.denied_data_writes;
+  nacm.append_child("denied-notifications").text() =
+      counters.denied_notifications;
+  std::ostringstream output;
+  data.print(output, "  ", pugi::format_raw);
+  return output.str();
+}
+
+std::vector<std::string> DangdOperationalData::Capabilities() const {
+  pugi::xml_document document;
+  if (!document.load_buffer(yang_library_xml_.data(), yang_library_xml_.size()))
+    return {};
+  const pugi::xml_node content =
+      document.document_element().child("content-id");
+  if (!content) return {};
+  return {"urn:ietf:params:netconf:capability:yang-library:1.1?revision="
+          "2019-01-04&content-id=" +
+          std::string(content.text().as_string())};
+}
 
 Application::Application(yang::config::RuntimeSchema schema,
                          yang::config::ConfigDocument configuration,
                          std::optional<std::filesystem::path> state_file,
-                         std::optional<yang::netconf::NacmPolicy> nacm)
+                         yang::netconf::NacmPolicy nacm, bool managed_nacm,
+                         std::unique_ptr<PluginManager> plugins,
+                         std::string yang_library_xml)
     : schema_(std::move(schema)),
-      backend_(configuration),
-      datastores_(schema_, std::move(configuration), std::nullopt, &backend_),
+      plugins_(std::move(plugins)),
       nacm_(std::move(nacm)),
-      server_(datastores_, nacm_ ? &*nacm_ : nullptr),
+      operational_(std::move(yang_library_xml), &nacm_),
+      backend_(configuration, plugins_.get(), &nacm_, managed_nacm),
+      datastores_(schema_, std::move(configuration), std::nullopt, &backend_),
+      server_(datastores_, &nacm_, nullptr, nullptr, std::nullopt,
+              &operational_),
       state_file_(std::move(state_file)) {}
 
 LoadResult Application::Load(const ApplicationOptions& options) {
@@ -108,6 +335,12 @@ LoadResult Application::Load(const ApplicationOptions& options) {
       (options.nacm_configuration && !nacm_text))
     return result;
 
+  auto plugins = std::make_unique<PluginManager>();
+  for (const auto& plugin : options.plugins)
+    (void)plugins->Load(plugin, &result.errors);
+  (void)plugins->ValidateDependencies(&result.errors);
+  if (!result.errors.empty()) return result;
+
   yang::VectorDiagnosticSink diagnostics;
   auto source = yang::SourceFile::Create(options.model.string(), *model_text,
                                          diagnostics);
@@ -117,7 +350,12 @@ LoadResult Application::Load(const ApplicationOptions& options) {
   }
   std::vector<std::filesystem::path> search_paths = options.search_paths;
   search_paths.insert(search_paths.begin(), options.model.parent_path());
-  yang::FilesystemModuleRepository repository(std::move(search_paths));
+  search_paths.emplace_back(std::filesystem::path(DANGD_SOURCE_DIR) /
+                            "dangd/models");
+  search_paths.emplace_back(DANGD_INSTALL_MODEL_DIR);
+  OverlayRepository repository(std::move(search_paths));
+  for (const PluginYangSource& plugin_source : plugins->yang_sources())
+    repository.Add(plugin_source);
   yang::Compiler compiler(repository, diagnostics);
   auto compilation = compiler.Compile(source);
   if (!compilation || diagnostics.has_errors()) {
@@ -125,9 +363,60 @@ LoadResult Application::Load(const ApplicationOptions& options) {
     return result;
   }
 
-  auto schema =
-      yang::config::RuntimeSchemaBuilder::FromCompilation(*compilation);
-  auto parsed = yang::config::ParseDatastoreXml(schema, *configuration_text);
+  const std::string root_module_name = compilation->module->name;
+  {
+    std::set<std::string> imported;
+    std::ostringstream aggregate;
+    aggregate << "module dangd-aggregate { yang-version 1.1; "
+                 "namespace \"urn:dangd:aggregate\"; prefix da;\n";
+    std::size_t prefix = 0;
+    const auto add_import = [&](std::string_view name,
+                                const std::optional<std::string>& revision) {
+      if (!imported.insert(std::string(name)).second) return;
+      aggregate << "import " << name << " { prefix p" << prefix++ << ";";
+      if (revision) aggregate << " revision-date " << *revision << ";";
+      aggregate << " }\n";
+    };
+    add_import(compilation->module->name, compilation->module->revision);
+    add_import("ietf-netconf-acm", std::string("2018-02-14"));
+    add_import("ietf-yang-library", std::string("2019-01-04"));
+    for (const PluginYangSource& plugin_source : plugins->yang_sources()) {
+      if (plugin_source.role != DANG_YANG_IMPORT_ONLY_V1)
+        add_import(plugin_source.module_name, plugin_source.revision);
+    }
+    aggregate << "}";
+    diagnostics = {};
+    auto aggregate_source = yang::SourceFile::Create(
+        "dangd-aggregate.yang", aggregate.str(), diagnostics);
+    if (!aggregate_source) {
+      AppendDiagnostics(diagnostics, nullptr, &result.errors);
+      return result;
+    }
+    std::vector<yang::semantic::QualifiedSymbolName> features;
+    for (const PluginYangSource& plugin_source : plugins->yang_sources()) {
+      for (const std::string& feature : plugin_source.enabled_features)
+        features.push_back({plugin_source.module_name, feature});
+    }
+    compilation = compiler.Compile(aggregate_source, features);
+    if (!compilation || diagnostics.has_errors()) {
+      AppendDiagnostics(diagnostics, aggregate_source.get(), &result.errors);
+      return result;
+    }
+  }
+  auto schema = yang::config::RuntimeSchemaBuilder::FromCompilation(*compilation);
+  std::set<std::string> implemented{root_module_name, "ietf-netconf-acm",
+                                    "ietf-yang-library"};
+  for (const PluginYangSource& plugin_source : plugins->yang_sources()) {
+    if (plugin_source.role != DANG_YANG_IMPORT_ONLY_V1)
+      implemented.insert(plugin_source.module_name);
+  }
+  const std::string yang_library_xml =
+      BuildYangLibraryXml(*compilation, implemented, plugins->yang_sources());
+  const bool managed_nacm = HasManagedNacm(schema);
+  std::string seeded_configuration = *configuration_text;
+  if (managed_nacm && nacm_text)
+    seeded_configuration = SeedNacm(std::move(seeded_configuration), *nacm_text);
+  auto parsed = yang::config::ParseDatastoreXml(schema, seeded_configuration);
   if (!parsed.document) {
     AppendFindings(parsed.findings, &result.errors);
     return result;
@@ -139,20 +428,28 @@ LoadResult Application::Load(const ApplicationOptions& options) {
     return result;
   }
 
-  std::optional<yang::netconf::NacmPolicy> nacm;
-  if (nacm_text) {
-    auto loaded_nacm = yang::netconf::LoadNacmPolicy(*nacm_text);
-    if (!loaded_nacm.policy) {
-      for (const std::string& error : loaded_nacm.errors)
-        result.errors.push_back("invalid NACM configuration: " + error);
-      return result;
+  yang::netconf::NacmPolicy nacm;
+  if (managed_nacm || nacm_text) {
+    std::string policy_xml = managed_nacm ? NacmSubtree(*parsed.document)
+                                           : *nacm_text;
+    if (policy_xml.empty()) {
+      nacm.set_enabled(false);
+    } else {
+      auto loaded_nacm = yang::netconf::LoadNacmPolicy(policy_xml);
+      if (!loaded_nacm.policy) {
+        for (const std::string& error : loaded_nacm.errors)
+          result.errors.push_back("invalid NACM configuration: " + error);
+        return result;
+      }
+      nacm = std::move(*loaded_nacm.policy);
     }
-    nacm = std::move(*loaded_nacm.policy);
+  } else {
+    nacm.set_enabled(false);
   }
 
   result.application = std::unique_ptr<Application>(new Application(
       std::move(schema), std::move(*parsed.document), options.state_file,
-      std::move(nacm)));
+      std::move(nacm), managed_nacm, std::move(plugins), yang_library_xml));
   if (options.state_file) {
     std::error_code exists_error;
     const bool exists =

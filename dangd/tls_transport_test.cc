@@ -46,6 +46,7 @@ TEST(DangdTlsTransportTest, ExchangesAuthenticatedNetconfRpcOverMutualTls) {
   const std::filesystem::path source = DANG_TEST_SOURCE_DIR;
   ApplicationOptions application_options{
       .model = source / "dangd/examples/appliance.yang",
+      .search_paths = {source / "dangd/models"},
       .configuration = source / "dangd/examples/config.xml",
       .nacm_configuration = source / "dangd/examples/nacm.xml"};
   auto loaded = Application::Load(application_options);
@@ -113,6 +114,7 @@ TEST(DangdTlsTransportTest, RejectsCertificateWithoutClientAuthenticationUse) {
   const std::filesystem::path source = DANG_TEST_SOURCE_DIR;
   auto loaded = Application::Load({
       .model = source / "dangd/examples/appliance.yang",
+      .search_paths = {source / "dangd/models"},
       .configuration = source / "dangd/examples/config.xml"});
   ASSERT_NE(loaded.application, nullptr);
 

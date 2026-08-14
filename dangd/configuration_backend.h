@@ -10,6 +10,9 @@
 #include <vector>
 
 #include "yang/netconf_datastore.h"
+#include "yang/nacm.h"
+
+#include "dangd/plugin_manager.h"
 
 namespace dangd {
 
@@ -18,14 +21,27 @@ class EnglishConfigurationBackend final
     : public yang::netconf::RunningConfigBackend {
  public:
   /** Initializes the backend with the already validated running document. */
-  explicit EnglishConfigurationBackend(yang::config::ConfigDocument initial)
-      : working_(std::move(initial)) {}
+  EnglishConfigurationBackend(yang::config::ConfigDocument initial,
+                              PluginManager* plugins,
+                              yang::netconf::NacmPolicy* nacm,
+                              bool managed_nacm)
+      : plugins_(plugins), nacm_(nacm), managed_nacm_(managed_nacm),
+        working_(std::move(initial)) {}
+
+  [[nodiscard]] std::optional<yang::config::ValidationFinding>
+  PrepareReplacement(
+      const yang::config::RuntimeSchema& schema,
+      const yang::config::ConfigDocument& before,
+      const yang::config::ConfigDocument& after,
+      std::span<const yang::config::ChangeEvent> changes) override;
 
   /** Records exact changes in English and atomically replaces the working copy. */
-  void Replace(const yang::config::RuntimeSchema& schema,
-               const yang::config::ConfigDocument& before,
-               const yang::config::ConfigDocument& after,
-               std::span<const yang::config::ChangeEvent> changes) override;
+  [[nodiscard]] std::optional<yang::config::ValidationFinding> Replace(
+      const yang::config::RuntimeSchema& schema,
+      const yang::config::ConfigDocument& before,
+      const yang::config::ConfigDocument& after,
+      std::span<const yang::config::ChangeEvent> changes) override;
+  void AbortPreparedReplacement() noexcept override;
 
   /** Returns an immutable snapshot of the backend working configuration. */
   [[nodiscard]] yang::config::ConfigDocument Working() const;
@@ -34,6 +50,10 @@ class EnglishConfigurationBackend final
 
  private:
   mutable std::mutex mutex_;
+  PluginManager* plugins_ = nullptr;
+  yang::netconf::NacmPolicy* nacm_ = nullptr;
+  bool managed_nacm_ = false;
+  std::optional<yang::netconf::NacmPolicy> prepared_nacm_;
   yang::config::ConfigDocument working_;
   std::vector<std::string> deltas_;
 };

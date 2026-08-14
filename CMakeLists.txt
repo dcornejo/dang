@@ -95,6 +95,7 @@ install(FILES LICENSE NOTICE README.md TODO.md CHANGELOG.md docs/STANDARDS.md
   docs/NETCONF_TRANSPORT.md
   docs/NETCONF_WITH_DEFAULTS.md
   docs/NETCONF_FILTER_NACM_PERSISTENCE.md
+  docs/DANGD_PLUGINS.md
   DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/yang)
 install(FILES examples/example.yang examples/library_example.cc
   examples/config_validation_example.cc
@@ -105,10 +106,15 @@ if(YANG_BUILD_DANGD)
   add_library(dangd_core
     dangd/application.cc
     dangd/configuration_backend.cc
+    dangd/plugin_manager.cc
     dangd/tls_transport.cc)
   target_compile_features(dangd_core PUBLIC cxx_std_20)
   target_include_directories(dangd_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-  target_link_libraries(dangd_core PUBLIC yang::yang OpenSSL::SSL OpenSSL::Crypto)
+  target_compile_definitions(dangd_core PRIVATE
+    DANGD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    DANGD_INSTALL_MODEL_DIR="${CMAKE_INSTALL_FULL_DATADIR}/doc/yang/dangd/models")
+  target_link_libraries(dangd_core PUBLIC yang::yang OpenSSL::SSL OpenSSL::Crypto
+    ${CMAKE_DL_LIBS})
   target_compile_options(dangd_core PRIVATE
     -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 
@@ -122,8 +128,19 @@ if(YANG_BUILD_DANGD)
   target_link_libraries(dangctl PRIVATE dangd_core)
   target_compile_options(dangctl PRIVATE
     -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+  add_library(dangd_example_plugin MODULE dangd/plugins/example_plugin.cc)
+  target_compile_features(dangd_example_plugin PRIVATE cxx_std_20)
+  target_include_directories(dangd_example_plugin PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+  target_compile_options(dangd_example_plugin PRIVATE
+    -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+  set_target_properties(dangd_example_plugin PROPERTIES PREFIX "")
   install(TARGETS dangd dangctl RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-  install(FILES dangd/README.md dangd/CHANGELOG.md
+  install(TARGETS dangd_example_plugin
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/dangd/plugins)
+  install(FILES dangd/plugin_api.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dangd)
+  install(FILES dangd/README.md dangd/CHANGELOG.md docs/DANGD_PLUGINS.md
     DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/yang/dangd)
   install(DIRECTORY dangd/examples dangd/models dangd/testdata
     DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/yang/dangd)
@@ -222,7 +239,9 @@ if(YANG_BUILD_TESTS)
     target_link_libraries(dangd_tests PRIVATE dangd_core GTest::gtest_main
       Threads::Threads)
     target_compile_definitions(dangd_tests PRIVATE
-      DANG_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+      DANG_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+      DANG_TEST_PLUGIN_PATH="$<TARGET_FILE:dangd_example_plugin>")
+    add_dependencies(dangd_tests dangd_example_plugin)
     target_compile_options(dangd_tests PRIVATE
       -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
     if(YANG_ENABLE_SANITIZERS AND APPLE)

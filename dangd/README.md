@@ -123,6 +123,7 @@ Start the server from the repository root:
 ./build/dangd \
   --model dangd/examples/appliance.yang \
   --config dangd/examples/config.xml \
+  --search dangd/models \
   --nacm dangd/examples/nacm.xml \
   --tls-listen 127.0.0.1 --tls-port 6513 \
   --tls-cert dangd/testdata/tls/server-cert.pem \
@@ -160,3 +161,31 @@ mapping defined by RFC 7589. The listener handles connections synchronously and
 is intended for local integration and tests; production work still needs an
 event-loop TLS service, revocation policy, configurable identity mapping,
 operational monitoring, and protected deployment credentials.
+
+## Managed NACM and plugins
+
+`ietf-netconf-acm` is a core `dangd` model. `--nacm FILE` seeds the initial
+datastore only when the configuration does not already contain `/nacm`; it is
+not a permanent override. Thereafter authorized clients manage NACM through
+ordinary candidate edits and commits. The policy active at RPC start
+authorizes the change, and its compiled replacement becomes active only after
+the complete backend transaction succeeds. An absent NACM container leaves
+enforcement disabled for explicit bootstrap compatibility. Denial counters
+remain core-owned operational state and are returned by `<get>`.
+
+POSIX plugins are loaded with repeatable `--plugin FILE` arguments. A plugin
+supplies implemented, deviation, and import-only YANG source bytes. `dangd`
+compiles them into the common effective schema and advertises the resulting
+inventory through the RFC 8525 `/yang-library` operational tree returned by
+`<get>`.
+
+Configuration is coordinated by preparing all affected plugins, validating
+all of them, applying in dependency order, and releasing preparations. Partial
+apply failures roll already-applied plugins back in reverse order. Confirmed
+commit cancellation and expiry also pass through the backend so plugin state
+tracks the restored running datastore.
+
+See [Writing a dangd configuration plugin](../docs/DANGD_PLUGINS.md) for the
+complete ABI, ownership, dependency, transaction, rollback, error, threading,
+and security contract. The reference implementation is
+`dangd/plugins/example_plugin.cc`.

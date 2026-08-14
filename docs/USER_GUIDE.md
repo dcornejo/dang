@@ -362,4 +362,5 @@ test-only trust material and production limitations.
 - [NETCONF framing and sessions](NETCONF_FRAMING.md)
 - [Transport integration](NETCONF_TRANSPORT.md)
 - [Filtering, NACM, and persistence](NETCONF_FILTER_NACM_PERSISTENCE.md)
+- [Writing a dangd configuration plugin](DANGD_PLUGINS.md)
 - [`dangd` design and limitations](../dangd/README.md)

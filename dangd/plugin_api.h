@@ -1,0 +1,74 @@
+// Copyright 2026 David Cornejo
+// SPDX-License-Identifier: Apache-2.0
+
+#ifndef DANGD_PLUGIN_API_H_
+#define DANGD_PLUGIN_API_H_
+
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define DANG_PLUGIN_ABI_V1 1u
+
+/** Declares how one supplied YANG source participates in server conformance. */
+typedef enum DangYangSourceRoleV1 {
+  DANG_YANG_IMPLEMENTED_V1 = 1,
+  DANG_YANG_IMPORT_ONLY_V1 = 2,
+  DANG_YANG_DEVIATION_V1 = 3
+} DangYangSourceRoleV1;
+
+/** Immutable YANG source descriptor returned by a plugin. */
+typedef struct DangYangSourceV1 {
+  const char* module_name;
+  const char* revision;
+  const char* source;
+  size_t source_size;
+  const char* source_uri;
+  uint32_t role;
+  const char* const* enabled_features;
+  size_t enabled_feature_count;
+} DangYangSourceV1;
+
+/** Borrowed callback error strings, valid until the callback returns. */
+typedef struct DangPluginErrorV1 {
+  const char* message;
+  const char* instance_path;
+} DangPluginErrorV1;
+
+/** Complete immutable configuration snapshots for one running transaction. */
+typedef struct DangTransactionV1 {
+  const char* before_xml;
+  const char* proposed_xml;
+  const char* changes_json;
+} DangTransactionV1;
+
+/** Version-one POSIX plugin function table and lifecycle contract. */
+typedef struct DangPluginV1 {
+  uint32_t abi_version;
+  const char* plugin_name;
+  void* context;
+  size_t (*yang_source_count)(void* context);
+  int (*yang_source_at)(void* context, size_t index,
+                        DangYangSourceV1* source, DangPluginErrorV1* error);
+  size_t (*dependency_count)(void* context);
+  const char* (*dependency_at)(void* context, size_t index);
+  int (*prepare)(void* context, const DangTransactionV1* transaction,
+                 void** prepared, DangPluginErrorV1* error);
+  int (*validate)(void* context, void* prepared, DangPluginErrorV1* error);
+  int (*apply)(void* context, void* prepared, DangPluginErrorV1* error);
+  int (*rollback)(void* context, void* prepared, DangPluginErrorV1* error);
+  void (*release)(void* context, void* prepared);
+  void (*destroy)(void* context);
+} DangPluginV1;
+
+/** Type of the required exported `dang_plugin_init_v1` entry point. */
+typedef const DangPluginV1* (*DangPluginInitV1)(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif  // DANGD_PLUGIN_API_H_

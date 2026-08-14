@@ -7,6 +7,7 @@
 #include "yang/resource_limits.h"
 
 #include <charconv>
+#include <iterator>
 #include <optional>
 #include <ranges>
 #include <sstream>
@@ -263,6 +264,12 @@ std::vector<std::string> NetconfServer::AdvertisedCapabilities() const {
         "urn:ietf:params:xml:ns:yang:ietf-netconf-with-defaults?module="
         "ietf-netconf-with-defaults&revision=2011-06-01");
   }
+  if (operational_ != nullptr) {
+    std::vector<std::string> capabilities = operational_->Capabilities();
+    result.insert(result.end(),
+                  std::make_move_iterator(capabilities.begin()),
+                  std::make_move_iterator(capabilities.end()));
+  }
   return result;
 }
 
@@ -424,6 +431,9 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
                                             defaults_mode)
                     : "<data>" + datastores_.Read(source).ToXml(false) +
                           "</data>";
+      if (name == "get" && operational_ != nullptr) {
+        payload = operational_->AugmentDataXml(payload);
+      }
       if (nacm != nullptr)
         payload = nacm->FilterReadableData(
             session.username, payload, session.external_groups,

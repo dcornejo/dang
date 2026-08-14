@@ -1986,6 +1986,7 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
     for (ConfigNodeId child : config_children) instances[request.document.Get(child).schema].push_back(child);
     for (RuntimeSchemaNodeId schema_id : visible) {
       const RuntimeSchemaNode& node = request.schema.Get(schema_id);
+      if (!node.config) continue;
       const Coverage collection_coverage =
           request.document.CollectionCoverage(data_parent, schema_id)
               .value_or(coverage);
@@ -2004,7 +2005,20 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
         result.findings.push_back(Finding(ValidationCode::kElementCount, FindingState::kInvalid,
             "more entries than max-elements", path, "too-many-elements",
             node.module_name));
-      if (node.mandatory && count == 0)
+      bool active_case = true;
+      if (node.parent &&
+          request.schema.Get(*node.parent).kind == SchemaNodeKind::kCase) {
+        const RuntimeSchemaNode& case_node = request.schema.Get(*node.parent);
+        if (case_node.parent) {
+          active_case = std::ranges::any_of(
+              config_children, [&](ConfigNodeId child) {
+                return DirectCaseFor(request.schema, *case_node.parent,
+                                     request.document.Get(child).schema) ==
+                       node.parent;
+              });
+        }
+      }
+      if (node.mandatory && count == 0 && active_case)
         result.findings.push_back(Finding(ValidationCode::kMissingMandatoryNode,
             omission_state(collection_coverage), "mandatory data node is absent", path,
             "missing-element", node.module_name));

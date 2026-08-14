@@ -6,6 +6,12 @@ module appliance {
   namespace "urn:example:appliance";
   prefix appliance;
 
+  import ietf-netconf-acm {
+    prefix nacm;
+    revision-date "2018-02-14";
+    description "Makes the core-managed NACM configuration part of the schema.";
+  }
+
   organization "dangd example";
   description
     "Small configuration model used by the mutual-TLS walkthrough.";
