@@ -131,6 +131,21 @@ TEST(DangdApplicationTest, RetrievesAndEditsConventionalNmdaDatastores) {
   EXPECT_NE(intended.xml.find("ietf-netconf-nmda"), std::string::npos)
       << intended.xml;
 
+  const auto operational = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="operational"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore>
+        <config-filter>false</config-filter>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_EQ(operational.xml.find("edge-1"), std::string::npos)
+      << operational.xml;
+  EXPECT_NE(operational.xml.find("yang-library"), std::string::npos)
+      << operational.xml;
+  EXPECT_NE(operational.xml.find("denied-operations"), std::string::npos)
+      << operational.xml;
+
   const auto edit = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="edit-data"
          xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
@@ -538,7 +553,7 @@ TEST(DangdApplicationTest, AdvertisesPluginSourceThroughYangLibraryGet) {
             std::string::npos) << get.xml;
   EXPECT_NE(get.xml.find("<conformance-type>import</conformance-type>"),
             std::string::npos) << get.xml;
-  EXPECT_EQ(get.xml.find("<name>ds:operational</name>"), std::string::npos)
+  EXPECT_NE(get.xml.find("<name>ds:operational</name>"), std::string::npos)
       << get.xml;
   EXPECT_NE(get.xml.find("<denied-operations>0</denied-operations>"),
             std::string::npos) << get.xml;

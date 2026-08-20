@@ -22,7 +22,11 @@ datastore identity selection, subtree or XPath selection, `config-filter`,
 configuration for writable conventional datastores and always uses atomic
 rollback-on-error behavior. URL content is unavailable because the core NMDA
 module does not enable the NETCONF `url` feature. The `origin` feature is also
-disabled until a real operational datastore supplies origin metadata.
+disabled until the operational datastore supplies per-node origin metadata.
+The initial read-only `operational` snapshot combines applied intended
+configuration with core YANG Library, NETCONF monitoring, and NACM state.
+Schema-aware `config-filter` processing can select its configuration or state
+portion while retaining required ancestor shells and list keys.
 
 ```cpp
 #include <chrono>

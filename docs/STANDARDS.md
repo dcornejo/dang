@@ -20,8 +20,9 @@ The same inventory generates the deprecated `/modules-state` compatibility
 tree and its conformance types. Conventional running, candidate, startup, and
 intended datastores reference the common schema. The initial read-only
 `intended` view is identical to `running`, as RFC 8342 permits when there are
-no configuration transformations. `operational` is not advertised until an
-NMDA operational datastore is implemented. The content identifier is
+no configuration transformations. The read-only `operational` datastore
+combines that applied intended configuration with the server's schema-bound
+YANG Library, monitoring, and NACM state. The content identifier is
 derived from the current tree, and reload emits current and legacy update
 notifications only when that identifier changes. RFC 6022
 `/netconf-state/schemas` identifies every compiled source with a `NETCONF`
@@ -30,8 +31,8 @@ location served by `get-schema`.
 RFC 8526 `ietf-netconf-nmda` and its exact dependency sources are compiled and
 retrievable. `<get-data>` and `<edit-data>` operate on the supported
 conventional datastores. The `origin` feature is deliberately not enabled, and
-`operational` remains absent from YANG Library, until applied configuration and
-system state can be represented truthfully.
+the `origin` feature remains disabled until per-node origin metadata and
+plugin-supplied system state can be represented truthfully.
 
 ### YANG version is semantic, not merely syntactic
 

@@ -7,6 +7,9 @@
 
 ### Added
 
+- A read-only `operational` datastore snapshot containing applied intended
+  configuration plus core YANG Library, monitoring, and NACM state, with
+  `config-filter` selection and RFC 8525 publication.
 - RFC 8526 conventional-datastore access through `<get-data>` and
   `<edit-data>`, with pinned `ietf-netconf-nmda`, `ietf-origin`, metadata, and
   NETCONF dependency models exposed through YANG Library and `get-schema`.

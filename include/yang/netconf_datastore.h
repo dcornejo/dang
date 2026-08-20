@@ -19,7 +19,14 @@
 namespace yang::netconf {
 
 /** Conventional configuration datastore, including RFC 8342 intended. */
-enum class Datastore { kRunning, kCandidate, kStartup, kIntended };
+enum class Datastore {
+  kRunning,
+  kCandidate,
+  kStartup,
+  kIntended,
+  /** Read-only selector whose state is supplied outside ConfigDocument. */
+  kOperational,
+};
 /** RFC 6241 :validate test behavior for edit-config. */
 enum class TestOption { kTestThenSet, kSet, kTestOnly };
 /** RFC 6241 behavior after an edit error. */

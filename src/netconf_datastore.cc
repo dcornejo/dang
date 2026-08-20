@@ -56,7 +56,8 @@ config::ConfigDocument DatastoreManager::Read(Datastore datastore) const {
 TransactionResult DatastoreManager::Lock(Datastore datastore,
                                          std::string_view session) {
   std::lock_guard lock(mutex_);
-  if (datastore == Datastore::kIntended)
+  if (datastore == Datastore::kIntended ||
+      datastore == Datastore::kOperational)
     return Failure(config::ValidationCode::kInvalidValue,
                    "the intended datastore is read-only",
                    "operation-not-supported");
@@ -85,7 +86,8 @@ TransactionResult DatastoreManager::Unlock(Datastore datastore,
 
 TransactionResult DatastoreManager::CheckWriteAccess(
     Datastore datastore, std::string_view session) const {
-  if (datastore == Datastore::kIntended)
+  if (datastore == Datastore::kIntended ||
+      datastore == Datastore::kOperational)
     return Failure(config::ValidationCode::kInvalidValue,
                    "the intended datastore is read-only",
                    "operation-not-supported");
@@ -508,7 +510,8 @@ config::ConfigDocument& DatastoreManager::Mutable(Datastore datastore) {
 const config::ConfigDocument& DatastoreManager::Get(Datastore datastore) const {
   if (datastore == Datastore::kRunning) return running_;
   if (datastore == Datastore::kCandidate) return candidate_;
-  if (datastore == Datastore::kIntended) return running_;
+  if (datastore == Datastore::kIntended ||
+      datastore == Datastore::kOperational) return running_;
   return startup_;
 }
 

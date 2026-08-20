@@ -102,6 +102,7 @@ std::optional<Datastore> ParseNmdaDatastore(const pugi::xml_node& node) {
   if (local == "candidate") return Datastore::kCandidate;
   if (local == "startup") return Datastore::kStartup;
   if (local == "intended") return Datastore::kIntended;
+  if (local == "operational") return Datastore::kOperational;
   return std::nullopt;
 }
 
@@ -128,6 +129,56 @@ std::string ApplyMaximumDepth(std::string_view xml, unsigned int maximum) {
     }
   };
   prune(document.document_element(), 1);
+  std::ostringstream output;
+  document.print(output, "", pugi::format_raw);
+  return output.str();
+}
+
+std::string FilterConfigKind(std::string_view xml,
+                             const config::RuntimeSchema& schema,
+                             bool want_config) {
+  pugi::xml_document document;
+  if (!document.load_buffer(xml.data(), xml.size())) return {};
+  std::function<bool(pugi::xml_node, config::RuntimeSchemaNodeId, bool)> visit;
+  visit = [&](pugi::xml_node node, config::RuntimeSchemaNodeId schema_id,
+              bool list_key) {
+    const config::RuntimeSchemaNode& metadata = schema.Get(schema_id);
+    bool has_selected_descendant = false;
+    for (pugi::xml_node child = node.first_child(); child;) {
+      pugi::xml_node next = child.next_sibling();
+      if (child.type() == pugi::node_element) {
+        const auto child_schema = schema.FindChild(
+            schema_id, {NamespaceFor(child).value_or(""),
+                        std::string(LocalName(child.name()))});
+        bool selected = false;
+        if (child_schema) {
+          const bool child_is_key =
+              std::ranges::find(metadata.keys, *child_schema) !=
+              metadata.keys.end();
+          selected = visit(child, *child_schema, child_is_key);
+        }
+        if (!selected) node.remove_child(child);
+        has_selected_descendant = has_selected_descendant || selected;
+      }
+      child = next;
+    }
+    return metadata.config == want_config ||
+           (!want_config && list_key) || has_selected_descendant;
+  };
+  pugi::xml_node root = document.document_element();
+  for (pugi::xml_node child = root.first_child(); child;) {
+    pugi::xml_node next = child.next_sibling();
+    bool selected = false;
+    if (child.type() == pugi::node_element) {
+      const auto schema_id = schema.FindRoot(
+          {NamespaceFor(child).value_or(""),
+           std::string(LocalName(child.name()))});
+      if (schema_id) selected = visit(child, *schema_id, false);
+    }
+    if (child.type() == pugi::node_element && !selected)
+      root.remove_child(child);
+    child = next;
+  }
   std::ostringstream output;
   document.print(output, "", pugi::format_raw);
   return output.str();
@@ -768,7 +819,8 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
           converted.ptr != value.data() + value.size() || depth == 0)
         result = ProtocolFailure("invalid get-data max-depth", "invalid-value");
     }
-    if (!source || (subtree && xpath)) {
+    if (!source || (subtree && xpath) ||
+        (*source == Datastore::kOperational && operational_ == nullptr)) {
       result = ProtocolFailure("get-data requires one supported datastore",
                                "invalid-value");
     } else if (config_filter &&
@@ -780,14 +832,18 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
       result.ok = true;
       payload = "<data xmlns=\"" + std::string(kNmdaNamespace) + "\">" +
                 datastores_.Read(*source).ToXml(false) + "</data>";
+      if (*source == Datastore::kOperational)
+        payload = operational_->AugmentDataXml(payload);
       if (nacm != nullptr)
         payload = nacm->FilterReadableData(
             session.username, payload, session.external_groups,
             &datastores_.schema());
-      if (config_filter &&
-          std::string_view(config_filter.text().as_string()) == "false") {
-        payload = "<data xmlns=\"" + std::string(kNmdaNamespace) + "\"/>";
-      } else if (subtree) {
+      if (config_filter) {
+        payload = FilterConfigKind(
+            payload, datastores_.schema(),
+            std::string_view(config_filter.text().as_string()) == "true");
+      }
+      if (subtree) {
         pugi::xml_document filter_document;
         pugi::xml_node filter = filter_document.append_child("filter");
         filter.append_attribute("type") = "subtree";
@@ -839,7 +895,8 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
     const auto default_operation = ParseDefaultOperation(
         Child(operation, "default-operation").text().as_string());
     const pugi::xml_node config = Child(operation, "config");
-    if (!target || *target == Datastore::kIntended || !default_operation ||
+    if (!target || *target == Datastore::kIntended ||
+        *target == Datastore::kOperational || !default_operation ||
         !config || Child(operation, "url")) {
       result = ProtocolFailure("invalid or read-only edit-data target/content",
                                "invalid-value");

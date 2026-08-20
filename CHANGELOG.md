@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added an RFC 8342 `operational` retrieval target combining applied intended
+  configuration with core schema-bound state, including schema-aware
+  `config-filter` separation and read-only enforcement.
 - Added RFC 8526 `<get-data>` and `<edit-data>` for conventional datastores,
   including identity-based datastore selection, filters, maximum depth, NACM,
   atomic edits, and the normative NMDA/origin model dependency closure.

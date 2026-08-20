@@ -326,6 +326,10 @@ TEST(NetconfDatastoreTest, IntendedMirrorsRunningAndIsReadOnly) {
        {HostnameEdit(fixture->schema, "new")}}).ok);
   EXPECT_FALSE(stores.CopyConfig("one", Datastore::kCandidate,
                                  Datastore::kIntended).ok);
+  EXPECT_FALSE(stores.Lock(Datastore::kOperational, "one").ok);
+  EXPECT_FALSE(stores.EditConfig(
+      {"one", Datastore::kOperational,
+       {HostnameEdit(fixture->schema, "new")}}).ok);
 }
 
 }  // namespace
