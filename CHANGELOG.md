@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added the first NMDA datastore increment: a read-only RFC 8342 `intended`
+  view that initially mirrors `running` and is published in RFC 8525 YANG
+  Library.
 - Added the `dangd` RFC 8344 IP-management example plugin and integration
   test.
 - Added schema-aware NACM authorization for application RPCs, YANG 1.1

@@ -7,6 +7,8 @@
 
 ### Added
 
+- A read-only RFC 8342 `intended` datastore, initially identical to `running`,
+  with RFC 8525 datastore publication and write-rejection regression tests.
 - A self-contained `dangd_ip_management_plugin` example that owns the
   normative RFC 8343 `ietf-interfaces` and RFC 8344 `ietf-ip` models, prepares
   reversible actions from schema-qualified deltas, and prints apply or

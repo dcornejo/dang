@@ -56,6 +56,10 @@ config::ConfigDocument DatastoreManager::Read(Datastore datastore) const {
 TransactionResult DatastoreManager::Lock(Datastore datastore,
                                          std::string_view session) {
   std::lock_guard lock(mutex_);
+  if (datastore == Datastore::kIntended)
+    return Failure(config::ValidationCode::kInvalidValue,
+                   "the intended datastore is read-only",
+                   "operation-not-supported");
   if (session.empty())
     return Failure(config::ValidationCode::kInvalidValue,
                    "a non-empty NETCONF session identifier is required",
@@ -81,6 +85,10 @@ TransactionResult DatastoreManager::Unlock(Datastore datastore,
 
 TransactionResult DatastoreManager::CheckWriteAccess(
     Datastore datastore, std::string_view session) const {
+  if (datastore == Datastore::kIntended)
+    return Failure(config::ValidationCode::kInvalidValue,
+                   "the intended datastore is read-only",
+                   "operation-not-supported");
   const auto found = locks_.find(datastore);
   if (found != locks_.end() && found->second != session)
     return Failure(config::ValidationCode::kInvalidValue,
@@ -493,12 +501,14 @@ TransactionResult DatastoreManager::RestorePersistentState(
 config::ConfigDocument& DatastoreManager::Mutable(Datastore datastore) {
   if (datastore == Datastore::kRunning) return running_;
   if (datastore == Datastore::kCandidate) return candidate_;
+  // kIntended is read-only and is rejected before reaching this helper.
   return startup_;
 }
 
 const config::ConfigDocument& DatastoreManager::Get(Datastore datastore) const {
   if (datastore == Datastore::kRunning) return running_;
   if (datastore == Datastore::kCandidate) return candidate_;
+  if (datastore == Datastore::kIntended) return running_;
   return startup_;
 }
 

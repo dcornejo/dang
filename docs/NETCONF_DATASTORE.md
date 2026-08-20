@@ -5,9 +5,16 @@
 
 `yang/netconf_datastore.h` supplies a thread-safe, in-memory transaction layer
 over the immutable configuration documents. It models `running`, `candidate`,
-and `startup`, including datastore locks, edit validation options, error
+`startup`, and the read-only RFC 8342 `intended` datastore, including datastore
+locks, edit validation options, error
 options, commit, confirmed commit, cancel, timeout rollback, discard, copy, and
 startup deletion.
+
+The initial NMDA implementation treats `intended` as a logical read-only view
+of `running`, as RFC 8342 permits for systems without configuration
+transformations. Reads and validation are supported. Lock, edit, copy-target,
+and delete operations reject `intended`; a later transformation boundary can
+give it independent contents without changing callers of `Read(kIntended)`.
 
 ```cpp
 #include <chrono>

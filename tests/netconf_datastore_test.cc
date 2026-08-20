@@ -313,5 +313,20 @@ TEST(NetconfDatastoreTest, SessionCloseReleasesLocksAndRollsBackConfirmation) {
   EXPECT_TRUE(stores.Lock(Datastore::kCandidate, "two").ok);
 }
 
+TEST(NetconfDatastoreTest, IntendedMirrorsRunningAndIsReadOnly) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildFixture(&diagnostics);
+  ASSERT_TRUE(fixture.has_value());
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  EXPECT_EQ(stores.Read(Datastore::kIntended).ToXml(),
+            stores.Read(Datastore::kRunning).ToXml());
+  EXPECT_FALSE(stores.Lock(Datastore::kIntended, "one").ok);
+  EXPECT_FALSE(stores.EditConfig(
+      {"one", Datastore::kIntended,
+       {HostnameEdit(fixture->schema, "new")}}).ok);
+  EXPECT_FALSE(stores.CopyConfig("one", Datastore::kCandidate,
+                                 Datastore::kIntended).ok);
+}
+
 }  // namespace
 }  // namespace yang::netconf

@@ -17,9 +17,11 @@ boundaries that callers should understand.
 RFC 8525 clients receive `/yang-library`, including implemented and
 import-only modules, enabled features, submodules, and deviation relationships.
 The same inventory generates the deprecated `/modules-state` compatibility
-tree and its conformance types. Conventional running, candidate, and startup
-datastores reference the common schema; `operational` is not advertised until
-an NMDA operational datastore is implemented. The content identifier is
+tree and its conformance types. Conventional running, candidate, startup, and
+intended datastores reference the common schema. The initial read-only
+`intended` view is identical to `running`, as RFC 8342 permits when there are
+no configuration transformations. `operational` is not advertised until an
+NMDA operational datastore is implemented. The content identifier is
 derived from the current tree, and reload emits current and legacy update
 notifications only when that identifier changes. RFC 6022
 `/netconf-state/schemas` identifies every compiled source with a `NETCONF`

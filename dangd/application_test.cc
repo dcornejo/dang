@@ -97,6 +97,12 @@ TEST(DangdApplicationTest, LoadsModelAndCompleteConfiguration) {
                   .FindRoot({"urn:ietf:params:xml:ns:yang:ietf-yang-library",
                              "yang-library"})
                   .has_value());
+  const auto library = loaded.application->server().Process("alice", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="nmda">
+      <get/>
+    </rpc>)xml");
+  EXPECT_NE(library.xml.find("<name>ds:intended</name>"), std::string::npos)
+      << library.xml;
 }
 
 TEST(DangdApplicationTest, UsesSecureNacmDefaultsWhenSubtreeIsAbsent) {

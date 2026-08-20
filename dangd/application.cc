@@ -266,7 +266,8 @@ std::string BuildYangLibraryXml(
   pugi::xml_node schema = library.append_child("schema");
   schema.append_child("name").text() = "dangd-schema";
   schema.append_child("module-set").text() = "dangd-modules";
-  for (const char* datastore : {"running", "candidate", "startup"}) {
+  for (const char* datastore : {"running", "candidate", "startup",
+                                "intended"}) {
     pugi::xml_node entry = library.append_child("datastore");
     entry.append_child("name").text() =
         (std::string("ds:") + datastore).c_str();
