@@ -7,6 +7,9 @@
 
 ### Added
 
+- RFC 8526 conventional-datastore access through `<get-data>` and
+  `<edit-data>`, with pinned `ietf-netconf-nmda`, `ietf-origin`, metadata, and
+  NETCONF dependency models exposed through YANG Library and `get-schema`.
 - A read-only RFC 8342 `intended` datastore, initially identical to `running`,
   with RFC 8525 datastore publication and write-rejection regression tests.
 - A self-contained `dangd_ip_management_plugin` example that owns the

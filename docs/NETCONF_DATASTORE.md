@@ -16,6 +16,14 @@ transformations. Reads and validation are supported. Lock, edit, copy-target,
 and delete operations reject `intended`; a later transformation boundary can
 give it independent contents without changing callers of `Read(kIntended)`.
 
+`dangd` exposes conventional datastores through RFC 8526 `<get-data>`, with
+datastore identity selection, subtree or XPath selection, `config-filter`,
+`max-depth`, and NACM read filtering. RFC 8526 `<edit-data>` supports inline
+configuration for writable conventional datastores and always uses atomic
+rollback-on-error behavior. URL content is unavailable because the core NMDA
+module does not enable the NETCONF `url` feature. The `origin` feature is also
+disabled until a real operational datastore supplies origin metadata.
+
 ```cpp
 #include <chrono>
 #include <yang/netconf_datastore.h>

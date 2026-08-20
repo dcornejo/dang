@@ -113,5 +113,21 @@ TEST(ValidatorTest, RejectsUnsupportedYangVersion) {
             DiagnosticCode::kUnsupportedYangVersion);
 }
 
+TEST(ValidatorTest, AcceptsStandardStatementsInsideExtensionInvocation) {
+  VectorDiagnosticSink sink;
+  const SyntaxTree tree = Parse(R"yang(module extension-test {
+    yang-version 1.1;
+    namespace "urn:extension-test";
+    prefix et;
+    et:annotation origin {
+      type string;
+      description "Extension-defined content.";
+    }
+  })yang", sink);
+  Validator validator(sink);
+  EXPECT_TRUE(validator.Validate(tree));
+  EXPECT_FALSE(sink.has_errors());
+}
+
 }  // namespace
 }  // namespace yang

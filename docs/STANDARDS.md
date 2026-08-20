@@ -27,6 +27,12 @@ notifications only when that identifier changes. RFC 6022
 `/netconf-state/schemas` identifies every compiled source with a `NETCONF`
 location served by `get-schema`.
 
+RFC 8526 `ietf-netconf-nmda` and its exact dependency sources are compiled and
+retrievable. `<get-data>` and `<edit-data>` operate on the supported
+conventional datastores. The `origin` feature is deliberately not enabled, and
+`operational` remains absent from YANG Library, until applied configuration and
+system state can be represented truthfully.
+
 ### YANG version is semantic, not merely syntactic
 
 A missing `yang-version` means version 1; it must not silently select 1.1.

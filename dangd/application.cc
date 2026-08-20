@@ -252,6 +252,12 @@ std::string BuildYangLibraryXml(
       for (const std::string& feature : source->enabled_features)
         entry.append_child("feature").text() = feature;
     }
+    if (is_implemented && module->name == "ietf-netconf") {
+      for (const char* feature : {"writable-running", "candidate",
+                                  "confirmed-commit", "rollback-on-error",
+                                  "validate", "startup", "xpath"})
+        entry.append_child("feature").text() = feature;
+    }
     if (is_implemented) {
       for (const std::string& deviation : deviations[module->name])
         entry.append_child("deviation").text() = deviation;
@@ -601,6 +607,7 @@ LoadResult Application::Load(const ApplicationOptions& options) {
     add_import("ietf-netconf-acm", std::string("2018-02-14"));
     add_import("ietf-yang-library", std::string("2019-01-04"));
     add_import("ietf-netconf-monitoring", std::string("2010-10-04"));
+    add_import("ietf-netconf-nmda", std::string("2019-01-07"));
     for (const PluginYangSource& plugin_source : plugins->yang_sources()) {
       if (plugin_source.role != DANG_YANG_IMPORT_ONLY_V1)
         add_import(plugin_source.module_name, plugin_source.revision);
@@ -613,7 +620,14 @@ LoadResult Application::Load(const ApplicationOptions& options) {
       AppendDiagnostics(diagnostics, nullptr, &result.errors);
       return result;
     }
-    std::vector<yang::semantic::QualifiedSymbolName> features;
+    std::vector<yang::semantic::QualifiedSymbolName> features{
+        {"ietf-netconf", "writable-running"},
+        {"ietf-netconf", "candidate"},
+        {"ietf-netconf", "confirmed-commit"},
+        {"ietf-netconf", "rollback-on-error"},
+        {"ietf-netconf", "validate"},
+        {"ietf-netconf", "startup"},
+        {"ietf-netconf", "xpath"}};
     for (const PluginYangSource& plugin_source : plugins->yang_sources()) {
       for (const std::string& feature : plugin_source.enabled_features)
         features.push_back({plugin_source.module_name, feature});
@@ -627,7 +641,8 @@ LoadResult Application::Load(const ApplicationOptions& options) {
   auto schema = yang::config::RuntimeSchemaBuilder::FromCompilation(*compilation);
   std::set<std::string> implemented{root_module_name, "ietf-netconf-acm",
                                     "ietf-yang-library",
-                                    "ietf-netconf-monitoring"};
+                                    "ietf-netconf-monitoring",
+                                    "ietf-netconf", "ietf-netconf-nmda"};
   for (const PluginYangSource& plugin_source : plugins->yang_sources()) {
     if (plugin_source.role != DANG_YANG_IMPORT_ONLY_V1)
       implemented.insert(plugin_source.module_name);

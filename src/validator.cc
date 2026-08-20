@@ -32,6 +32,10 @@ bool IsDataDefinition(std::string_view keyword) {
 
 bool SchemaRegistry::IsAllowed(std::string_view parent,
                                std::string_view child) noexcept {
+  // Extension invocations define their own substatement grammar. RFC 7950
+  // requires unknown extension content to be preserved, not constrained by
+  // the built-in statement registry.
+  if (IsExtension(parent)) return true;
   if (IsExtension(child)) return true;
   if (parent == "module") {
     constexpr std::array values{"yang-version", "namespace", "prefix", "include", "import",

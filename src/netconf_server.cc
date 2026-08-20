@@ -7,6 +7,7 @@
 #include "yang/resource_limits.h"
 
 #include <charconv>
+#include <cctype>
 #include <iterator>
 #include <map>
 #include <optional>
@@ -26,6 +27,10 @@ constexpr std::string_view kYangActionNamespace =
     "urn:ietf:params:xml:ns:yang:1";
 constexpr std::string_view kMonitoringNamespace =
     "urn:ietf:params:xml:ns:yang:ietf-netconf-monitoring";
+constexpr std::string_view kNmdaNamespace =
+    "urn:ietf:params:xml:ns:yang:ietf-netconf-nmda";
+constexpr std::string_view kDatastoresNamespace =
+    "urn:ietf:params:xml:ns:yang:ietf-datastores";
 
 std::string_view LocalName(std::string_view name) {
   const std::size_t colon = name.find(':');
@@ -67,6 +72,65 @@ std::optional<Datastore> ParseDatastore(const pugi::xml_node& parent) {
   if (name == "candidate") return Datastore::kCandidate;
   if (name == "startup") return Datastore::kStartup;
   return std::nullopt;
+}
+
+std::optional<Datastore> ParseNmdaDatastore(const pugi::xml_node& node) {
+  if (!node) return std::nullopt;
+  std::string_view value = node.text().as_string();
+  while (!value.empty() && std::isspace(
+             static_cast<unsigned char>(value.front()))) value.remove_prefix(1);
+  while (!value.empty() && std::isspace(
+             static_cast<unsigned char>(value.back()))) value.remove_suffix(1);
+  const std::size_t colon = value.find(':');
+  const std::string_view prefix = colon == std::string_view::npos
+      ? std::string_view() : value.substr(0, colon);
+  const std::string_view local = colon == std::string_view::npos
+      ? value : value.substr(colon + 1);
+  const std::string attribute = prefix.empty()
+      ? "xmlns" : "xmlns:" + std::string(prefix);
+  std::optional<std::string_view> namespace_uri;
+  for (pugi::xml_node current = node; current; current = current.parent()) {
+    if (const pugi::xml_attribute declaration =
+            current.attribute(attribute.c_str())) {
+      namespace_uri = declaration.value();
+      break;
+    }
+  }
+  if (!namespace_uri || *namespace_uri != kDatastoresNamespace)
+    return std::nullopt;
+  if (local == "running") return Datastore::kRunning;
+  if (local == "candidate") return Datastore::kCandidate;
+  if (local == "startup") return Datastore::kStartup;
+  if (local == "intended") return Datastore::kIntended;
+  return std::nullopt;
+}
+
+std::string ApplyMaximumDepth(std::string_view xml, unsigned int maximum) {
+  pugi::xml_document document;
+  if (!document.load_buffer(xml.data(), xml.size())) return {};
+  std::function<void(pugi::xml_node, unsigned int)> prune;
+  prune = [&](pugi::xml_node parent, unsigned int depth) {
+    for (pugi::xml_node child = parent.first_child(); child;) {
+      pugi::xml_node next = child.next_sibling();
+      if (child.type() == pugi::node_element) {
+        if (depth >= maximum) {
+          for (pugi::xml_node descendant = child.first_child(); descendant;) {
+            pugi::xml_node after = descendant.next_sibling();
+            if (descendant.type() == pugi::node_element)
+              child.remove_child(descendant);
+            descendant = after;
+          }
+        } else {
+          prune(child, depth + 1);
+        }
+      }
+      child = next;
+    }
+  };
+  prune(document.document_element(), 1);
+  std::ostringstream output;
+  document.print(output, "", pugi::format_raw);
+  return output.str();
 }
 
 std::optional<config::EditOperation> ParseDefaultOperation(
@@ -584,7 +648,12 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
   const bool get_schema = LocalName(operation.name()) == "get-schema" &&
                           operation_namespace == kMonitoringNamespace &&
                           operational_ != nullptr;
-  const auto custom_rpc = (create_subscription || get_schema)
+  const bool get_data = LocalName(operation.name()) == "get-data" &&
+                        operation_namespace == kNmdaNamespace;
+  const bool edit_data = LocalName(operation.name()) == "edit-data" &&
+                         operation_namespace == kNmdaNamespace;
+  const auto custom_rpc = (create_subscription || get_schema || get_data ||
+                           edit_data || operation_namespace == kNetconfNamespace)
       ? std::optional<config::RuntimeSchemaNodeId>{}
       : datastores_.schema().FindTopLevelOperation(
             {operation_namespace, std::string(LocalName(operation.name()))},
@@ -600,7 +669,8 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
         false};
   }
   if (operation_namespace != kNetconfNamespace && !create_subscription &&
-      !get_schema && !custom_rpc && !action_request) {
+      !get_schema && !get_data && !edit_data && !custom_rpc &&
+      !action_request) {
     return {Reply(message_id, ProtocolFailure(
         "RPC operation is not in the NETCONF base namespace",
         "unknown-namespace")), false};
@@ -648,7 +718,8 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
                     ? operation_schema->module_name
                     : (create_subscription ? "notifications"
                         : (get_schema ? "ietf-netconf-monitoring"
-                                      : "ietf-netconf")),
+                           : ((get_data || edit_data) ? "ietf-netconf-nmda"
+                                                      : "ietf-netconf"))),
                 name, session.external_groups,
                 operation_schema != nullptr &&
                     operation_schema->nacm_default_deny_all));
@@ -679,6 +750,111 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
         payload = FilterOperationOutput(
             *nacm, session, datastores_.schema(), action->schema,
             action->path, payload);
+      }
+    }
+  } else if (get_data) {
+    const auto source = ParseNmdaDatastore(Child(operation, "datastore"));
+    const pugi::xml_node subtree = Child(operation, "subtree-filter");
+    const pugi::xml_node xpath = Child(operation, "xpath-filter");
+    const pugi::xml_node config_filter = Child(operation, "config-filter");
+    const pugi::xml_node maximum_depth = Child(operation, "max-depth");
+    unsigned int depth = 0;
+    if (maximum_depth &&
+        std::string_view(maximum_depth.text().as_string()) != "unbounded") {
+      const std::string_view value = maximum_depth.text().as_string();
+      const auto converted = std::from_chars(value.data(),
+                                             value.data() + value.size(), depth);
+      if (converted.ec != std::errc() ||
+          converted.ptr != value.data() + value.size() || depth == 0)
+        result = ProtocolFailure("invalid get-data max-depth", "invalid-value");
+    }
+    if (!source || (subtree && xpath)) {
+      result = ProtocolFailure("get-data requires one supported datastore",
+                               "invalid-value");
+    } else if (config_filter &&
+               std::string_view(config_filter.text().as_string()) != "true" &&
+               std::string_view(config_filter.text().as_string()) != "false") {
+      result = ProtocolFailure("invalid get-data config-filter",
+                               "invalid-value");
+    } else if (result.errors.empty()) {
+      result.ok = true;
+      payload = "<data xmlns=\"" + std::string(kNmdaNamespace) + "\">" +
+                datastores_.Read(*source).ToXml(false) + "</data>";
+      if (nacm != nullptr)
+        payload = nacm->FilterReadableData(
+            session.username, payload, session.external_groups,
+            &datastores_.schema());
+      if (config_filter &&
+          std::string_view(config_filter.text().as_string()) == "false") {
+        payload = "<data xmlns=\"" + std::string(kNmdaNamespace) + "\"/>";
+      } else if (subtree) {
+        pugi::xml_document filter_document;
+        pugi::xml_node filter = filter_document.append_child("filter");
+        filter.append_attribute("type") = "subtree";
+        for (const pugi::xml_attribute attribute : subtree.attributes()) {
+          const std::string_view attribute_name = attribute.name();
+          if (attribute_name == "xmlns" ||
+              attribute_name.starts_with("xmlns:"))
+            filter.append_attribute(attribute.name()) = attribute.value();
+        }
+        for (const pugi::xml_node child : subtree.children())
+          if (child.type() == pugi::node_element) filter.append_copy(child);
+        FilterResult filtered = ApplySubtreeFilter(payload,
+                                                   Serialize(filter_document));
+        if (!filtered.xml) {
+          result = ProtocolFailure(*filtered.error,
+              filtered.error_tag.value_or("invalid-value"));
+          payload.clear();
+        } else {
+          payload = std::move(*filtered.xml);
+        }
+      } else if (xpath) {
+        pugi::xml_document filter_document;
+        pugi::xml_node filter = filter_document.append_child("filter");
+        filter.append_attribute("type") = "xpath";
+        filter.append_attribute("select") = xpath.text().as_string();
+        for (pugi::xml_node current = xpath; current; current = current.parent()) {
+          for (const pugi::xml_attribute attribute : current.attributes()) {
+            const std::string_view attribute_name = attribute.name();
+            if ((attribute_name == "xmlns" ||
+                 attribute_name.starts_with("xmlns:")) &&
+                !filter.attribute(attribute.name()))
+              filter.append_attribute(attribute.name()) = attribute.value();
+          }
+        }
+        FilterResult filtered = ApplyXPathFilter(payload,
+                                                 Serialize(filter_document));
+        if (!filtered.xml) {
+          result = ProtocolFailure(*filtered.error,
+              filtered.error_tag.value_or("invalid-value"));
+          payload.clear();
+        } else {
+          payload = std::move(*filtered.xml);
+        }
+      }
+      if (result.ok && depth != 0) payload = ApplyMaximumDepth(payload, depth);
+    }
+  } else if (edit_data) {
+    const auto target = ParseNmdaDatastore(Child(operation, "datastore"));
+    const auto default_operation = ParseDefaultOperation(
+        Child(operation, "default-operation").text().as_string());
+    const pugi::xml_node config = Child(operation, "config");
+    if (!target || *target == Datastore::kIntended || !default_operation ||
+        !config || Child(operation, "url")) {
+      result = ProtocolFailure("invalid or read-only edit-data target/content",
+                               "invalid-value");
+    } else {
+      config::EditParseResult edit = config::ParseEditXml(
+          datastores_.schema(), SerializeConfig(config));
+      if (!edit.document) {
+        result = {false, std::move(edit.findings), {}};
+      } else {
+        EditConfigRequest request{
+            std::string(session.datastore_owner), *target,
+            {std::move(*edit.document)}, *default_operation,
+            TestOption::kTestThenSet, ErrorOption::kRollbackOnError, {}};
+        request.authorize_change = authorize_change;
+        result = datastores_.EditConfig(request);
       }
     }
   } else if (custom_rpc) {

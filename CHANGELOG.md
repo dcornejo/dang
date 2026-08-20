@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added RFC 8526 `<get-data>` and `<edit-data>` for conventional datastores,
+  including identity-based datastore selection, filters, maximum depth, NACM,
+  atomic edits, and the normative NMDA/origin model dependency closure.
 - Added the first NMDA datastore increment: a read-only RFC 8342 `intended`
   view that initially mirrors `running` and is published in RFC 8525 YANG
   Library.
@@ -23,6 +26,9 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Permit standard YANG statements within extension invocations, whose
+  substatement grammar is defined by the extension rather than the built-in
+  statement registry.
 - Retained module and annotation metadata for NACM ancestor checks, derived
   nested-notification context from runtime schema paths, and bound RPC/action
   input and output to the compiled operation schema.

@@ -103,6 +103,60 @@ TEST(DangdApplicationTest, LoadsModelAndCompleteConfiguration) {
     </rpc>)xml");
   EXPECT_NE(library.xml.find("<name>ds:intended</name>"), std::string::npos)
       << library.xml;
+  EXPECT_NE(library.xml.find("<name>ietf-netconf-nmda</name>"),
+            std::string::npos) << library.xml;
+  EXPECT_NE(library.xml.find("<name>ietf-origin</name>"), std::string::npos)
+      << library.xml;
+  EXPECT_NE(library.xml.find("<feature>xpath</feature>"), std::string::npos)
+      << library.xml;
+}
+
+TEST(DangdApplicationTest, RetrievesAndEditsConventionalNmdaDatastores) {
+  TemporaryInputs inputs;
+  auto loaded = Application::Load(Options(inputs));
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+
+  const auto intended = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="get-data"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:intended</datastore>
+        <subtree-filter><system xmlns="urn:example:appliance"/></subtree-filter>
+        <config-filter>true</config-filter>
+        <max-depth>2</max-depth>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_NE(intended.xml.find(">edge-1</"), std::string::npos) << intended.xml;
+  EXPECT_NE(intended.xml.find("ietf-netconf-nmda"), std::string::npos)
+      << intended.xml;
+
+  const auto edit = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="edit-data"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <edit-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:candidate</datastore>
+        <config><system xmlns="urn:example:appliance">
+          <hostname>edge-nmda</hostname>
+        </system></config>
+      </edit-data>
+    </rpc>)xml");
+  ASSERT_NE(edit.xml.find("<ok/>"), std::string::npos) << edit.xml;
+  EXPECT_NE(loaded.application->datastores()
+                .Read(yang::netconf::Datastore::kCandidate)
+                .ToXml()
+                .find("edge-nmda"),
+            std::string::npos);
+
+  const auto rejected = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="readonly"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <edit-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:intended</datastore><config/>
+      </edit-data>
+    </rpc>)xml");
+  EXPECT_NE(rejected.xml.find("<error-tag>invalid-value</error-tag>"),
+            std::string::npos) << rejected.xml;
 }
 
 TEST(DangdApplicationTest, UsesSecureNacmDefaultsWhenSubtreeIsAbsent) {

@@ -18,3 +18,9 @@ IETF Trust license notices.
 implemented by `dangd`, including the schema inventory and `get-schema` RPC.
 It is derived from the RFC code component under the IETF Trust Simplified BSD
 License.
+
+`ietf-netconf-nmda@2019-01-07.yang` is the normative RFC 8526 NETCONF NMDA
+module. Its RFC 8342 origin dependency, RFC 7952 metadata dependency, and RFC
+6241/RFC 6243 NETCONF dependencies are pinned beside it. These unmodified
+copies come from the YangModels IETF RFC registry and retain their embedded
+IETF Trust license notices.
