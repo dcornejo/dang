@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <dlfcn.h>
 #include <functional>
+#include <iterator>
 #include <set>
 #include <sstream>
 #include <unordered_map>
@@ -81,6 +82,7 @@ PluginManager::~PluginManager() {
 
 bool PluginManager::Load(const std::filesystem::path& path,
                          std::vector<std::string>* errors) {
+  if (!errors) return false;
   void* library = dlopen(path.string().c_str(), RTLD_NOW | RTLD_LOCAL);
   if (!library) {
     errors->push_back("cannot load plugin " + path.string() + ": " +
@@ -106,6 +108,14 @@ bool PluginManager::Load(const std::filesystem::path& path,
     dlclose(library);
     return false;
   }
+  if ((api->dependency_count == nullptr) !=
+      (api->dependency_at == nullptr)) {
+    errors->push_back("plugin " + std::string(api->plugin_name) +
+                      " must provide both dependency callbacks or neither");
+    if (api->destroy) api->destroy(api->context);
+    dlclose(library);
+    return false;
+  }
   if (std::ranges::any_of(state_->plugins, [&](const State::Plugin& plugin) {
         return plugin.name == api->plugin_name;
       })) {
@@ -118,6 +128,7 @@ bool PluginManager::Load(const std::filesystem::path& path,
   plugin.library = library;
   plugin.api = api;
   plugin.name = api->plugin_name;
+  std::vector<PluginYangSource> discovered_sources;
   const std::size_t count = api->yang_source_count(api->context);
   for (std::size_t index = 0; index < count; ++index) {
     DangYangSourceV1 source{};
@@ -173,17 +184,40 @@ bool PluginManager::Load(const std::filesystem::path& path,
       dlclose(library);
       return false;
     }
+    const auto local_duplicate = std::ranges::find_if(
+        discovered_sources, [&](const PluginYangSource& existing) {
+          return existing.module_name == copied.module_name &&
+                 existing.revision == copied.revision;
+        });
+    if (local_duplicate != discovered_sources.end()) {
+      errors->push_back("plugin " + plugin.name + " supplies " +
+                        copied.module_name + "@" +
+                        copied.revision.value_or("<none>") + " more than once");
+      if (api->destroy) api->destroy(api->context);
+      dlclose(library);
+      return false;
+    }
     if (source.role == DANG_YANG_IMPLEMENTED_V1)
       plugin.modules.push_back(copied.module_name);
-    state_->sources.push_back(std::move(copied));
+    discovered_sources.push_back(std::move(copied));
   }
   if (api->dependency_count && api->dependency_at) {
     for (std::size_t index = 0; index < api->dependency_count(api->context);
          ++index) {
-      if (const char* dependency = api->dependency_at(api->context, index))
-        plugin.dependencies.emplace_back(dependency);
+      const char* dependency = api->dependency_at(api->context, index);
+      if (!dependency || !*dependency) {
+        errors->push_back("plugin " + plugin.name +
+                          ": invalid runtime dependency descriptor");
+        if (api->destroy) api->destroy(api->context);
+        dlclose(library);
+        return false;
+      }
+      plugin.dependencies.emplace_back(dependency);
     }
   }
+  state_->sources.insert(state_->sources.end(),
+                         std::make_move_iterator(discovered_sources.begin()),
+                         std::make_move_iterator(discovered_sources.end()));
   state_->plugins.push_back(std::move(plugin));
   return true;
 }
@@ -342,14 +376,29 @@ std::optional<yang::config::ValidationFinding> PluginManager::Apply() {
     State::Plugin& plugin = state_->plugins[index];
     DangPluginErrorV1 error{};
     if (!plugin.api->apply(plugin.api->context, plugin.prepared, &error)) {
-      const auto finding = PluginFinding(plugin.name, error, "apply failed");
+      auto finding = PluginFinding(plugin.name, error, "apply failed");
+      std::vector<std::string> rollback_failures;
       for (auto rollback = state_->order.rbegin();
            rollback != state_->order.rend(); ++rollback) {
         State::Plugin& applied = state_->plugins[*rollback];
         if (!applied.applied) continue;
         DangPluginErrorV1 rollback_error{};
-        (void)applied.api->rollback(applied.api->context, applied.prepared,
-                                    &rollback_error);
+        if (!applied.api->rollback(applied.api->context, applied.prepared,
+                                   &rollback_error)) {
+          rollback_failures.push_back(
+              "plugin " + applied.name + ": " +
+              (rollback_error.message ? rollback_error.message
+                                      : "rollback failed"));
+        }
+      }
+      if (!rollback_failures.empty()) {
+        finding.netconf_error_app_tag = "plugin-rollback-failed";
+        finding.message += "; rollback also failed for ";
+        for (std::size_t failure = 0; failure < rollback_failures.size();
+             ++failure) {
+          if (failure != 0) finding.message += ", ";
+          finding.message += rollback_failures[failure];
+        }
       }
       Abort();
       return finding;

@@ -206,6 +206,9 @@ std::string Reply(std::string_view message_id, const TransactionResult& result,
                                         ? "operation-failed"
                                         : error.netconf_error_tag) +
              "</error-tag><error-severity>error</error-severity>";
+      if (!error.netconf_error_app_tag.empty())
+        xml += "<error-app-tag>" + Escape(error.netconf_error_app_tag) +
+               "</error-app-tag>";
       if (!error.instance_path.empty())
         xml += "<error-path>" + Escape(error.instance_path) + "</error-path>";
       std::string message = error.message;

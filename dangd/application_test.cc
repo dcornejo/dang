@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "dangd/application.h"
+#include "dangd/test_plugins/plugin_test_support.h"
 
 #include <filesystem>
 #include <fstream>
@@ -61,6 +62,26 @@ constexpr std::string_view kConfig = R"xml(
 ApplicationOptions Options(TemporaryInputs& inputs) {
   return {.model = inputs.Write("appliance.yang", kModel),
           .configuration = inputs.Write("config.xml", kConfig)};
+}
+
+yang::netconf::RpcResponse SetProviderMode(Application& application,
+                                           std::string_view mode) {
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+  return application.server().Process(
+      session,
+      "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+      "message-id=\"edit\"><edit-config><target><candidate/></target>"
+      "<config><provider-settings xmlns=\"urn:dangd:test:provider\">"
+      "<mode>" + std::string(mode) + "</mode></provider-settings></config>"
+      "</edit-config></rpc>");
+}
+
+yang::netconf::RpcResponse Commit(Application& application) {
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+  return application.server().Process(
+      session,
+      "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+      "message-id=\"commit\"><commit/></rpc>");
 }
 
 TEST(DangdApplicationTest, LoadsModelAndCompleteConfiguration) {
@@ -196,6 +217,113 @@ TEST(DangdApplicationTest, LoadsPluginModelAndRejectsPluginInvalidCommit) {
                 .Read(yang::netconf::Datastore::kRunning)
                 .ToXml()
                 .find("plugin-settings"),
+            std::string::npos);
+}
+
+TEST(DangdApplicationTest, AppliesDependentPluginsInDependencyOrder) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_CONSUMER_PLUGIN_PATH,
+                     DANG_TEST_PROVIDER_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  test_plugin::ResetTrace();
+
+  ASSERT_NE(SetProviderMode(*loaded.application, "active").xml.find("<ok/>"),
+            std::string::npos);
+  const auto commit = Commit(*loaded.application);
+  ASSERT_NE(commit.xml.find("<ok/>"), std::string::npos) << commit.xml;
+  EXPECT_EQ(test_plugin::Trace(),
+            (std::vector<std::string>{
+                "provider.prepare", "consumer.prepare", "provider.validate",
+                "consumer.validate", "provider.apply", "consumer.apply",
+                "consumer.release", "provider.release"}));
+}
+
+TEST(DangdApplicationTest, ValidatesEveryPluginBeforeApplyingAnyPlugin) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_CONSUMER_PLUGIN_PATH,
+                     DANG_TEST_PROVIDER_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr);
+  test_plugin::ResetTrace();
+
+  ASSERT_NE(SetProviderMode(*loaded.application, "consumer-validate-fail")
+                .xml.find("<ok/>"),
+            std::string::npos);
+  const auto commit = Commit(*loaded.application);
+  EXPECT_NE(commit.xml.find("provider mode is incompatible"), std::string::npos)
+      << commit.xml;
+  EXPECT_NE(commit.xml.find("/provider:provider-settings/provider:mode"),
+            std::string::npos) << commit.xml;
+  EXPECT_EQ(test_plugin::Trace(),
+            (std::vector<std::string>{
+                "provider.prepare", "consumer.prepare", "provider.validate",
+                "consumer.validate", "consumer.release", "provider.release"}));
+  EXPECT_TRUE(test_plugin::Active("provider").empty());
+  EXPECT_TRUE(test_plugin::Active("consumer").empty());
+}
+
+TEST(DangdApplicationTest, RollsBackAppliedDependencyAfterConsumerFailure) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_CONSUMER_PLUGIN_PATH,
+                     DANG_TEST_PROVIDER_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr);
+  test_plugin::ResetTrace();
+
+  ASSERT_NE(SetProviderMode(*loaded.application, "consumer-apply-fail")
+                .xml.find("<ok/>"),
+            std::string::npos);
+  const auto commit = Commit(*loaded.application);
+  EXPECT_NE(commit.xml.find("simulated consumer hardware failure"),
+            std::string::npos) << commit.xml;
+  EXPECT_EQ(test_plugin::Trace(),
+            (std::vector<std::string>{
+                "provider.prepare", "consumer.prepare", "provider.validate",
+                "consumer.validate", "provider.apply", "consumer.apply",
+                "provider.rollback", "consumer.release", "provider.release"}));
+  EXPECT_EQ(test_plugin::Active("provider").find("consumer-apply-fail"),
+            std::string::npos);
+  EXPECT_NE(test_plugin::Active("provider").find("edge-1"),
+            std::string::npos);
+  EXPECT_TRUE(test_plugin::Active("consumer").empty());
+  EXPECT_EQ(loaded.application->datastores()
+                .Read(yang::netconf::Datastore::kRunning)
+                .ToXml()
+                .find("consumer-apply-fail"),
+            std::string::npos);
+}
+
+TEST(DangdApplicationTest, ReportsApplyAndRollbackFailuresTogether) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_CONSUMER_PLUGIN_PATH,
+                     DANG_TEST_PROVIDER_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr);
+  test_plugin::ResetTrace();
+
+  ASSERT_NE(SetProviderMode(*loaded.application,
+                            "consumer-apply-rollback-fail")
+                .xml.find("<ok/>"),
+            std::string::npos);
+  const auto commit = Commit(*loaded.application);
+  EXPECT_NE(commit.xml.find("simulated consumer hardware failure"),
+            std::string::npos) << commit.xml;
+  EXPECT_NE(commit.xml.find("simulated provider rollback failure"),
+            std::string::npos) << commit.xml;
+  EXPECT_NE(commit.xml.find("plugin-rollback-failed"), std::string::npos)
+      << commit.xml;
+  EXPECT_NE(test_plugin::Active("provider").find(
+                "consumer-apply-rollback-fail"),
+            std::string::npos);
+  EXPECT_EQ(loaded.application->datastores()
+                .Read(yang::netconf::Datastore::kRunning)
+                .ToXml()
+                .find("consumer-apply-rollback-fail"),
             std::string::npos);
 }
 

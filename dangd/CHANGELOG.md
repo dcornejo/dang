@@ -31,11 +31,22 @@
 
 ### Fixed
 
+- Made plugin discovery atomic so a rejected plugin cannot leave partially
+  published YANG sources, and reject incomplete or invalid dependency
+  descriptors at load time.
+- Preserve both the original apply error and every rollback error in the
+  NETCONF response, including a distinct `plugin-rollback-failed` app-tag.
+- Emit populated `error-app-tag` values in NETCONF RPC errors instead of
+  silently dropping diagnostics produced by validators and backends.
 - Deferred GoogleTest discovery for sanitizer builds on macOS so the existing
   prebuilt-library compatibility workaround also covers `dangd_tests`.
 
 ### Tests
 
+- Added realistic provider and consumer plugins that verify dependency-driven
+  affected-set expansion, prepare/validate/apply ordering, resource release,
+  downstream apply failure, reverse rollback, rollback failure reporting, and
+  missing dependency rejection.
 - Added end-to-end NETCONF failures for an invalid edit target and for a
   schema-invalid candidate commit, verifying that failed operations preserve
   the running and backend working configurations and emit no backend deltas.

@@ -177,10 +177,12 @@ explicit rollback callback and an ordinary transaction whose proposed tree is
 an earlier configuration.
 
 If rollback itself fails, the plugin should return the most precise error it
-can and preserve diagnostic state for reconciliation. ABI v1 reports the
-original apply failure to NETCONF; production providers should also log
-rollback failures through their platform facilities. A future ABI may expose
-a core reconciliation journal.
+can and preserve diagnostic state for reconciliation. `dangd` reports the
+original apply failure together with every rollback failure and uses the
+`plugin-rollback-failed` NETCONF error app-tag. Production providers should
+also log rollback failures through their platform facilities because device
+state may require reconciliation. A future ABI may expose a core
+reconciliation journal.
 
 ### release
 

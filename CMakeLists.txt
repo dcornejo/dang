@@ -135,6 +135,37 @@ if(YANG_BUILD_DANGD)
   target_compile_options(dangd_example_plugin PRIVATE
     -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
   set_target_properties(dangd_example_plugin PROPERTIES PREFIX "")
+  if(YANG_BUILD_TESTS)
+    add_library(dangd_test_plugin_support SHARED
+      dangd/test_plugins/plugin_test_support.cc)
+    target_compile_features(dangd_test_plugin_support PRIVATE cxx_std_20)
+    target_include_directories(dangd_test_plugin_support PUBLIC
+      ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_options(dangd_test_plugin_support PRIVATE
+      -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+    foreach(test_plugin IN ITEMS provider consumer)
+      add_library(dangd_test_${test_plugin}_plugin MODULE
+        dangd/test_plugins/${test_plugin}_plugin.cc)
+      target_compile_features(dangd_test_${test_plugin}_plugin PRIVATE
+        cxx_std_20)
+      target_include_directories(dangd_test_${test_plugin}_plugin PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+      target_link_libraries(dangd_test_${test_plugin}_plugin PRIVATE
+        dangd_test_plugin_support)
+      target_compile_options(dangd_test_${test_plugin}_plugin PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+      set_target_properties(dangd_test_${test_plugin}_plugin PROPERTIES
+        PREFIX "")
+    endforeach()
+    add_library(dangd_test_broken_discovery_plugin MODULE
+      dangd/test_plugins/broken_discovery_plugin.cc)
+    target_include_directories(dangd_test_broken_discovery_plugin PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_options(dangd_test_broken_discovery_plugin PRIVATE
+      -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+    set_target_properties(dangd_test_broken_discovery_plugin PROPERTIES
+      PREFIX "")
+  endif()
   install(TARGETS dangd dangctl RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
   install(TARGETS dangd_example_plugin
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/dangd/plugins)
@@ -234,14 +265,19 @@ if(YANG_BUILD_TESTS)
 
   if(YANG_BUILD_DANGD)
     add_executable(dangd_tests dangd/application_test.cc
-      dangd/tls_transport_test.cc)
+      dangd/plugin_manager_test.cc dangd/tls_transport_test.cc)
     target_compile_features(dangd_tests PRIVATE cxx_std_20)
-    target_link_libraries(dangd_tests PRIVATE dangd_core GTest::gtest_main
-      Threads::Threads)
+    target_link_libraries(dangd_tests PRIVATE dangd_core
+      dangd_test_plugin_support GTest::gtest_main Threads::Threads)
     target_compile_definitions(dangd_tests PRIVATE
       DANG_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
-      DANG_TEST_PLUGIN_PATH="$<TARGET_FILE:dangd_example_plugin>")
-    add_dependencies(dangd_tests dangd_example_plugin)
+      DANG_TEST_PLUGIN_PATH="$<TARGET_FILE:dangd_example_plugin>"
+      DANG_TEST_PROVIDER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_provider_plugin>"
+      DANG_TEST_CONSUMER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_consumer_plugin>"
+      DANG_TEST_BROKEN_PLUGIN_PATH="$<TARGET_FILE:dangd_test_broken_discovery_plugin>")
+    add_dependencies(dangd_tests dangd_example_plugin
+      dangd_test_provider_plugin dangd_test_consumer_plugin
+      dangd_test_broken_discovery_plugin)
     target_compile_options(dangd_tests PRIVATE
       -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
     if(YANG_ENABLE_SANITIZERS AND APPLE)
