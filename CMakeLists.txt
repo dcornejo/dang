@@ -165,6 +165,13 @@ if(YANG_BUILD_DANGD)
       -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
     set_target_properties(dangd_test_broken_discovery_plugin PROPERTIES
       PREFIX "")
+    add_library(dangd_test_deviation_plugin MODULE
+      dangd/test_plugins/deviation_plugin.cc)
+    target_include_directories(dangd_test_deviation_plugin PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_options(dangd_test_deviation_plugin PRIVATE
+      -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+    set_target_properties(dangd_test_deviation_plugin PROPERTIES PREFIX "")
   endif()
   install(TARGETS dangd dangctl RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
   install(TARGETS dangd_example_plugin
@@ -275,9 +282,11 @@ if(YANG_BUILD_TESTS)
       DANG_TEST_PROVIDER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_provider_plugin>"
       DANG_TEST_CONSUMER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_consumer_plugin>"
       DANG_TEST_BROKEN_PLUGIN_PATH="$<TARGET_FILE:dangd_test_broken_discovery_plugin>")
+    target_compile_definitions(dangd_tests PRIVATE
+      DANG_TEST_DEVIATION_PLUGIN_PATH="$<TARGET_FILE:dangd_test_deviation_plugin>")
     add_dependencies(dangd_tests dangd_example_plugin
       dangd_test_provider_plugin dangd_test_consumer_plugin
-      dangd_test_broken_discovery_plugin)
+      dangd_test_broken_discovery_plugin dangd_test_deviation_plugin)
     target_compile_options(dangd_tests PRIVATE
       -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
     if(YANG_ENABLE_SANITIZERS AND APPLE)

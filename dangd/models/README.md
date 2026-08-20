@@ -13,3 +13,8 @@ embedded IETF Trust license notice.
 `ietf-inet-types@2013-07-15.yang` is its RFC 6991 URI-type dependency. These
 copies come from the IANA YANG Parameters registry and retain their embedded
 IETF Trust license notices.
+
+`ietf-netconf-monitoring@2010-10-04.yang` provides the RFC 6022 schema nodes
+implemented by `dangd`, including the schema inventory and `get-schema` RPC.
+It is derived from the RFC code component under the IETF Trust Simplified BSD
+License.

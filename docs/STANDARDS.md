@@ -12,6 +12,19 @@ boundaries that callers should understand.
 
 ## Resolved issues
 
+### YANG Library current and legacy views describe one schema inventory
+
+RFC 8525 clients receive `/yang-library`, including implemented and
+import-only modules, enabled features, submodules, and deviation relationships.
+The same inventory generates the deprecated `/modules-state` compatibility
+tree and its conformance types. Conventional running, candidate, and startup
+datastores reference the common schema; `operational` is not advertised until
+an NMDA operational datastore is implemented. The content identifier is
+derived from the current tree, and reload emits current and legacy update
+notifications only when that identifier changes. RFC 6022
+`/netconf-state/schemas` identifies every compiled source with a `NETCONF`
+location served by `get-schema`.
+
 ### YANG version is semantic, not merely syntactic
 
 A missing `yang-version` means version 1; it must not silently select 1.1.

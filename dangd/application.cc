@@ -7,6 +7,7 @@
 #include <atomic>
 #include <fstream>
 #include <iterator>
+#include <map>
 #include <set>
 #include <sstream>
 #include <system_error>
@@ -187,6 +188,36 @@ std::string BuildYangLibraryXml(
     const yang::Compilation& compilation,
     const std::set<std::string>& implemented,
     const std::vector<PluginYangSource>& plugin_sources) {
+  std::map<std::string, std::set<std::string>> deviations;
+  for (const yang::ResolvedModule* module : compilation.schemas.modules()) {
+    const auto inspect = [&](const yang::ResolvedModule& source) {
+      if (!source.syntax || source.syntax->roots().empty()) return;
+      const yang::Statement& root =
+          source.syntax->Get(source.syntax->roots().front());
+      for (const yang::StatementId id : root.children) {
+        const yang::Statement& statement = source.syntax->Get(id);
+        if (statement.keyword != "deviation" || !statement.argument ||
+            !statement.argument->starts_with('/')) continue;
+        const std::string_view path = *statement.argument;
+        const std::size_t slash = path.find('/', 1);
+        const std::string_view first = path.substr(1, slash - 1);
+        const std::size_t colon = first.find(':');
+        const std::string deviation_module =
+            source.belongs_to.value_or(source.name);
+        if (colon == std::string_view::npos) {
+          deviations[source.belongs_to.value_or(source.name)].insert(
+              deviation_module);
+          continue;
+        }
+        const auto imported =
+            source.imports.find(std::string(first.substr(0, colon)));
+        if (imported != source.imports.end())
+          deviations[imported->second->name].insert(deviation_module);
+      }
+    };
+    inspect(*module);
+    for (const auto& submodule : module->includes) inspect(*submodule);
+  }
   pugi::xml_document document;
   pugi::xml_node library = document.append_child("yang-library");
   library.append_attribute("xmlns") =
@@ -221,6 +252,10 @@ std::string BuildYangLibraryXml(
       for (const std::string& feature : source->enabled_features)
         entry.append_child("feature").text() = feature;
     }
+    if (is_implemented) {
+      for (const std::string& deviation : deviations[module->name])
+        entry.append_child("deviation").text() = deviation;
+    }
     for (const auto& submodule : module->includes) {
       pugi::xml_node child = entry.append_child("submodule");
       child.append_child("name").text() = submodule->name;
@@ -231,8 +266,7 @@ std::string BuildYangLibraryXml(
   pugi::xml_node schema = library.append_child("schema");
   schema.append_child("name").text() = "dangd-schema";
   schema.append_child("module-set").text() = "dangd-modules";
-  for (const char* datastore : {"running", "candidate", "startup",
-                                "operational"}) {
+  for (const char* datastore : {"running", "candidate", "startup"}) {
     pugi::xml_node entry = library.append_child("datastore");
     entry.append_child("name").text() =
         (std::string("ds:") + datastore).c_str();
@@ -249,20 +283,22 @@ std::string BuildYangLibraryXml(
 std::vector<DangdOperationalData::ModelSource> BuildModelSources(
     const yang::Compilation& compilation) {
   std::vector<DangdOperationalData::ModelSource> result;
-  const auto add = [&](const yang::ResolvedModule& module) {
+  const auto add = [&](const yang::ResolvedModule& module,
+                       std::string_view namespace_uri) {
     if (!module.syntax || !module.syntax->source()) return;
     const std::string version = module.revision.value_or("");
     if (std::ranges::any_of(result, [&](const auto& existing) {
           return existing.identifier == module.name &&
                  existing.version == version;
         })) return;
-    result.push_back({module.name, version,
+    result.push_back({module.name, version, std::string(namespace_uri),
                       std::string(module.syntax->source()->contents())});
   };
   for (const yang::ResolvedModule* module : compilation.schemas.modules()) {
     if (module->name == "dangd-aggregate") continue;
-    add(*module);
-    for (const auto& submodule : module->includes) add(*submodule);
+    add(*module, module->namespace_uri);
+    for (const auto& submodule : module->includes)
+      add(*submodule, module->namespace_uri);
   }
   std::ranges::sort(result, {}, [](const auto& source) {
     return std::pair(source.identifier, source.version);
@@ -271,6 +307,79 @@ std::vector<DangdOperationalData::ModelSource> BuildModelSources(
 }
 
 }  // namespace
+
+DangdOperationalData::DangdOperationalData(
+    std::string yang_library_xml, std::vector<ModelSource> model_sources,
+    const yang::netconf::NacmPolicy* nacm)
+    : yang_library_xml_(std::move(yang_library_xml)),
+      model_sources_(std::move(model_sources)), nacm_(nacm) {
+  pugi::xml_document library;
+  pugi::xml_document legacy;
+  if (!library.load_buffer(yang_library_xml_.data(), yang_library_xml_.size()))
+    return;
+  const pugi::xml_node set =
+      library.document_element().child("module-set");
+  pugi::xml_node state = legacy.append_child("modules-state");
+  state.append_attribute("xmlns") =
+      "urn:ietf:params:xml:ns:yang:ietf-yang-library";
+  state.append_child("module-set-id").text() =
+      library.document_element().child("content-id").text().as_string();
+  const auto append_modules = [&](std::string_view element,
+                                  std::string_view conformance) {
+    for (const pugi::xml_node source : set.children(element.data())) {
+      pugi::xml_node module = state.append_child("module");
+      module.append_copy(source.child("name"));
+      if (source.child("revision"))
+        module.append_copy(source.child("revision"));
+      else
+        module.append_child("revision");
+      if (source.child("namespace"))
+        module.append_copy(source.child("namespace"));
+      for (const pugi::xml_node feature : source.children("feature"))
+        module.append_copy(feature);
+      for (const pugi::xml_node deviation : source.children("deviation")) {
+        pugi::xml_node legacy_deviation = module.append_child("deviation");
+        legacy_deviation.append_copy(deviation).set_name("name");
+        for (const pugi::xml_node candidate : set.children("module")) {
+          if (std::string_view(candidate.child("name").text().as_string()) !=
+              deviation.text().as_string()) continue;
+          if (candidate.child("revision"))
+            legacy_deviation.append_copy(candidate.child("revision"));
+          else
+            legacy_deviation.append_child("revision");
+          break;
+        }
+      }
+      module.append_child("conformance-type").text() = conformance.data();
+      for (const pugi::xml_node submodule : source.children("submodule")) {
+        pugi::xml_node copied = module.append_copy(submodule);
+        if (!copied.child("revision")) copied.append_child("revision");
+      }
+    }
+  };
+  append_modules("module", "implement");
+  append_modules("import-only-module", "import");
+  std::ostringstream output;
+  state.print(output, "  ", pugi::format_raw);
+  modules_state_xml_ = output.str();
+
+  pugi::xml_document monitoring;
+  pugi::xml_node monitoring_state = monitoring.append_child("netconf-state");
+  monitoring_state.append_attribute("xmlns") =
+      "urn:ietf:params:xml:ns:yang:ietf-netconf-monitoring";
+  pugi::xml_node schemas = monitoring_state.append_child("schemas");
+  for (const ModelSource& source : model_sources_) {
+    pugi::xml_node schema = schemas.append_child("schema");
+    schema.append_child("identifier").text() = source.identifier;
+    schema.append_child("version").text() = source.version;
+    schema.append_child("format").text() = "yang";
+    schema.append_child("namespace").text() = source.namespace_uri;
+    schema.append_child("location").text() = "NETCONF";
+  }
+  std::ostringstream monitoring_output;
+  monitoring_state.print(monitoring_output, "  ", pugi::format_raw);
+  monitoring_xml_ = monitoring_output.str();
+}
 
 std::string DangdOperationalData::AugmentDataXml(
     std::string_view configuration_data_xml) const {
@@ -282,6 +391,13 @@ std::string DangdOperationalData::AugmentDataXml(
   pugi::xml_document library;
   if (library.load_buffer(yang_library_xml_.data(), yang_library_xml_.size()))
     data.append_copy(library.document_element());
+  pugi::xml_document modules_state;
+  if (modules_state.load_buffer(modules_state_xml_.data(),
+                                modules_state_xml_.size()))
+    data.append_copy(modules_state.document_element());
+  pugi::xml_document monitoring;
+  if (monitoring.load_buffer(monitoring_xml_.data(), monitoring_xml_.size()))
+    data.append_copy(monitoring.document_element());
   pugi::xml_node nacm;
   for (const pugi::xml_node child : data.children()) {
     const std::string_view name = child.name();
@@ -322,9 +438,11 @@ std::vector<std::string> DangdOperationalData::Capabilities() const {
   const pugi::xml_node content =
       document.document_element().child("content-id");
   if (!content) return {};
-  return {"urn:ietf:params:netconf:capability:yang-library:1.1?revision="
-          "2019-01-04&content-id=" +
-          std::string(content.text().as_string())};
+  return {
+      "urn:ietf:params:netconf:capability:yang-library:1.1?revision="
+      "2019-01-04&content-id=" + std::string(content.text().as_string()),
+      "urn:ietf:params:xml:ns:yang:ietf-netconf-monitoring?"
+      "module=ietf-netconf-monitoring&revision=2010-10-04"};
 }
 
 yang::netconf::OperationalDataProvider::SchemaLookup
@@ -359,6 +477,8 @@ std::string DangdOperationalData::source_digest() const {
     material.push_back('\0');
     material += source.version;
     material.push_back('\0');
+    material += source.namespace_uri;
+    material.push_back('\0');
     material += source.content;
     material.push_back('\0');
   }
@@ -388,13 +508,22 @@ Application::Application(yang::config::RuntimeSchema schema,
 }
 
 bool Application::PublishYangLibraryUpdate(std::string_view content_id) {
+  if (content_id == operational_.content_id()) return true;
   const std::string content =
       "<yang-library-update "
       "xmlns=\"urn:ietf:params:xml:ns:yang:ietf-yang-library\">"
       "<content-id>" + std::string(content_id) +
       std::string("</content-id></yang-library-update>");
-  return notifications_.Publish("NETCONF", "ietf-yang-library",
-                                "yang-library-update", content);
+  const bool current = notifications_.Publish(
+      "NETCONF", "ietf-yang-library", "yang-library-update", content);
+  const std::string legacy =
+      "<yang-library-change "
+      "xmlns=\"urn:ietf:params:xml:ns:yang:ietf-yang-library\">"
+      "<module-set-id>" + std::string(content_id) +
+      "</module-set-id></yang-library-change>";
+  const bool compatible = notifications_.Publish(
+      "NETCONF", "ietf-yang-library", "yang-library-change", legacy);
+  return current && compatible;
 }
 
 LoadResult Application::Load(const ApplicationOptions& options) {
@@ -470,6 +599,7 @@ LoadResult Application::Load(const ApplicationOptions& options) {
     add_import(compilation->module->name, compilation->module->revision);
     add_import("ietf-netconf-acm", std::string("2018-02-14"));
     add_import("ietf-yang-library", std::string("2019-01-04"));
+    add_import("ietf-netconf-monitoring", std::string("2010-10-04"));
     for (const PluginYangSource& plugin_source : plugins->yang_sources()) {
       if (plugin_source.role != DANG_YANG_IMPORT_ONLY_V1)
         add_import(plugin_source.module_name, plugin_source.revision);
@@ -495,7 +625,8 @@ LoadResult Application::Load(const ApplicationOptions& options) {
   }
   auto schema = yang::config::RuntimeSchemaBuilder::FromCompilation(*compilation);
   std::set<std::string> implemented{root_module_name, "ietf-netconf-acm",
-                                    "ietf-yang-library"};
+                                    "ietf-yang-library",
+                                    "ietf-netconf-monitoring"};
   for (const PluginYangSource& plugin_source : plugins->yang_sources()) {
     if (plugin_source.role != DANG_YANG_IMPORT_ONLY_V1)
       implemented.insert(plugin_source.module_name);

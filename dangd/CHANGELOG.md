@@ -13,6 +13,9 @@
   negotiated the superseded library.
 - Built-in RFC 6022 `get-schema` retrieval for the exact YANG module and
   submodule sources used to compile the active schema.
+- RFC 6022 NETCONF monitoring schema inventory with `NETCONF` retrieval
+  locations and capability advertisement, plus RFC 8525's deprecated
+  `/modules-state` compatibility view and `yang-library-change` notification.
 - The versioned POSIX plugin loader, plugin-supplied YANG schema composition,
   runtime dependencies, two-pass validation, ordered apply, reverse rollback,
   reference plugin, and comprehensive plugin author guide.
@@ -37,6 +40,9 @@
 
 ### Fixed
 
+- Publish deviation relationships against every affected implemented module,
+  suppress library notifications for no-change reloads, and stop advertising
+  the NMDA operational datastore until that datastore is actually supported.
 - Retained an explicitly configured revisioned root source in the compilation
   overlay so aggregate schema construction and live reload do not depend on a
   repository-style filename.
@@ -52,6 +58,9 @@
 
 ### Tests
 
+- Added RFC 8525 conformance checks for deviation linkage, current and legacy
+  inventories, legacy conformance types, schema retrieval locations,
+  monitoring capability advertisement, and no-change notification behavior.
 - Added realistic provider and consumer plugins that verify dependency-driven
   affected-set expansion, prepare/validate/apply ordering, resource release,
   downstream apply failure, reverse rollback, rollback failure reporting, and

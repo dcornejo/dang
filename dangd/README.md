@@ -30,11 +30,10 @@ authenticate or encrypt the peer. The supplied `--username` is trusted. Do not
 connect this mode directly to a socket; use it only in tests or behind a local
 supervisor that has already authenticated the peer.
 
-Production SSH/TLS listeners, authentication, NACM policy loading, operational
-state, and a device-specific backend that can fail and roll back application
-steps remain future `dangd` work. The current English backend is deliberately
-in-memory: it establishes the commit boundary and delta vocabulary without
-pretending to configure an external system.
+An event-loop production transport, richer operational device state, and a
+device-specific backend remain future `dangd` work. The current English
+backend is deliberately in-memory: it establishes the commit boundary and
+delta vocabulary without pretending to configure an external system.
 
 ## Safe hardware application ordering
 

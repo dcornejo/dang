@@ -379,10 +379,27 @@ TEST(DangdApplicationTest, AdvertisesPluginSourceThroughYangLibraryGet) {
   EXPECT_NE(get.xml.find("plugin:dangd-example-plugin"), std::string::npos)
       << get.xml;
   EXPECT_NE(get.xml.find("<content-id>"), std::string::npos) << get.xml;
+  EXPECT_NE(get.xml.find("<modules-state"), std::string::npos) << get.xml;
+  EXPECT_NE(get.xml.find("<module-set-id>"), std::string::npos) << get.xml;
+  EXPECT_NE(get.xml.find("<netconf-state"), std::string::npos) << get.xml;
+  EXPECT_NE(get.xml.find("<identifier>ietf-netconf-monitoring</identifier>"),
+            std::string::npos) << get.xml;
+  EXPECT_NE(get.xml.find("<location>NETCONF</location>"), std::string::npos)
+      << get.xml;
+  EXPECT_NE(get.xml.find("<conformance-type>implement</conformance-type>"),
+            std::string::npos) << get.xml;
+  EXPECT_NE(get.xml.find("<conformance-type>import</conformance-type>"),
+            std::string::npos) << get.xml;
+  EXPECT_EQ(get.xml.find("<name>ds:operational</name>"), std::string::npos)
+      << get.xml;
   EXPECT_NE(get.xml.find("<denied-operations>0</denied-operations>"),
             std::string::npos) << get.xml;
   EXPECT_NE(loaded.application->server().ServerHello(9).find(
                 "capability:yang-library:1.1?revision=2019-01-04&amp;content-id="),
+            std::string::npos);
+  EXPECT_NE(loaded.application->server().ServerHello(9).find(
+                "ietf-netconf-monitoring?module=ietf-netconf-monitoring&amp;"
+                "revision=2010-10-04"),
             std::string::npos);
 
   const auto get_config = loaded.application->server().Process(session, R"xml(
@@ -390,6 +407,10 @@ TEST(DangdApplicationTest, AdvertisesPluginSourceThroughYangLibraryGet) {
       <get-config><source><running/></source></get-config>
     </rpc>)xml");
   EXPECT_EQ(get_config.xml.find("<yang-library"), std::string::npos)
+      << get_config.xml;
+  EXPECT_EQ(get_config.xml.find("<modules-state"), std::string::npos)
+      << get_config.xml;
+  EXPECT_EQ(get_config.xml.find("<netconf-state"), std::string::npos)
       << get_config.xml;
 }
 
@@ -416,12 +437,43 @@ TEST(DangdApplicationTest, RetrievesBuiltInAndPluginYangSources) {
       "<version>2026-08-13</version>");
   EXPECT_NE(plugin.xml.find("module dangd-example-plugin"), std::string::npos)
       << plugin.xml;
+  const auto monitoring = retrieve(
+      "<identifier>ietf-netconf-monitoring</identifier>"
+      "<version>2010-10-04</version>");
+  EXPECT_NE(monitoring.xml.find("module ietf-netconf-monitoring"),
+            std::string::npos) << monitoring.xml;
   EXPECT_NE(retrieve("<identifier>missing</identifier>")
                 .xml.find("invalid-value"),
             std::string::npos);
   EXPECT_NE(retrieve("<identifier>appliance</identifier><format>yin</format>")
                 .xml.find("invalid-value"),
             std::string::npos);
+}
+
+TEST(DangdApplicationTest, PublishesDeviationRelationshipsInBothLibraries) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_DEVIATION_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+  const auto get = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="1">
+      <get/>
+    </rpc>)xml");
+  EXPECT_NE(get.xml.find(
+                "<name>appliance</name><namespace>urn:example:appliance"
+                "</namespace><deviation>dangd-test-deviation</deviation>"),
+            std::string::npos) << get.xml;
+  EXPECT_NE(get.xml.find(
+                "<deviation><name>dangd-test-deviation</name>"
+                "<revision>2026-08-20</revision></deviation>"),
+            std::string::npos) << get.xml;
+  EXPECT_NE(get.xml.find(
+                "<name>dangd-test-deviation</name><revision>2026-08-20"
+                "</revision><namespace>urn:dangd:test:deviation</namespace>"
+                "<conformance-type>implement</conformance-type>"),
+            std::string::npos) << get.xml;
 }
 
 TEST(DangdApplicationTest, PublishesYangLibraryUpdateToSubscribers) {
@@ -438,11 +490,21 @@ TEST(DangdApplicationTest, PublishesYangLibraryUpdateToSubscribers) {
   ASSERT_TRUE(loaded.application->PublishYangLibraryUpdate("replacement-id"));
   const auto notifications =
       loaded.application->server().DrainNotifications(session.session_id);
-  ASSERT_EQ(notifications.size(), 1u);
+  ASSERT_EQ(notifications.size(), 2u);
   EXPECT_NE(notifications.front().find("yang-library-update"),
             std::string::npos);
   EXPECT_NE(notifications.front().find("<content-id>replacement-id</content-id>"),
             std::string::npos);
+  EXPECT_NE(notifications.back().find("yang-library-change"),
+            std::string::npos);
+  EXPECT_NE(notifications.back().find(
+                "<module-set-id>replacement-id</module-set-id>"),
+            std::string::npos);
+  EXPECT_TRUE(loaded.application->PublishYangLibraryUpdate(
+      loaded.application->yang_library_content_id()));
+  EXPECT_TRUE(loaded.application->server()
+                  .DrainNotifications(session.session_id)
+                  .empty());
 }
 
 TEST(DangdApplicationTest, AtomicallyReloadsSchemaWithRunningConfiguration) {

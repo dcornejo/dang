@@ -30,13 +30,12 @@ class DangdOperationalData final
   struct ModelSource {
     std::string identifier;
     std::string version;
+    std::string namespace_uri;
     std::string content;
   };
   DangdOperationalData(std::string yang_library_xml,
                        std::vector<ModelSource> model_sources,
-                       const yang::netconf::NacmPolicy* nacm)
-      : yang_library_xml_(std::move(yang_library_xml)),
-        model_sources_(std::move(model_sources)), nacm_(nacm) {}
+                       const yang::netconf::NacmPolicy* nacm);
   [[nodiscard]] std::string AugmentDataXml(
       std::string_view configuration_data_xml) const override;
   [[nodiscard]] std::vector<std::string> Capabilities() const override;
@@ -50,6 +49,8 @@ class DangdOperationalData final
 
  private:
   std::string yang_library_xml_;
+  std::string modules_state_xml_;
+  std::string monitoring_xml_;
   std::vector<ModelSource> model_sources_;
   const yang::netconf::NacmPolicy* nacm_ = nullptr;
 };

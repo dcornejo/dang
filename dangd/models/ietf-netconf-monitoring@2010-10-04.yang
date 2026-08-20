@@ -1,0 +1,112 @@
+module ietf-netconf-monitoring {
+  namespace "urn:ietf:params:xml:ns:yang:ietf-netconf-monitoring";
+  prefix ncm;
+
+  import ietf-yang-types { prefix yang; }
+  import ietf-inet-types { prefix inet; }
+
+  organization "IETF NETCONF Working Group";
+  description
+    "NETCONF monitoring model from RFC 6022. Code components from the RFC
+     are used under the IETF Trust Simplified BSD License.";
+  revision 2010-10-04 {
+    description "Initial revision.";
+    reference "RFC 6022";
+  }
+
+  typedef netconf-datastore-type {
+    type enumeration { enum running; enum candidate; enum startup; }
+  }
+  identity transport;
+  identity netconf-ssh { base transport; }
+  identity netconf-soap-over-beep { base transport; }
+  identity netconf-soap-over-https { base transport; }
+  identity netconf-beep { base transport; }
+  identity netconf-tls { base transport; }
+  identity schema-format;
+  identity xsd { base schema-format; }
+  identity yang { base schema-format; }
+  identity yin { base schema-format; }
+  identity rng { base schema-format; }
+  identity rnc { base schema-format; }
+
+  grouping common-counters {
+    leaf in-rpcs { type yang:zero-based-counter32; }
+    leaf in-bad-rpcs { type yang:zero-based-counter32; }
+    leaf out-rpc-errors { type yang:zero-based-counter32; }
+    leaf out-notifications { type yang:zero-based-counter32; }
+  }
+
+  container netconf-state {
+    config false;
+    container capabilities { leaf-list capability { type inet:uri; } }
+    container datastores {
+      list datastore {
+        key name;
+        leaf name { type netconf-datastore-type; }
+        container locks {
+          presence "The datastore has at least one lock.";
+          grouping lock-info {
+            leaf locked-by-session { type uint32; mandatory true; }
+            leaf locked-time { type yang:date-and-time; mandatory true; }
+          }
+          choice lock-type {
+            container global-lock { uses lock-info; }
+            list partial-lock {
+              key lock-id;
+              leaf lock-id { type uint32; }
+              uses lock-info;
+              leaf-list select { type yang:xpath1.0; min-elements 1; }
+              leaf-list locked-node { type instance-identifier; }
+            }
+          }
+        }
+      }
+    }
+    container schemas {
+      list schema {
+        key "identifier version format";
+        leaf identifier { type string; }
+        leaf version { type string; }
+        leaf format { type identityref { base schema-format; } }
+        leaf namespace { type inet:uri; mandatory true; }
+        leaf-list location {
+          type union {
+            type enumeration { enum NETCONF; }
+            type inet:uri;
+          }
+        }
+      }
+    }
+    container sessions {
+      list session {
+        key session-id;
+        leaf session-id { type uint32 { range "1..max"; } }
+        leaf transport { type identityref { base transport; } mandatory true; }
+        leaf username { type string; mandatory true; }
+        leaf source-host { type inet:host; }
+        leaf login-time { type yang:date-and-time; mandatory true; }
+        uses common-counters;
+      }
+    }
+    container statistics {
+      leaf netconf-start-time { type yang:date-and-time; }
+      leaf in-bad-hellos { type yang:zero-based-counter32; }
+      leaf in-sessions { type yang:zero-based-counter32; }
+      leaf dropped-sessions { type yang:zero-based-counter32; }
+      uses common-counters;
+    }
+  }
+
+  rpc get-schema {
+    input {
+      leaf identifier { type string; mandatory true; }
+      leaf version { type string; }
+      leaf format {
+        type identityref { base schema-format; }
+        default yang;
+      }
+    }
+    output { anyxml data; }
+  }
+}

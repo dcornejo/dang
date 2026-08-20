@@ -317,9 +317,12 @@ int RunReloadableTlsServer(
       return nullptr;
     }
     const std::string id = loaded.application->yang_library_content_id();
-    (void)application->PublishYangLibraryUpdate(id);
-    (void)loaded.application->PublishYangLibraryUpdate(id);
-    diagnostics << "dangd: reloaded YANG library " << id << '\n';
+    if (id != application->yang_library_content_id()) {
+      (void)application->PublishYangLibraryUpdate(id);
+      diagnostics << "dangd: reloaded YANG library " << id << '\n';
+    } else {
+      diagnostics << "dangd: reloaded implementation; YANG library unchanged\n";
+    }
     return std::move(loaded.application);
   };
 
