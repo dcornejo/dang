@@ -5,7 +5,10 @@
 
 #include <gtest/gtest.h>
 
+#include "yang/compiler.h"
+#include "yang/module_resolver.h"
 #include "yang/netconf_notifications.h"
+#include "yang/source_file.h"
 
 namespace yang::netconf {
 namespace {
@@ -92,6 +95,54 @@ TEST(NetconfNotificationsTest, AppliesNacmBeforeQueueing) {
                               "<alarm xmlns=\"urn:events\"/>"));
   EXPECT_TRUE(manager.Drain(4).empty());
   EXPECT_EQ(policy.counters().denied_notifications, 1U);
+}
+
+TEST(NetconfNotificationsTest, DerivesAssociatedNotificationAncestorsFromSchema) {
+  VectorDiagnosticSink diagnostics;
+  auto source = SourceFile::Create("events.yang", R"yang(module events {
+    yang-version 1.1; namespace "urn:events"; prefix e;
+    container interfaces {
+      list interface { key name; leaf name { type string; }
+        notification link-change;
+      }
+    }
+  })yang", diagnostics);
+  ASSERT_TRUE(source);
+  InMemoryModuleRepository repository;
+  Compiler compiler(repository, diagnostics);
+  auto compilation = compiler.Compile(source);
+  ASSERT_TRUE(compilation);
+  const config::RuntimeSchema schema =
+      config::RuntimeSchemaBuilder::FromCompilation(*compilation);
+
+  NacmPolicy policy;
+  policy.set_read_default(AccessAction::kDeny);
+  policy.AddUserToGroup("alice", "operators");
+  policy.AddRule({"read-events", "operators", "", "",
+                  AccessMask(AccessOperation::kRead),
+                  AccessAction::kPermit, "events"});
+  NacmRule notification;
+  notification.name = "read-link-change";
+  notification.groups = {"operators"};
+  notification.module_name = "events";
+  notification.notification_name = "link-change";
+  notification.operations = AccessMask(AccessOperation::kRead);
+  notification.action = AccessAction::kPermit;
+  policy.AddRule(std::move(notification));
+
+  NotificationManager manager(&policy, 1024, 16 * 1024 * 1024, &schema);
+  ASSERT_TRUE(manager.AddStream({}));
+  SubscriptionRequest request;
+  request.session_id = 5;
+  request.username = "alice";
+  ASSERT_TRUE(manager.Subscribe(std::move(request)).ok);
+  EXPECT_TRUE(manager.Publish(
+      "NETCONF", "events", "link-change",
+      "<link-change xmlns=\"urn:events\"/>",
+      std::chrono::system_clock::now(), false,
+      "/{urn:events}interfaces/{urn:events}interface"
+      "[{urn:events}name='eth0']/{urn:events}link-change"));
+  EXPECT_EQ(manager.Drain(5).size(), 1U);
 }
 }  // namespace
 }  // namespace yang::netconf

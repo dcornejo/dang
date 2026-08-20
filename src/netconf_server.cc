@@ -8,6 +8,7 @@
 
 #include <charconv>
 #include <iterator>
+#include <map>
 #include <optional>
 #include <ranges>
 #include <sstream>
@@ -155,7 +156,7 @@ std::string SchemaInstanceComponent(
 struct ActionInstance {
   config::RuntimeSchemaNodeId schema = config::kInvalidRuntimeSchemaNodeId;
   std::string path;
-  std::vector<std::string> ancestors;
+  std::vector<NacmDataNode> ancestors;
   pugi::xml_node xml;
 };
 
@@ -163,9 +164,9 @@ std::optional<ActionInstance> FindActionInstance(
     const config::RuntimeSchema& schema, const pugi::xml_node& wrapper) {
   std::function<std::optional<ActionInstance>(
       pugi::xml_node, config::RuntimeSchemaNodeId, std::string,
-      std::vector<std::string>)> visit;
+      std::vector<NacmDataNode>)> visit;
   visit = [&](pugi::xml_node instance, config::RuntimeSchemaNodeId schema_id,
-              std::string parent_path, std::vector<std::string> ancestors)
+              std::string parent_path, std::vector<NacmDataNode> ancestors)
       -> std::optional<ActionInstance> {
     const config::RuntimeSchemaNode& metadata = schema.Get(schema_id);
     std::string path = parent_path +
@@ -173,7 +174,8 @@ std::optional<ActionInstance> FindActionInstance(
     if (metadata.kind == semantic::SchemaNodeKind::kAction)
       return ActionInstance{schema_id, std::move(path),
                             std::move(ancestors), instance};
-    ancestors.push_back(path);
+    ancestors.push_back({metadata.module_name, path,
+                         metadata.nacm_default_deny_all});
     for (const pugi::xml_node child : instance.children()) {
       if (child.type() != pugi::node_element) continue;
       const config::QualifiedXmlName child_name{
@@ -201,6 +203,164 @@ std::optional<ActionInstance> FindActionInstance(
     }
   }
   return std::nullopt;
+}
+
+std::optional<config::RuntimeSchemaNodeId> FindNamedSchema(
+    const config::RuntimeSchema& schema,
+    std::span<const config::RuntimeSchemaNodeId> candidates,
+    const pugi::xml_node& xml) {
+  const config::QualifiedXmlName name{NamespaceFor(xml).value_or(""),
+                                      std::string(LocalName(xml.name()))};
+  const auto found = std::ranges::find_if(
+      candidates, [&](config::RuntimeSchemaNodeId id) {
+        return schema.Get(id).name == name;
+      });
+  return found == candidates.end()
+      ? std::nullopt : std::optional<config::RuntimeSchemaNodeId>(*found);
+}
+
+TransactionResult ValidateOperationData(
+    const config::RuntimeSchema& schema,
+    config::RuntimeSchemaNodeId operation, semantic::SchemaNodeKind io_kind,
+    const pugi::xml_node& operation_xml) {
+  std::vector<config::ValidationFinding> findings;
+  const std::string_view direction =
+      io_kind == semantic::SchemaNodeKind::kOutput ? "output" : "input";
+  std::function<void(const pugi::xml_node&,
+                     const std::vector<config::RuntimeSchemaNodeId>&,
+                     std::string_view)> validate_children;
+  validate_children = [&](const pugi::xml_node& parent,
+                          const std::vector<config::RuntimeSchemaNodeId>& allowed,
+                          std::string_view parent_path) {
+    std::map<config::RuntimeSchemaNodeId, std::size_t> counts;
+    for (const pugi::xml_node child : parent.children()) {
+      if (child.type() != pugi::node_element) continue;
+      const auto schema_id = FindNamedSchema(schema, allowed, child);
+      if (!schema_id) {
+        config::ValidationFinding finding;
+        finding.message = "operation " + std::string(direction) +
+                          " contains an unknown data node";
+        finding.instance_path = std::string(parent_path) + "/" +
+                                std::string(LocalName(child.name()));
+        finding.netconf_error_tag = "unknown-element";
+        findings.push_back(std::move(finding));
+        continue;
+      }
+      const config::RuntimeSchemaNode& metadata = schema.Get(*schema_id);
+      ++counts[*schema_id];
+      const std::string path = std::string(parent_path) + "/{" +
+          metadata.name.namespace_uri + "}" + metadata.name.local_name;
+      const bool scalar = metadata.kind == semantic::SchemaNodeKind::kLeaf ||
+                          metadata.kind == semantic::SchemaNodeKind::kLeafList;
+      if (scalar && metadata.type) {
+        const bool empty = metadata.type->builtin ==
+                           semantic::BuiltinType::kEmpty;
+        const bool valid = empty
+            ? !std::ranges::any_of(child.children(), [](pugi::xml_node node) {
+                return node.type() == pugi::node_element;
+              }) && std::string_view(child.text().as_string()).empty()
+            : semantic::ValueMatchesType(*metadata.type,
+                                         child.text().as_string());
+        if (!valid) {
+          config::ValidationFinding finding;
+          finding.message = "operation " + std::string(direction) +
+                            " value does not match its YANG type";
+          finding.instance_path = path;
+          finding.module_name = metadata.module_name;
+          finding.netconf_error_tag = "invalid-value";
+          findings.push_back(std::move(finding));
+        }
+      } else if (!scalar) {
+        validate_children(child, schema.DataChildren(*schema_id), path);
+      }
+    }
+    for (config::RuntimeSchemaNodeId id : allowed) {
+      const config::RuntimeSchemaNode& metadata = schema.Get(id);
+      const std::size_t count = counts[id];
+      if ((metadata.kind != semantic::SchemaNodeKind::kList &&
+           metadata.kind != semantic::SchemaNodeKind::kLeafList && count > 1) ||
+          (metadata.max_elements && count > *metadata.max_elements) ||
+          (metadata.min_elements && count < *metadata.min_elements) ||
+          (metadata.mandatory && count == 0)) {
+        config::ValidationFinding finding;
+        finding.message = count == 0
+            ? "mandatory operation " + std::string(direction) + " is absent"
+            : "operation " + std::string(direction) +
+                  " has an invalid element count";
+        finding.instance_path = std::string(parent_path) + "/{" +
+            metadata.name.namespace_uri + "}" + metadata.name.local_name;
+        finding.module_name = metadata.module_name;
+        finding.netconf_error_tag = count == 0 ? "missing-element"
+                                               : "invalid-value";
+        findings.push_back(std::move(finding));
+      }
+    }
+  };
+  validate_children(operation_xml,
+                    schema.OperationDataChildren(operation, io_kind), "");
+  return {findings.empty(), std::move(findings), {}};
+}
+
+TransactionResult ProtocolFailure(std::string message, std::string tag);
+
+TransactionResult ValidateOperationOutput(
+    const config::RuntimeSchema& schema,
+    config::RuntimeSchemaNodeId operation, std::string_view output_xml) {
+  pugi::xml_document output;
+  if (output_xml.empty()) {
+    output.append_child("output");
+    return ValidateOperationData(schema, operation,
+                                 semantic::SchemaNodeKind::kOutput,
+                                 output.document_element());
+  }
+  if (!output.load_buffer(output_xml.data(), output_xml.size()))
+    return ProtocolFailure("plugin returned malformed operation output",
+                           "operation-failed");
+  return ValidateOperationData(schema, operation,
+                               semantic::SchemaNodeKind::kOutput, output);
+}
+
+std::string FilterOperationOutput(
+    const NacmPolicy& nacm, const RpcSessionContext& session,
+    const config::RuntimeSchema& schema,
+    config::RuntimeSchemaNodeId operation, std::string_view base_path,
+    std::string_view output_xml) {
+  pugi::xml_document document;
+  if (!document.load_buffer(output_xml.data(), output_xml.size())) return {};
+  std::function<void(pugi::xml_node,
+                     const std::vector<config::RuntimeSchemaNodeId>&,
+                     std::string_view)> filter;
+  filter = [&](pugi::xml_node parent,
+               const std::vector<config::RuntimeSchemaNodeId>& allowed,
+               std::string_view parent_path) {
+    for (pugi::xml_node child = parent.first_child(); child;) {
+      pugi::xml_node next = child.next_sibling();
+      if (child.type() == pugi::node_element) {
+        const auto schema_id = FindNamedSchema(schema, allowed, child);
+        if (!schema_id) {
+          parent.remove_child(child);
+          child = next;
+          continue;
+        }
+        const config::RuntimeSchemaNode& metadata = schema.Get(*schema_id);
+        const std::string path = std::string(parent_path) + "/{" +
+            metadata.name.namespace_uri + "}" + metadata.name.local_name;
+        if (!nacm.AuthorizeData(
+                session.username, metadata.module_name, AccessOperation::kRead,
+                path, session.external_groups,
+                metadata.nacm_default_deny_all,
+                metadata.nacm_default_deny_write)) {
+          parent.remove_child(child);
+        } else {
+          filter(child, schema.DataChildren(*schema_id), path);
+        }
+      }
+      child = next;
+    }
+  };
+  filter(document, schema.OperationDataChildren(
+                       operation, semantic::SchemaNodeKind::kOutput), base_path);
+  return Serialize(document);
 }
 
 TransactionResult ProtocolFailure(std::string message, std::string tag) {
@@ -497,7 +657,12 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
         "execution of the requested RPC is denied", "access-denied")), false};
   }
   if (action) {
-    if (operations_ == nullptr) {
+    result = ValidateOperationData(datastores_.schema(), action->schema,
+                                   semantic::SchemaNodeKind::kInput,
+                                   action->xml);
+    if (!result.ok) {
+      // Schema-invalid input never crosses the plugin boundary.
+    } else if (operations_ == nullptr) {
       result = ProtocolFailure("no handler is registered for the requested action",
                                "operation-not-supported");
     } else {
@@ -506,14 +671,23 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
           SerializeSelfContained(action->xml));
       result = std::move(invoked.result);
       payload = std::move(invoked.output_xml);
+      if (result.ok) {
+        result = ValidateOperationOutput(datastores_.schema(), action->schema,
+                                         payload);
+      }
       if (result.ok && nacm != nullptr && !payload.empty()) {
-        payload = nacm->FilterReadableData(
-            session.username, payload, session.external_groups,
-            &datastores_.schema());
+        payload = FilterOperationOutput(
+            *nacm, session, datastores_.schema(), action->schema,
+            action->path, payload);
       }
     }
   } else if (custom_rpc) {
-    if (operations_ == nullptr) {
+    result = ValidateOperationData(datastores_.schema(), *custom_rpc,
+                                   semantic::SchemaNodeKind::kInput,
+                                   operation);
+    if (!result.ok) {
+      // Schema-invalid input never crosses the plugin boundary.
+    } else if (operations_ == nullptr) {
       result = ProtocolFailure("no handler is registered for the requested RPC",
                                "operation-not-supported");
     } else {
@@ -521,10 +695,13 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
           session, *operation_schema, SerializeSelfContained(operation));
       result = std::move(invoked.result);
       payload = std::move(invoked.output_xml);
+      if (result.ok) {
+        result = ValidateOperationOutput(datastores_.schema(), *custom_rpc,
+                                         payload);
+      }
       if (result.ok && nacm != nullptr && !payload.empty()) {
-        payload = nacm->FilterReadableData(
-            session.username, payload, session.external_groups,
-            &datastores_.schema());
+        payload = FilterOperationOutput(
+            *nacm, session, datastores_.schema(), *custom_rpc, {}, payload);
       }
     }
   } else if (get_schema) {

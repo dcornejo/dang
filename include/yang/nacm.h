@@ -52,6 +52,13 @@ struct NacmRule {
   std::vector<std::string> groups;
 };
 
+/** Schema-qualified data instance used for ancestor authorization. */
+struct NacmDataNode {
+  std::string module_name;
+  std::string instance_path;
+  bool default_deny_all = false;
+};
+
 /** Small immutable-query RFC 8341 policy engine for host-supplied rules. */
 class NacmPolicy {
  public:
@@ -78,7 +85,7 @@ class NacmPolicy {
   [[nodiscard]] bool AuthorizeAction(
       std::string_view user, std::string_view module_name,
       std::string_view action_name, std::string_view instance_path,
-      std::span<const std::string> ancestor_paths,
+      std::span<const NacmDataNode> ancestors,
       std::span<const std::string> external_groups = {},
       bool default_deny_all = false) const;
   [[nodiscard]] bool AuthorizeData(std::string_view user,
@@ -101,7 +108,7 @@ class NacmPolicy {
   [[nodiscard]] bool AuthorizeNotification(
       std::string_view user, std::string_view module_name,
       std::string_view notification_name, std::string_view instance_path,
-      std::span<const std::string> ancestor_paths,
+      std::span<const NacmDataNode> ancestors,
       std::span<const std::string> external_groups = {},
       bool default_deny_all = false) const;
   /** Returns an atomic snapshot of RFC 8341 operational counters. */

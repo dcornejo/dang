@@ -268,7 +268,8 @@ TEST(NacmTest, AppliesRfc8341ActionDecisionSequence) {
                   "/{urn:secure}system/{urn:secure}reset",
                   AccessMask(AccessOperation::kExecute),
                   AccessAction::kPermit});
-  const std::vector<std::string> ancestors = {"/{urn:secure}system"};
+  const std::vector<NacmDataNode> ancestors = {
+      {"secure", "/{urn:secure}system", false}};
   EXPECT_TRUE(policy.AuthorizeAction(
       "alice", "secure", "reset",
       "/{urn:secure}system/{urn:secure}reset", ancestors));
@@ -301,9 +302,9 @@ TEST(NacmTest, AppliesRfc8341DataAssociatedNotificationDecisionSequence) {
   event.operations = AccessMask(AccessOperation::kRead);
   event.action = AccessAction::kPermit;
   policy.AddRule(std::move(event));
-  const std::vector<std::string> ancestors = {
-      "/{urn:example}interfaces",
-      "/{urn:example}interfaces/{urn:example}interface"};
+  const std::vector<NacmDataNode> ancestors = {
+      {"example", "/{urn:example}interfaces", false},
+      {"example", "/{urn:example}interfaces/{urn:example}interface", false}};
   EXPECT_TRUE(policy.AuthorizeNotification(
       "alice", "example", "link-change",
       "/{urn:example}interfaces/{urn:example}interface/"

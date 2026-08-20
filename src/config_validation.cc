@@ -1247,6 +1247,68 @@ std::optional<RuntimeSchemaNodeId> RuntimeSchema::FindChildOperation(
     if (auto found = find(child)) return found;
   return std::nullopt;
 }
+std::vector<RuntimeSchemaNodeId> RuntimeSchema::ResolveInstancePath(
+    std::string_view path) const {
+  std::vector<RuntimeSchemaNodeId> result;
+  std::size_t position = 0;
+  while (position < path.size()) {
+    if (path[position] != '/' || position + 2 >= path.size() ||
+        path[position + 1] != '{') return {};
+    const std::size_t namespace_end = path.find('}', position + 2);
+    if (namespace_end == std::string_view::npos) return {};
+    const std::size_t local_begin = namespace_end + 1;
+    std::size_t local_end = path.find_first_of("[/", local_begin);
+    if (local_end == std::string_view::npos) local_end = path.size();
+    if (local_begin == local_end) return {};
+    const QualifiedXmlName name{
+        std::string(path.substr(position + 2,
+                                namespace_end - position - 2)),
+        std::string(path.substr(local_begin, local_end - local_begin))};
+    std::optional<RuntimeSchemaNodeId> node = result.empty()
+        ? FindRoot(name) : FindChild(result.back(), name);
+    if (!node && !result.empty()) {
+      node = FindChildOperation(result.back(), name,
+                                semantic::SchemaNodeKind::kAction);
+      if (!node)
+        node = FindChildOperation(result.back(), name,
+                                  semantic::SchemaNodeKind::kNotification);
+    }
+    if (!node) return {};
+    result.push_back(*node);
+    position = local_end;
+    while (position < path.size() && path[position] == '[') {
+      char quote = 0;
+      std::size_t close = position + 1;
+      for (; close < path.size(); ++close) {
+        const char character = path[close];
+        if ((character == '\'' || character == '"')) {
+          quote = quote == 0 ? character : (quote == character ? 0 : quote);
+        } else if (character == ']' && quote == 0) {
+          break;
+        }
+      }
+      if (close == path.size()) return {};
+      position = close + 1;
+    }
+  }
+  return result;
+}
+std::vector<RuntimeSchemaNodeId> RuntimeSchema::OperationDataChildren(
+    RuntimeSchemaNodeId operation, semantic::SchemaNodeKind io_kind) const {
+  std::vector<RuntimeSchemaNodeId> result;
+  for (RuntimeSchemaNodeId child : Get(operation).children) {
+    const RuntimeSchemaNode& node = Get(child);
+    if (node.supported && node.kind == io_kind)
+      CollectVisible(*this, node.children, &result);
+  }
+  return result;
+}
+std::vector<RuntimeSchemaNodeId> RuntimeSchema::DataChildren(
+    RuntimeSchemaNodeId parent) const {
+  std::vector<RuntimeSchemaNodeId> result;
+  CollectVisible(*this, Get(parent).children, &result);
+  return result;
+}
 
 RuntimeSchema RuntimeSchemaBuilder::FromCompilation(const Compilation& compilation) {
   RuntimeSchema result;

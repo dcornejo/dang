@@ -48,6 +48,14 @@
 
 ### Fixed
 
+- Preserve schema module and inherited NACM annotation context while checking
+  action and data-associated notification ancestors, so module-wide rules work
+  consistently with path rules.
+- Resolve associated-notification ancestors from the compiled schema and one
+  exact instance path instead of trusting caller-supplied ancestor metadata.
+- Validate application RPC and action input/output structure, mandatory nodes,
+  element counts, and scalar types before crossing the plugin boundary, and
+  filter operation output relative to its actual output schema and action path.
 - Keep RFC 8341's enabled/read-permit/write-deny/exec-permit defaults active
   when the managed NACM subtree is absent or deleted instead of silently
   disabling enforcement.
@@ -72,6 +80,9 @@
 
 ### Tests
 
+- Added regressions for module-only ancestor permissions, schema-derived keyed
+  notification ancestors, typed RPC input rejection before dispatch, and
+  module-aware operation output filtering.
 - Added RFC 8341 decision coverage for action ancestors, associated
   notifications, recovery-state preservation, secure absent-policy defaults,
   schema RPC dispatch, action dispatch, and plugin-owned RPC invocation.

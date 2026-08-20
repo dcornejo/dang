@@ -63,8 +63,7 @@ class NotificationManager {
       std::string_view content_xml,
       std::chrono::system_clock::time_point event_time =
           std::chrono::system_clock::now(), bool default_deny_all = false,
-      std::string_view instance_path = {},
-      std::span<const std::string> ancestor_paths = {});
+      std::string_view instance_path = {});
   /** Removes and returns queued complete notification documents. */
   [[nodiscard]] std::vector<std::string> Drain(std::uint32_t session_id,
       std::chrono::system_clock::time_point now =
@@ -80,7 +79,7 @@ class NotificationManager {
     std::string xml;
     bool default_deny_all = false;
     std::string instance_path;
-    std::vector<std::string> ancestor_paths;
+    std::vector<NacmDataNode> ancestors;
   };
   struct Stream {
     NotificationStreamConfig config;

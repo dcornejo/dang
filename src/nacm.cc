@@ -309,14 +309,15 @@ bool NacmPolicy::AuthorizeRpc(
 bool NacmPolicy::AuthorizeAction(
     std::string_view user, std::string_view module_name,
     std::string_view action_name, std::string_view instance_path,
-    std::span<const std::string> ancestor_paths,
+    std::span<const NacmDataNode> ancestors,
     std::span<const std::string> external_groups,
     bool default_deny_all) const {
   (void)action_name;
   if (!enabled_ || IsRecovery(user)) return true;
-  for (const std::string& ancestor : ancestor_paths) {
-    if (!AuthorizeData(user, "", AccessOperation::kRead, ancestor,
-                       external_groups)) {
+  for (const NacmDataNode& ancestor : ancestors) {
+    if (!AuthorizeData(user, ancestor.module_name, AccessOperation::kRead,
+                       ancestor.instance_path, external_groups,
+                       ancestor.default_deny_all)) {
       counters_->denied_operations.fetch_add(1);
       return false;
     }
@@ -407,13 +408,14 @@ bool NacmPolicy::AuthorizeNotification(
 bool NacmPolicy::AuthorizeNotification(
     std::string_view user, std::string_view module_name,
     std::string_view notification_name, std::string_view instance_path,
-    std::span<const std::string> ancestor_paths,
+    std::span<const NacmDataNode> ancestors,
     std::span<const std::string> external_groups,
     bool default_deny_all) const {
   if (!enabled_ || IsRecovery(user)) return true;
-  for (const std::string& ancestor : ancestor_paths) {
-    if (!AuthorizeData(user, "", AccessOperation::kRead, ancestor,
-                       external_groups)) {
+  for (const NacmDataNode& ancestor : ancestors) {
+    if (!AuthorizeData(user, ancestor.module_name, AccessOperation::kRead,
+                       ancestor.instance_path, external_groups,
+                       ancestor.default_deny_all)) {
       counters_->denied_notifications.fetch_add(1);
       return false;
     }

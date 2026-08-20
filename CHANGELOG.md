@@ -16,6 +16,12 @@ and releases follow Semantic Versioning.
 - Added a host operation-provider boundary and NACM filtering of successful
   application operation output.
 
+### Fixed
+
+- Retained module and annotation metadata for NACM ancestor checks, derived
+  nested-notification context from runtime schema paths, and bound RPC/action
+  input and output to the compiled operation schema.
+
 ### Added
 
 - A POSIX dynamic-plugin ABI whose providers supply implemented and dependency

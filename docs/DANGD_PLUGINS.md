@@ -105,7 +105,8 @@ same immutable sources used for compilation.
 
 An ABI-v2 plugin's `invoke` callback receives `DangOperationV1` after `dangd`
 has resolved the operation against the plugin's implemented YANG module and
-completed NACM authorization. `module_name` and `operation_name` identify the
+completed NACM authorization and validated its input against the compiled
+schema. `module_name` and `operation_name` identify the
 schema node, `input_xml` is a self-contained request element, and
 `instance_path` is non-null only for an action. For actions, `dangd` has also
 verified read access to every ancestor data instance.
@@ -113,7 +114,9 @@ verified read access to every ancestor data instance.
 Return application output as one self-contained XML fragment through
 `DangOperationResultV1.output_xml`. The string is borrowed only for the
 duration of the callback and is copied immediately. `dangd` applies NACM read
-filtering before serializing the RPC reply. Return zero and populate
+filtering in the operation's output-schema context before serializing the RPC
+reply. Invalid or incomplete output is rejected as a plugin failure. Return
+zero and populate
 `DangPluginErrorV1` for an application failure. A plugin that owns a module but
 does not provide `invoke` receives `operation-not-supported` for that module's
 RPCs and actions.

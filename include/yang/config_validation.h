@@ -135,6 +135,15 @@ class RuntimeSchema {
   [[nodiscard]] std::optional<RuntimeSchemaNodeId> FindChildOperation(
       RuntimeSchemaNodeId parent, const QualifiedXmlName& name,
       semantic::SchemaNodeKind kind) const;
+  /** Resolves an expanded-name instance path, ignoring instance predicates. */
+  [[nodiscard]] std::vector<RuntimeSchemaNodeId> ResolveInstancePath(
+      std::string_view path) const;
+  /** Returns visible input or output data children for an RPC/action. */
+  [[nodiscard]] std::vector<RuntimeSchemaNodeId> OperationDataChildren(
+      RuntimeSchemaNodeId operation, semantic::SchemaNodeKind io_kind) const;
+  /** Returns supported data children with choices and cases flattened. */
+  [[nodiscard]] std::vector<RuntimeSchemaNodeId> DataChildren(
+      RuntimeSchemaNodeId parent) const;
 
  private:
   friend class RuntimeSchemaBuilder;

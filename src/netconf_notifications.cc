@@ -135,7 +135,7 @@ SubscriptionResult NotificationManager::Subscribe(
           (subscription.request.stop_time && event.time > *subscription.request.stop_time)) continue;
       if (nacm_ && !nacm_->AuthorizeNotification(
               subscription.request.username, event.module, event.name,
-              event.instance_path, event.ancestor_paths,
+              event.instance_path, event.ancestors,
               subscription.request.external_groups,
               event.default_deny_all)) continue;
       if (subscription.request.filter_xml &&
@@ -164,8 +164,7 @@ SubscriptionResult NotificationManager::Subscribe(
 bool NotificationManager::Publish(std::string_view stream_name,
     std::string_view module_name, std::string_view notification_name,
     std::string_view content_xml, std::chrono::system_clock::time_point event_time,
-    bool default_deny_all, std::string_view instance_path,
-    std::span<const std::string> ancestor_paths) {
+    bool default_deny_all, std::string_view instance_path) {
   if (content_xml.size() > DefaultResourceLimits().maximum_xml_bytes) {
     return false;
   }
@@ -178,7 +177,26 @@ bool NotificationManager::Publish(std::string_view stream_name,
                                &resource_error)) {
     return false;
   }
-  if (schema_ != nullptr) {
+  std::vector<NacmDataNode> ancestors;
+  if (schema_ != nullptr && !instance_path.empty()) {
+    const std::vector<config::RuntimeSchemaNodeId> resolved =
+        schema_->ResolveInstancePath(instance_path);
+    if (resolved.empty()) return false;
+    const config::RuntimeSchemaNode& event_schema = schema_->Get(resolved.back());
+    if (event_schema.kind != semantic::SchemaNodeKind::kNotification ||
+        event_schema.module_name != module_name ||
+        event_schema.name.local_name != notification_name) return false;
+    default_deny_all = default_deny_all || event_schema.nacm_default_deny_all;
+    std::size_t path_end = 0;
+    for (std::size_t index = 0; index + 1 < resolved.size(); ++index) {
+      const config::RuntimeSchemaNode& metadata = schema_->Get(resolved[index]);
+      const std::size_t next = instance_path.find('/', path_end + 1);
+      path_end = next == std::string_view::npos ? instance_path.size() : next;
+      ancestors.push_back({metadata.module_name,
+                           std::string(instance_path.substr(0, path_end)),
+                           metadata.nacm_default_deny_all});
+    }
+  } else if (schema_ != nullptr) {
     const pugi::xml_node root = content.document_element();
     const auto metadata = schema_->FindTopLevelOperation(
         {NamespaceFor(root), std::string(LocalName(root.name()))},
@@ -193,7 +211,7 @@ bool NotificationManager::Publish(std::string_view stream_name,
   if (stream == streams_.end()) return false;
   Event event{event_time, std::string(module_name), std::string(notification_name),
               xml, default_deny_all, std::string(instance_path),
-              {ancestor_paths.begin(), ancestor_paths.end()}};
+              std::move(ancestors)};
   if (stream->second.config.replay_supported) {
     stream->second.replay.push_back(event);
     while (stream->second.replay.size() > stream->second.config.replay_event_limit)
@@ -207,7 +225,7 @@ bool NotificationManager::Publish(std::string_view stream_name,
         (subscription.request.stop_time && event_time > *subscription.request.stop_time)) continue;
     if (nacm_ && !nacm_->AuthorizeNotification(
             subscription.request.username, module_name, notification_name,
-            instance_path, ancestor_paths,
+            instance_path, event.ancestors,
             subscription.request.external_groups, default_deny_all)) continue;
     if (subscription.request.filter_xml &&
         !MatchesFilter(xml, *subscription.request.filter_xml)) continue;

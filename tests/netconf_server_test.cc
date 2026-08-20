@@ -73,7 +73,10 @@ std::optional<ServerFixture> BuildServerFixture(
       leaf hostname { type string; mandatory true; }
       action reset { output { leaf status { type string; } } }
     }
-    rpc ping { output { leaf result { type string; } } }
+    rpc ping {
+      input { leaf count { type uint16; mandatory true; } }
+      output { leaf result { type string; } }
+    }
   })yang", *diagnostics);
   if (!source) return std::nullopt;
   InMemoryModuleRepository repository;
@@ -109,12 +112,13 @@ TEST(NetconfServerTest, AuthorizesAndDispatchesSchemaRpc) {
   DatastoreManager stores(fixture->schema, fixture->initial);
   NacmPolicy nacm;
   nacm.set_exec_default(AccessAction::kDeny);
+  nacm.set_read_default(AccessAction::kDeny);
   RecordingOperationProvider operations;
   NetconfServer denied(stores, &nacm, nullptr, nullptr, std::nullopt, nullptr,
                        &operations);
   const std::string request = R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="rpc">
-      <ping xmlns="urn:rpc-test"/>
+      <ping xmlns="urn:rpc-test"><count>7</count></ping>
     </rpc>)xml";
   EXPECT_NE(denied.Process("alice", request).xml.find("access-denied"),
             std::string::npos);
@@ -124,9 +128,20 @@ TEST(NetconfServerTest, AuthorizesAndDispatchesSchemaRpc) {
   nacm.AddRule({"ping", "operators", "ping", "",
                 AccessMask(AccessOperation::kExecute),
                 AccessAction::kPermit, "rpc"});
+  nacm.AddRule({"read-rpc-output", "operators", "", "",
+                AccessMask(AccessOperation::kRead),
+                AccessAction::kPermit, "rpc"});
   const RpcResponse allowed = denied.Process("alice", request);
   EXPECT_EQ(operations.called, "rpc:ping");
   EXPECT_NE(allowed.xml.find("pong"), std::string::npos) << allowed.xml;
+
+  operations.called.clear();
+  const RpcResponse invalid = denied.Process("alice", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="bad">
+      <ping xmlns="urn:rpc-test"><count>not-a-number</count></ping>
+    </rpc>)xml");
+  EXPECT_NE(invalid.xml.find("invalid-value"), std::string::npos) << invalid.xml;
+  EXPECT_TRUE(operations.called.empty());
 }
 
 TEST(NetconfServerTest, RequiresReadableAncestorsBeforeDispatchingAction) {
@@ -153,7 +168,7 @@ TEST(NetconfServerTest, RequiresReadableAncestorsBeforeDispatchingAction) {
             std::string::npos);
   EXPECT_TRUE(operations.called.empty());
 
-  nacm.AddRule({"system", "operators", "", "/{urn:rpc-test}system",
+  nacm.AddRule({"system", "operators", "", "",
                 AccessMask(AccessOperation::kRead), AccessAction::kPermit,
                 "rpc"});
   const RpcResponse allowed = server.Process("alice", request);
