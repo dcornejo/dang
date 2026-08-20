@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cerrno>
+#include <csignal>
 #include <cstring>
 #include <memory>
 #include <optional>
@@ -23,6 +24,10 @@
 
 namespace dangd {
 namespace {
+
+volatile std::sig_atomic_t reload_requested = 0;
+
+extern "C" void RequestReload(int) { reload_requested = 1; }
 
 using Context = std::unique_ptr<SSL_CTX, decltype(&SSL_CTX_free)>;
 using Session = std::unique_ptr<SSL, decltype(&SSL_free)>;
@@ -268,6 +273,127 @@ int RunTlsServer(Application& application, const TlsServerOptions& options,
   }
   close(listener);
   return 0;
+}
+
+int RunReloadableTlsServer(
+    std::unique_ptr<Application>& application,
+    const ApplicationOptions& application_options,
+    const TlsServerOptions& options, std::ostream& diagnostics) {
+  Context context(SSL_CTX_new(TLS_server_method()), SSL_CTX_free);
+  if (!context) return 1;
+  SSL_CTX_set_min_proto_version(context.get(), TLS1_2_VERSION);
+  SSL_CTX_set_verify(context.get(),
+                     SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
+                     nullptr);
+  std::string error;
+  if (!ConfigureCredentials(context.get(), options.certificate,
+                            options.private_key, options.trust_anchor, &error)) {
+    diagnostics << "dangd: " << error << '\n';
+    return 1;
+  }
+  const int listener = ListenSocket(options, &error);
+  if (listener < 0) {
+    diagnostics << "dangd: " << error << '\n';
+    return 1;
+  }
+  struct sigaction action {};
+  action.sa_handler = RequestReload;
+  sigemptyset(&action.sa_mask);
+  struct sigaction previous {};
+  if (sigaction(SIGHUP, &action, &previous) != 0) {
+    diagnostics << "dangd: cannot install SIGHUP handler: "
+                << std::strerror(errno) << '\n';
+    close(listener);
+    return 1;
+  }
+  reload_requested = 0;
+  const auto reload = [&]() -> std::unique_ptr<Application> {
+    reload_requested = 0;
+    auto loaded = Application::Reload(application_options, *application);
+    if (!loaded.application) {
+      diagnostics << "dangd: SIGHUP reload rejected; keeping current schema\n";
+      for (const std::string& message : loaded.errors)
+        diagnostics << "dangd: reload: " << message << '\n';
+      return nullptr;
+    }
+    const std::string id = loaded.application->yang_library_content_id();
+    (void)application->PublishYangLibraryUpdate(id);
+    (void)loaded.application->PublishYangLibraryUpdate(id);
+    diagnostics << "dangd: reloaded YANG library " << id << '\n';
+    return std::move(loaded.application);
+  };
+
+  diagnostics << "dangd: TLS listening on " << options.address << ':'
+              << options.port << '\n';
+  std::size_t accepted = 0;
+  std::uint32_t session_id = 1;
+  int result = 0;
+  while (options.maximum_connections == 0 ||
+         accepted < options.maximum_connections) {
+    if (reload_requested) {
+      if (auto replacement = reload()) application = std::move(replacement);
+    }
+    const int connection = accept(listener, nullptr, nullptr);
+    if (connection < 0) {
+      if (errno == EINTR) continue;
+      diagnostics << "dangd: TLS accept failed: " << std::strerror(errno)
+                  << '\n';
+      result = 1;
+      break;
+    }
+    ++accepted;
+    Session tls(SSL_new(context.get()), SSL_free);
+    if (!tls) {
+      close(connection);
+      continue;
+    }
+    SSL_set_fd(tls.get(), connection);
+    if (SSL_accept(tls.get()) != 1) {
+      diagnostics << "dangd: " << LastTlsError("TLS handshake failed") << '\n';
+      close(connection);
+      continue;
+    }
+    const auto username = PeerCommonName(tls.get());
+    if (!username) {
+      SSL_shutdown(tls.get());
+      close(connection);
+      continue;
+    }
+    std::unique_ptr<Application> replacement;
+    {
+      OpenSslStream stream(tls.get());
+      yang::netconf::TransportIdentity identity{
+          yang::netconf::SecureTransport::kTls, *username, {}, "", true};
+      yang::netconf::NetconfTransportAdapter adapter(
+          application->server(), stream, session_id++, std::move(identity));
+      std::array<char, 16 * 1024> buffer{};
+      while (adapter.valid()) {
+        std::size_t count = 0;
+        if (SSL_read_ex(tls.get(), buffer.data(), buffer.size(), &count) != 1) {
+          if (reload_requested) {
+            replacement = reload();
+            adapter.Poll();
+          }
+          break;
+        }
+        adapter.Receive(std::string_view(buffer.data(), count));
+        for (const std::string& delta : application->DrainBackendDeltas())
+          diagnostics << "dangd: configuration delta: " << delta << '\n';
+        if (application->has_state_file()) {
+          if (const auto persistence_error = application->SaveState())
+            diagnostics << "dangd: cannot persist datastore state: "
+                        << *persistence_error << '\n';
+        }
+      }
+      adapter.TransportClosed();
+    }
+    SSL_shutdown(tls.get());
+    close(connection);
+    if (replacement) application = std::move(replacement);
+  }
+  (void)sigaction(SIGHUP, &previous, nullptr);
+  close(listener);
+  return result;
 }
 
 int RunTlsClient(const TlsClientOptions& options, std::istream& input,

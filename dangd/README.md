@@ -179,6 +179,30 @@ compiles them into the common effective schema and advertises the resulting
 inventory through the RFC 8525 `/yang-library` operational tree returned by
 `<get>`.
 
+Send `SIGHUP` to a TLS-mode `dangd` process after replacing a configured
+plugin or model file. The daemon stages and validates the entire replacement
+against the current running configuration. On success it publishes an RFC
+8525 `yang-library-update`; on failure it logs the diagnostics and continues
+with the old schema. A connected subscriber receives the update before its
+session is closed and should reconnect to negotiate the replacement library.
+
+Model source is available directly over NETCONF using RFC 6022:
+
+```xml
+<rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="schema">
+  <get-schema
+      xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-monitoring">
+    <identifier>appliance</identifier>
+    <format>yang</format>
+  </get-schema>
+</rpc>
+```
+
+`version` may be supplied to select a revision. YANG is the default and only
+format currently served. Unknown modules and formats return `invalid-value`;
+an omitted version that matches multiple revisions returns
+`data-not-unique`.
+
 Configuration is coordinated by preparing all affected plugins, validating
 all of them, applying in dependency order, and releasing preparations. Partial
 apply failures roll already-applied plugins back in reverse order. Confirmed

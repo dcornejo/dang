@@ -18,6 +18,7 @@
 #include "yang/config_validation.h"
 #include "yang/nacm.h"
 #include "yang/netconf_datastore.h"
+#include "yang/netconf_notifications.h"
 #include "yang/netconf_server.h"
 
 namespace dangd {
@@ -26,15 +27,30 @@ namespace dangd {
 class DangdOperationalData final
     : public yang::netconf::OperationalDataProvider {
  public:
+  struct ModelSource {
+    std::string identifier;
+    std::string version;
+    std::string content;
+  };
   DangdOperationalData(std::string yang_library_xml,
+                       std::vector<ModelSource> model_sources,
                        const yang::netconf::NacmPolicy* nacm)
-      : yang_library_xml_(std::move(yang_library_xml)), nacm_(nacm) {}
+      : yang_library_xml_(std::move(yang_library_xml)),
+        model_sources_(std::move(model_sources)), nacm_(nacm) {}
   [[nodiscard]] std::string AugmentDataXml(
       std::string_view configuration_data_xml) const override;
   [[nodiscard]] std::vector<std::string> Capabilities() const override;
+  [[nodiscard]] SchemaLookup GetSchema(
+      std::string_view identifier, std::optional<std::string_view> version,
+      std::string_view format) const override;
+  /** Returns the current RFC 8525 content identifier. */
+  [[nodiscard]] std::string content_id() const;
+  /** Hashes the exact retrievable source registry for reload consistency. */
+  [[nodiscard]] std::string source_digest() const;
 
  private:
   std::string yang_library_xml_;
+  std::vector<ModelSource> model_sources_;
   const yang::netconf::NacmPolicy* nacm_ = nullptr;
 };
 
@@ -54,6 +70,8 @@ struct ApplicationOptions {
   std::optional<std::filesystem::path> nacm_configuration;
   /** POSIX shared libraries implementing versioned dangd plugin ABI v1. */
   std::vector<std::filesystem::path> plugins;
+  /** In-memory startup configuration used by an atomic runtime reload. */
+  std::optional<std::string> configuration_override;
 };
 
 struct LoadResult;
@@ -63,6 +81,9 @@ class Application {
  public:
   /** Compiles, validates, and constructs an application from filesystem inputs. */
   [[nodiscard]] static LoadResult Load(const ApplicationOptions& options);
+  /** Builds a replacement using the current running configuration. */
+  [[nodiscard]] static LoadResult Reload(const ApplicationOptions& options,
+                                         const Application& current);
 
   Application(const Application&) = delete;
   Application& operator=(const Application&) = delete;
@@ -93,6 +114,12 @@ class Application {
   [[nodiscard]] yang::config::ConfigDocument working_configuration() const {
     return backend_.Working();
   }
+  /** Returns the current RFC 8525 library content identifier. */
+  [[nodiscard]] std::string yang_library_content_id() const {
+    return operational_.content_id();
+  }
+  /** Publishes an RFC 8525 update to subscribed sessions. */
+  [[nodiscard]] bool PublishYangLibraryUpdate(std::string_view content_id);
 
  private:
   Application(yang::config::RuntimeSchema schema,
@@ -100,11 +127,13 @@ class Application {
               std::optional<std::filesystem::path> state_file,
               yang::netconf::NacmPolicy nacm, bool managed_nacm,
               std::unique_ptr<PluginManager> plugins,
-              std::string yang_library_xml);
+              std::string yang_library_xml,
+              std::vector<DangdOperationalData::ModelSource> model_sources);
 
   yang::config::RuntimeSchema schema_;
   std::unique_ptr<PluginManager> plugins_;
   yang::netconf::NacmPolicy nacm_;
+  yang::netconf::NotificationManager notifications_;
   DangdOperationalData operational_;
   EnglishConfigurationBackend backend_;
   yang::netconf::DatastoreManager datastores_;

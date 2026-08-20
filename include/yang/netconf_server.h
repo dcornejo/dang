@@ -6,6 +6,7 @@
 
 #include <string>
 #include <string_view>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -21,12 +22,27 @@ namespace yang::netconf {
 /** Supplies config-false XML children for NETCONF get responses. */
 class OperationalDataProvider {
  public:
+  /** Result of looking up one source for RFC 6022 get-schema. */
+  struct SchemaLookup {
+    enum class Status { kFound, kNotFound, kNotUnique, kUnsupportedFormat };
+    Status status = Status::kNotFound;
+    std::string content;
+  };
   virtual ~OperationalDataProvider() = default;
   /** Returns a complete data element augmented with operational state. */
   [[nodiscard]] virtual std::string AugmentDataXml(
       std::string_view configuration_data_xml) const = 0;
   /** Returns NETCONF capabilities associated with the supplied state. */
   [[nodiscard]] virtual std::vector<std::string> Capabilities() const {
+    return {};
+  }
+  /** Finds a model source by module, optional revision, and format. */
+  [[nodiscard]] virtual SchemaLookup GetSchema(
+      std::string_view identifier, std::optional<std::string_view> version,
+      std::string_view format) const {
+    (void)identifier;
+    (void)version;
+    (void)format;
     return {};
   }
 };

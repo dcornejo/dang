@@ -393,6 +393,108 @@ TEST(DangdApplicationTest, AdvertisesPluginSourceThroughYangLibraryGet) {
       << get_config.xml;
 }
 
+TEST(DangdApplicationTest, RetrievesBuiltInAndPluginYangSources) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr);
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+  const auto retrieve = [&](std::string_view body) {
+    return loaded.application->server().Process(
+        session,
+        "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+        "message-id=\"schema\"><get-schema "
+        "xmlns=\"urn:ietf:params:xml:ns:yang:ietf-netconf-monitoring\">" +
+            std::string(body) + "</get-schema></rpc>");
+  };
+  const auto root = retrieve(
+      "<identifier>appliance</identifier><format>yang</format>");
+  EXPECT_NE(root.xml.find("module appliance"), std::string::npos) << root.xml;
+  const auto plugin = retrieve(
+      "<identifier>dangd-example-plugin</identifier>"
+      "<version>2026-08-13</version>");
+  EXPECT_NE(plugin.xml.find("module dangd-example-plugin"), std::string::npos)
+      << plugin.xml;
+  EXPECT_NE(retrieve("<identifier>missing</identifier>")
+                .xml.find("invalid-value"),
+            std::string::npos);
+  EXPECT_NE(retrieve("<identifier>appliance</identifier><format>yin</format>")
+                .xml.find("invalid-value"),
+            std::string::npos);
+}
+
+TEST(DangdApplicationTest, PublishesYangLibraryUpdateToSubscribers) {
+  TemporaryInputs inputs;
+  auto loaded = Application::Load(Options(inputs));
+  ASSERT_NE(loaded.application, nullptr);
+  yang::netconf::RpcSessionContext session{42, "alice", "alice", {}};
+  const auto subscribe = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="sub">
+      <create-subscription
+        xmlns="urn:ietf:params:xml:ns:netconf:notification:1.0"/>
+    </rpc>)xml");
+  ASSERT_NE(subscribe.xml.find("<ok/>"), std::string::npos) << subscribe.xml;
+  ASSERT_TRUE(loaded.application->PublishYangLibraryUpdate("replacement-id"));
+  const auto notifications =
+      loaded.application->server().DrainNotifications(session.session_id);
+  ASSERT_EQ(notifications.size(), 1u);
+  EXPECT_NE(notifications.front().find("yang-library-update"),
+            std::string::npos);
+  EXPECT_NE(notifications.front().find("<content-id>replacement-id</content-id>"),
+            std::string::npos);
+}
+
+TEST(DangdApplicationTest, AtomicallyReloadsSchemaWithRunningConfiguration) {
+  TemporaryInputs inputs;
+  const auto model = inputs.Write("reload.yang", R"yang(module reloadable {
+    yang-version 1.1; namespace "urn:dangd:reload"; prefix r;
+    revision 2026-08-19;
+    container system { leaf hostname { type string; mandatory true; } }
+  })yang");
+  const auto config = inputs.Write(
+      "reload.xml", "<config xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
+      "<system xmlns=\"urn:dangd:reload\"><hostname>edge</hostname></system>"
+      "</config>");
+  ApplicationOptions options{.model = model, .configuration = config};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  const std::string old_id = loaded.application->yang_library_content_id();
+
+  inputs.Write("reload.yang", R"yang(module reloadable {
+    yang-version 1.1; namespace "urn:dangd:reload"; prefix r;
+    revision 2026-08-20;
+    container system {
+      leaf hostname { type string; mandatory true; }
+      leaf description { type string; }
+    }
+  })yang");
+  auto replacement = Application::Reload(options, *loaded.application);
+  ASSERT_NE(replacement.application, nullptr)
+      << testing::PrintToString(replacement.errors);
+  EXPECT_NE(replacement.application->yang_library_content_id(), old_id);
+  EXPECT_NE(replacement.application->datastores()
+                .Read(yang::netconf::Datastore::kRunning)
+                .ToXml()
+                .find("<hostname>edge</hostname>"),
+            std::string::npos);
+  const std::string replacement_id =
+      replacement.application->yang_library_content_id();
+
+  inputs.Write("reload.yang", R"yang(module reloadable {
+    yang-version 1.1; namespace "urn:dangd:reload"; prefix r;
+    revision 2026-08-21;
+    container system {
+      leaf hostname { type string; mandatory true; }
+      leaf required-hardware-id { type string; mandatory true; }
+    }
+  })yang");
+  auto rejected = Application::Reload(options, *replacement.application);
+  EXPECT_EQ(rejected.application, nullptr);
+  EXPECT_FALSE(rejected.errors.empty());
+  EXPECT_EQ(replacement.application->yang_library_content_id(), replacement_id);
+}
+
 TEST(DangdApplicationTest, RejectsSchemaInvalidConfiguration) {
   TemporaryInputs inputs;
   auto options = Options(inputs);

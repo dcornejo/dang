@@ -7,6 +7,12 @@
 
 ### Added
 
+- Atomic POSIX `SIGHUP` reload of configured schemas and fresh plugin images,
+  with current-running validation, failure preservation, RFC 8525
+  `yang-library-update` publication, and reconnect semantics for sessions that
+  negotiated the superseded library.
+- Built-in RFC 6022 `get-schema` retrieval for the exact YANG module and
+  submodule sources used to compile the active schema.
 - The versioned POSIX plugin loader, plugin-supplied YANG schema composition,
   runtime dependencies, two-pass validation, ordered apply, reverse rollback,
   reference plugin, and comprehensive plugin author guide.
@@ -31,6 +37,9 @@
 
 ### Fixed
 
+- Retained an explicitly configured revisioned root source in the compilation
+  overlay so aggregate schema construction and live reload do not depend on a
+  repository-style filename.
 - Made plugin discovery atomic so a rejected plugin cannot leave partially
   published YANG sources, and reject incomplete or invalid dependency
   descriptors at load time.

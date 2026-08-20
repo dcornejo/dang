@@ -8,11 +8,13 @@
 #include <cstdint>
 #include <filesystem>
 #include <iosfwd>
+#include <memory>
 #include <string>
 
 namespace dangd {
 
 class Application;
+struct ApplicationOptions;
 
 /** Mutual-TLS listener settings for the blocking demonstration server. */
 struct TlsServerOptions {
@@ -44,6 +46,11 @@ struct TlsClientOptions {
 [[nodiscard]] int RunTlsServer(Application& application,
                                const TlsServerOptions& options,
                                std::ostream& diagnostics);
+/** Runs TLS and atomically reloads the application on POSIX SIGHUP. */
+[[nodiscard]] int RunReloadableTlsServer(
+    std::unique_ptr<Application>& application,
+    const ApplicationOptions& application_options,
+    const TlsServerOptions& options, std::ostream& diagnostics);
 
 /**
  * Runs a mutual-TLS NETCONF console.

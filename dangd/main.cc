@@ -110,7 +110,8 @@ int main(int argc, char* argv[]) {
     return 1;
   }
   if (tls_mode)
-    return dangd::RunTlsServer(*loaded.application, tls, std::cerr);
+    return dangd::RunReloadableTlsServer(loaded.application, options, tls,
+                                         std::cerr);
   if (!stream_mode) {
     std::cout << "dangd: configuration is valid\n";
     return 0;

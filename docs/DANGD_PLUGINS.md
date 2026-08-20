@@ -83,9 +83,18 @@ The resulting inventory is returned by NETCONF `<get>` under
 modules, revisions, namespaces, submodules, locations, datastore mappings, and
 a content identifier. `<get-config>` does not return this operational data.
 
-The schema and plugin set are fixed for the lifetime of the initial server
-implementation. Installing or replacing a plugin requires restarting
-`dangd`; live schema migration is not part of ABI v1.
+The configured plugin paths are reloaded on POSIX `SIGHUP`. `dangd` stages
+fresh shared-library images, compiles the complete replacement schema, and
+validates the current running configuration against it before publication. A
+failed reload leaves the current schema, plugins, and datastore untouched. A
+successful reload changes the RFC 8525 content identifier, publishes
+`yang-library-update`, and makes the new schema active for subsequent
+sessions. Existing TLS sessions are notified and closed so they cannot keep
+using the superseded schema negotiated in their server hello.
+
+Every advertised module and submodule can be retrieved from the daemon with
+the RFC 6022 `get-schema` operation in YANG format. The returned bytes are the
+same immutable sources used for compilation.
 
 ## Runtime dependencies
 

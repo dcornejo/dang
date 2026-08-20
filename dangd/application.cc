@@ -4,12 +4,15 @@
 #include "dangd/application.h"
 
 #include <array>
+#include <atomic>
 #include <fstream>
 #include <iterator>
 #include <set>
 #include <sstream>
 #include <system_error>
 #include <utility>
+
+#include <unistd.h>
 
 #include <pugixml.hpp>
 #include <openssl/evp.h>
@@ -32,6 +35,11 @@ class OverlayRepository final : public yang::ModuleSourceRepository {
 
   void Add(const PluginYangSource& source) {
     memory_.Add(source.module_name, source.source, source.revision);
+  }
+
+  void Add(std::string name, std::string source,
+           std::optional<std::string> revision) {
+    memory_.Add(std::move(name), std::move(source), std::move(revision));
   }
 
   std::shared_ptr<const yang::SourceFile> Load(
@@ -238,6 +246,30 @@ std::string BuildYangLibraryXml(
   return output.str();
 }
 
+std::vector<DangdOperationalData::ModelSource> BuildModelSources(
+    const yang::Compilation& compilation) {
+  std::vector<DangdOperationalData::ModelSource> result;
+  const auto add = [&](const yang::ResolvedModule& module) {
+    if (!module.syntax || !module.syntax->source()) return;
+    const std::string version = module.revision.value_or("");
+    if (std::ranges::any_of(result, [&](const auto& existing) {
+          return existing.identifier == module.name &&
+                 existing.version == version;
+        })) return;
+    result.push_back({module.name, version,
+                      std::string(module.syntax->source()->contents())});
+  };
+  for (const yang::ResolvedModule* module : compilation.schemas.modules()) {
+    if (module->name == "dangd-aggregate") continue;
+    add(*module);
+    for (const auto& submodule : module->includes) add(*submodule);
+  }
+  std::ranges::sort(result, {}, [](const auto& source) {
+    return std::pair(source.identifier, source.version);
+  });
+  return result;
+}
+
 }  // namespace
 
 std::string DangdOperationalData::AugmentDataXml(
@@ -295,21 +327,75 @@ std::vector<std::string> DangdOperationalData::Capabilities() const {
           std::string(content.text().as_string())};
 }
 
+yang::netconf::OperationalDataProvider::SchemaLookup
+DangdOperationalData::GetSchema(
+    std::string_view identifier, std::optional<std::string_view> version,
+    std::string_view format) const {
+  using Status = SchemaLookup::Status;
+  if (format != "yang" && format != "ncm:yang")
+    return {Status::kUnsupportedFormat, {}};
+  std::vector<const ModelSource*> matches;
+  for (const ModelSource& source : model_sources_) {
+    if (source.identifier == identifier &&
+        (!version || source.version == *version))
+      matches.push_back(&source);
+  }
+  if (matches.empty()) return {Status::kNotFound, {}};
+  if (matches.size() != 1) return {Status::kNotUnique, {}};
+  return {Status::kFound, matches.front()->content};
+}
+
+std::string DangdOperationalData::content_id() const {
+  pugi::xml_document document;
+  if (!document.load_buffer(yang_library_xml_.data(), yang_library_xml_.size()))
+    return {};
+  return document.document_element().child("content-id").text().as_string();
+}
+
+std::string DangdOperationalData::source_digest() const {
+  std::string material;
+  for (const ModelSource& source : model_sources_) {
+    material += source.identifier;
+    material.push_back('\0');
+    material += source.version;
+    material.push_back('\0');
+    material += source.content;
+    material.push_back('\0');
+  }
+  return Sha256(material);
+}
+
 Application::Application(yang::config::RuntimeSchema schema,
                          yang::config::ConfigDocument configuration,
                          std::optional<std::filesystem::path> state_file,
                          yang::netconf::NacmPolicy nacm, bool managed_nacm,
                          std::unique_ptr<PluginManager> plugins,
-                         std::string yang_library_xml)
+                         std::string yang_library_xml,
+                         std::vector<DangdOperationalData::ModelSource>
+                             model_sources)
     : schema_(std::move(schema)),
       plugins_(std::move(plugins)),
       nacm_(std::move(nacm)),
-      operational_(std::move(yang_library_xml), &nacm_),
+      notifications_(&nacm_),
+      operational_(std::move(yang_library_xml), std::move(model_sources),
+                   &nacm_),
       backend_(configuration, plugins_.get(), &nacm_, managed_nacm),
       datastores_(schema_, std::move(configuration), std::nullopt, &backend_),
-      server_(datastores_, &nacm_, nullptr, nullptr, std::nullopt,
+      server_(datastores_, &nacm_, nullptr, &notifications_, std::nullopt,
               &operational_),
-      state_file_(std::move(state_file)) {}
+      state_file_(std::move(state_file)) {
+  (void)notifications_.AddStream({});
+}
+
+bool Application::PublishYangLibraryUpdate(std::string_view content_id) {
+  const std::string content =
+      "<yang-library-update "
+      "xmlns=\"urn:ietf:params:xml:ns:yang:ietf-yang-library\">"
+      "<content-id>" + std::string(content_id) +
+      std::string("</content-id></yang-library-update>");
+  return notifications_.Publish("NETCONF", "ietf-yang-library",
+                                "yang-library-update", content);
+}
 
 LoadResult Application::Load(const ApplicationOptions& options) {
   LoadResult result;
@@ -322,9 +408,11 @@ LoadResult Application::Load(const ApplicationOptions& options) {
   const auto model_text = ReadFile(
       options.model, yang::DefaultResourceLimits().maximum_source_bytes,
       "YANG model", &result.errors);
-  const auto configuration_text = ReadFile(
-      options.configuration, yang::DefaultResourceLimits().maximum_xml_bytes,
-      "XML configuration", &result.errors);
+  const auto configuration_text = options.configuration_override
+      ? options.configuration_override
+      : ReadFile(options.configuration,
+                 yang::DefaultResourceLimits().maximum_xml_bytes,
+                 "XML configuration", &result.errors);
   std::optional<std::string> nacm_text;
   if (options.nacm_configuration) {
     nacm_text = ReadFile(*options.nacm_configuration,
@@ -364,6 +452,8 @@ LoadResult Application::Load(const ApplicationOptions& options) {
   }
 
   const std::string root_module_name = compilation->module->name;
+  repository.Add(compilation->module->name, std::string(source->contents()),
+                 compilation->module->revision);
   {
     std::set<std::string> imported;
     std::ostringstream aggregate;
@@ -412,6 +502,7 @@ LoadResult Application::Load(const ApplicationOptions& options) {
   }
   const std::string yang_library_xml =
       BuildYangLibraryXml(*compilation, implemented, plugins->yang_sources());
+  auto model_sources = BuildModelSources(*compilation);
   const bool managed_nacm = HasManagedNacm(schema);
   std::string seeded_configuration = *configuration_text;
   if (managed_nacm && nacm_text)
@@ -449,8 +540,9 @@ LoadResult Application::Load(const ApplicationOptions& options) {
 
   result.application = std::unique_ptr<Application>(new Application(
       std::move(schema), std::move(*parsed.document), options.state_file,
-      std::move(nacm), managed_nacm, std::move(plugins), yang_library_xml));
-  if (options.state_file) {
+      std::move(nacm), managed_nacm, std::move(plugins), yang_library_xml,
+      std::move(model_sources)));
+  if (options.state_file && !options.configuration_override) {
     std::error_code exists_error;
     const bool exists =
         std::filesystem::exists(*options.state_file, exists_error);
@@ -467,6 +559,51 @@ LoadResult Application::Load(const ApplicationOptions& options) {
         result.application.reset();
       }
     }
+  }
+  return result;
+}
+
+LoadResult Application::Reload(const ApplicationOptions& options,
+                               const Application& current) {
+  ApplicationOptions replacement = options;
+  replacement.configuration_override =
+      current.datastores_.Read(yang::netconf::Datastore::kRunning).ToXml();
+  static std::atomic<unsigned long> sequence = 0;
+  std::vector<std::filesystem::path> staged;
+  for (const std::filesystem::path& plugin : options.plugins) {
+    const std::filesystem::path copy =
+        std::filesystem::temp_directory_path() /
+        ("dangd-plugin-" + std::to_string(getpid()) + "-" +
+         std::to_string(++sequence) + plugin.extension().string());
+    std::error_code error;
+    std::filesystem::copy_file(plugin, copy,
+                               std::filesystem::copy_options::overwrite_existing,
+                               error);
+    if (error) {
+      for (const auto& path : staged) {
+        std::error_code ignored;
+        std::filesystem::remove(path, ignored);
+      }
+      return {nullptr, {"cannot stage plugin for atomic reload: " +
+                        plugin.string() + ": " + error.message()}};
+    }
+    staged.push_back(copy);
+  }
+  replacement.plugins = staged;
+  LoadResult result = Load(replacement);
+  for (const auto& path : staged) {
+    std::error_code ignored;
+    std::filesystem::remove(path, ignored);
+  }
+  if (result.application &&
+      result.application->operational_.content_id() ==
+          current.operational_.content_id() &&
+      result.application->operational_.source_digest() !=
+          current.operational_.source_digest()) {
+    result.application.reset();
+    result.errors.push_back(
+        "model source changed without a YANG Library identity change; "
+        "update the module revision before reloading");
   }
   return result;
 }

@@ -21,6 +21,8 @@ constexpr std::string_view kNetconfNamespace =
     "urn:ietf:params:xml:ns:netconf:base:1.0";
 constexpr std::string_view kNotificationNamespace =
     "urn:ietf:params:xml:ns:netconf:notification:1.0";
+constexpr std::string_view kMonitoringNamespace =
+    "urn:ietf:params:xml:ns:yang:ietf-netconf-monitoring";
 
 std::string_view LocalName(std::string_view name) {
   const std::size_t colon = name.find(':');
@@ -343,7 +345,11 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
       LocalName(operation.name()) == "create-subscription" &&
       operation_namespace == kNotificationNamespace &&
       notifications_ != nullptr && notifications_->configured();
-  if (operation_namespace != kNetconfNamespace && !create_subscription) {
+  const bool get_schema = LocalName(operation.name()) == "get-schema" &&
+                          operation_namespace == kMonitoringNamespace &&
+                          operational_ != nullptr;
+  if (operation_namespace != kNetconfNamespace && !create_subscription &&
+      !get_schema) {
     return {Reply(message_id, ProtocolFailure(
         "RPC operation is not in the NETCONF base namespace",
         "unknown-namespace")), false};
@@ -376,12 +382,47 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
   }
   if (nacm != nullptr && !nacm->AuthorizeRpc(
           session.username,
-          create_subscription ? "notifications" : "ietf-netconf", name,
+          create_subscription ? "notifications"
+                              : (get_schema ? "ietf-netconf-monitoring"
+                                            : "ietf-netconf"),
+          name,
           session.external_groups)) {
     return {Reply(message_id, ProtocolFailure(
         "execution of the requested RPC is denied", "access-denied")), false};
   }
-  if (create_subscription) {
+  if (get_schema) {
+    const pugi::xml_node identifier = Child(operation, "identifier");
+    if (!identifier || std::string_view(identifier.text().as_string()).empty()) {
+      result = ProtocolFailure("get-schema requires an identifier",
+                               "missing-element");
+    } else {
+      const pugi::xml_node version = Child(operation, "version");
+      const pugi::xml_node format = Child(operation, "format");
+      const std::optional<std::string_view> requested_version =
+          version ? std::optional<std::string_view>(version.text().as_string())
+                  : std::nullopt;
+      const std::string_view requested_format =
+          format ? std::string_view(format.text().as_string()) : "yang";
+      const auto lookup = operational_->GetSchema(
+          identifier.text().as_string(), requested_version, requested_format);
+      using Status = OperationalDataProvider::SchemaLookup::Status;
+      if (lookup.status == Status::kFound) {
+        result.ok = true;
+        payload = "<data xmlns=\"" + std::string(kMonitoringNamespace) +
+                  "\">" + Escape(lookup.content) + "</data>";
+      } else if (lookup.status == Status::kNotUnique) {
+        result = ProtocolFailure("more than one schema matches the request",
+                                 "operation-failed");
+        result.errors.front().netconf_error_app_tag = "data-not-unique";
+      } else if (lookup.status == Status::kUnsupportedFormat) {
+        result = ProtocolFailure("requested schema format is not available",
+                                 "invalid-value");
+      } else {
+        result = ProtocolFailure("requested schema does not exist",
+                                 "invalid-value");
+      }
+    }
+  } else if (create_subscription) {
     SubscriptionRequest request;
     request.session_id = session.session_id;
     request.username = std::string(session.username);
