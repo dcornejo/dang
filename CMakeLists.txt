@@ -135,6 +135,22 @@ if(YANG_BUILD_DANGD)
   target_compile_options(dangd_example_plugin PRIVATE
     -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
   set_target_properties(dangd_example_plugin PROPERTIES PREFIX "")
+  file(READ tests/third_party/ietf/ietf-interfaces@2018-02-20.yang
+    DANGD_IETF_INTERFACES_YANG)
+  file(READ tests/third_party/ietf/ietf-ip@2018-02-22.yang
+    DANGD_IETF_IP_YANG)
+  configure_file(dangd/plugins/ip_management_models.h.in
+    ${CMAKE_CURRENT_BINARY_DIR}/generated/ip_management_models.h @ONLY)
+  add_library(dangd_ip_management_plugin MODULE
+    dangd/plugins/ip_management_plugin.cc)
+  target_compile_features(dangd_ip_management_plugin PRIVATE cxx_std_20)
+  target_include_directories(dangd_ip_management_plugin PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/generated)
+  target_link_libraries(dangd_ip_management_plugin PRIVATE
+    nlohmann_json::nlohmann_json)
+  target_compile_options(dangd_ip_management_plugin PRIVATE
+    -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+  set_target_properties(dangd_ip_management_plugin PROPERTIES PREFIX "")
   if(YANG_BUILD_TESTS)
     add_library(dangd_test_plugin_support SHARED
       dangd/test_plugins/plugin_test_support.cc)
@@ -174,7 +190,7 @@ if(YANG_BUILD_DANGD)
     set_target_properties(dangd_test_deviation_plugin PROPERTIES PREFIX "")
   endif()
   install(TARGETS dangd dangctl RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-  install(TARGETS dangd_example_plugin
+  install(TARGETS dangd_example_plugin dangd_ip_management_plugin
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/dangd/plugins)
   install(FILES dangd/plugin_api.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dangd)
@@ -279,12 +295,13 @@ if(YANG_BUILD_TESTS)
     target_compile_definitions(dangd_tests PRIVATE
       DANG_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
       DANG_TEST_PLUGIN_PATH="$<TARGET_FILE:dangd_example_plugin>"
+      DANG_TEST_IP_PLUGIN_PATH="$<TARGET_FILE:dangd_ip_management_plugin>"
       DANG_TEST_PROVIDER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_provider_plugin>"
       DANG_TEST_CONSUMER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_consumer_plugin>"
       DANG_TEST_BROKEN_PLUGIN_PATH="$<TARGET_FILE:dangd_test_broken_discovery_plugin>")
     target_compile_definitions(dangd_tests PRIVATE
       DANG_TEST_DEVIATION_PLUGIN_PATH="$<TARGET_FILE:dangd_test_deviation_plugin>")
-    add_dependencies(dangd_tests dangd_example_plugin
+    add_dependencies(dangd_tests dangd_example_plugin dangd_ip_management_plugin
       dangd_test_provider_plugin dangd_test_consumer_plugin
       dangd_test_broken_discovery_plugin dangd_test_deviation_plugin)
     target_compile_options(dangd_tests PRIVATE

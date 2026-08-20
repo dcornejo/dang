@@ -236,6 +236,63 @@ TEST(DangdApplicationTest, LoadsPluginModelAndRejectsPluginInvalidCommit) {
             std::string::npos);
 }
 
+TEST(DangdApplicationTest, IpManagementPluginPublishesRfc8344AndPrintsApplyPlan) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_IP_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  EXPECT_TRUE(loaded.application->schema()
+                  .FindRoot({"urn:ietf:params:xml:ns:yang:ietf-interfaces",
+                             "interfaces"})
+                  .has_value());
+
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+  const auto library = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="library">
+      <get/>
+    </rpc>)xml");
+  EXPECT_NE(library.xml.find("<name>ietf-interfaces</name>"), std::string::npos)
+      << library.xml;
+  EXPECT_NE(library.xml.find("<name>ietf-ip</name>"), std::string::npos)
+      << library.xml;
+
+  const auto edit = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="ip-edit">
+      <edit-config><target><candidate/></target><config>
+        <interfaces xmlns="urn:ietf:params:xml:ns:yang:ietf-interfaces">
+          <interface>
+            <name>eth0</name>
+            <type xmlns:if="urn:ietf:params:xml:ns:yang:ietf-interfaces">if:interface-type</type>
+            <enabled>true</enabled>
+            <ipv4 xmlns="urn:ietf:params:xml:ns:yang:ietf-ip">
+              <enabled>true</enabled>
+              <address><ip>192.0.2.1</ip><prefix-length>24</prefix-length></address>
+            </ipv4>
+          </interface>
+        </interfaces>
+      </config></edit-config>
+    </rpc>)xml");
+  ASSERT_NE(edit.xml.find("<ok/>"), std::string::npos) << edit.xml;
+
+  testing::internal::CaptureStderr();
+  const auto commit = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="ip-commit">
+      <commit/>
+    </rpc>)xml");
+  const std::string actions = testing::internal::GetCapturedStderr();
+  ASSERT_NE(commit.xml.find("<ok/>"), std::string::npos) << commit.xml;
+  EXPECT_NE(actions.find("ip-management: create"), std::string::npos)
+      << actions;
+  EXPECT_NE(actions.find("eth0"), std::string::npos) << actions;
+  EXPECT_NE(actions.find("192.0.2.1"), std::string::npos) << actions;
+  EXPECT_NE(loaded.application->datastores()
+                .Read(yang::netconf::Datastore::kRunning)
+                .ToXml()
+                .find("192.0.2.1"),
+            std::string::npos);
+}
+
 TEST(DangdApplicationTest, AppliesDependentPluginsInDependencyOrder) {
   TemporaryInputs inputs;
   auto options = Options(inputs);

@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added the `dangd` RFC 8344 IP-management example plugin and integration
+  test.
 - Added schema-aware NACM authorization for application RPCs, YANG 1.1
   actions, and data-associated notifications, including action and
   notification ancestor checks and schema-derived `default-deny-all`.

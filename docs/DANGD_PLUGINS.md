@@ -43,6 +43,40 @@ compiler-specific class layouts across the ABI.
 The reference implementation is `dangd/plugins/example_plugin.cc`; CMake
 builds it as `dangd_example_plugin`.
 
+The more complete `dangd/plugins/ip_management_plugin.cc` example owns the
+normative RFC 8343 `ietf-interfaces` and RFC 8344 `ietf-ip` modules. The build
+embeds the pinned YANG sources in `dangd_ip_management_plugin`, so the shared
+library remains self-contained. It converts each interface or IP delta into a
+retained forward and reverse action plan. Its demonstration `apply` and
+`rollback` callbacks print those actions to the daemon's diagnostic stream and
+assume they succeeded; replace those two callbacks when adapting it to real
+network interfaces.
+
+For example, start `dangd` with the plugin using the module filename produced
+by CMake:
+
+```sh
+./build/dangd --model dangd/examples/appliance.yang \
+  --config dangd/examples/config.xml \
+  --plugin ./build/dangd_ip_management_plugin.so --stdio \
+  --username admin
+```
+
+An `<edit-config>` that creates `/interfaces/interface[name='eth0']`, enables
+IPv4, and adds `192.0.2.1/24`, followed by `<commit>`, produces diagnostic
+lines resembling:
+
+```text
+ip-management: create /{urn:ietf:params:xml:ns:yang:ietf-interfaces}interfaces/...
+ip-management: create /{urn:ietf:params:xml:ns:yang:ietf-ip}ipv4/... with value "192.0.2.1"
+```
+
+The paths are the exact schema-qualified paths supplied by `dangd`, rather
+than paths reconstructed by the plugin from XML. The regression test
+`IpManagementPluginPublishesRfc8344AndPrintsApplyPlan` contains a complete
+NETCONF request and verifies model discovery, validation, commit, logging, and
+the resulting running configuration.
+
 Plugins that implement YANG RPCs or actions use ABI v2 and export
 `dang_plugin_init_v2`. `DangPluginV2` retains the complete ABI-v1 table as its
 first member and adds `invoke`. Configuration-only ABI-v1 plugins remain

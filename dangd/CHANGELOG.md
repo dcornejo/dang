@@ -7,6 +7,13 @@
 
 ### Added
 
+- A self-contained `dangd_ip_management_plugin` example that owns the
+  normative RFC 8343 `ietf-interfaces` and RFC 8344 `ietf-ip` models, prepares
+  reversible actions from schema-qualified deltas, and prints apply or
+  rollback activity while assuming the simulated platform operation succeeds.
+- An application-level regression test covering RFC 8344 model discovery, a
+  validated IPv4 interface edit, commit-time action output, and publication to
+  the running datastore.
 - Secure NACM bootstrap with repeatable host-owned `--recovery-user`
   identities that survive managed-policy commits and live reloads.
 - Schema-driven application RPC and YANG 1.1 action dispatch through the

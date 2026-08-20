@@ -35,6 +35,16 @@ device-specific backend remain future `dangd` work. The current English
 backend is deliberately in-memory: it establishes the commit boundary and
 delta vocabulary without pretending to configure an external system.
 
+## RFC 8344 IP-management plugin example
+
+The `dangd_ip_management_plugin` build target is a self-contained example
+provider for RFC 8343 interfaces and RFC 8344 IP configuration. It discovers
+both normative models through the plugin ABI and turns committed interface,
+IPv4, and IPv6 changes into human-readable apply actions. The example prints
+each action to the daemon's diagnostic stream and assumes success; it does not
+modify host networking. See the concrete request and build instructions in
+[the plugin guide](../docs/DANGD_PLUGINS.md).
+
 ## Safe hardware application ordering
 
 A valid final configuration does not imply that every transition to it is
