@@ -128,6 +128,13 @@ class RuntimeSchema {
       const QualifiedXmlName& name) const;
   [[nodiscard]] std::optional<RuntimeSchemaNodeId> FindChild(
       RuntimeSchemaNodeId parent, const QualifiedXmlName& name) const;
+  /** Finds a supported top-level RPC or notification by expanded name. */
+  [[nodiscard]] std::optional<RuntimeSchemaNodeId> FindTopLevelOperation(
+      const QualifiedXmlName& name, semantic::SchemaNodeKind kind) const;
+  /** Finds a supported action or notification below a data node. */
+  [[nodiscard]] std::optional<RuntimeSchemaNodeId> FindChildOperation(
+      RuntimeSchemaNodeId parent, const QualifiedXmlName& name,
+      semantic::SchemaNodeKind kind) const;
 
  private:
   friend class RuntimeSchemaBuilder;

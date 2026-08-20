@@ -1219,6 +1219,34 @@ std::optional<RuntimeSchemaNodeId> RuntimeSchema::FindChild(
     RuntimeSchemaNodeId parent, const QualifiedXmlName& name) const {
   return FindVisible(*this, Get(parent).children, name);
 }
+std::optional<RuntimeSchemaNodeId> RuntimeSchema::FindTopLevelOperation(
+    const QualifiedXmlName& name, semantic::SchemaNodeKind kind) const {
+  const auto found = std::ranges::find_if(nodes_, [&](const RuntimeSchemaNode& node) {
+    return node.supported && !node.parent && node.kind == kind &&
+           node.name == name;
+  });
+  return found == nodes_.end() ? std::nullopt
+                               : std::optional<RuntimeSchemaNodeId>(found->id);
+}
+std::optional<RuntimeSchemaNodeId> RuntimeSchema::FindChildOperation(
+    RuntimeSchemaNodeId parent, const QualifiedXmlName& name,
+    semantic::SchemaNodeKind kind) const {
+  std::function<std::optional<RuntimeSchemaNodeId>(RuntimeSchemaNodeId)> find;
+  find = [&](RuntimeSchemaNodeId candidate)
+      -> std::optional<RuntimeSchemaNodeId> {
+    const RuntimeSchemaNode& node = Get(candidate);
+    if (!node.supported) return std::nullopt;
+    if (node.kind == kind && node.name == name) return candidate;
+    if (IsTransparent(node.kind)) {
+      for (RuntimeSchemaNodeId child : node.children)
+        if (auto found = find(child)) return found;
+    }
+    return std::nullopt;
+  };
+  for (RuntimeSchemaNodeId child : Get(parent).children)
+    if (auto found = find(child)) return found;
+  return std::nullopt;
+}
 
 RuntimeSchema RuntimeSchemaBuilder::FromCompilation(const Compilation& compilation) {
   RuntimeSchema result;

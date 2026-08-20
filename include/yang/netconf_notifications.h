@@ -51,7 +51,8 @@ class NotificationManager {
  public:
   explicit NotificationManager(const NacmPolicy* nacm = nullptr,
       std::size_t maximum_queued_events = 1024,
-      std::size_t maximum_queued_bytes = 16 * 1024 * 1024);
+      std::size_t maximum_queued_bytes = 16 * 1024 * 1024,
+      const config::RuntimeSchema* schema = nullptr);
   [[nodiscard]] bool AddStream(NotificationStreamConfig stream);
   [[nodiscard]] SubscriptionResult Subscribe(SubscriptionRequest request,
       std::chrono::system_clock::time_point now =
@@ -61,7 +62,9 @@ class NotificationManager {
       std::string_view module_name, std::string_view notification_name,
       std::string_view content_xml,
       std::chrono::system_clock::time_point event_time =
-          std::chrono::system_clock::now(), bool default_deny_all = false);
+          std::chrono::system_clock::now(), bool default_deny_all = false,
+      std::string_view instance_path = {},
+      std::span<const std::string> ancestor_paths = {});
   /** Removes and returns queued complete notification documents. */
   [[nodiscard]] std::vector<std::string> Drain(std::uint32_t session_id,
       std::chrono::system_clock::time_point now =
@@ -76,6 +79,8 @@ class NotificationManager {
     std::string name;
     std::string xml;
     bool default_deny_all = false;
+    std::string instance_path;
+    std::vector<std::string> ancestor_paths;
   };
   struct Stream {
     NotificationStreamConfig config;
@@ -88,6 +93,7 @@ class NotificationManager {
     bool terminated = false;
   };
   const NacmPolicy* nacm_;
+  const config::RuntimeSchema* schema_;
   std::size_t maximum_queued_events_;
   std::size_t maximum_queued_bytes_;
   mutable std::mutex mutex_;

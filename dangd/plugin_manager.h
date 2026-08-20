@@ -14,6 +14,7 @@
 
 #include "dangd/plugin_api.h"
 #include "yang/config_edit.h"
+#include "yang/netconf_server.h"
 
 namespace dangd {
 
@@ -29,7 +30,7 @@ struct PluginYangSource {
 };
 
 /** Loads ABI-v1 plugins and coordinates their configuration transactions. */
-class PluginManager {
+class PluginManager : public yang::netconf::OperationProvider {
  public:
   /** Constructs an empty plugin registry. */
   PluginManager();
@@ -54,6 +55,14 @@ class PluginManager {
   [[nodiscard]] std::optional<yang::config::ValidationFinding> Apply();
   /** Releases every retained preparation without applying it. */
   void Abort() noexcept;
+  [[nodiscard]] yang::netconf::OperationResult InvokeRpc(
+      const yang::netconf::RpcSessionContext& session,
+      const yang::config::RuntimeSchemaNode& operation,
+      std::string_view operation_xml) override;
+  [[nodiscard]] yang::netconf::OperationResult InvokeAction(
+      const yang::netconf::RpcSessionContext& session,
+      const yang::config::RuntimeSchemaNode& action,
+      std::string_view instance_path, std::string_view action_xml) override;
 
  private:
   struct State;

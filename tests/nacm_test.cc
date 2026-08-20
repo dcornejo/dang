@@ -258,5 +258,77 @@ TEST(NacmTest, EnforcesDefaultDenyAnnotationsAfterExplicitRules) {
       AccessOperation::kRead, "/{urn:secure}secret", {}, true, false));
 }
 
+TEST(NacmTest, AppliesRfc8341ActionDecisionSequence) {
+  NacmPolicy policy;
+  policy.AddUserToGroup("alice", "operators");
+  policy.AddRule({"read-system", "operators", "", "/{urn:secure}system",
+                  AccessMask(AccessOperation::kRead),
+                  AccessAction::kPermit});
+  policy.AddRule({"reset-system", "operators", "",
+                  "/{urn:secure}system/{urn:secure}reset",
+                  AccessMask(AccessOperation::kExecute),
+                  AccessAction::kPermit});
+  const std::vector<std::string> ancestors = {"/{urn:secure}system"};
+  EXPECT_TRUE(policy.AuthorizeAction(
+      "alice", "secure", "reset",
+      "/{urn:secure}system/{urn:secure}reset", ancestors));
+
+  NacmPolicy hidden_parent;
+  hidden_parent.AddUserToGroup("alice", "operators");
+  hidden_parent.AddRule({"reset-system", "operators", "",
+                         "/{urn:secure}system/{urn:secure}reset",
+                         AccessMask(AccessOperation::kExecute),
+                         AccessAction::kPermit});
+  hidden_parent.set_read_default(AccessAction::kDeny);
+  EXPECT_FALSE(hidden_parent.AuthorizeAction(
+      "alice", "secure", "reset",
+      "/{urn:secure}system/{urn:secure}reset", ancestors));
+  EXPECT_EQ(hidden_parent.counters().denied_operations, 1U);
+}
+
+TEST(NacmTest, AppliesRfc8341DataAssociatedNotificationDecisionSequence) {
+  NacmPolicy policy;
+  policy.AddUserToGroup("alice", "operators");
+  policy.AddRule({"read-interface", "operators", "",
+                  "/{urn:example}interfaces/{urn:example}interface",
+                  AccessMask(AccessOperation::kRead),
+                  AccessAction::kPermit});
+  NacmRule event;
+  event.name = "read-link-event";
+  event.groups = {"operators"};
+  event.module_name = "example";
+  event.notification_name = "link-change";
+  event.operations = AccessMask(AccessOperation::kRead);
+  event.action = AccessAction::kPermit;
+  policy.AddRule(std::move(event));
+  const std::vector<std::string> ancestors = {
+      "/{urn:example}interfaces",
+      "/{urn:example}interfaces/{urn:example}interface"};
+  EXPECT_TRUE(policy.AuthorizeNotification(
+      "alice", "example", "link-change",
+      "/{urn:example}interfaces/{urn:example}interface/"
+      "{urn:example}link-change", ancestors));
+
+  policy.set_read_default(AccessAction::kDeny);
+  EXPECT_FALSE(policy.AuthorizeNotification(
+      "bob", "example", "link-change",
+      "/{urn:example}interfaces/{urn:example}interface/"
+      "{urn:example}link-change", ancestors));
+  EXPECT_EQ(policy.counters().denied_notifications, 1U);
+}
+
+TEST(NacmTest, PreservesRecoveryIdentityWhenManagedPolicyChanges) {
+  NacmPolicy previous;
+  previous.AddRecoveryUser("break-glass");
+  previous.set_exec_default(AccessAction::kDeny);
+  EXPECT_FALSE(previous.AuthorizeRpc("guest", "delete-config"));
+
+  NacmPolicy replacement;
+  replacement.set_exec_default(AccessAction::kDeny);
+  replacement.PreserveRuntimeStateFrom(previous);
+  EXPECT_TRUE(replacement.AuthorizeRpc("break-glass", "delete-config"));
+  EXPECT_EQ(replacement.counters().denied_operations, 1U);
+}
+
 }  // namespace
 }  // namespace yang::netconf

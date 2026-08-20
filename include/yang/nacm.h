@@ -74,6 +74,13 @@ class NacmPolicy {
       std::string_view rpc_name,
       std::span<const std::string> external_groups = {},
       bool default_deny_all = false) const;
+  /** Authorizes a data-node action after checking readable ancestors. */
+  [[nodiscard]] bool AuthorizeAction(
+      std::string_view user, std::string_view module_name,
+      std::string_view action_name, std::string_view instance_path,
+      std::span<const std::string> ancestor_paths,
+      std::span<const std::string> external_groups = {},
+      bool default_deny_all = false) const;
   [[nodiscard]] bool AuthorizeData(std::string_view user,
                                    AccessOperation operation,
                                    std::string_view instance_path) const;
@@ -90,11 +97,19 @@ class NacmPolicy {
       std::string_view notification_name,
       std::span<const std::string> external_groups = {},
       bool default_deny_all = false) const;
+  /** Authorizes a data-associated notification and its readable ancestors. */
+  [[nodiscard]] bool AuthorizeNotification(
+      std::string_view user, std::string_view module_name,
+      std::string_view notification_name, std::string_view instance_path,
+      std::span<const std::string> ancestor_paths,
+      std::span<const std::string> external_groups = {},
+      bool default_deny_all = false) const;
   /** Returns an atomic snapshot of RFC 8341 operational counters. */
   [[nodiscard]] NacmCounters counters() const noexcept;
-  /** Retains denial counters while atomically replacing policy configuration. */
-  void PreserveCountersFrom(const NacmPolicy& previous) noexcept {
+  /** Retains host-owned recovery identities and counters across policy reloads. */
+  void PreserveRuntimeStateFrom(const NacmPolicy& previous) {
     counters_ = previous.counters_;
+    recovery_users_ = previous.recovery_users_;
   }
   /** Silently removes read-denied data nodes, as required by RFC 8341. */
   [[nodiscard]] std::string FilterReadableData(std::string_view user,

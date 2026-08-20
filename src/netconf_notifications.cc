@@ -24,6 +24,23 @@ constexpr std::string_view kNotificationNamespace =
 constexpr std::string_view kManagementNamespace =
     "urn:ietf:params:xml:ns:netmod:notification";
 
+std::string_view LocalName(std::string_view name) {
+  const std::size_t colon = name.find(':');
+  return colon == std::string_view::npos ? name : name.substr(colon + 1);
+}
+
+std::string NamespaceFor(const pugi::xml_node& node) {
+  const std::string_view name = node.name();
+  const std::size_t colon = name.find(':');
+  const std::string attribute = colon == std::string_view::npos
+      ? "xmlns" : "xmlns:" + std::string(name.substr(0, colon));
+  for (pugi::xml_node current = node; current; current = current.parent()) {
+    if (const pugi::xml_attribute binding = current.attribute(attribute.c_str()))
+      return binding.value();
+  }
+  return {};
+}
+
 std::optional<int> Number(std::string_view value) {
   int result = 0;
   const auto parsed = std::from_chars(value.data(), value.data() + value.size(), result);
@@ -80,8 +97,9 @@ bool ValidFilter(std::string_view filter) {
 }  // namespace
 
 NotificationManager::NotificationManager(const NacmPolicy* nacm,
-    std::size_t maximum_queued_events, std::size_t maximum_queued_bytes)
-    : nacm_(nacm), maximum_queued_events_(maximum_queued_events),
+    std::size_t maximum_queued_events, std::size_t maximum_queued_bytes,
+    const config::RuntimeSchema* schema)
+    : nacm_(nacm), schema_(schema), maximum_queued_events_(maximum_queued_events),
       maximum_queued_bytes_(maximum_queued_bytes) {}
 
 bool NotificationManager::AddStream(NotificationStreamConfig stream) {
@@ -117,7 +135,9 @@ SubscriptionResult NotificationManager::Subscribe(
           (subscription.request.stop_time && event.time > *subscription.request.stop_time)) continue;
       if (nacm_ && !nacm_->AuthorizeNotification(
               subscription.request.username, event.module, event.name,
-              subscription.request.external_groups, event.default_deny_all)) continue;
+              event.instance_path, event.ancestor_paths,
+              subscription.request.external_groups,
+              event.default_deny_all)) continue;
       if (subscription.request.filter_xml &&
           !MatchesFilter(event.xml, *subscription.request.filter_xml)) continue;
       subscription.queued_bytes += event.xml.size();
@@ -144,7 +164,8 @@ SubscriptionResult NotificationManager::Subscribe(
 bool NotificationManager::Publish(std::string_view stream_name,
     std::string_view module_name, std::string_view notification_name,
     std::string_view content_xml, std::chrono::system_clock::time_point event_time,
-    bool default_deny_all) {
+    bool default_deny_all, std::string_view instance_path,
+    std::span<const std::string> ancestor_paths) {
   if (content_xml.size() > DefaultResourceLimits().maximum_xml_bytes) {
     return false;
   }
@@ -157,12 +178,22 @@ bool NotificationManager::Publish(std::string_view stream_name,
                                &resource_error)) {
     return false;
   }
+  if (schema_ != nullptr) {
+    const pugi::xml_node root = content.document_element();
+    const auto metadata = schema_->FindTopLevelOperation(
+        {NamespaceFor(root), std::string(LocalName(root.name()))},
+        semantic::SchemaNodeKind::kNotification);
+    if (metadata)
+      default_deny_all = default_deny_all ||
+          schema_->Get(*metadata).nacm_default_deny_all;
+  }
   const std::string xml = Wrap(content_xml, event_time);
   std::lock_guard lock(mutex_);
   const auto stream = streams_.find(stream_name);
   if (stream == streams_.end()) return false;
   Event event{event_time, std::string(module_name), std::string(notification_name),
-              xml, default_deny_all};
+              xml, default_deny_all, std::string(instance_path),
+              {ancestor_paths.begin(), ancestor_paths.end()}};
   if (stream->second.config.replay_supported) {
     stream->second.replay.push_back(event);
     while (stream->second.replay.size() > stream->second.config.replay_event_limit)
@@ -176,6 +207,7 @@ bool NotificationManager::Publish(std::string_view stream_name,
         (subscription.request.stop_time && event_time > *subscription.request.stop_time)) continue;
     if (nacm_ && !nacm_->AuthorizeNotification(
             subscription.request.username, module_name, notification_name,
+            instance_path, ancestor_paths,
             subscription.request.external_groups, default_deny_all)) continue;
     if (subscription.request.filter_xml &&
         !MatchesFilter(xml, *subscription.request.filter_xml)) continue;

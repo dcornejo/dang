@@ -21,6 +21,8 @@ constexpr std::string_view kNetconfNamespace =
     "urn:ietf:params:xml:ns:netconf:base:1.0";
 constexpr std::string_view kNotificationNamespace =
     "urn:ietf:params:xml:ns:netconf:notification:1.0";
+constexpr std::string_view kYangActionNamespace =
+    "urn:ietf:params:xml:ns:yang:1";
 constexpr std::string_view kMonitoringNamespace =
     "urn:ietf:params:xml:ns:yang:ietf-netconf-monitoring";
 
@@ -125,6 +127,80 @@ std::string SerializeSelfContained(const pugi::xml_node& node) {
     }
   }
   return Serialize(copy);
+}
+
+std::string SchemaInstanceComponent(
+    const pugi::xml_node& instance,
+    const config::RuntimeSchemaNode& metadata,
+    const config::RuntimeSchema& schema) {
+  std::string result = "/{" + metadata.name.namespace_uri + "}" +
+                       metadata.name.local_name;
+  for (config::RuntimeSchemaNodeId key_id : metadata.keys) {
+    const config::RuntimeSchemaNode& key = schema.Get(key_id);
+    for (const pugi::xml_node child : instance.children()) {
+      if (child.type() != pugi::node_element ||
+          LocalName(child.name()) != key.name.local_name ||
+          NamespaceFor(child).value_or("") != key.name.namespace_uri) continue;
+      const std::string value = child.text().as_string();
+      if (value.find('\'') == std::string::npos) {
+        result += "[{" + key.name.namespace_uri + "}" + key.name.local_name +
+                  "='" + value + "']";
+      }
+      break;
+    }
+  }
+  return result;
+}
+
+struct ActionInstance {
+  config::RuntimeSchemaNodeId schema = config::kInvalidRuntimeSchemaNodeId;
+  std::string path;
+  std::vector<std::string> ancestors;
+  pugi::xml_node xml;
+};
+
+std::optional<ActionInstance> FindActionInstance(
+    const config::RuntimeSchema& schema, const pugi::xml_node& wrapper) {
+  std::function<std::optional<ActionInstance>(
+      pugi::xml_node, config::RuntimeSchemaNodeId, std::string,
+      std::vector<std::string>)> visit;
+  visit = [&](pugi::xml_node instance, config::RuntimeSchemaNodeId schema_id,
+              std::string parent_path, std::vector<std::string> ancestors)
+      -> std::optional<ActionInstance> {
+    const config::RuntimeSchemaNode& metadata = schema.Get(schema_id);
+    std::string path = parent_path +
+        SchemaInstanceComponent(instance, metadata, schema);
+    if (metadata.kind == semantic::SchemaNodeKind::kAction)
+      return ActionInstance{schema_id, std::move(path),
+                            std::move(ancestors), instance};
+    ancestors.push_back(path);
+    for (const pugi::xml_node child : instance.children()) {
+      if (child.type() != pugi::node_element) continue;
+      const config::QualifiedXmlName child_name{
+          NamespaceFor(child).value_or(""),
+          std::string(LocalName(child.name()))};
+      auto child_schema = schema.FindChild(schema_id, child_name);
+      if (!child_schema)
+        child_schema = schema.FindChildOperation(
+            schema_id, child_name, semantic::SchemaNodeKind::kAction);
+      if (!child_schema) continue;
+      const auto kind = schema.Get(*child_schema).kind;
+      if (kind != semantic::SchemaNodeKind::kAction &&
+          kind != semantic::SchemaNodeKind::kContainer &&
+          kind != semantic::SchemaNodeKind::kList) continue;
+      if (auto found = visit(child, *child_schema, path, ancestors)) return found;
+    }
+    return std::nullopt;
+  };
+  for (const pugi::xml_node child : wrapper.children()) {
+    if (child.type() != pugi::node_element) continue;
+    const auto root = schema.FindRoot(
+        {NamespaceFor(child).value_or(""), std::string(LocalName(child.name()))});
+    if (root) {
+      if (auto found = visit(child, *root, "", {})) return found;
+    }
+  }
+  return std::nullopt;
 }
 
 TransactionResult ProtocolFailure(std::string message, std::string tag) {
@@ -348,8 +424,23 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
   const bool get_schema = LocalName(operation.name()) == "get-schema" &&
                           operation_namespace == kMonitoringNamespace &&
                           operational_ != nullptr;
+  const auto custom_rpc = (create_subscription || get_schema)
+      ? std::optional<config::RuntimeSchemaNodeId>{}
+      : datastores_.schema().FindTopLevelOperation(
+            {operation_namespace, std::string(LocalName(operation.name()))},
+            semantic::SchemaNodeKind::kRpc);
+  const bool action_request = LocalName(operation.name()) == "action" &&
+                              operation_namespace == kYangActionNamespace;
+  const auto action = action_request
+      ? FindActionInstance(datastores_.schema(), operation)
+      : std::optional<ActionInstance>{};
+  if (action_request && !action) {
+    return {Reply(message_id, ProtocolFailure(
+        "action does not identify one schema action instance", "bad-element")),
+        false};
+  }
   if (operation_namespace != kNetconfNamespace && !create_subscription &&
-      !get_schema) {
+      !get_schema && !custom_rpc && !action_request) {
     return {Reply(message_id, ProtocolFailure(
         "RPC operation is not in the NETCONF base namespace",
         "unknown-namespace")), false};
@@ -380,17 +471,63 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
           node != nullptr && node->nacm_default_deny_write);
     };
   }
-  if (nacm != nullptr && !nacm->AuthorizeRpc(
-          session.username,
-          create_subscription ? "notifications"
-                              : (get_schema ? "ietf-netconf-monitoring"
-                                            : "ietf-netconf"),
-          name,
-          session.external_groups)) {
+  const config::RuntimeSchemaNode* operation_schema =
+      custom_rpc ? &datastores_.schema().Get(*custom_rpc) : nullptr;
+  const config::RuntimeSchemaNode* action_schema = action
+      ? &datastores_.schema().Get(action->schema) : nullptr;
+  const bool authorized = nacm == nullptr ||
+      (action_schema != nullptr
+          ? nacm->AuthorizeAction(
+                session.username, action_schema->module_name,
+                action_schema->name.local_name, action->path,
+                action->ancestors, session.external_groups,
+                action_schema->nacm_default_deny_all)
+          : nacm->AuthorizeRpc(
+                session.username,
+                operation_schema != nullptr
+                    ? operation_schema->module_name
+                    : (create_subscription ? "notifications"
+                        : (get_schema ? "ietf-netconf-monitoring"
+                                      : "ietf-netconf")),
+                name, session.external_groups,
+                operation_schema != nullptr &&
+                    operation_schema->nacm_default_deny_all));
+  if (!authorized) {
     return {Reply(message_id, ProtocolFailure(
         "execution of the requested RPC is denied", "access-denied")), false};
   }
-  if (get_schema) {
+  if (action) {
+    if (operations_ == nullptr) {
+      result = ProtocolFailure("no handler is registered for the requested action",
+                               "operation-not-supported");
+    } else {
+      OperationResult invoked = operations_->InvokeAction(
+          session, *action_schema, action->path,
+          SerializeSelfContained(action->xml));
+      result = std::move(invoked.result);
+      payload = std::move(invoked.output_xml);
+      if (result.ok && nacm != nullptr && !payload.empty()) {
+        payload = nacm->FilterReadableData(
+            session.username, payload, session.external_groups,
+            &datastores_.schema());
+      }
+    }
+  } else if (custom_rpc) {
+    if (operations_ == nullptr) {
+      result = ProtocolFailure("no handler is registered for the requested RPC",
+                               "operation-not-supported");
+    } else {
+      OperationResult invoked = operations_->InvokeRpc(
+          session, *operation_schema, SerializeSelfContained(operation));
+      result = std::move(invoked.result);
+      payload = std::move(invoked.output_xml);
+      if (result.ok && nacm != nullptr && !payload.empty()) {
+        payload = nacm->FilterReadableData(
+            session.username, payload, session.external_groups,
+            &datastores_.schema());
+      }
+    }
+  } else if (get_schema) {
     const pugi::xml_node identifier = Child(operation, "identifier");
     if (!identifier || std::string_view(identifier.text().as_string()).empty()) {
       result = ProtocolFailure("get-schema requires an identifier",

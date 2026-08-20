@@ -61,7 +61,8 @@ constexpr std::string_view kConfig = R"xml(
 
 ApplicationOptions Options(TemporaryInputs& inputs) {
   return {.model = inputs.Write("appliance.yang", kModel),
-          .configuration = inputs.Write("config.xml", kConfig)};
+          .configuration = inputs.Write("config.xml", kConfig),
+          .recovery_users = {"alice", "one"}};
 }
 
 yang::netconf::RpcResponse SetProviderMode(Application& application,
@@ -96,6 +97,21 @@ TEST(DangdApplicationTest, LoadsModelAndCompleteConfiguration) {
                   .FindRoot({"urn:ietf:params:xml:ns:yang:ietf-yang-library",
                              "yang-library"})
                   .has_value());
+}
+
+TEST(DangdApplicationTest, UsesSecureNacmDefaultsWhenSubtreeIsAbsent) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.recovery_users.clear();
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr);
+  const auto denied = loaded.application->server().Process("guest", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="secure">
+      <edit-config><target><candidate/></target><config>
+        <system xmlns="urn:example:appliance"><hostname>changed</hostname></system>
+      </config></edit-config>
+    </rpc>)xml");
+  EXPECT_NE(denied.xml.find("access-denied"), std::string::npos) << denied.xml;
 }
 
 TEST(DangdApplicationTest, LoadsNacmAndUsesAuthenticatedSessionIdentity) {
@@ -238,6 +254,21 @@ TEST(DangdApplicationTest, AppliesDependentPluginsInDependencyOrder) {
                 "provider.prepare", "consumer.prepare", "provider.validate",
                 "consumer.validate", "provider.apply", "consumer.apply",
                 "consumer.release", "provider.release"}));
+}
+
+TEST(DangdApplicationTest, DispatchesPluginOwnedSchemaRpc) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_PROVIDER_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+  const auto response = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="status">
+      <provider-status xmlns="urn:dangd:test:provider"/>
+    </rpc>)xml");
+  EXPECT_NE(response.xml.find("<status"), std::string::npos) << response.xml;
+  EXPECT_NE(response.xml.find("ready"), std::string::npos) << response.xml;
 }
 
 TEST(DangdApplicationTest, ValidatesEveryPluginBeforeApplyingAnyPlugin) {

@@ -14,7 +14,7 @@ namespace {
 void Usage() {
   std::cerr
       << "usage: dangd --model FILE --config FILE [--search DIR] [--state FILE]"
-         " [--nacm FILE] [--plugin FILE]... [--check | --stdio --username USER [--session-id ID]"
+         " [--nacm FILE] [--recovery-user USER]... [--plugin FILE]... [--check | --stdio --username USER [--session-id ID]"
          " | --tls-listen ADDRESS --tls-port PORT --tls-cert FILE --tls-key "
          "FILE --tls-ca FILE]\n";
 }
@@ -49,6 +49,8 @@ int main(int argc, char* argv[]) {
       options.state_file = std::filesystem::path(argv[++index]);
     } else if (argument == "--nacm" && index + 1 < argc) {
       options.nacm_configuration = std::filesystem::path(argv[++index]);
+    } else if (argument == "--recovery-user" && index + 1 < argc) {
+      options.recovery_users.emplace_back(argv[++index]);
     } else if (argument == "--plugin" && index + 1 < argc) {
       options.plugins.emplace_back(argv[++index]);
     } else if (argument == "--username" && index + 1 < argc) {

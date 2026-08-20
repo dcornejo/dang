@@ -43,6 +43,11 @@ compiler-specific class layouts across the ABI.
 The reference implementation is `dangd/plugins/example_plugin.cc`; CMake
 builds it as `dangd_example_plugin`.
 
+Plugins that implement YANG RPCs or actions use ABI v2 and export
+`dang_plugin_init_v2`. `DangPluginV2` retains the complete ABI-v1 table as its
+first member and adds `invoke`. Configuration-only ABI-v1 plugins remain
+supported without recompilation.
+
 Load plugins explicitly:
 
 ```sh
@@ -95,6 +100,27 @@ using the superseded schema negotiated in their server hello.
 Every advertised module and submodule can be retrieved from the daemon with
 the RFC 6022 `get-schema` operation in YANG format. The returned bytes are the
 same immutable sources used for compilation.
+
+## RPC and action dispatch
+
+An ABI-v2 plugin's `invoke` callback receives `DangOperationV1` after `dangd`
+has resolved the operation against the plugin's implemented YANG module and
+completed NACM authorization. `module_name` and `operation_name` identify the
+schema node, `input_xml` is a self-contained request element, and
+`instance_path` is non-null only for an action. For actions, `dangd` has also
+verified read access to every ancestor data instance.
+
+Return application output as one self-contained XML fragment through
+`DangOperationResultV1.output_xml`. The string is borrowed only for the
+duration of the callback and is copied immediately. `dangd` applies NACM read
+filtering before serializing the RPC reply. Return zero and populate
+`DangPluginErrorV1` for an application failure. A plugin that owns a module but
+does not provide `invoke` receives `operation-not-supported` for that module's
+RPCs and actions.
+
+Authentication, NACM, schema dispatch, and NETCONF error serialization must
+not be duplicated in the callback. The plugin should perform only the actual
+module operation and return its result.
 
 ## Runtime dependencies
 

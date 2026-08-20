@@ -7,6 +7,14 @@
 
 ### Added
 
+- Secure NACM bootstrap with repeatable host-owned `--recovery-user`
+  identities that survive managed-policy commits and live reloads.
+- Schema-driven application RPC and YANG 1.1 action dispatch through the
+  owning ABI-v2 plugin, including action ancestor checks and NACM-filtered
+  operation output.
+- Data-associated notification authorization with ancestor paths and automatic
+  `default-deny-all` discovery for top-level schema notifications.
+
 - Atomic POSIX `SIGHUP` reload of configured schemas and fresh plugin images,
   with current-running validation, failure preservation, RFC 8525
   `yang-library-update` publication, and reconnect semantics for sessions that
@@ -40,6 +48,12 @@
 
 ### Fixed
 
+- Keep RFC 8341's enabled/read-permit/write-deny/exec-permit defaults active
+  when the managed NACM subtree is absent or deleted instead of silently
+  disabling enforcement.
+- Derive RPC, action, and notification module and `default-deny-all` metadata
+  from the compiled schema before making access-control decisions.
+
 - Publish deviation relationships against every affected implemented module,
   suppress library notifications for no-change reloads, and stop advertising
   the NMDA operational datastore until that datastore is actually supported.
@@ -57,6 +71,10 @@
   prebuilt-library compatibility workaround also covers `dangd_tests`.
 
 ### Tests
+
+- Added RFC 8341 decision coverage for action ancestors, associated
+  notifications, recovery-state preservation, secure absent-policy defaults,
+  schema RPC dispatch, action dispatch, and plugin-owned RPC invocation.
 
 - Added RFC 8525 conformance checks for deviation linkage, current and legacy
   inventories, legacy conformance types, schema retrieval locations,

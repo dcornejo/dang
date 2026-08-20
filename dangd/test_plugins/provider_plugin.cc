@@ -17,6 +17,7 @@ constexpr char kModel[] = R"yang(module dangd-test-provider {
   container provider-settings {
     leaf mode { type string; default "normal"; }
   }
+  rpc provider-status { output { leaf status { type string; } } }
 })yang";
 
 struct Prepared { std::string before; std::string proposed; };
@@ -62,11 +63,19 @@ void Release(void*, void* opaque) {
   dangd::test_plugin::Record("provider.release");
   delete static_cast<Prepared*>(opaque);
 }
+int Invoke(void*, const DangOperationV1* operation,
+           DangOperationResultV1* result, DangPluginErrorV1*) {
+  if (!operation || !result ||
+      std::string_view(operation->operation_name) != "provider-status") return 0;
+  result->output_xml =
+      "<status xmlns=\"urn:dangd:test:provider\">ready</status>";
+  return 1;
+}
 
-const DangPluginV1 kPlugin{DANG_PLUGIN_ABI_V1, "test-provider", nullptr,
-                           SourceCount, SourceAt, nullptr, nullptr, Prepare,
-                           Validate, Apply, Rollback, Release, nullptr};
+const DangPluginV2 kPlugin{{DANG_PLUGIN_ABI_V2, "test-provider", nullptr,
+                            SourceCount, SourceAt, nullptr, nullptr, Prepare,
+                            Validate, Apply, Rollback, Release, nullptr}, Invoke};
 
 }  // namespace
 
-extern "C" const DangPluginV1* dang_plugin_init_v1() { return &kPlugin; }
+extern "C" const DangPluginV2* dang_plugin_init_v2() { return &kPlugin; }

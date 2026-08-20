@@ -84,10 +84,9 @@ EnglishConfigurationBackend::PrepareReplacement(
   if (managed_nacm_) {
     const std::string xml = ManagedNacmXml(after);
     if (xml.empty()) {
-      yang::netconf::NacmPolicy disabled;
-      disabled.set_enabled(false);
-      if (nacm_) disabled.PreserveCountersFrom(*nacm_);
-      prepared_nacm_ = std::move(disabled);
+      yang::netconf::NacmPolicy defaults;
+      if (nacm_) defaults.PreserveRuntimeStateFrom(*nacm_);
+      prepared_nacm_ = std::move(defaults);
       return std::nullopt;
     }
     auto loaded = yang::netconf::LoadNacmPolicy(xml);
@@ -105,7 +104,7 @@ EnglishConfigurationBackend::PrepareReplacement(
       if (plugins_) plugins_->Abort();
       return finding;
     }
-    if (nacm_) loaded.policy->PreserveCountersFrom(*nacm_);
+    if (nacm_) loaded.policy->PreserveRuntimeStateFrom(*nacm_);
     prepared_nacm_ = std::move(*loaded.policy);
   }
   return std::nullopt;

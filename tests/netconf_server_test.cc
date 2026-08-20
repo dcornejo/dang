@@ -36,6 +36,30 @@ class MemoryUrlProvider final : public UrlDatastoreProvider {
   std::map<std::string, std::string> values;
 };
 
+class RecordingOperationProvider final : public OperationProvider {
+ public:
+  OperationResult InvokeRpc(const RpcSessionContext&,
+      const config::RuntimeSchemaNode& operation,
+      std::string_view operation_xml) override {
+    called = operation.module_name + ":" + operation.name.local_name;
+    input = operation_xml;
+    return {{true, {}, {}},
+            R"xml(<result xmlns="urn:rpc-test">pong</result>)xml"};
+  }
+  OperationResult InvokeAction(const RpcSessionContext&,
+      const config::RuntimeSchemaNode& action, std::string_view instance_path,
+      std::string_view action_xml) override {
+    called = action.module_name + ":" + action.name.local_name;
+    path = instance_path;
+    input = action_xml;
+    return {{true, {}, {}},
+            R"xml(<status xmlns="urn:rpc-test">reset</status>)xml"};
+  }
+  std::string called;
+  std::string path;
+  std::string input;
+};
+
 struct ServerFixture {
   config::RuntimeSchema schema;
   config::ConfigDocument initial;
@@ -45,7 +69,11 @@ std::optional<ServerFixture> BuildServerFixture(
     VectorDiagnosticSink* diagnostics) {
   auto source = SourceFile::Create("rpc.yang", R"yang(module rpc {
     yang-version 1.1; namespace "urn:rpc-test"; prefix r;
-    container system { leaf hostname { type string; mandatory true; } }
+    container system {
+      leaf hostname { type string; mandatory true; }
+      action reset { output { leaf status { type string; } } }
+    }
+    rpc ping { output { leaf result { type string; } } }
   })yang", *diagnostics);
   if (!source) return std::nullopt;
   InMemoryModuleRepository repository;
@@ -72,6 +100,67 @@ TEST(NetconfServerTest, AdvertisesImplementedCapabilities) {
   EXPECT_NE(hello.find("capability:candidate:1.0"), std::string::npos);
   EXPECT_NE(hello.find("capability:confirmed-commit:1.1"), std::string::npos);
   EXPECT_NE(hello.find("capability:xpath:1.0"), std::string::npos);
+}
+
+TEST(NetconfServerTest, AuthorizesAndDispatchesSchemaRpc) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NacmPolicy nacm;
+  nacm.set_exec_default(AccessAction::kDeny);
+  RecordingOperationProvider operations;
+  NetconfServer denied(stores, &nacm, nullptr, nullptr, std::nullopt, nullptr,
+                       &operations);
+  const std::string request = R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="rpc">
+      <ping xmlns="urn:rpc-test"/>
+    </rpc>)xml";
+  EXPECT_NE(denied.Process("alice", request).xml.find("access-denied"),
+            std::string::npos);
+  EXPECT_TRUE(operations.called.empty());
+
+  nacm.AddUserToGroup("alice", "operators");
+  nacm.AddRule({"ping", "operators", "ping", "",
+                AccessMask(AccessOperation::kExecute),
+                AccessAction::kPermit, "rpc"});
+  const RpcResponse allowed = denied.Process("alice", request);
+  EXPECT_EQ(operations.called, "rpc:ping");
+  EXPECT_NE(allowed.xml.find("pong"), std::string::npos) << allowed.xml;
+}
+
+TEST(NetconfServerTest, RequiresReadableAncestorsBeforeDispatchingAction) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NacmPolicy nacm;
+  nacm.AddUserToGroup("alice", "operators");
+  nacm.set_read_default(AccessAction::kDeny);
+  nacm.AddRule({"reset", "operators", "", "/{urn:rpc-test}system/"
+                "{urn:rpc-test}reset", AccessMask(AccessOperation::kExecute),
+                AccessAction::kPermit, "rpc"});
+  RecordingOperationProvider operations;
+  NetconfServer server(stores, &nacm, nullptr, nullptr, std::nullopt, nullptr,
+                       &operations);
+  const std::string request = R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="action">
+      <action xmlns="urn:ietf:params:xml:ns:yang:1">
+        <system xmlns="urn:rpc-test"><reset/></system>
+      </action>
+    </rpc>)xml";
+  EXPECT_NE(server.Process("alice", request).xml.find("access-denied"),
+            std::string::npos);
+  EXPECT_TRUE(operations.called.empty());
+
+  nacm.AddRule({"system", "operators", "", "/{urn:rpc-test}system",
+                AccessMask(AccessOperation::kRead), AccessAction::kPermit,
+                "rpc"});
+  const RpcResponse allowed = server.Process("alice", request);
+  EXPECT_EQ(operations.called, "rpc:reset");
+  EXPECT_EQ(operations.path,
+            "/{urn:rpc-test}system/{urn:rpc-test}reset");
+  EXPECT_NE(allowed.xml.find("reset"), std::string::npos) << allowed.xml;
 }
 
 TEST(NetconfServerTest, AppliesXPathRetrievalFilter) {

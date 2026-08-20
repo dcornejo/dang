@@ -10,6 +10,14 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added schema-aware NACM authorization for application RPCs, YANG 1.1
+  actions, and data-associated notifications, including action and
+  notification ancestor checks and schema-derived `default-deny-all`.
+- Added a host operation-provider boundary and NACM filtering of successful
+  application operation output.
+
+### Added
+
 - A POSIX dynamic-plugin ABI whose providers supply implemented and dependency
   YANG sources and participate in prepare, validate, apply, rollback, and
   release phases, with a loadable reference implementation and author guide.

@@ -69,6 +69,8 @@ struct ApplicationOptions {
   std::optional<std::filesystem::path> state_file;
   /** Optional RFC 8341 NACM XML configuration loaded at startup. */
   std::optional<std::filesystem::path> nacm_configuration;
+  /** Host-authenticated users whose sessions bypass NACM for recovery. */
+  std::vector<std::string> recovery_users;
   /** POSIX shared libraries implementing versioned dangd plugin ABI v1. */
   std::vector<std::filesystem::path> plugins;
   /** In-memory startup configuration used by an atomic runtime reload. */

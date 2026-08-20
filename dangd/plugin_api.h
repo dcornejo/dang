@@ -45,6 +45,19 @@ typedef struct DangTransactionV1 {
   const char* changes_json;
 } DangTransactionV1;
 
+/** One schema-validated RPC or action invocation authorized by dangd. */
+typedef struct DangOperationV1 {
+  const char* module_name;
+  const char* operation_name;
+  const char* instance_path;
+  const char* input_xml;
+} DangOperationV1;
+
+/** Borrowed operation output copied by dangd before the callback returns. */
+typedef struct DangOperationResultV1 {
+  const char* output_xml;
+} DangOperationResultV1;
+
 /** Version-one POSIX plugin function table and lifecycle contract. */
 typedef struct DangPluginV1 {
   uint32_t abi_version;
@@ -66,6 +79,18 @@ typedef struct DangPluginV1 {
 
 /** Type of the required exported `dang_plugin_init_v1` entry point. */
 typedef const DangPluginV1* (*DangPluginInitV1)(void);
+
+#define DANG_PLUGIN_ABI_V2 2u
+
+/** ABI v2 preserves the complete v1 prefix and adds operation dispatch. */
+typedef struct DangPluginV2 {
+  DangPluginV1 v1;
+  int (*invoke)(void* context, const DangOperationV1* operation,
+                DangOperationResultV1* result, DangPluginErrorV1* error);
+} DangPluginV2;
+
+/** Type of the optional exported `dang_plugin_init_v2` entry point. */
+typedef const DangPluginV2* (*DangPluginInitV2)(void);
 
 #ifdef __cplusplus
 }

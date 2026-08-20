@@ -61,6 +61,35 @@ struct RpcSessionContext {
   std::span<const std::string> external_groups;
 };
 
+/** Host result for an application-defined schema RPC or action. */
+struct OperationResult {
+  TransactionResult result;
+  std::string output_xml;
+};
+
+/** Dispatches schema-defined operations after the server completes NACM. */
+class OperationProvider {
+ public:
+  virtual ~OperationProvider() = default;
+  [[nodiscard]] virtual OperationResult InvokeRpc(
+      const RpcSessionContext& session,
+      const config::RuntimeSchemaNode& operation,
+      std::string_view operation_xml) = 0;
+  [[nodiscard]] virtual OperationResult InvokeAction(
+      const RpcSessionContext& session,
+      const config::RuntimeSchemaNode& action,
+      std::string_view instance_path, std::string_view action_xml) {
+    (void)session;
+    (void)action;
+    (void)instance_path;
+    (void)action_xml;
+    config::ValidationFinding finding;
+    finding.message = "no handler is registered for the requested action";
+    finding.netconf_error_tag = "operation-not-supported";
+    return {{false, {std::move(finding)}, {}}, {}};
+  }
+};
+
 /**
  * XML RPC service for the RFC 6241 datastore operations.
  *
@@ -73,10 +102,11 @@ class NetconfServer {
                          UrlDatastoreProvider* urls = nullptr,
                          NotificationManager* notifications = nullptr,
                          std::optional<WithDefaultsConfig> with_defaults = std::nullopt,
-                         OperationalDataProvider* operational = nullptr)
+                         OperationalDataProvider* operational = nullptr,
+                         OperationProvider* operations = nullptr)
       : datastores_(datastores), nacm_(nacm), urls_(urls),
         notifications_(notifications), with_defaults_(with_defaults),
-        operational_(operational) {}
+        operational_(operational), operations_(operations) {}
 
   /** Returns a server hello with the supported capability URIs. */
   [[nodiscard]] std::string ServerHello(std::uint32_t session_id) const;
@@ -112,6 +142,7 @@ class NetconfServer {
   NotificationManager* notifications_ = nullptr;
   std::optional<WithDefaultsConfig> with_defaults_;
   OperationalDataProvider* operational_ = nullptr;
+  OperationProvider* operations_ = nullptr;
 };
 
 }  // namespace yang::netconf

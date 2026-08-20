@@ -306,6 +306,41 @@ bool NacmPolicy::AuthorizeRpc(
   return permitted;
 }
 
+bool NacmPolicy::AuthorizeAction(
+    std::string_view user, std::string_view module_name,
+    std::string_view action_name, std::string_view instance_path,
+    std::span<const std::string> ancestor_paths,
+    std::span<const std::string> external_groups,
+    bool default_deny_all) const {
+  (void)action_name;
+  if (!enabled_ || IsRecovery(user)) return true;
+  for (const std::string& ancestor : ancestor_paths) {
+    if (!AuthorizeData(user, "", AccessOperation::kRead, ancestor,
+                       external_groups)) {
+      counters_->denied_operations.fetch_add(1);
+      return false;
+    }
+  }
+  for (const NacmRule& rule : rules_) {
+    if (!RuleApplies(rule, user, external_groups) ||
+        !(rule.operations & AccessMask(AccessOperation::kExecute)) ||
+        !rule.rpc_name.empty() || !rule.notification_name.empty() ||
+        (!rule.module_name.empty() && rule.module_name != "*" &&
+         rule.module_name != module_name) ||
+        (!rule.path_prefix.empty() &&
+         !PathMatches(rule.path_prefix, instance_path))) {
+      continue;
+    }
+    const bool permitted = rule.action == AccessAction::kPermit;
+    if (!permitted) counters_->denied_operations.fetch_add(1);
+    return permitted;
+  }
+  const bool permitted = !default_deny_all &&
+                         exec_default_ == AccessAction::kPermit;
+  if (!permitted) counters_->denied_operations.fetch_add(1);
+  return permitted;
+}
+
 bool NacmPolicy::AuthorizeData(std::string_view user, AccessOperation operation,
                                std::string_view instance_path) const {
   return AuthorizeData(user, "", operation, instance_path);
@@ -357,6 +392,42 @@ bool NacmPolicy::AuthorizeNotification(
          rule.module_name != module_name) ||
         (!rule.notification_name.empty() && rule.notification_name != "*" &&
          rule.notification_name != notification_name)) {
+      continue;
+    }
+    const bool permitted = rule.action == AccessAction::kPermit;
+    if (!permitted) counters_->denied_notifications.fetch_add(1);
+    return permitted;
+  }
+  const bool permitted = !default_deny_all &&
+                         read_default_ == AccessAction::kPermit;
+  if (!permitted) counters_->denied_notifications.fetch_add(1);
+  return permitted;
+}
+
+bool NacmPolicy::AuthorizeNotification(
+    std::string_view user, std::string_view module_name,
+    std::string_view notification_name, std::string_view instance_path,
+    std::span<const std::string> ancestor_paths,
+    std::span<const std::string> external_groups,
+    bool default_deny_all) const {
+  if (!enabled_ || IsRecovery(user)) return true;
+  for (const std::string& ancestor : ancestor_paths) {
+    if (!AuthorizeData(user, "", AccessOperation::kRead, ancestor,
+                       external_groups)) {
+      counters_->denied_notifications.fetch_add(1);
+      return false;
+    }
+  }
+  for (const NacmRule& rule : rules_) {
+    if (!RuleApplies(rule, user, external_groups) ||
+        !(rule.operations & AccessMask(AccessOperation::kRead)) ||
+        !rule.rpc_name.empty() ||
+        (!rule.module_name.empty() && rule.module_name != "*" &&
+         rule.module_name != module_name) ||
+        (!rule.notification_name.empty() && rule.notification_name != "*" &&
+         rule.notification_name != notification_name) ||
+        (!rule.path_prefix.empty() &&
+         !PathMatches(rule.path_prefix, instance_path))) {
       continue;
     }
     const bool permitted = rule.action == AccessAction::kPermit;

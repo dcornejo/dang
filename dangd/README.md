@@ -168,9 +168,19 @@ datastore only when the configuration does not already contain `/nacm`; it is
 not a permanent override. Thereafter authorized clients manage NACM through
 ordinary candidate edits and commits. The policy active at RPC start
 authorizes the change, and its compiled replacement becomes active only after
-the complete backend transaction succeeds. An absent NACM container leaves
-enforcement disabled for explicit bootstrap compatibility. Denial counters
-remain core-owned operational state and are returned by `<get>`.
+the complete backend transaction succeeds. When the NACM container is absent,
+the RFC 8341 defaults remain active: reads and operations are permitted, while
+configuration writes are denied. Configure at least one repeatable
+`--recovery-user USER` whose authenticated sessions may bypass NACM to install
+or repair policy. Recovery identities are host configuration, are never read
+from the datastore, and survive NACM commits and `SIGHUP` reloads. Denial
+counters remain core-owned operational state and are returned by `<get>`.
+
+Application RPCs and YANG 1.1 actions are resolved against the compiled schema
+before dispatch. `dangd` applies operation rules and `default-deny-all`; actions
+also require read access to every data ancestor. Only then is the request sent
+to the plugin that owns the defining module. Successful plugin output is NACM
+read-filtered before it is returned.
 
 POSIX plugins are loaded with repeatable `--plugin FILE` arguments. A plugin
 supplies implemented, deviation, and import-only YANG source bytes. `dangd`

@@ -496,13 +496,13 @@ Application::Application(yang::config::RuntimeSchema schema,
     : schema_(std::move(schema)),
       plugins_(std::move(plugins)),
       nacm_(std::move(nacm)),
-      notifications_(&nacm_),
+      notifications_(&nacm_, 1024, 16 * 1024 * 1024, &schema_),
       operational_(std::move(yang_library_xml), std::move(model_sources),
                    &nacm_),
       backend_(configuration, plugins_.get(), &nacm_, managed_nacm),
       datastores_(schema_, std::move(configuration), std::nullopt, &backend_),
       server_(datastores_, &nacm_, nullptr, &notifications_, std::nullopt,
-              &operational_),
+              &operational_, plugins_.get()),
       state_file_(std::move(state_file)) {
   (void)notifications_.AddStream({});
 }
@@ -654,9 +654,7 @@ LoadResult Application::Load(const ApplicationOptions& options) {
   if (managed_nacm || nacm_text) {
     std::string policy_xml = managed_nacm ? NacmSubtree(*parsed.document)
                                            : *nacm_text;
-    if (policy_xml.empty()) {
-      nacm.set_enabled(false);
-    } else {
+    if (!policy_xml.empty()) {
       auto loaded_nacm = yang::netconf::LoadNacmPolicy(policy_xml);
       if (!loaded_nacm.policy) {
         for (const std::string& error : loaded_nacm.errors)
@@ -666,7 +664,14 @@ LoadResult Application::Load(const ApplicationOptions& options) {
       nacm = std::move(*loaded_nacm.policy);
     }
   } else {
-    nacm.set_enabled(false);
+    nacm.set_enabled(true);
+  }
+  for (const std::string& recovery_user : options.recovery_users) {
+    if (recovery_user.empty()) {
+      result.errors.push_back("NACM recovery user cannot be empty");
+      return result;
+    }
+    nacm.AddRecoveryUser(recovery_user);
   }
 
   result.application = std::unique_ptr<Application>(new Application(

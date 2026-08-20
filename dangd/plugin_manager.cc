@@ -38,6 +38,8 @@ struct PluginManager::State {
   struct Plugin {
     void* library = nullptr;
     const DangPluginV1* api = nullptr;
+    int (*invoke)(void*, const DangOperationV1*, DangOperationResultV1*,
+                  DangPluginErrorV1*) = nullptr;
     std::string name;
     std::vector<std::string> modules;
     std::vector<std::string> dependencies;
@@ -90,17 +92,26 @@ bool PluginManager::Load(const std::filesystem::path& path,
     return false;
   }
   dlerror();
+  auto initialize_v2 = reinterpret_cast<DangPluginInitV2>(
+      dlsym(library, "dang_plugin_init_v2"));
+  const char* v2_error = dlerror();
+  const DangPluginV2* api_v2 =
+      v2_error == nullptr && initialize_v2 ? initialize_v2() : nullptr;
+  dlerror();
   auto initialize = reinterpret_cast<DangPluginInitV1>(
       dlsym(library, "dang_plugin_init_v1"));
-  if (const char* symbol_error = dlerror(); symbol_error != nullptr) {
+  const char* v1_error = dlerror();
+  if (api_v2 == nullptr && v1_error != nullptr) {
     errors->push_back("plugin " + path.string() +
-                      " has no dang_plugin_init_v1 entry point: " +
-                      symbol_error);
+                      " has no dang_plugin_init_v1 or dang_plugin_init_v2 entry point");
     dlclose(library);
     return false;
   }
-  const DangPluginV1* api = initialize ? initialize() : nullptr;
-  if (!api || api->abi_version != DANG_PLUGIN_ABI_V1 || !api->plugin_name ||
+  const DangPluginV1* api = api_v2 ? &api_v2->v1
+                                   : (initialize ? initialize() : nullptr);
+  if (!api || api->abi_version !=
+                  (api_v2 ? DANG_PLUGIN_ABI_V2 : DANG_PLUGIN_ABI_V1) ||
+      !api->plugin_name ||
       !api->yang_source_count || !api->yang_source_at || !api->prepare ||
       !api->validate || !api->apply || !api->rollback || !api->release) {
     errors->push_back("plugin " + path.string() +
@@ -127,6 +138,7 @@ bool PluginManager::Load(const std::filesystem::path& path,
   State::Plugin plugin;
   plugin.library = library;
   plugin.api = api;
+  plugin.invoke = api_v2 ? api_v2->invoke : nullptr;
   plugin.name = api->plugin_name;
   std::vector<PluginYangSource> discovered_sources;
   const std::size_t count = api->yang_source_count(api->context);
@@ -410,5 +422,48 @@ std::optional<yang::config::ValidationFinding> PluginManager::Apply() {
 }
 
 void PluginManager::Abort() noexcept { state_->ReleasePrepared(); }
+
+yang::netconf::OperationResult PluginManager::InvokeRpc(
+    const yang::netconf::RpcSessionContext& session,
+    const yang::config::RuntimeSchemaNode& operation,
+    std::string_view operation_xml) {
+  (void)session;
+  return InvokeAction(session, operation, {}, operation_xml);
+}
+
+yang::netconf::OperationResult PluginManager::InvokeAction(
+    const yang::netconf::RpcSessionContext& session,
+    const yang::config::RuntimeSchemaNode& operation,
+    std::string_view instance_path, std::string_view operation_xml) {
+  (void)session;
+  const auto owner = std::ranges::find_if(
+      state_->plugins, [&](const State::Plugin& plugin) {
+        return std::ranges::find(plugin.modules, operation.module_name) !=
+               plugin.modules.end();
+      });
+  if (owner == state_->plugins.end() || owner->invoke == nullptr) {
+    yang::config::ValidationFinding finding;
+    finding.message = owner == state_->plugins.end()
+        ? "no plugin owns the operation's module"
+        : "the module plugin does not implement operation dispatch";
+    finding.module_name = operation.module_name;
+    finding.netconf_error_tag = "operation-not-supported";
+    finding.netconf_error_app_tag = "plugin-operation-unsupported";
+    return {{false, {std::move(finding)}, {}}, {}};
+  }
+  const std::string input(operation_xml);
+  const std::string path(instance_path);
+  const DangOperationV1 request{operation.module_name.c_str(),
+                                operation.name.local_name.c_str(),
+                                path.empty() ? nullptr : path.c_str(),
+                                input.c_str()};
+  DangOperationResultV1 response{};
+  DangPluginErrorV1 error{};
+  if (!owner->invoke(owner->api->context, &request, &response, &error)) {
+    return {{false, {PluginFinding(owner->name, error,
+                                    "operation invocation failed")}, {}}, {}};
+  }
+  return {{true, {}, {}}, response.output_xml ? response.output_xml : ""};
+}
 
 }  // namespace dangd
