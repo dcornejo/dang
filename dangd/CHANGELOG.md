@@ -14,6 +14,8 @@
 
 ### Added
 
+- Kept notification replay and live fanout internally consistent while managed
+  NACM policy is replaced concurrently.
 - Verified NACM execute denial, error paths, accounting, and non-disclosure for
   every standard operation dispatched by `dangd`.
 - Verified live managed-policy replacement while several NETCONF sessions take

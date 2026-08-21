@@ -196,9 +196,12 @@ integration responsibilities.
   `NacmTest.AppliesRfc8341DataAssociatedNotificationDecisionSequence`,
   `NetconfNotificationsTest.DerivesAssociatedNotificationAncestorsFromSchema`,
   and `NetconfNotificationsTest.AppliesNacmBeforeQueueing`.
+- Each replay subscription and live multi-session fanout uses one immutable
+  policy snapshot. Concurrent replacement therefore cannot split one operation
+  across policy generations:
+  `NetconfNotificationsTest.UsesOnePolicySnapshotForReplayAndLiveFanout`.
 
-Open evidence: concurrent policy replacement during replay/live fanout and an
-external RFC 5277/NACM interoperability run.
+Open evidence: an external RFC 5277/NACM interoperability run.
 
 ## Sections 3.5 and 5: model and security considerations
 

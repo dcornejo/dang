@@ -17,6 +17,8 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Applied one immutable NACM snapshot to each notification replay and live
+  multi-session fanout, with concurrent replacement stress coverage.
 - Added a denial matrix for every supported standard NETCONF, notification,
   monitoring, and NMDA operation, including the `close-session` exception.
 - Added a multi-session stress test for live NACM policy replacement and

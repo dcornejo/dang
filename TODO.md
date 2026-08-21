@@ -34,6 +34,8 @@ stays in this file with its remaining work rewritten precisely.
   Access-denied messages are generic and disclose no internal path notation,
   rejected non-key value, NACM rule name, or other policy detail beyond the
   required namespace-bound error-path.
+  Replay authorization and live multi-session notification fanout each retain
+  one policy snapshot during concurrent managed-policy replacement.
   Datastore-source copy filtering and the running-to-startup execute-only
   exception are also covered. URL/datastore copy combinations are covered;
   remote source-read, target-inspection, and atomic write failures preserve

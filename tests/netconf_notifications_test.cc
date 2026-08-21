@@ -1,7 +1,9 @@
 // Copyright 2026 David Cornejo
 // SPDX-License-Identifier: Apache-2.0
 
+#include <atomic>
 #include <chrono>
+#include <thread>
 
 #include <gtest/gtest.h>
 
@@ -95,6 +97,97 @@ TEST(NetconfNotificationsTest, AppliesNacmBeforeQueueing) {
                               "<alarm xmlns=\"urn:events\"/>"));
   EXPECT_TRUE(manager.Drain(4).empty());
   EXPECT_EQ(policy.counters().denied_notifications, 1U);
+}
+
+TEST(NetconfNotificationsTest, UsesOnePolicySnapshotForReplayAndLiveFanout) {
+  const auto make_policy = [](std::string permitted_group) {
+    NacmPolicy result;
+    result.set_read_default(AccessAction::kDeny);
+    result.AddUserToGroup("alice", "alpha");
+    result.AddUserToGroup("bob", "beta");
+    NacmRule rule;
+    rule.name = "permit-" + permitted_group;
+    rule.groups = {std::move(permitted_group)};
+    rule.module_name = "events";
+    rule.notification_name = "alarm";
+    rule.operations = AccessMask(AccessOperation::kRead);
+    rule.action = AccessAction::kPermit;
+    result.AddRule(std::move(rule));
+    return result;
+  };
+  NacmPolicy policy = make_policy("alpha");
+  NacmPolicy alpha = policy;
+  NacmPolicy beta = make_policy("beta");
+  beta.PreserveRuntimeStateFrom(policy);
+  NotificationManager manager(&policy, 4096, 16 * 1024 * 1024);
+  ASSERT_TRUE(manager.AddStream({"NETCONF", true, 64}));
+  for (const auto& [session, user] :
+       std::vector<std::pair<std::uint32_t, std::string>>{{1, "alice"},
+                                                          {2, "bob"}}) {
+    SubscriptionRequest request;
+    request.session_id = session;
+    request.username = user;
+    ASSERT_TRUE(manager.Subscribe(std::move(request)).ok);
+  }
+
+  std::atomic<bool> start = false;
+  std::atomic<unsigned> inconsistent_fanouts = 0;
+  std::thread replacement([&] {
+    while (!start.load(std::memory_order_acquire)) std::this_thread::yield();
+    for (unsigned generation = 0; generation < 4000; ++generation) {
+      policy = generation % 2 == 0 ? beta : alpha;
+      std::this_thread::yield();
+    }
+  });
+  start.store(true, std::memory_order_release);
+  const auto now = std::chrono::system_clock::now();
+  for (unsigned event = 0; event < 1000; ++event) {
+    const bool published = manager.Publish(
+        "NETCONF", "events", "alarm",
+        "<alarm xmlns=\"urn:events\"/>", now);
+    EXPECT_TRUE(published);
+    if (!published) {
+      inconsistent_fanouts.fetch_add(1, std::memory_order_relaxed);
+      continue;
+    }
+    const std::size_t delivered =
+        manager.Drain(1, now).size() + manager.Drain(2, now).size();
+    if (delivered != 1)
+      inconsistent_fanouts.fetch_add(1, std::memory_order_relaxed);
+  }
+  replacement.join();
+  EXPECT_EQ(inconsistent_fanouts.load(), 0U);
+
+  manager.RemoveSession(1);
+  manager.RemoveSession(2);
+  std::atomic<unsigned> inconsistent_replays = 0;
+  std::thread replay_replacement([&] {
+    for (unsigned generation = 0; generation < 4000; ++generation) {
+      policy = generation % 2 == 0 ? beta : alpha;
+      std::this_thread::yield();
+    }
+  });
+  for (std::uint32_t session = 10; session < 210; ++session) {
+    SubscriptionRequest request;
+    request.session_id = session;
+    request.username = "alice";
+    request.start_time = now - 1h;
+    const SubscriptionResult subscribed =
+        manager.Subscribe(std::move(request), now);
+    EXPECT_TRUE(subscribed.ok) << subscribed.error;
+    if (!subscribed.ok) {
+      inconsistent_replays.fetch_add(1, std::memory_order_relaxed);
+      continue;
+    }
+    const std::size_t replayed = manager.Drain(session, now).size();
+    // One replayComplete marker is always present. A complete policy snapshot
+    // either admits all 64 retained events or denies every one of them.
+    if (replayed != 1 && replayed != 65)
+      inconsistent_replays.fetch_add(1, std::memory_order_relaxed);
+    manager.RemoveSession(session);
+  }
+  replay_replacement.join();
+  EXPECT_EQ(inconsistent_replays.load(), 0U);
 }
 
 TEST(NetconfNotificationsTest, DerivesAssociatedNotificationAncestorsFromSchema) {

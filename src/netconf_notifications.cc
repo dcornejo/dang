@@ -219,6 +219,10 @@ void NotificationManager::SetInstanceDataProvider(
 SubscriptionResult NotificationManager::Subscribe(
     SubscriptionRequest request, std::chrono::system_clock::time_point now) {
   std::lock_guard lock(mutex_);
+  const std::optional<NacmPolicy> policy_snapshot =
+      nacm_ == nullptr ? std::nullopt : std::optional<NacmPolicy>(*nacm_);
+  const NacmPolicy* const nacm =
+      policy_snapshot ? &*policy_snapshot : nullptr;
   if (request.session_id == 0) return {false, "invalid session", "invalid-value", ""};
   if (subscriptions_.contains(request.session_id))
     return {false, "a subscription already exists", "resource-denied", ""};
@@ -240,7 +244,7 @@ SubscriptionResult NotificationManager::Subscribe(
     for (const Event& event : stream->second.replay) {
       if (event.time < *subscription.request.start_time ||
           (subscription.request.stop_time && event.time > *subscription.request.stop_time)) continue;
-      if (nacm_ && !nacm_->AuthorizeNotification(
+      if (nacm && !nacm->AuthorizeNotification(
               subscription.request.username, event.module, event.name,
               event.instance_path, event.ancestors,
               subscription.request.external_groups,
@@ -338,6 +342,10 @@ bool NotificationManager::Publish(std::string_view stream_name,
           schema_->Get(*metadata).nacm_default_deny_all;
   }
   const std::string xml = Wrap(content_xml, event_time);
+  const std::optional<NacmPolicy> policy_snapshot =
+      nacm_ == nullptr ? std::nullopt : std::optional<NacmPolicy>(*nacm_);
+  const NacmPolicy* const nacm =
+      policy_snapshot ? &*policy_snapshot : nullptr;
   std::lock_guard lock(mutex_);
   const auto stream = streams_.find(stream_name);
   if (stream == streams_.end()) return false;
@@ -355,7 +363,7 @@ bool NotificationManager::Publish(std::string_view stream_name,
         (subscription.request.start_time &&
          event_time < *subscription.request.start_time) ||
         (subscription.request.stop_time && event_time > *subscription.request.stop_time)) continue;
-    if (nacm_ && !nacm_->AuthorizeNotification(
+    if (nacm && !nacm->AuthorizeNotification(
             subscription.request.username, module_name, notification_name,
             instance_path, event.ancestors,
             subscription.request.external_groups, default_deny_all)) continue;
