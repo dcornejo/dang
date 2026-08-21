@@ -20,6 +20,7 @@
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
+#include <openssl/x509v3.h>
 
 #include "dangd/application.h"
 #include "yang/netconf_transport.h"
@@ -130,11 +131,28 @@ int ListenSocket(const TlsServerOptions& options, std::string* error) {
   return -1;
 }
 
-std::optional<std::string> PeerCommonName(SSL* tls) {
+std::optional<std::string> SafeUsername(const unsigned char* bytes,
+                                        int length) {
+  if (bytes == nullptr || length <= 0 || length > 255) return std::nullopt;
+  const std::string username(reinterpret_cast<const char*>(bytes),
+                             static_cast<std::size_t>(length));
+  if (username.find('\0') != std::string::npos ||
+      std::isspace(static_cast<unsigned char>(username.front())) ||
+      std::isspace(static_cast<unsigned char>(username.back())) ||
+      std::ranges::any_of(username, [](unsigned char character) {
+        return character < 0x20 || character == 0x7f;
+      })) {
+    return std::nullopt;
+  }
+  return username;
+}
+
+std::optional<std::string> PeerUsername(SSL* tls,
+                                        TlsUsernameSource source) {
   Certificate certificate(SSL_get1_peer_certificate(tls), X509_free);
   if (!certificate || SSL_get_verify_result(tls) != X509_V_OK)
     return std::nullopt;
-  return CertificateSubjectUsername(X509_get_subject_name(certificate.get()));
+  return CertificateUsername(certificate.get(), source);
 }
 
 bool WriteTls(SSL* tls, std::string_view bytes, std::string* error) {
@@ -209,16 +227,32 @@ std::optional<std::string> CertificateSubjectUsername(
     OPENSSL_free(utf8);
     return std::nullopt;
   }
-  const std::string username(reinterpret_cast<char*>(utf8),
-                             static_cast<std::size_t>(length));
+  const auto username = SafeUsername(utf8, length);
   OPENSSL_free(utf8);
-  if (username.find('\0') != std::string::npos ||
-      std::isspace(static_cast<unsigned char>(username.front())) ||
-      std::isspace(static_cast<unsigned char>(username.back())) ||
-      std::ranges::any_of(username, [](unsigned char character) {
-        return character < 0x20 || character == 0x7f;
-      })) {
-    return std::nullopt;
+  return username;
+}
+
+std::optional<std::string> CertificateUsername(
+    const X509* certificate, TlsUsernameSource source) {
+  if (certificate == nullptr) return std::nullopt;
+  if (source == TlsUsernameSource::kCommonName) {
+    return CertificateSubjectUsername(X509_get_subject_name(certificate));
+  }
+  GENERAL_NAMES* names = static_cast<GENERAL_NAMES*>(
+      X509_get_ext_d2i(certificate, NID_subject_alt_name, nullptr, nullptr));
+  if (names == nullptr) return std::nullopt;
+  std::unique_ptr<GENERAL_NAMES, decltype(&GENERAL_NAMES_free)> owned(
+      names, GENERAL_NAMES_free);
+  const int wanted = source == TlsUsernameSource::kSanDns ? GEN_DNS : GEN_URI;
+  std::optional<std::string> username;
+  for (int index = 0; index < sk_GENERAL_NAME_num(names); ++index) {
+    const GENERAL_NAME* name = sk_GENERAL_NAME_value(names, index);
+    if (name == nullptr || name->type != wanted) continue;
+    if (username) return std::nullopt;
+    const ASN1_IA5STRING* value = name->d.ia5;
+    username = SafeUsername(ASN1_STRING_get0_data(value),
+                            ASN1_STRING_length(value));
+    if (!username) return std::nullopt;
   }
   return username;
 }
@@ -269,10 +303,10 @@ int RunTlsServer(Application& application, const TlsServerOptions& options,
       close(connection);
       continue;
     }
-    const auto username = PeerCommonName(tls.get());
+    const auto username = PeerUsername(tls.get(), options.username_source);
     if (!username) {
       diagnostics << "dangd: authenticated certificate has no unique safe "
-                     "common name\n";
+                     "configured username field\n";
       SSL_shutdown(tls.get());
       close(connection);
       continue;
@@ -382,10 +416,10 @@ int RunReloadableTlsServer(
       close(connection);
       continue;
     }
-    const auto username = PeerCommonName(tls.get());
+    const auto username = PeerUsername(tls.get(), options.username_source);
     if (!username) {
       diagnostics << "dangd: authenticated certificate has no unique safe "
-                     "common name\n";
+                     "configured username field\n";
       SSL_shutdown(tls.get());
       close(connection);
       continue;

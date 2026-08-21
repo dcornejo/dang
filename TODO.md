@@ -55,7 +55,8 @@ stays in this file with its remaining work rewritten precisely.
   the prior durable file, running tree, backend/plugin state, and live policy
   before returning `operation-failed`.
 - Harden authentication-to-NACM identity plumbing for production transports:
-  add configurable SAN/SSH name mapping. The TLS
+  add configurable SSH name mapping and deployment-specific transformation of
+  selected certificate values. TLS can select CN, DNS SAN, or URI SAN. The TLS
   common-name mapping is fail-closed for absent, ambiguous, noncanonical, and
   embedded-NUL identities. External groups require explicit trusted provenance,
   bounded canonical values, and per-session isolation. Every recovery-user RPC

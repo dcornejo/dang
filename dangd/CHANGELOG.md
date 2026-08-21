@@ -23,6 +23,8 @@
 
 ### Added
 
+- Added `--tls-username-source` with exact CN, DNS SAN, and URI SAN identity
+  selection and ambiguity rejection.
 - Added safely encoded diagnostic audit records for every recovery-user RPC
   attempt without logging request payloads or policy internals.
 - Covered live commit persistence failures both before and after atomic file

@@ -53,6 +53,11 @@ mutual certificate validation and RFC 7589 certificate-to-name mapping before
 setting `peer_authenticated`; the library intentionally does not parse or
 trust certificates itself.
 
+`dangd --tls-username-source cn|san-dns|san-uri` selects the certificate field
+used verbatim as the NETCONF/NACM username. The default is `cn`. The chosen
+field must contain exactly one safe value; ambiguity or absence fails closed.
+Values of other SAN types do not participate in the selected mapping.
+
 Nonempty `external_groups` are rejected unless `external_groups_trusted` is
 true. Set it only when every group came from the authenticated transport
 identity or another equally trusted authorization source—not from NETCONF

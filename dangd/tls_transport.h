@@ -19,6 +19,9 @@ namespace dangd {
 class Application;
 struct ApplicationOptions;
 
+/** Certificate field selected as the authenticated NETCONF username. */
+enum class TlsUsernameSource { kCommonName, kSanDns, kSanUri };
+
 /** Mutual-TLS listener settings for the blocking demonstration server. */
 struct TlsServerOptions {
   std::string address = "127.0.0.1";
@@ -26,6 +29,7 @@ struct TlsServerOptions {
   std::filesystem::path certificate;
   std::filesystem::path private_key;
   std::filesystem::path trust_anchor;
+  TlsUsernameSource username_source = TlsUsernameSource::kCommonName;
   /** Zero serves until interrupted; nonzero is useful for deterministic tests. */
   std::size_t maximum_connections = 0;
 };
@@ -42,13 +46,16 @@ struct TlsClientOptions {
 /** Maps exactly one safe certificate subject common name to a NACM username. */
 [[nodiscard]] std::optional<std::string> CertificateSubjectUsername(
     const X509_NAME* subject);
+/** Maps exactly one safe value from the configured certificate field. */
+[[nodiscard]] std::optional<std::string> CertificateUsername(
+    const X509* certificate, TlsUsernameSource source);
 
 /**
  * Serves authenticated NETCONF-over-TLS connections synchronously.
  *
  * Client certificates must chain to trust_anchor. Exactly one nonempty, bounded
- * UTF-8 common name without surrounding whitespace, controls, or embedded NUL
- * becomes the NETCONF username supplied to NACM. Returns after
+ * value from the configured CN, DNS SAN, or URI SAN field becomes the NETCONF
+ * username supplied to NACM. Returns after
  * maximum_connections successful TCP accepts, or on a listener failure.
  */
 [[nodiscard]] int RunTlsServer(Application& application,

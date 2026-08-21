@@ -195,8 +195,9 @@ to the concrete publishing instance before replay or live delivery. Action
 requests are authorized before their parent is resolved, so denied users cannot
 use the existence error to probe datastore contents.
 
-Remaining gaps are tracked in `TODO.md`: configurable production identity
-mapping, fuzzing, and independent interoperability testing. Transport external
+Remaining gaps are tracked in `TODO.md`: configurable SSH and deployment-
+specific certificate value mapping, fuzzing, and independent interoperability
+testing. TLS directly supports CN, DNS SAN, and URI SAN selection. Transport external
 groups require explicit trusted provenance and bounded, unique values. Every
 recovery-user RPC attempt emits a privacy-minimal host audit record. Live
 datastore mutations

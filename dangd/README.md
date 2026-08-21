@@ -119,11 +119,12 @@ intended configuration.
 ## Mutual-TLS console example
 
 `dangd` can expose its NETCONF session over a blocking mutual-TLS listener.
-The server validates client certificates against the configured CA and maps
-the verified certificate common name to the NETCONF username used by NACM. A
-certificate must contain exactly one nonempty UTF-8 common name of at most 255
-bytes; surrounding whitespace, control characters, embedded NUL, duplicate
-common names, and missing common names are rejected rather than normalized.
+The server validates client certificates against the configured CA. By default
+it maps the verified certificate common name to the NETCONF username used by
+NACM. `--tls-username-source san-dns` or `san-uri` instead selects a DNS or URI
+subjectAltName. The selected field must contain exactly one nonempty value of
+at most 255 bytes; surrounding whitespace, controls, embedded NUL, duplicates,
+and missing values are rejected rather than normalized.
 The example certificate for `alice` therefore selects the `alice` rules in
 `examples/nacm.xml`.
 
@@ -166,13 +167,13 @@ The client prints the server hello. Paste one XML RPC, then enter a blank line:
 `rpc-reply`. It negotiates NETCONF base 1.0 so the interactive boundary remains
 easy to see. End the session with `<close-session/>` or EOF.
 
-The listener requires TLS 1.2 or newer, a trusted client certificate, and a
-nonempty certificate common name. The client requires a trusted server chain
-and verifies `--host` against the server certificate. The current CN mapping is
-an explicit demonstration policy, not the configurable certificate-to-name
-mapping defined by RFC 7589. The listener handles connections synchronously and
-is intended for local integration and tests; production work still needs an
-event-loop TLS service, revocation policy, configurable identity mapping,
+The listener requires TLS 1.2 or newer, a trusted client certificate, and one
+safe value in the configured username field. The client requires a trusted
+server chain and verifies `--host` against the server certificate. Field
+selection is configurable, but deployment-specific value transformation remains
+host policy. The listener handles connections synchronously and is intended for
+local integration and tests; production work still needs an event-loop TLS
+service, revocation policy, deployment-specific identity mapping,
 operational monitoring, and protected deployment credentials.
 
 ## Managed NACM and plugins

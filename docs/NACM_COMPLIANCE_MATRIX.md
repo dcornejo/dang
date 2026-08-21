@@ -82,6 +82,10 @@ No open core-server evidence item remains for initial operation.
   NUL, missing names, and failed certificate verification:
   `DangdTlsTransportTest.MapsOnlyOneCanonicalCertificateCommonName` and mutual
   TLS integration tests.
+- TLS deployments may explicitly select common name, DNS SAN, or URI SAN as the
+  username source. SAN selection requires exactly one safe value of the chosen
+  type and ignores other SAN types:
+  `DangdTlsTransportTest.SelectsExactlyOneConfiguredSanIdentity`.
 - Transport-supplied external groups are accepted only with an explicit trusted
   authentication-provenance assertion. Empty, oversized, control-containing,
   and duplicate group values are rejected, and simultaneous sessions retain
@@ -94,8 +98,9 @@ No open core-server evidence item remains for initial operation.
   `NetconfServerTest.AuditsEveryRecoveryUserRpcAttempt` and
   `DangdApplicationTest.EmitsSafeRecoveryAuditRecords`.
 
-Open evidence: configurable SAN/SSH identity mapping. This remains
-host/deployment work in `TODO.md`.
+Open evidence: configurable SSH identity mapping and deployment-specific
+certificate-value transformation. This remains host/deployment work in
+`TODO.md`.
 
 ## Section 3.4.3: access-denied errors
 

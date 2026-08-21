@@ -8,6 +8,8 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <utility>
+#include <vector>
 
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -15,6 +17,7 @@
 
 #include <gtest/gtest.h>
 #include <openssl/x509.h>
+#include <openssl/x509v3.h>
 
 #include "dangd/application.h"
 
@@ -22,12 +25,34 @@ namespace dangd {
 namespace {
 
 using Subject = std::unique_ptr<X509_NAME, decltype(&X509_NAME_free)>;
+using TestCertificate = std::unique_ptr<X509, decltype(&X509_free)>;
 
 void AddCommonName(X509_NAME* subject, const unsigned char* value,
                    int length = -1) {
   ASSERT_EQ(X509_NAME_add_entry_by_NID(subject, NID_commonName, MBSTRING_UTF8,
                                        value, length, -1, 0),
             1);
+}
+
+void AddSubjectAlternativeNames(
+    X509* certificate,
+    const std::vector<std::pair<int, std::string>>& values) {
+  GENERAL_NAMES* names = sk_GENERAL_NAME_new_null();
+  ASSERT_NE(names, nullptr);
+  for (const auto& [type, value] : values) {
+    GENERAL_NAME* name = GENERAL_NAME_new();
+    ASSERT_NE(name, nullptr);
+    ASN1_IA5STRING* text = ASN1_IA5STRING_new();
+    ASSERT_NE(text, nullptr);
+    ASSERT_EQ(ASN1_STRING_set(text, value.data(),
+                              static_cast<int>(value.size())),
+              1);
+    GENERAL_NAME_set0_value(name, type, text);
+    ASSERT_GT(sk_GENERAL_NAME_push(names, name), 0);
+  }
+  ASSERT_EQ(X509_add1_ext_i2d(certificate, NID_subject_alt_name, names, 0, 0),
+            1);
+  GENERAL_NAMES_free(names);
 }
 
 std::uint16_t AvailableLoopbackPort() {
@@ -151,6 +176,43 @@ TEST(DangdTlsTransportTest, MapsOnlyOneCanonicalCertificateCommonName) {
   ASSERT_TRUE(absent);
   EXPECT_FALSE(CertificateSubjectUsername(absent.get()));
   EXPECT_FALSE(CertificateSubjectUsername(nullptr));
+}
+
+TEST(DangdTlsTransportTest, SelectsExactlyOneConfiguredSanIdentity) {
+  TestCertificate certificate(X509_new(), X509_free);
+  ASSERT_TRUE(certificate);
+  Subject subject(X509_NAME_new(), X509_NAME_free);
+  ASSERT_TRUE(subject);
+  AddCommonName(subject.get(),
+                reinterpret_cast<const unsigned char*>("legacy-cn"));
+  ASSERT_EQ(X509_set_subject_name(certificate.get(), subject.get()), 1);
+  AddSubjectAlternativeNames(
+      certificate.get(),
+      {{GEN_DNS, "alice.example"}, {GEN_URI, "urn:example:user:alice"}});
+
+  EXPECT_EQ(CertificateUsername(certificate.get(),
+                                TlsUsernameSource::kCommonName),
+            "legacy-cn");
+  EXPECT_EQ(CertificateUsername(certificate.get(), TlsUsernameSource::kSanDns),
+            "alice.example");
+  EXPECT_EQ(CertificateUsername(certificate.get(), TlsUsernameSource::kSanUri),
+            "urn:example:user:alice");
+
+  TestCertificate ambiguous(X509_new(), X509_free);
+  ASSERT_TRUE(ambiguous);
+  AddSubjectAlternativeNames(
+      ambiguous.get(), {{GEN_DNS, "alice"}, {GEN_DNS, "administrator"}});
+  EXPECT_FALSE(CertificateUsername(ambiguous.get(),
+                                   TlsUsernameSource::kSanDns));
+  EXPECT_FALSE(CertificateUsername(ambiguous.get(),
+                                   TlsUsernameSource::kSanUri));
+
+  TestCertificate unsafe(X509_new(), X509_free);
+  ASSERT_TRUE(unsafe);
+  AddSubjectAlternativeNames(
+      unsafe.get(), {{GEN_URI, std::string("urn:alice\0root", 14)}});
+  EXPECT_FALSE(CertificateUsername(unsafe.get(), TlsUsernameSource::kSanUri));
+  EXPECT_FALSE(CertificateUsername(nullptr, TlsUsernameSource::kSanDns));
 }
 
 TEST(DangdTlsTransportTest, RejectsCertificateWithoutClientAuthenticationUse) {

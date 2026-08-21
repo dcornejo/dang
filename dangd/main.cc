@@ -16,7 +16,7 @@ void Usage() {
       << "usage: dangd --model FILE --config FILE [--search DIR] [--state FILE]"
          " [--nacm FILE] [--recovery-user USER]... [--plugin FILE]... [--check | --stdio --username USER [--session-id ID]"
          " | --tls-listen ADDRESS --tls-port PORT --tls-cert FILE --tls-key "
-         "FILE --tls-ca FILE]\n";
+         "FILE --tls-ca FILE [--tls-username-source cn|san-dns|san-uri]]\n";
 }
 
 }  // namespace
@@ -89,6 +89,18 @@ int main(int argc, char* argv[]) {
       tls.private_key = argv[++index];
     } else if (argument == "--tls-ca" && index + 1 < argc) {
       tls.trust_anchor = argv[++index];
+    } else if (argument == "--tls-username-source" && index + 1 < argc) {
+      const std::string source = argv[++index];
+      if (source == "cn") {
+        tls.username_source = dangd::TlsUsernameSource::kCommonName;
+      } else if (source == "san-dns") {
+        tls.username_source = dangd::TlsUsernameSource::kSanDns;
+      } else if (source == "san-uri") {
+        tls.username_source = dangd::TlsUsernameSource::kSanUri;
+      } else {
+        Usage();
+        return 2;
+      }
     } else if (argument == "--check") {
       stream_mode = false;
       tls_mode = false;
