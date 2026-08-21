@@ -27,15 +27,18 @@ high-level status and variance statement is in [COMPLIANCE.md](COMPLIANCE.md).
   `ConfigValidationTest.PropagatesNacmDefaultDenyAnnotations`, and
   `ConfigValidationTest.PreservesNacmAnnotationsFromYin`.
 - Model loading rejects malformed switches, operations, selectors, duplicate
-  names, and missing actions: `NacmTest.RejectsMalformedModelConfiguration`.
+  names, duplicate singleton leaves, foreign/config-false elements, invalid
+  group wildcards, duplicate group membership/selectors, and missing actions:
+  `NacmTest.RejectsMalformedModelConfiguration` and
+  `NacmTest.RejectsInvalidModelShapeAndLeafListValues`.
 - Managed bootstrap and datastore policy replacement:
   `DangdApplicationTest.UsesSecureNacmDefaultsWhenSubtreeIsAbsent`,
   `DangdApplicationTest.SeedsAndCommitsDatastoreManagedNacm`, and
   `DangdApplicationTest.LoadsNacmAndUsesAuthenticatedSessionIdentity`.
 
-Open evidence: add a dedicated vector for every `ietf-netconf-acm` leaf's
-default and range, every prohibited selector combination, duplicate membership,
-multiple matching rule-list groups, and concurrent policy replacement.
+Open evidence: add dedicated vectors for remaining lexical boundaries and XML
+attribute handling, every prohibited selector combination, multiple matching
+rule-list groups, and concurrent managed-policy replacement across sessions.
 
 ## Section 3.4.1: initial operation
 

@@ -188,6 +188,44 @@ TEST(NacmTest, RejectsMalformedModelConfiguration) {
   EXPECT_GE(loaded.errors.size(), 3U);
 }
 
+TEST(NacmTest, RejectsInvalidModelShapeAndLeafListValues) {
+  const std::vector<std::string> invalid = {
+      R"xml(<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+        <read-default>permit</read-default><read-default>deny</read-default>
+      </nacm>)xml",
+      R"xml(<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+        <denied-operations>0</denied-operations>
+      </nacm>)xml",
+      R"xml(<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+        <groups><group><name>*admins</name></group></groups>
+      </nacm>)xml",
+      R"xml(<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+        <groups><group><name>admins</name><user-name>alice</user-name>
+          <user-name>alice</user-name></group></groups>
+      </nacm>)xml",
+      R"xml(<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+        <rule-list><name>rules</name><group>admins</group><group>admins</group>
+        </rule-list>
+      </nacm>)xml",
+      R"xml(<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+        <rule-list><name>rules</name><group>*admins</group></rule-list>
+      </nacm>)xml",
+      R"xml(<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm"
+                  xmlns:foreign="urn:foreign">
+        <foreign:read-default>deny</foreign:read-default>
+      </nacm>)xml",
+      R"xml(<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+        <rule-list><name>rules</name><group>admins</group><rule>
+          <name>read</name><rpc-name>get</rpc-name><rpc-name>get-config</rpc-name>
+          <action>permit</action></rule></rule-list>
+      </nacm>)xml"};
+  for (const std::string& xml : invalid) {
+    const NacmLoadResult loaded = LoadNacmPolicy(xml);
+    EXPECT_FALSE(loaded.policy) << xml;
+    EXPECT_FALSE(loaded.errors.empty()) << xml;
+  }
+}
+
 TEST(NacmTest, CountsDeniedOperationsWritesAndNotifications) {
   NacmPolicy policy;
   policy.set_exec_default(AccessAction::kDeny);

@@ -6,11 +6,12 @@
 #include "yang/resource_limits.h"
 
 #include <functional>
+#include <initializer_list>
 #include <optional>
 #include <ranges>
 #include <sstream>
-#include <vector>
 #include <utility>
+#include <vector>
 
 #include <pugixml.hpp>
 
@@ -74,6 +75,27 @@ pugi::xml_node Child(const pugi::xml_node& parent, std::string_view name) {
       return child;
   }
   return {};
+}
+
+void ValidateChildren(
+    const pugi::xml_node& parent,
+    std::initializer_list<std::string_view> allowed,
+    std::initializer_list<std::string_view> repeatable,
+    std::vector<std::string>* errors) {
+  std::set<std::string> seen;
+  for (const pugi::xml_node child : parent.children()) {
+    if (child.type() != pugi::node_element) continue;
+    const std::string name(LocalName(child.name()));
+    if (NamespaceFor(child, SplitName(child.name()).first) != kNacmNamespace ||
+        std::ranges::find(allowed, name) == allowed.end()) {
+      errors->push_back("unexpected NACM element " + name);
+      continue;
+    }
+    if (std::ranges::find(repeatable, name) == repeatable.end() &&
+        !seen.insert(name).second) {
+      errors->push_back("duplicate NACM element " + name);
+    }
+  }
 }
 
 std::optional<AccessAction> ParseAction(std::string_view value) {
@@ -474,6 +496,11 @@ NacmLoadResult LoadNacmPolicy(std::string_view xml) {
     loaded.errors.push_back("expected the ietf-netconf-acm nacm container");
     return loaded;
   }
+  ValidateChildren(root,
+                   {"enable-nacm", "read-default", "write-default",
+                    "exec-default", "enable-external-groups", "groups",
+                    "rule-list"},
+                   {"rule-list"}, &loaded.errors);
   NacmPolicy policy;
   const auto load_boolean = [&](std::string_view name, bool default_value,
                                 auto setter) {
@@ -510,20 +537,27 @@ NacmLoadResult LoadNacmPolicy(std::string_view xml) {
                [&](AccessAction value) { policy.set_exec_default(value); });
 
   if (const pugi::xml_node groups = Child(root, "groups")) {
+    ValidateChildren(groups, {"group"}, {"group"}, &loaded.errors);
     std::set<std::string> names;
     for (const pugi::xml_node group : groups.children()) {
       if (group.type() != pugi::node_element ||
           LocalName(group.name()) != "group") continue;
+      ValidateChildren(group, {"name", "user-name"}, {"user-name"},
+                       &loaded.errors);
       const std::string name = Child(group, "name").text().as_string();
-      if (name.empty() || !names.insert(name).second) {
-        loaded.errors.push_back("NACM group names must be nonempty and unique");
+      if (name.empty() || name.front() == '*' || !names.insert(name).second) {
+        loaded.errors.push_back(
+            "NACM group names must be nonempty, unique, and not start with *");
         continue;
       }
+      std::set<std::string> users;
       for (const pugi::xml_node user : group.children()) {
-        if (LocalName(user.name()) == "user-name" &&
-            !std::string_view(user.text().as_string()).empty()) {
-          policy.AddUserToGroup(user.text().as_string(), name);
-        }
+        if (LocalName(user.name()) != "user-name") continue;
+        const std::string username = user.text().as_string();
+        if (username.empty() || !users.insert(username).second)
+          loaded.errors.push_back(
+              "NACM user-name values must be nonempty and unique within a group");
+        else policy.AddUserToGroup(username, name);
       }
     }
   }
@@ -532,14 +566,26 @@ NacmLoadResult LoadNacmPolicy(std::string_view xml) {
   for (const pugi::xml_node list : root.children()) {
     if (list.type() != pugi::node_element ||
         LocalName(list.name()) != "rule-list") continue;
+    ValidateChildren(list, {"name", "group", "rule"}, {"group", "rule"},
+                     &loaded.errors);
     const std::string list_name = Child(list, "name").text().as_string();
     if (list_name.empty() || !list_names.insert(list_name).second) {
       loaded.errors.push_back("NACM rule-list names must be nonempty and unique");
       continue;
     }
     std::vector<std::string> groups;
-    for (const pugi::xml_node child : list.children())
-      if (LocalName(child.name()) == "group") groups.emplace_back(child.text().as_string());
+    std::set<std::string> unique_groups;
+    for (const pugi::xml_node child : list.children()) {
+      if (LocalName(child.name()) != "group") continue;
+      const std::string group = child.text().as_string();
+      if (group.empty() || (group.front() == '*' && group != "*") ||
+          !unique_groups.insert(group).second) {
+        loaded.errors.push_back(
+            "NACM rule-list groups must be nonempty, unique, and use only * as a wildcard");
+      } else {
+        groups.push_back(group);
+      }
+    }
     if (groups.empty()) {
       loaded.errors.push_back("NACM rule-list requires at least one group");
       continue;
@@ -547,6 +593,11 @@ NacmLoadResult LoadNacmPolicy(std::string_view xml) {
     std::set<std::string> rule_names;
     for (const pugi::xml_node entry : list.children()) {
       if (LocalName(entry.name()) != "rule") continue;
+      ValidateChildren(entry,
+                       {"name", "module-name", "rpc-name",
+                        "notification-name", "path", "access-operations",
+                        "action", "comment"},
+                       {}, &loaded.errors);
       NacmRule rule;
       rule.name = Child(entry, "name").text().as_string();
       rule.groups = groups;

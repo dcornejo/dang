@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Hardened the standalone NACM loader to reject unknown, foreign, config-false,
+  and duplicate elements plus invalid or duplicate group and membership values.
 - Added a synchronized multi-stage RPC test proving RFC 8341 policy snapshot
   isolation while the live NACM policy is replaced.
 - Added namespace-correct RFC 8341 `error-path` values to NACM-denied standard
