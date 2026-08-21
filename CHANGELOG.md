@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Applied NACM read filtering to datastore `<copy-config>` sources, honored the
+  running-to-startup execute-only exception, and made complete copy sources
+  remove omitted top-level nodes from their target.
 - Hardened the standalone NACM loader to reject unknown, foreign, config-false,
   and duplicate elements plus invalid or duplicate group and membership values.
 - Preserved explicit empty NACM `bits` and selector values as no-access/no-match

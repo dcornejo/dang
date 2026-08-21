@@ -578,6 +578,24 @@ std::string FilterOperationOutput(
   return Serialize(document);
 }
 
+std::string FilterDatastoreCopySource(
+    const NacmPolicy& nacm, const RpcSessionContext& session,
+    const config::RuntimeSchema& schema,
+    const config::ConfigDocument& source) {
+  const std::string data = "<data xmlns=\"" + std::string(kNetconfNamespace) +
+      "\">" + source.ToXml(false) + "</data>";
+  const std::string filtered = nacm.FilterReadableData(
+      session.username, data, session.external_groups, &schema);
+  pugi::xml_document parsed;
+  if (!parsed.load_buffer(filtered.data(), filtered.size())) return {};
+  pugi::xml_document result;
+  pugi::xml_node config = result.append_child("config");
+  config.append_attribute("xmlns") = kNetconfNamespace.data();
+  for (const pugi::xml_node child : parsed.document_element().children())
+    if (child.type() == pugi::node_element) config.append_copy(child);
+  return Serialize(result);
+}
+
 TransactionResult ProtocolFailure(std::string message, std::string tag,
                                   std::string error_path,
                                   std::string error_path_namespace) {
@@ -1350,8 +1368,13 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
                                    "invalid-value");
         }
         std::string config_xml;
-        if (source) config_xml = datastores_.Read(*source).ToXml();
-        else if (inline_config) config_xml = SerializeConfig(inline_config);
+        if (source) {
+          config_xml = nacm == nullptr
+              ? datastores_.Read(*source).ToXml()
+              : FilterDatastoreCopySource(
+                    *nacm, session, datastores_.schema(),
+                    datastores_.Read(*source));
+        } else if (inline_config) config_xml = SerializeConfig(inline_config);
         else if (urls_ != nullptr &&
                  UrlAllowed(*urls_, source_url_node.text().as_string())) {
           UrlResult read = urls_->Read(source_url_node.text().as_string());
@@ -1382,8 +1405,29 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
         }
       }
     } else if (source) {
-      result = datastores_.CopyConfig(session.datastore_owner, *source, *target,
-                                      authorize_change);
+      if (*source == *target) {
+        result = ProtocolFailure(
+            "copy-config source and target must be different", "invalid-value");
+      } else if (*source == Datastore::kRunning &&
+                 *target == Datastore::kStartup) {
+        result = datastores_.CopyConfig(session.datastore_owner, *source,
+                                        *target);
+      } else {
+        const std::string source_xml = nacm == nullptr
+            ? datastores_.Read(*source).ToXml()
+            : FilterDatastoreCopySource(
+                  *nacm, session, datastores_.schema(),
+                  datastores_.Read(*source));
+        config::ConfigParseResult parsed_source = config::ParseDatastoreXml(
+            datastores_.schema(), source_xml);
+        if (!parsed_source.document) {
+          result = {false, std::move(parsed_source.findings), {}};
+        } else {
+          result = datastores_.CopyConfig(
+              session.datastore_owner, *parsed_source.document, *target,
+              authorize_change);
+        }
+      }
     } else {
       std::string source_xml;
       if (source_url_node) {
@@ -1418,17 +1462,14 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
             "inline copy-config source cannot contain edit attributes",
             "invalid-value");
       } else {
-        config::EditParseResult edit = config::ParseEditXml(
+        config::ConfigParseResult parsed_source = config::ParseDatastoreXml(
             datastores_.schema(), source_xml);
-        if (!edit.document) {
-          result = {false, std::move(edit.findings), {}};
+        if (!parsed_source.document) {
+          result = {false, std::move(parsed_source.findings), {}};
         } else {
-          EditConfigRequest request{
-              std::string(session.datastore_owner), *target,
-              {std::move(*edit.document)}, config::EditOperation::kReplace,
-              TestOption::kTestThenSet, ErrorOption::kRollbackOnError, {}};
-          request.authorize_change = authorize_change;
-          result = datastores_.EditConfig(request);
+          result = datastores_.CopyConfig(
+              session.datastore_owner, *parsed_source.document, *target,
+              authorize_change);
         }
       }
     }

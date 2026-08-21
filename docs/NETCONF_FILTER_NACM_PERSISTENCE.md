@@ -105,6 +105,11 @@ nodes can also be checked; inability to inspect it fails closed. Notification
 transport and delivery remain part of the separate RFC 5277 task, while the
 NACM notification authorization decision is available to that adapter.
 
+Datastore sources for `copy-config` are first filtered by NACM read access, and
+the resulting complete tree replaces the target. Running-to-startup copy is the
+RFC 8341 exception: it requires execute access to the operation but no per-node
+read or write permission.
+
 RFC 8341 does not require permission for changes that are side effects of
 validating an explicitly authorized edit. The editor therefore marks nodes
 removed only because another `choice` case became active or a `when` expression

@@ -474,6 +474,8 @@ TEST(NetconfServerTest, CopiesCompleteInlineConfigurationAtomically) {
   EXPECT_NE(copied.xml.find("<ok/>"), std::string::npos) << copied.xml;
   EXPECT_NE(stores.Read(Datastore::kCandidate).ToXml().find(">inline</"),
             std::string::npos);
+  EXPECT_EQ(stores.Read(Datastore::kCandidate).ToXml().find("device"),
+            std::string::npos);
 
   const RpcResponse invalid = server.Process("17", R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="invalid">
@@ -498,6 +500,50 @@ TEST(NetconfServerTest, RejectsCopyToSameDatastore) {
       </copy-config>
     </rpc>)xml");
   EXPECT_NE(response.xml.find("invalid-value"), std::string::npos);
+}
+
+TEST(NetconfServerTest, AppliesNacmCopyConfigSourceAndStartupSpecialCase) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NacmPolicy policy;
+  policy.set_read_default(AccessAction::kPermit);
+  policy.set_write_default(AccessAction::kPermit);
+  policy.AddUserToGroup("alice", "users");
+  policy.AddRule({"hide-device", "users", "",
+                  "/{urn:rpc-test}device",
+                  AccessMask(AccessOperation::kRead), AccessAction::kDeny});
+  EXPECT_FALSE(policy.AuthorizeData(
+      "alice", "rpc", AccessOperation::kRead,
+      "/{urn:rpc-test}device[{urn:rpc-test}name='edge-1']"));
+  const std::string directly_filtered = policy.FilterReadableData(
+      "alice",
+      "<data xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">" +
+          stores.Read(Datastore::kRunning).ToXml(false) + "</data>",
+      {}, &fixture->schema);
+  EXPECT_EQ(directly_filtered.find("device"), std::string::npos)
+      << directly_filtered;
+  NetconfServer server(stores, &policy);
+  const RpcResponse filtered = server.Process("alice", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="filtered">
+      <copy-config><target><candidate/></target><source><running/></source>
+      </copy-config>
+    </rpc>)xml");
+  EXPECT_NE(filtered.xml.find("<ok/>"), std::string::npos) << filtered.xml;
+  const std::string candidate = stores.Read(Datastore::kCandidate).ToXml();
+  EXPECT_EQ(candidate.find("device"), std::string::npos) << candidate;
+
+  policy.set_read_default(AccessAction::kDeny);
+  policy.set_write_default(AccessAction::kDeny);
+  const RpcResponse startup = server.Process("alice", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="startup">
+      <copy-config><target><startup/></target><source><running/></source>
+      </copy-config>
+    </rpc>)xml");
+  EXPECT_NE(startup.xml.find("<ok/>"), std::string::npos) << startup.xml;
+  EXPECT_EQ(stores.Read(Datastore::kStartup).ToXml(),
+            stores.Read(Datastore::kRunning).ToXml());
 }
 
 TEST(NetconfServerTest, UsesHostSuppliedUrlDatastores) {

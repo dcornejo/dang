@@ -7,6 +7,8 @@
 
 ### Added
 
+- Corrected `<copy-config>` NACM behavior for filtered datastore sources,
+  complete target replacement, and the running-to-startup special case.
 - Made managed NACM policy compilation fail closed on invalid model structure,
   foreign elements, and group or membership uniqueness violations.
 - Prevented empty managed NACM operation and selector values from becoming

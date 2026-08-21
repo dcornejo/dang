@@ -120,11 +120,16 @@ No open core-server evidence item remains for policy snapshot isolation.
   `NetconfDatastoreTest.AuthorizesExactCommitAndCopyChangesAtomically`,
   `NetconfDatastoreTest.DoesNotAuthorizeImplicitChoiceSideEffect`, and
   `NetconfDatastoreTest.DoesNotAuthorizeImplicitWhenSideEffect`.
+- Datastore-source `<copy-config>` silently omits read-denied nodes before exact
+  target replacement, while running-to-startup requires only operation execute
+  permission as specified by RFC 8341 Section 3.2.6:
+  `NetconfServerTest.AppliesNacmCopyConfigSourceAndStartupSpecialCase` and
+  `NetconfServerTest.CopiesCompleteInlineConfigurationAtomically`.
 - Denied write accounting: `NacmTest.CountsDeniedOperationsWritesAndNotifications`.
 
-Open evidence: a single protocol-level CRUDX suite covering every NETCONF and
-RFC 8526 operation-to-access mapping, ordered-by-user moves, defaults, leaf-list
-instances, confirmed-commit rollback, and all URL failure paths.
+Open evidence: complete the protocol-level CRUDX suite for remaining NETCONF
+and RFC 8526 mappings, ordered-by-user moves, defaults, leaf-list instances,
+confirmed-commit rollback, and all URL source/target authorization paths.
 
 ## Section 3.4.6: outgoing notification authorization
 

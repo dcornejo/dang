@@ -382,6 +382,37 @@ TransactionResult DatastoreManager::CopyConfig(std::string_view session,
   return {true, {}, std::move(changes)};
 }
 
+TransactionResult DatastoreManager::CopyConfig(
+    std::string_view session, const config::ConfigDocument& source,
+    Datastore target,
+    std::function<bool(const config::ChangeEvent&)> authorize_change) {
+  std::lock_guard lock(mutex_);
+  if (TransactionResult access = CheckWriteAccess(target, session); !access.ok)
+    return access;
+  TransactionResult validated = ValidateDocument(source);
+  if (!validated.ok) return validated;
+  std::vector<config::ChangeEvent> changes =
+      config::DiffConfigDocuments(schema_, Get(target), source);
+  if (authorize_change) {
+    const auto denied = std::ranges::find_if(
+        changes, [&](const config::ChangeEvent& change) {
+          return !authorize_change(change);
+        });
+    if (denied != changes.end()) {
+      return Failure(config::ValidationCode::kInvalidValue,
+                     "access to the proposed copy-config change is denied",
+                     "access-denied", denied->instance_path);
+    }
+  }
+  if (target == Datastore::kRunning) {
+    TransactionResult replaced = ReplaceRunning(source, changes);
+    if (!replaced.ok) return replaced;
+  } else {
+    Mutable(target) = source;
+  }
+  return {true, {}, std::move(changes)};
+}
+
 TransactionResult DatastoreManager::DeleteConfig(std::string_view session,
                                                  Datastore target) {
   std::lock_guard lock(mutex_);

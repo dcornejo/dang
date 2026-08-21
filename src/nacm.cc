@@ -686,7 +686,9 @@ std::string NacmPolicy::FilterReadableData(std::string_view user,
         }
         const config::RuntimeSchemaNode* metadata =
             child_schema ? &schema->Get(*child_schema) : nullptr;
-        if (!AuthorizeData(user, "", AccessOperation::kRead, path,
+        if (!AuthorizeData(user,
+                           metadata == nullptr ? "" : metadata->module_name,
+                           AccessOperation::kRead, path,
                            external_groups,
                            metadata != nullptr &&
                                metadata->nacm_default_deny_all,

@@ -55,6 +55,11 @@ create/update/delete checks used by edit transactions apply. Edit-control
 attributes are rejected in an inline source, and identical source and target
 datastores return `invalid-value`, as required by RFC 6241.
 
+For datastore sources, read-denied nodes are silently removed before the
+complete target replacement is validated and authorized. The RFC 8341
+running-to-startup special case bypasses per-node read and write checks; only
+permission to execute `copy-config` is required.
+
 URL datastores are enabled only when the host supplies a
 `UrlDatastoreProvider`. Its scheme allowlist is advertised in the `:url`
 capability, and unsupported schemes are rejected before invoking the provider.

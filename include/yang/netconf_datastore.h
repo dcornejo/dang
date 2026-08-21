@@ -135,6 +135,11 @@ class DatastoreManager {
                                              Datastore source,
                                              Datastore target,
       std::function<bool(const config::ChangeEvent&)> authorize_change = {});
+  /** Replaces a datastore with one complete, already parsed configuration. */
+  [[nodiscard]] TransactionResult CopyConfig(
+      std::string_view session, const config::ConfigDocument& source,
+      Datastore target,
+      std::function<bool(const config::ChangeEvent&)> authorize_change = {});
   [[nodiscard]] TransactionResult DeleteConfig(std::string_view session,
                                                Datastore target);
   /** Releases locks and cancels that session's non-persistent confirmed commit. */
