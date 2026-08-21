@@ -7,6 +7,8 @@
 
 ### Added
 
+- Verified that an in-flight RPC retains one NACM policy snapshot while a new
+  managed policy becomes effective for subsequent requests.
 - Added RFC 8341 operation-identifying `error-path` serialization for denied
   NETCONF and model-defined RPC execution.
 - Added an RFC 8341 section-indexed compliance matrix covering `dangd` policy

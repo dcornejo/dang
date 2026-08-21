@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added a synchronized multi-stage RPC test proving RFC 8341 policy snapshot
+  isolation while the live NACM policy is replaced.
 - Added namespace-correct RFC 8341 `error-path` values to NACM-denied standard
   and schema-defined RPC replies, without disclosing `error-info`.
 - Included the general and NACM compliance documents in installed project

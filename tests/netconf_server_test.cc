@@ -1,10 +1,13 @@
 // Copyright 2026 David Cornejo
 // SPDX-License-Identifier: Apache-2.0
 
+#include <condition_variable>
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <mutex>
 #include <optional>
+#include <thread>
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -58,6 +61,36 @@ class RecordingOperationProvider final : public OperationProvider {
   std::string called;
   std::string path;
   std::string input;
+};
+
+class BlockingOperationProvider final : public OperationProvider {
+ public:
+  OperationResult InvokeRpc(const RpcSessionContext&,
+      const config::RuntimeSchemaNode&, std::string_view) override {
+    std::unique_lock lock(mutex_);
+    entered_ = true;
+    changed_.notify_all();
+    changed_.wait(lock, [&] { return released_; });
+    return {{true, {}, {}},
+            R"xml(<result xmlns="urn:rpc-test">snapshot</result>)xml"};
+  }
+
+  void WaitUntilEntered() {
+    std::unique_lock lock(mutex_);
+    changed_.wait(lock, [&] { return entered_; });
+  }
+
+  void Release() {
+    std::lock_guard lock(mutex_);
+    released_ = true;
+    changed_.notify_all();
+  }
+
+ private:
+  std::mutex mutex_;
+  std::condition_variable changed_;
+  bool entered_ = false;
+  bool released_ = false;
 };
 
 struct ServerFixture {
@@ -153,6 +186,40 @@ TEST(NetconfServerTest, AuthorizesAndDispatchesSchemaRpc) {
     </rpc>)xml");
   EXPECT_NE(invalid.xml.find("invalid-value"), std::string::npos) << invalid.xml;
   EXPECT_TRUE(operations.called.empty());
+}
+
+TEST(NetconfServerTest, UsesOneNacmSnapshotForEntireRpcDuringPolicyReplacement) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NacmPolicy policy;
+  policy.set_exec_default(AccessAction::kPermit);
+  policy.set_read_default(AccessAction::kDeny);
+  BlockingOperationProvider operations;
+  NetconfServer server(stores, &policy, nullptr, nullptr, std::nullopt, nullptr,
+                       &operations);
+  const std::string request = R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="snapshot">
+      <ping xmlns="urn:rpc-test"><count>7</count></ping>
+    </rpc>)xml";
+
+  RpcResponse response;
+  std::thread request_thread(
+      [&] { response = server.Process("alice", request); });
+  operations.WaitUntilEntered();
+  NacmPolicy replacement;
+  replacement.set_exec_default(AccessAction::kDeny);
+  replacement.set_read_default(AccessAction::kPermit);
+  replacement.PreserveRuntimeStateFrom(policy);
+  policy = std::move(replacement);
+  operations.Release();
+  request_thread.join();
+
+  EXPECT_EQ(response.xml.find("<result"), std::string::npos) << response.xml;
+  const RpcResponse subsequent = server.Process("alice", request);
+  EXPECT_NE(subsequent.xml.find("access-denied"), std::string::npos)
+      << subsequent.xml;
 }
 
 TEST(NetconfServerTest, RequiresReadableAncestorsBeforeDispatchingAction) {

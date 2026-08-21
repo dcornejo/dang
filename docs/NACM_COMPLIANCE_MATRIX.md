@@ -91,10 +91,10 @@ data-write error, including information-disclosure review of data-node paths.
   `NetconfServerTest.RequiresReadableAncestorsBeforeDispatchingAction`, and
   `NetconfServerTest.RequiresActionParentInstanceAndCompleteListKeys`.
 - One immutable policy copy governs an RPC and its data operations; counters are
-  shared with the live policy. This is implemented by `NetconfServer::Process`.
+  shared with the live policy:
+  `NetconfServerTest.UsesOneNacmSnapshotForEntireRpcDuringPolicyReplacement`.
 
-Open evidence: a concurrent replacement test proving policy snapshot isolation
-through a deliberately blocked multi-stage RPC.
+No open core-server evidence item remains for policy snapshot isolation.
 
 ## Section 3.4.5: data-node access validation
 
