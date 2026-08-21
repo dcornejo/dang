@@ -21,6 +21,26 @@ namespace yang::netconf {
 enum class SecureTransport { kSsh, kTls };
 enum class WriteStatus { kAccepted, kWouldBlock, kClosed, kFailed };
 
+/** Exact mapping from a transport-authenticated identity to a local account. */
+struct UsernameMapping {
+  std::string authenticated;
+  std::string local;
+};
+
+/** Validates a complete exact mapping table before accepting connections. */
+[[nodiscard]] bool UsernameMappingsValid(
+    std::span<const UsernameMapping> mappings);
+
+/**
+ * Applies one unambiguous exact username mapping.
+ *
+ * Invalid/duplicate rules and required-but-unmapped identities fail closed.
+ */
+[[nodiscard]] std::optional<std::string> MapAuthenticatedUsername(
+    std::string_view authenticated,
+    std::span<const UsernameMapping> mappings,
+    bool require_mapping = false);
+
 /** Authenticated information supplied by an SSH or TLS implementation. */
 struct TransportIdentity {
   SecureTransport transport = SecureTransport::kSsh;

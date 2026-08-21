@@ -259,6 +259,10 @@ std::optional<std::string> CertificateUsername(
 
 int RunTlsServer(Application& application, const TlsServerOptions& options,
                  std::ostream& diagnostics) {
+  if (!yang::netconf::UsernameMappingsValid(options.username_mappings)) {
+    diagnostics << "dangd: TLS username mapping table is invalid\n";
+    return 1;
+  }
   Context context(SSL_CTX_new(TLS_server_method()), SSL_CTX_free);
   if (!context) {
     diagnostics << LastTlsError("cannot create TLS server context") << '\n';
@@ -303,7 +307,12 @@ int RunTlsServer(Application& application, const TlsServerOptions& options,
       close(connection);
       continue;
     }
-    const auto username = PeerUsername(tls.get(), options.username_source);
+    auto username = PeerUsername(tls.get(), options.username_source);
+    if (username) {
+      username = yang::netconf::MapAuthenticatedUsername(
+          *username, options.username_mappings,
+          options.require_username_mapping);
+    }
     if (!username) {
       diagnostics << "dangd: authenticated certificate has no unique safe "
                      "configured username field\n";
@@ -339,6 +348,10 @@ int RunReloadableTlsServer(
     std::unique_ptr<Application>& application,
     const ApplicationOptions& application_options,
     const TlsServerOptions& options, std::ostream& diagnostics) {
+  if (!yang::netconf::UsernameMappingsValid(options.username_mappings)) {
+    diagnostics << "dangd: TLS username mapping table is invalid\n";
+    return 1;
+  }
   Context context(SSL_CTX_new(TLS_server_method()), SSL_CTX_free);
   if (!context) return 1;
   SSL_CTX_set_min_proto_version(context.get(), TLS1_2_VERSION);
@@ -416,7 +429,12 @@ int RunReloadableTlsServer(
       close(connection);
       continue;
     }
-    const auto username = PeerUsername(tls.get(), options.username_source);
+    auto username = PeerUsername(tls.get(), options.username_source);
+    if (username) {
+      username = yang::netconf::MapAuthenticatedUsername(
+          *username, options.username_mappings,
+          options.require_username_mapping);
+    }
     if (!username) {
       diagnostics << "dangd: authenticated certificate has no unique safe "
                      "configured username field\n";

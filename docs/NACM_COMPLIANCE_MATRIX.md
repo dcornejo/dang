@@ -86,6 +86,10 @@ No open core-server evidence item remains for initial operation.
   username source. SAN selection requires exactly one safe value of the chosen
   type and ignores other SAN types:
   `DangdTlsTransportTest.SelectsExactlyOneConfiguredSanIdentity`.
+- A transport-neutral exact mapper converts authenticated identities to local
+  NACM usernames. Invalid or duplicate rules fail closed, and deployments may
+  reject every unmapped identity. `dangd` applies it after verified TLS field
+  extraction: `NetconfTransportTest.MapsAuthenticatedUsernamesExactlyAndFailClosed`.
 - Transport-supplied external groups are accepted only with an explicit trusted
   authentication-provenance assertion. Empty, oversized, control-containing,
   and duplicate group values are rejected, and simultaneous sessions retain
@@ -98,9 +102,8 @@ No open core-server evidence item remains for initial operation.
   `NetconfServerTest.AuditsEveryRecoveryUserRpcAttempt` and
   `DangdApplicationTest.EmitsSafeRecoveryAuditRecords`.
 
-Open evidence: configurable SSH identity mapping and deployment-specific
-certificate-value transformation. This remains host/deployment work in
-`TODO.md`.
+Open evidence: a production SSH host integration using the shared authenticated
+username mapper. This remains host/deployment work in `TODO.md`.
 
 ## Section 3.4.3: access-denied errors
 

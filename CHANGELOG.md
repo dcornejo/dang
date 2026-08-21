@@ -26,6 +26,8 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added a transport-neutral exact authenticated-username mapper with optional
+  required-match behavior and fail-closed rule validation.
 - Extended protocol fuzzing from NACM XML loading through attacker-controlled
   instance-path CRUD authorization and read filtering, with keyed and leaf-list
   predicate seeds.

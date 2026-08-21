@@ -23,6 +23,8 @@
 
 ### Added
 
+- Added repeatable `--username-map AUTHENTICATED=LOCAL` rules and
+  `--require-username-map` for fail-closed TLS-to-NACM account mapping.
 - Extended NACM sanitizer smoke coverage through instance-path authorization
   and filtering, including keyed and leaf-list predicate corpus seeds.
 - Added `--tls-username-source` with exact CN, DNS SAN, and URI SAN identity

@@ -16,7 +16,8 @@ void Usage() {
       << "usage: dangd --model FILE --config FILE [--search DIR] [--state FILE]"
          " [--nacm FILE] [--recovery-user USER]... [--plugin FILE]... [--check | --stdio --username USER [--session-id ID]"
          " | --tls-listen ADDRESS --tls-port PORT --tls-cert FILE --tls-key "
-         "FILE --tls-ca FILE [--tls-username-source cn|san-dns|san-uri]]\n";
+         "FILE --tls-ca FILE [--tls-username-source cn|san-dns|san-uri]"
+         " [--username-map AUTHENTICATED=LOCAL]... [--require-username-map]]\n";
 }
 
 }  // namespace
@@ -101,6 +102,17 @@ int main(int argc, char* argv[]) {
         Usage();
         return 2;
       }
+    } else if (argument == "--username-map" && index + 1 < argc) {
+      const std::string mapping = argv[++index];
+      const std::size_t separator = mapping.find('=');
+      if (separator == std::string::npos) {
+        Usage();
+        return 2;
+      }
+      tls.username_mappings.push_back(
+          {mapping.substr(0, separator), mapping.substr(separator + 1)});
+    } else if (argument == "--require-username-map") {
+      tls.require_username_mapping = true;
     } else if (argument == "--check") {
       stream_mode = false;
       tls_mode = false;

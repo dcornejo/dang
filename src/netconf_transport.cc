@@ -3,6 +3,7 @@
 
 #include "yang/netconf_transport.h"
 
+#include <cctype>
 #include <ranges>
 #include <set>
 #include <utility>
@@ -16,7 +17,39 @@ bool ValidXmlText(std::string_view value) {
            character >= 0x20;
   });
 }
+bool ValidMappedIdentity(std::string_view value) {
+  return value.size() <= 255 && ValidXmlText(value) &&
+      !std::isspace(static_cast<unsigned char>(value.front())) &&
+      !std::isspace(static_cast<unsigned char>(value.back())) &&
+      std::ranges::none_of(value, [](unsigned char character) {
+        return character < 0x20 || character == 0x7f;
+      });
+}
 }  // namespace
+
+bool UsernameMappingsValid(std::span<const UsernameMapping> mappings) {
+  std::set<std::string_view> sources;
+  for (const UsernameMapping& mapping : mappings) {
+    if (!ValidMappedIdentity(mapping.authenticated) ||
+        !ValidMappedIdentity(mapping.local) ||
+        !sources.insert(mapping.authenticated).second) {
+      return false;
+    }
+  }
+  return true;
+}
+
+std::optional<std::string> MapAuthenticatedUsername(
+    std::string_view authenticated, std::span<const UsernameMapping> mappings,
+    bool require_mapping) {
+  if (!ValidMappedIdentity(authenticated) || !UsernameMappingsValid(mappings))
+    return std::nullopt;
+  const auto found = std::ranges::find(
+      mappings, authenticated, &UsernameMapping::authenticated);
+  if (found != mappings.end()) return found->local;
+  if (require_mapping) return std::nullopt;
+  return std::string(authenticated);
+}
 
 NetconfTransportAdapter::NetconfTransportAdapter(
     NetconfServer& server, SecureByteStream& stream, std::uint32_t session_id,

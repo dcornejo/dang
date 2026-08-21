@@ -125,6 +125,9 @@ NACM. `--tls-username-source san-dns` or `san-uri` instead selects a DNS or URI
 subjectAltName. The selected field must contain exactly one nonempty value of
 at most 255 bytes; surrounding whitespace, controls, embedded NUL, duplicates,
 and missing values are rejected rather than normalized.
+Repeat `--username-map AUTHENTICATED=LOCAL` to translate selected certificate
+values to local NACM accounts. Add `--require-username-map` to reject any
+verified identity without an exact mapping.
 The example certificate for `alice` therefore selects the `alice` rules in
 `examples/nacm.xml`.
 
@@ -170,10 +173,10 @@ easy to see. End the session with `<close-session/>` or EOF.
 The listener requires TLS 1.2 or newer, a trusted client certificate, and one
 safe value in the configured username field. The client requires a trusted
 server chain and verifies `--host` against the server certificate. Field
-selection is configurable, but deployment-specific value transformation remains
-host policy. The listener handles connections synchronously and is intended for
+selection and exact local-account transformation are configurable. The listener
+handles connections synchronously and is intended for
 local integration and tests; production work still needs an event-loop TLS
-service, revocation policy, deployment-specific identity mapping,
+service, revocation policy, production identity lifecycle management,
 operational monitoring, and protected deployment credentials.
 
 ## Managed NACM and plugins

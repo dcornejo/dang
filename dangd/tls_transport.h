@@ -11,8 +11,11 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <openssl/types.h>
+
+#include "yang/netconf_transport.h"
 
 namespace dangd {
 
@@ -30,6 +33,8 @@ struct TlsServerOptions {
   std::filesystem::path private_key;
   std::filesystem::path trust_anchor;
   TlsUsernameSource username_source = TlsUsernameSource::kCommonName;
+  std::vector<yang::netconf::UsernameMapping> username_mappings;
+  bool require_username_mapping = false;
   /** Zero serves until interrupted; nonzero is useful for deterministic tests. */
   std::size_t maximum_connections = 0;
 };

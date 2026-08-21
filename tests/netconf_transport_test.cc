@@ -58,6 +58,27 @@ TransportIdentity SshIdentity(std::string username = "alice") {
           "netconf", true, true};
 }
 
+TEST(NetconfTransportTest, MapsAuthenticatedUsernamesExactlyAndFailClosed) {
+  const std::vector<UsernameMapping> mappings = {
+      {"urn:example:user:alice", "alice"},
+      {"device-admin.example", "administrator"}};
+  EXPECT_EQ(MapAuthenticatedUsername("urn:example:user:alice", mappings, true),
+            "alice");
+  EXPECT_EQ(MapAuthenticatedUsername("unmapped", mappings, false), "unmapped");
+  EXPECT_FALSE(MapAuthenticatedUsername("unmapped", mappings, true));
+
+  const std::vector<UsernameMapping> duplicate = {
+      {"alice", "first"}, {"alice", "second"}};
+  EXPECT_FALSE(UsernameMappingsValid(duplicate));
+  EXPECT_FALSE(MapAuthenticatedUsername("alice", duplicate));
+  const std::vector<UsernameMapping> unsafe = {
+      {"alice", std::string("admin\0root", 10)}};
+  EXPECT_FALSE(MapAuthenticatedUsername("alice", unsafe));
+  EXPECT_FALSE(MapAuthenticatedUsername(std::string("bad\x01user", 8), {}));
+  EXPECT_FALSE(MapAuthenticatedUsername(" alice", mappings));
+  EXPECT_FALSE(MapAuthenticatedUsername("line\nuser", mappings));
+}
+
 TEST(NetconfTransportTest, AcceptsAuthenticatedSshAndTlsSessions) {
   VectorDiagnosticSink diagnostics;
   auto fixture = BuildFixture(&diagnostics);

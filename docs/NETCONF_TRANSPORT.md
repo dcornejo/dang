@@ -58,6 +58,13 @@ used verbatim as the NETCONF/NACM username. The default is `cn`. The chosen
 field must contain exactly one safe value; ambiguity or absence fails closed.
 Values of other SAN types do not participate in the selected mapping.
 
+`--username-map AUTHENTICATED=LOCAL` applies an exact mapping after certificate
+field selection. Repeat it for several identities. Without
+`--require-username-map`, an identity with no rule is used unchanged; with that
+flag it is rejected. Duplicate authenticated names, empty/unsafe values, and
+oversized names invalidate the complete map. Embedding SSH implementations can
+use the same `MapAuthenticatedUsername` function after SSH authentication.
+
 Nonempty `external_groups` are rejected unless `external_groups_trusted` is
 true. Set it only when every group came from the authenticated transport
 identity or another equally trusted authorization source—not from NETCONF
