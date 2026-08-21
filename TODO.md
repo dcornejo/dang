@@ -36,6 +36,8 @@ stays in this file with its remaining work rewritten precisely.
   required namespace-bound error-path.
   Replay authorization and live multi-session notification fanout each retain
   one policy snapshot during concurrent managed-policy replacement.
+  Schema-aware notification publication rejects mismatches between the claimed
+  identity, modeled XML event root, and associated instance path.
   With persistence configured, first boot saves the validated datastore and
   seeded NACM before startup succeeds; interruption at every atomic-save stage
   restarts with either a safe reseed or the complete saved policy.

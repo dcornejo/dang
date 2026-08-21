@@ -232,6 +232,11 @@ integration responsibilities.
   `NacmTest.AppliesRfc8341DataAssociatedNotificationDecisionSequence`,
   `NetconfNotificationsTest.DerivesAssociatedNotificationAncestorsFromSchema`,
   and `NetconfNotificationsTest.AppliesNacmBeforeQueueing`.
+- Schema-aware publication binds the claimed module and notification name to
+  both the modeled XML event root and any associated instance path before NACM
+  authorization or queueing:
+  `NetconfNotificationsTest.BindsTopLevelPublicationToModeledIdentity` and
+  `NetconfNotificationsTest.DerivesAssociatedNotificationAncestorsFromSchema`.
 - Each replay subscription and live multi-session fanout uses one immutable
   policy snapshot. Concurrent replacement therefore cannot split one operation
   across policy generations:

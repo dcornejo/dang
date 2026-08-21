@@ -272,7 +272,39 @@ TEST(NetconfNotificationsTest, DerivesAssociatedNotificationAncestorsFromSchema)
       std::chrono::system_clock::now(), false,
       "/{urn:events}interfaces/{urn:events}interface/"
       "{urn:events}link-change"));
+  EXPECT_FALSE(manager.Publish(
+      "NETCONF", "events", "link-change",
+      "<different-event xmlns=\"urn:events\"/>",
+      std::chrono::system_clock::now(), false,
+      "/{urn:events}interfaces/{urn:events}interface"
+      "[{urn:events}name='eth0']/{urn:events}link-change"));
   EXPECT_TRUE(manager.Drain(5).empty());
+}
+
+TEST(NetconfNotificationsTest, BindsTopLevelPublicationToModeledIdentity) {
+  VectorDiagnosticSink diagnostics;
+  auto source = SourceFile::Create("events.yang", R"yang(module events {
+    yang-version 1.1; namespace "urn:events"; prefix e;
+    notification alarm;
+  })yang", diagnostics);
+  ASSERT_TRUE(source);
+  InMemoryModuleRepository repository;
+  Compiler compiler(repository, diagnostics);
+  auto compilation = compiler.Compile(source);
+  ASSERT_TRUE(compilation);
+  const config::RuntimeSchema schema =
+      config::RuntimeSchemaBuilder::FromCompilation(*compilation);
+  NotificationManager manager(nullptr, 1024, 16 * 1024 * 1024, &schema);
+  ASSERT_TRUE(manager.AddStream({}));
+
+  EXPECT_TRUE(manager.Publish("NETCONF", "events", "alarm",
+                              "<alarm xmlns=\"urn:events\"/>"));
+  EXPECT_FALSE(manager.Publish("NETCONF", "events", "different",
+                               "<alarm xmlns=\"urn:events\"/>"));
+  EXPECT_FALSE(manager.Publish("NETCONF", "other", "alarm",
+                               "<alarm xmlns=\"urn:events\"/>"));
+  EXPECT_FALSE(manager.Publish("NETCONF", "events", "alarm",
+                               "<alarm xmlns=\"urn:other\"/>"));
 }
 }  // namespace
 }  // namespace yang::netconf

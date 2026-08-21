@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Bound schema-aware notification publication to the exact modeled XML event
+  identity before NACM authorization, replay storage, or subscriber delivery.
 - Made schema-aware NACM read filtering omit unmodeled XML elements instead of
   exposing them through the default read policy without module annotations.
 - Rejected unsafe or duplicate host recovery identities before granting NACM

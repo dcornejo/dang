@@ -7,6 +7,8 @@
 
 ### Fixed
 
+- Rejected plugin/host notifications whose claimed module and name do not match
+  the modeled XML event root or associated instance path.
 - Omitted unmodeled datastore elements at the schema-aware NACM read boundary
   instead of applying an annotation-free default read decision.
 - Made startup fail when recovery-user configuration contains an unsafe,

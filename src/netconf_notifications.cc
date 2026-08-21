@@ -299,7 +299,11 @@ bool NotificationManager::Publish(std::string_view stream_name,
     const config::RuntimeSchemaNode& event_schema = schema_->Get(resolved.back());
     if (event_schema.kind != semantic::SchemaNodeKind::kNotification ||
         event_schema.module_name != module_name ||
-        event_schema.name.local_name != notification_name) return false;
+        event_schema.name.local_name != notification_name ||
+        event_schema.name.namespace_uri !=
+            NamespaceFor(content.document_element()) ||
+        event_schema.name.local_name !=
+            LocalName(content.document_element().name())) return false;
     default_deny_all = default_deny_all || event_schema.nacm_default_deny_all;
     std::vector<InstanceSelector> selectors;
     std::size_t path_end = 0;
@@ -337,9 +341,12 @@ bool NotificationManager::Publish(std::string_view stream_name,
     const auto metadata = schema_->FindTopLevelOperation(
         {NamespaceFor(root), std::string(LocalName(root.name()))},
         semantic::SchemaNodeKind::kNotification);
-    if (metadata)
-      default_deny_all = default_deny_all ||
-          schema_->Get(*metadata).nacm_default_deny_all;
+    if (!metadata) return false;
+    const config::RuntimeSchemaNode& event_schema = schema_->Get(*metadata);
+    if (event_schema.module_name != module_name ||
+        event_schema.name.local_name != notification_name) return false;
+    default_deny_all = default_deny_all ||
+        event_schema.nacm_default_deny_all;
   }
   const std::string xml = Wrap(content_xml, event_time);
   const std::optional<NacmPolicy> policy_snapshot =

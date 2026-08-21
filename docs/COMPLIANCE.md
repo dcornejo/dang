@@ -193,7 +193,9 @@ evaluation is deliberately excluded from separate write authorization as RFC
 
 Actions and data-associated notifications bind complete keyed ancestor paths to
 the current operational view. Notification authorization consequently applies
-to the concrete publishing instance before replay or live delivery. Action
+to the concrete publishing instance before replay or live delivery. The host's
+claimed notification identity must also match the modeled XML event root and,
+for associated events, the notification at the end of the instance path. Action
 requests are authorized before their parent is resolved, so denied users cannot
 use the existence error to probe datastore contents.
 
