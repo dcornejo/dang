@@ -76,7 +76,9 @@ bool HasElementChild(const pugi::xml_node& node) {
   });
 }
 
-std::string PredicateLiteral(std::string_view value) {
+std::optional<std::string> PredicateLiteral(std::string_view value) {
+  if (value.find('\'') != std::string_view::npos &&
+      value.find('"') != std::string_view::npos) return std::nullopt;
   const char quote = value.find('\'') == std::string_view::npos ? '\'' : '"';
   return std::string(1, quote) + std::string(value) + quote;
 }
@@ -88,7 +90,9 @@ std::optional<std::string> InstancePathComponent(
   std::string result = PathComponent(node);
   if (metadata != nullptr &&
       metadata->kind == semantic::SchemaNodeKind::kLeafList) {
-    result += "[.=" + PredicateLiteral(node.text().as_string()) + "]";
+    const auto literal = PredicateLiteral(node.text().as_string());
+    if (!literal) return std::nullopt;
+    result += "[.=" + *literal + "]";
     return result;
   }
   if (metadata != nullptr && schema != nullptr &&
@@ -105,17 +109,24 @@ std::optional<std::string> InstancePathComponent(
         key_node = child;
       }
       if (!key_node || HasElementChild(*key_node)) return std::nullopt;
+      const auto literal = PredicateLiteral(key_node->text().as_string());
+      if (!literal) return std::nullopt;
       result += "[{" + key_name.namespace_uri + "}" + key_name.local_name +
-          "=" + PredicateLiteral(key_node->text().as_string()) + "]";
+          "=" + *literal + "]";
     }
     return result;
   }
+  // Modeled containers and scalar nodes have no instance predicates. The
+  // generic schema-less API retains its historical best-effort child keys.
+  if (metadata != nullptr) return result;
   for (const pugi::xml_node child : node.children()) {
     if (child.type() != pugi::node_element || HasElementChild(child)) continue;
     const auto [prefix, local] = SplitName(child.name());
     const std::string value = child.text().as_string();
+    const auto literal = PredicateLiteral(value);
+    if (!literal) return std::nullopt;
     result += "[{" + NamespaceFor(child, prefix) + "}" +
-              std::string(local) + "=" + PredicateLiteral(value) + "]";
+              std::string(local) + "=" + *literal + "]";
   }
   return result;
 }

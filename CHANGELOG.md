@@ -10,6 +10,10 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Removed schema-aware list and leaf-list instances whose identity contains
+  both XPath quote forms and therefore cannot be represented without forbidden
+  functions in an NACM node-instance identifier, without treating ordinary
+  container children as predicates.
 - Built schema-aware NACM list paths from declared keys in model order and
   removed entries with missing or duplicate keys before authorization.
 - Kept an explicitly supplied runtime schema active during recovery-user and

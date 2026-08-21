@@ -193,7 +193,10 @@ No open core-server evidence item remains for policy snapshot isolation.
 - Leaf-list values use RFC 7950 self predicates in their instance paths, so
   rules can independently filter reads and authorize creation or deletion of a
   particular value. Apostrophes select a double-quoted predicate literal:
-  `NetconfServerTest.AuthorizesSpecificLeafListInstances`.
+  `NetconfServerTest.AuthorizesSpecificLeafListInstances`. Values containing
+  both quote forms fail closed because NACM paths prohibit the function needed
+  to concatenate an XPath 1.0 literal. Ordinary containers never acquire
+  predicates from their scalar children.
 - Virtual schema defaults do not create datastore write events or phantom NACM
   checks. Explicitly storing a default-valued node requires `create`, and
   removing that explicit node requires `delete`, even though the effective

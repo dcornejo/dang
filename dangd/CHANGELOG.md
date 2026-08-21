@@ -7,6 +7,9 @@
 
 ### Fixed
 
+- Failed closed when list keys or leaf-list values contain both XPath quote
+  forms and cannot be represented in an RFC 8341 instance path, while keeping
+  container paths free of child-value predicates.
 - Rejected missing or ambiguous list identities during schema-aware NACM reads
   and used only declared keys when matching instance-specific rules.
 - Kept schema-aware pruning active for recovery and disabled-NACM reads so

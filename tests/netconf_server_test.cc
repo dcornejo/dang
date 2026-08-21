@@ -749,6 +749,7 @@ TEST(NetconfServerTest, OmitsUnmodeledSchemaAwareNacmReadData) {
       </system>
       <device xmlns="urn:rpc-test"><name>edge-ok</name></device>
       <device xmlns="urn:rpc-test"><name>one</name><name>two</name></device>
+      <device xmlns="urn:rpc-test"><name>both'&quot;quotes</name></device>
       <device xmlns="urn:rpc-test"/>
       <foreign xmlns="urn:unknown">secret</foreign>
     </data>)xml";
@@ -761,6 +762,7 @@ TEST(NetconfServerTest, OmitsUnmodeledSchemaAwareNacmReadData) {
   EXPECT_NE(filtered.find("<name>edge-ok</name>"), std::string::npos);
   EXPECT_EQ(filtered.find("<name>one</name>"), std::string::npos);
   EXPECT_EQ(filtered.find("<name>two</name>"), std::string::npos);
+  EXPECT_EQ(filtered.find("both'\"quotes"), std::string::npos);
   const std::size_t first_device = filtered.find("<device");
   ASSERT_NE(first_device, std::string::npos);
   EXPECT_EQ(filtered.find("<device", first_device + 1), std::string::npos);
@@ -1116,6 +1118,7 @@ TEST(NetconfServerTest, AuthorizesSpecificLeafListInstances) {
     <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
       <preferences xmlns="urn:leaf-list-test">
         <color>red</color><color>black</color><color>user's choice</color>
+        <color>user's &quot;choice</color>
       </preferences>
     </config>)xml").document;
   ASSERT_TRUE(initial);
@@ -1143,6 +1146,8 @@ TEST(NetconfServerTest, AuthorizesSpecificLeafListInstances) {
     </rpc>)xml");
   EXPECT_EQ(filtered.xml.find(">red</"), std::string::npos) << filtered.xml;
   EXPECT_EQ(filtered.xml.find("user's choice"), std::string::npos)
+      << filtered.xml;
+  EXPECT_EQ(filtered.xml.find("user's \"choice"), std::string::npos)
       << filtered.xml;
   EXPECT_NE(filtered.xml.find(">black</"), std::string::npos) << filtered.xml;
 
