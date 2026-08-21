@@ -644,6 +644,70 @@ TEST(NetconfServerTest, EnforcesNacmBeforePublishingWrites) {
             std::string::npos) << keyed.xml;
 }
 
+TEST(NetconfServerTest, MapsEffectiveEditConfigChangesToCrudBits) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NacmPolicy policy;
+  policy.set_write_default(AccessAction::kDeny);
+  for (const std::string& user : {"creator", "updater", "deleter"})
+    policy.AddUserToGroup(user, user);
+  policy.AddRule({"create-device", "creator", "",
+                  "/{urn:rpc-test}device",
+                  AccessMask(AccessOperation::kCreate), AccessAction::kPermit});
+  policy.AddRule({"update-hostname", "updater", "",
+                  "/{urn:rpc-test}system/{urn:rpc-test}hostname",
+                  AccessMask(AccessOperation::kUpdate), AccessAction::kPermit});
+  policy.AddRule({"delete-device", "deleter", "",
+                  "/{urn:rpc-test}device",
+                  AccessMask(AccessOperation::kDelete), AccessAction::kPermit});
+  NetconfServer server(stores, &policy);
+
+  const RpcResponse created = server.Process("creator", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="create">
+      <edit-config><target><candidate/></target><config>
+        <device xmlns="urn:rpc-test"><name>edge-2</name></device>
+      </config></edit-config>
+    </rpc>)xml");
+  EXPECT_NE(created.xml.find("<ok/>"), std::string::npos) << created.xml;
+  EXPECT_NE(stores.Read(Datastore::kCandidate).ToXml().find("edge-2"),
+            std::string::npos);
+
+  const RpcResponse updated = server.Process("updater", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="update">
+      <edit-config><target><candidate/></target><config>
+        <system xmlns="urn:rpc-test"><hostname>new</hostname></system>
+      </config></edit-config>
+    </rpc>)xml");
+  EXPECT_NE(updated.xml.find("<ok/>"), std::string::npos) << updated.xml;
+  EXPECT_NE(stores.Read(Datastore::kCandidate).ToXml().find(">new</"),
+            std::string::npos);
+
+  const RpcResponse deleted = server.Process("deleter", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="delete">
+      <edit-config><target><candidate/></target><config>
+        <device xmlns="urn:rpc-test"
+          xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0"
+          nc:operation="delete"><name>edge-1</name></device>
+      </config></edit-config>
+    </rpc>)xml");
+  EXPECT_NE(deleted.xml.find("<ok/>"), std::string::npos) << deleted.xml;
+  EXPECT_EQ(stores.Read(Datastore::kCandidate).ToXml().find("edge-1"),
+            std::string::npos);
+
+  const std::string before = stores.Read(Datastore::kCandidate).ToXml();
+  const RpcResponse wrong_bit = server.Process("updater", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="wrong-bit">
+      <edit-config><target><candidate/></target><config>
+        <device xmlns="urn:rpc-test"><name>edge-3</name></device>
+      </config></edit-config>
+    </rpc>)xml");
+  EXPECT_NE(wrong_bit.xml.find("access-denied"), std::string::npos)
+      << wrong_bit.xml;
+  EXPECT_EQ(stores.Read(Datastore::kCandidate).ToXml(), before);
+}
+
 TEST(NetconfServerTest, NacmRpcDenialIdentifiesNetconfOperation) {
   VectorDiagnosticSink diagnostics;
   auto fixture = BuildServerFixture(&diagnostics);

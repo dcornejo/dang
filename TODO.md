@@ -26,7 +26,9 @@ stays in this file with its remaining work rewritten precisely.
   Datastore-source copy filtering and the running-to-startup execute-only
   exception are also covered. URL/datastore copy combinations are covered;
   independent provider authorization remains host policy. Data-write denial
-  paths now use namespace-correct XPath, including keyed instances.
+  paths now use namespace-correct XPath, including keyed instances. Effective
+  `<edit-config>` create/update/delete mapping is covered; ordered moves,
+  defaults, leaf-lists, confirmed rollback, and remaining NMDA mappings remain.
 - Make managed NACM policy replacement and durable datastore persistence one
   recoverable transaction, retaining or restoring the last known-good policy
   and running configuration when snapshot persistence fails. Schema validation,

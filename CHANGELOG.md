@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added protocol-level NACM CRUD evidence for effective keyed creation,
+  scalar update, keyed deletion, wrong-bit denial, and atomic preservation.
 - Added protocol evidence that URL `<copy-config>` combinations read-filter
   datastore sources and atomically authorize datastore targets.
 - Serialized expanded-name validation and NACM data-write `error-path` values as

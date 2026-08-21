@@ -7,6 +7,8 @@
 
 ### Added
 
+- Verified end-to-end NACM create/update/delete selection for effective
+  `<edit-config>` changes and atomic wrong-bit denial.
 - Verified NACM filtering and atomic denial for datastore-to-URL and
   URL-to-datastore copy operations.
 - Returned namespace-correct XPath for configuration and NACM data errors

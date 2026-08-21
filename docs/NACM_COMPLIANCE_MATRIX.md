@@ -117,7 +117,10 @@ No open core-server evidence item remains for policy snapshot isolation.
   `NacmTest.MatchesKeyedPathsAndTreatsMissingKeysAsWildcards` and
   `NacmTest.DoesNotUseTextualPathPrefixes`.
 - Read/create/update/delete bit selection and first-match ordering:
-  `NacmTest.AppliesWildcardGroupsModulesNamesAndCrudxBitsInOrder`.
+  `NacmTest.AppliesWildcardGroupsModulesNamesAndCrudxBitsInOrder` and
+  `NetconfServerTest.MapsEffectiveEditConfigChangesToCrudBits`. The latter
+  verifies keyed create/delete, scalar update, wrong-bit denial, and unchanged
+  target state after denial through the NETCONF protocol.
 - Exact edits, candidate commit, inline/URL replacement, and copy operations are
   authorized atomically before publication. Implicit `choice` and `when`
   removals do not demand separate permission:
