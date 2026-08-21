@@ -55,7 +55,7 @@ std::optional<Fixture> BuildFixture(VectorDiagnosticSink* diagnostics) {
 
 TransportIdentity SshIdentity(std::string username = "alice") {
   return {SecureTransport::kSsh, std::move(username), {"operators"},
-          "netconf", true};
+          "netconf", true, true};
 }
 
 TEST(NetconfTransportTest, AcceptsAuthenticatedSshAndTlsSessions) {
@@ -102,6 +102,80 @@ TEST(NetconfTransportTest, RejectsUnauthenticatedInvalidSubsystemAndUsername) {
   NetconfTransportAdapter invalid_username(
       server, username_stream, 205, SshIdentity(std::string("a\x01b", 3)));
   EXPECT_FALSE(invalid_username.valid());
+}
+
+TEST(NetconfTransportTest, RequiresTrustedCanonicalExternalGroups) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NetconfServer server(stores);
+
+  TransportIdentity untrusted = SshIdentity();
+  untrusted.external_groups_trusted = false;
+  MemoryStream untrusted_stream;
+  NetconfTransportAdapter untrusted_adapter(
+      server, untrusted_stream, 212, std::move(untrusted));
+  ASSERT_FALSE(untrusted_adapter.valid());
+  ASSERT_TRUE(untrusted_adapter.error());
+  EXPECT_NE(untrusted_adapter.error()->find("provenance"),
+            std::string_view::npos);
+
+  TransportIdentity duplicate = SshIdentity();
+  duplicate.external_groups.push_back("operators");
+  MemoryStream duplicate_stream;
+  NetconfTransportAdapter duplicate_adapter(
+      server, duplicate_stream, 213, std::move(duplicate));
+  EXPECT_FALSE(duplicate_adapter.valid());
+
+  TransportIdentity malformed = SshIdentity();
+  malformed.external_groups = {std::string("bad\x01group", 9)};
+  MemoryStream malformed_stream;
+  NetconfTransportAdapter malformed_adapter(
+      server, malformed_stream, 214, std::move(malformed));
+  EXPECT_FALSE(malformed_adapter.valid());
+}
+
+TEST(NetconfTransportTest, KeepsTrustedGroupsIsolatedBetweenSessions) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NacmPolicy nacm;
+  nacm.set_exec_default(AccessAction::kDeny);
+  NacmRule permit_get;
+  permit_get.name = "operator-get";
+  permit_get.groups = {"operators"};
+  permit_get.module_name = "ietf-netconf";
+  permit_get.rpc_name = "get";
+  permit_get.rpc_name_present = true;
+  permit_get.operations = static_cast<std::uint8_t>(AccessOperation::kExecute);
+  permit_get.action = AccessAction::kPermit;
+  nacm.AddRule(std::move(permit_get));
+  NetconfServer server(stores, &nacm);
+
+  TransportIdentity viewer = SshIdentity("bob");
+  viewer.external_groups = {"viewers"};
+  MemoryStream operator_stream;
+  MemoryStream viewer_stream;
+  NetconfTransportAdapter operator_session(
+      server, operator_stream, 215, SshIdentity("alice"));
+  NetconfTransportAdapter viewer_session(
+      server, viewer_stream, 216, std::move(viewer));
+  const std::string requests =
+      "<hello xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
+      "<capabilities><capability>urn:ietf:params:netconf:base:1.0"
+      "</capability></capabilities></hello>]]>]]>"
+      "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+      "message-id=\"groups\"><get/></rpc>]]>]]>";
+  operator_session.Receive(requests);
+  viewer_session.Receive(requests);
+  ASSERT_GE(operator_stream.writes.size(), 2U);
+  ASSERT_GE(viewer_stream.writes.size(), 2U);
+  EXPECT_EQ(operator_stream.writes.back().find("access-denied"),
+            std::string::npos);
+  EXPECT_NE(viewer_stream.writes.back().find("access-denied"),
+            std::string::npos);
 }
 
 TEST(NetconfTransportTest, RetriesBackpressureAndEnforcesQueueLimit) {

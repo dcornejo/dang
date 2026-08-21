@@ -55,11 +55,11 @@ stays in this file with its remaining work rewritten precisely.
   the prior durable file, running tree, backend/plugin state, and live policy
   before returning `operation-failed`.
 - Harden authentication-to-NACM identity plumbing for production transports:
-  add configurable SAN/SSH name mapping, trusted external-group provenance,
-  recovery-session auditing, and multi-session identity-mapping tests. The TLS
+  add configurable SAN/SSH name mapping and recovery-session auditing. The TLS
   common-name mapping is fail-closed for absent, ambiguous, noncanonical, and
-  embedded-NUL identities. Concurrent policy replacement and per-RPC snapshots
-  are covered in the core server.
+  embedded-NUL identities. External groups require explicit trusted provenance,
+  bounded canonical values, and per-session isolation. Concurrent policy
+  replacement and per-RPC snapshots are covered in the core server.
 - Run interoperability and negative-security tests against at least one
   independent RFC 8341 implementation, fuzz NACM XML and instance-identifier
   paths, and document any intentional deviations before claiming compliance.

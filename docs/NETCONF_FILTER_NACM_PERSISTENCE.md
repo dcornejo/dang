@@ -64,7 +64,9 @@ attributes and rejects character content in structural NACM containers. This
 keeps standalone policy loading aligned with schema-bound datastore validation
 instead of silently discarding unsupported metadata.
 Namespace-qualified data paths are compiled into expanded XML names. A host
-can attach authenticated groups with `NetconfSession::set_external_groups`;
+A trusted host can attach authenticated groups directly with
+`NetconfSession::set_external_groups`; secure transport adapters additionally
+require `TransportIdentity::external_groups_trusted` before accepting any.
 `enable-external-groups` controls whether they participate. Each RPC uses a
 policy copy that remains stable for the complete request. Copying and live
 replacement are synchronized, so concurrent sessions see either the complete

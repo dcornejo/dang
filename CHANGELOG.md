@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Rejected transport-supplied NACM external groups unless their authenticated
+  provenance is explicitly trusted, and rejected malformed or duplicate groups.
 - Coupled persistent datastore mutations to durable snapshot publication and
   restored the prior file, live running backend/plugins, and managed NACM policy
   before returning an error when persistence fails.
@@ -24,6 +26,8 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added simultaneous secure-session tests proving trusted external groups do
+  not leak authorization between identities.
 - Added transaction fault tests before and after atomic snapshot replacement.
 - Added restart tests that interrupt initial snapshot persistence at every
   atomic-save milestone and verify managed NACM remains enforceable.

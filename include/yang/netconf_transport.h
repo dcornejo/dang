@@ -30,6 +30,8 @@ struct TransportIdentity {
   std::string ssh_subsystem;
   /** True only after host-key/certificate and peer authentication succeeds. */
   bool peer_authenticated = false;
+  /** True only when external_groups came from the authenticated peer source. */
+  bool external_groups_trusted = false;
 };
 
 /** Nonblocking secure byte-stream boundary implemented by the host. */

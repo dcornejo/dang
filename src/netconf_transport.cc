@@ -4,6 +4,7 @@
 #include "yang/netconf_transport.h"
 
 #include <ranges>
+#include <set>
 #include <utility>
 
 namespace yang::netconf {
@@ -28,6 +29,19 @@ NetconfTransportAdapter::NetconfTransportAdapter(
   if (!ValidXmlText(identity.username)) {
     Fail("authenticated NETCONF username is not valid XML text");
     return;
+  }
+  if (!identity.external_groups.empty() &&
+      !identity.external_groups_trusted) {
+    Fail("external NACM groups lack trusted authentication provenance");
+    return;
+  }
+  std::set<std::string_view> unique_groups;
+  for (const std::string& group : identity.external_groups) {
+    if (!ValidXmlText(group) || group.size() > 255 ||
+        !unique_groups.insert(group).second) {
+      Fail("external NACM groups must be unique, bounded valid XML text");
+      return;
+    }
   }
   if (identity.transport == SecureTransport::kSsh &&
       identity.ssh_subsystem != "netconf")

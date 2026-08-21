@@ -7,6 +7,8 @@
 
 ### Fixed
 
+- Required authenticated provenance for transport-supplied NACM external groups
+  and rejected invalid, oversized, or duplicate group identities.
 - Moved snapshot saving into the live datastore transaction boundary so a
   failed save rolls back the durable file, backend/plugins, and managed NACM
   policy before NETCONF sends `operation-failed`.
