@@ -290,6 +290,8 @@ int RunTlsServer(Application& application, const TlsServerOptions& options,
       adapter.Receive(std::string_view(buffer.data(), count));
       for (const std::string& delta : application.DrainBackendDeltas())
         diagnostics << "dangd: configuration delta: " << delta << '\n';
+      for (const std::string& audit : application.DrainRecoveryAuditRecords())
+        diagnostics << "dangd: audit: " << audit << '\n';
     }
     adapter.TransportClosed();
     SSL_shutdown(tls.get());
@@ -408,6 +410,9 @@ int RunReloadableTlsServer(
         adapter.Receive(std::string_view(buffer.data(), count));
         for (const std::string& delta : application->DrainBackendDeltas())
           diagnostics << "dangd: configuration delta: " << delta << '\n';
+        for (const std::string& audit :
+             application->DrainRecoveryAuditRecords())
+          diagnostics << "dangd: audit: " << audit << '\n';
       }
       adapter.TransportClosed();
     }

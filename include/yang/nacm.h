@@ -82,6 +82,8 @@ class NacmPolicy {
   void AddUserToGroup(std::string user, std::string group);
   void AddRecoveryUser(std::string user);
   void AddRule(NacmRule rule);
+  /** Returns whether the authenticated identity has host recovery privilege. */
+  [[nodiscard]] bool IsRecoveryUser(std::string_view user) const;
 
   [[nodiscard]] bool AuthorizeRpc(std::string_view user,
                                   std::string_view rpc_name) const;

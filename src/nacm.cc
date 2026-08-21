@@ -396,6 +396,11 @@ void NacmPolicy::AddRule(NacmRule rule) {
   rules_.push_back(std::move(rule));
 }
 
+bool NacmPolicy::IsRecoveryUser(std::string_view user) const {
+  std::lock_guard lock(mutex_);
+  return IsRecovery(user);
+}
+
 bool NacmPolicy::IsRecovery(std::string_view user) const {
   return recovery_users_.contains(user);
 }

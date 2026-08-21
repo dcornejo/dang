@@ -248,6 +248,30 @@ TEST(DangdApplicationTest, LoadsNacmAndUsesAuthenticatedSessionIdentity) {
             std::string::npos);
 }
 
+TEST(DangdApplicationTest, EmitsSafeRecoveryAuditRecords) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.recovery_users = {"line\nuser"};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
+  const std::string request =
+      "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+      "message-id=\"audit\"><get/></rpc>";
+  (void)loaded.application->server().Process(
+      {71, "ordinary", "ordinary", {}}, request);
+  (void)loaded.application->server().Process(
+      {72, "line\nuser", "line\nuser", {}}, request);
+
+  const std::vector<std::string> records =
+      loaded.application->DrainRecoveryAuditRecords();
+  ASSERT_EQ(records.size(), 1U);
+  EXPECT_NE(records.front().find("session=72"), std::string::npos);
+  EXPECT_NE(records.front().find("user=line%0Auser"), std::string::npos);
+  EXPECT_EQ(records.front().find('\n'), std::string::npos);
+  EXPECT_TRUE(loaded.application->DrainRecoveryAuditRecords().empty());
+}
+
 TEST(DangdApplicationTest, SeedsAndCommitsDatastoreManagedNacm) {
   TemporaryInputs inputs;
   constexpr std::string_view model = R"yang(module managed-appliance {

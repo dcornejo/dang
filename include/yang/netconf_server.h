@@ -4,10 +4,12 @@
 #ifndef YANG_NETCONF_SERVER_H_
 #define YANG_NETCONF_SERVER_H_
 
-#include <string>
-#include <string_view>
+#include <functional>
 #include <optional>
 #include <span>
+#include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include "yang/netconf_datastore.h"
@@ -60,6 +62,15 @@ struct RpcSessionContext {
   std::string_view datastore_owner;
   std::span<const std::string> external_groups;
 };
+
+/** Privacy-minimal audit record for use of host recovery privilege. */
+struct RecoveryAuditRecord {
+  std::uint32_t session_id = 0;
+  std::string username;
+  std::size_t rpc_bytes = 0;
+};
+
+using RecoveryAuditSink = std::function<void(const RecoveryAuditRecord&)>;
 
 /** Host result for an application-defined schema RPC or action. */
 struct OperationResult {
@@ -120,6 +131,10 @@ class NetconfServer {
   /** Processes an RPC with distinct protocol, authorization, and lock IDs. */
   [[nodiscard]] RpcResponse Process(const RpcSessionContext& session,
                                     std::string_view rpc_xml);
+  /** Installs a host audit sink called for every recovery-user RPC attempt. */
+  void SetRecoveryAuditSink(RecoveryAuditSink sink) {
+    recovery_audit_sink_ = std::move(sink);
+  }
   /** Registers a transport session before its server hello is sent. */
   [[nodiscard]] bool RegisterSession(std::uint32_t session_id,
                                      std::string username);
@@ -143,6 +158,7 @@ class NetconfServer {
   std::optional<WithDefaultsConfig> with_defaults_;
   OperationalDataProvider* operational_ = nullptr;
   OperationProvider* operations_ = nullptr;
+  RecoveryAuditSink recovery_audit_sink_;
 };
 
 }  // namespace yang::netconf

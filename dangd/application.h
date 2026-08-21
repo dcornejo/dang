@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <iosfwd>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -120,6 +121,8 @@ class Application {
   [[nodiscard]] std::vector<std::string> DrainBackendDeltas() {
     return backend_.DrainDeltas();
   }
+  /** Drains privacy-minimal records of recovery-user RPC attempts. */
+  [[nodiscard]] std::vector<std::string> DrainRecoveryAuditRecords();
   /** Returns an immutable copy of the backend's current working configuration. */
   [[nodiscard]] yang::config::ConfigDocument working_configuration() const {
     return backend_.Working();
@@ -151,6 +154,8 @@ class Application {
   yang::netconf::NetconfServer server_;
   std::optional<std::filesystem::path> state_file_;
   yang::netconf::SnapshotSaveCheckpoint snapshot_save_checkpoint_;
+  mutable std::mutex recovery_audit_mutex_;
+  std::vector<std::string> recovery_audit_records_;
 };
 
 /**

@@ -196,9 +196,10 @@ requests are authorized before their parent is resolved, so denied users cannot
 use the existence error to probe datastore contents.
 
 Remaining gaps are tracked in `TODO.md`: configurable production identity
-mapping, recovery-session auditing, fuzzing, and independent interoperability
-testing. Transport external groups now require explicit trusted provenance and
-bounded, unique values. Live datastore mutations
+mapping, fuzzing, and independent interoperability testing. Transport external
+groups require explicit trusted provenance and bounded, unique values. Every
+recovery-user RPC attempt emits a privacy-minimal host audit record. Live
+datastore mutations
 now publish their durable snapshot before success is returned and compensate a
 failed save by restoring the prior snapshot and live backend/NACM state.
 Until the remaining work closes, the project must not describe NACM as fully

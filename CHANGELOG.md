@@ -26,6 +26,8 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added a structured recovery-user RPC audit hook and concurrent evidence that
+  successful and malformed attempts are recorded without retaining payloads.
 - Added simultaneous secure-session tests proving trusted external groups do
   not leak authorization between identities.
 - Added transaction fault tests before and after atomic snapshot replacement.

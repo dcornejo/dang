@@ -38,6 +38,14 @@ connection.Poll();  // writable/timer/notification/cancellation processing
 connection.TransportClosed();  // EOF or secure-transport failure
 ```
 
+Hosts should install `NetconfServer::SetRecoveryAuditSink` whenever recovery
+users are configured. The sink receives a record before each recovery-user RPC
+is parsed, including malformed attempts. It contains only session ID, username,
+and request byte count; the host is responsible for timestamps, durable audit
+storage, retention, and access control. `dangd` installs this hook and writes
+safely encoded records to its diagnostic stream. Recovery RPC processing fails
+closed with `operation-failed` if the sink throws.
+
 For SSH, set `transport` to `kSsh`, preserve the SSH-authenticated username,
 and set `ssh_subsystem` to the requested subsystem. The adapter rejects every
 subsystem except the exact RFC 6242 name `netconf`. For TLS, the host performs

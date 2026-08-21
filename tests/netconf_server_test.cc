@@ -9,6 +9,8 @@
 #include <map>
 #include <mutex>
 #include <optional>
+#include <ranges>
+#include <stdexcept>
 #include <thread>
 
 #include <gtest/gtest.h>
@@ -177,6 +179,62 @@ TEST(NetconfServerTest, AdvertisesImplementedCapabilities) {
   EXPECT_NE(hello.find("capability:candidate:1.0"), std::string::npos);
   EXPECT_NE(hello.find("capability:confirmed-commit:1.1"), std::string::npos);
   EXPECT_NE(hello.find("capability:xpath:1.0"), std::string::npos);
+}
+
+TEST(NetconfServerTest, AuditsEveryRecoveryUserRpcAttempt) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NacmPolicy policy;
+  policy.set_exec_default(AccessAction::kDeny);
+  policy.AddRecoveryUser("rescue");
+  NetconfServer server(stores, &policy);
+  std::mutex records_mutex;
+  std::vector<RecoveryAuditRecord> records;
+  server.SetRecoveryAuditSink([&](const RecoveryAuditRecord& record) {
+    std::lock_guard lock(records_mutex);
+    records.push_back(record);
+  });
+  const std::string get =
+      "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+      "message-id=\"audit\"><get/></rpc>";
+
+  const RpcResponse recovery =
+      server.Process({401, "rescue", "rescue", {}}, get);
+  EXPECT_EQ(recovery.xml.find("access-denied"), std::string::npos)
+      << recovery.xml;
+  (void)server.Process({402, "ordinary", "ordinary", {}}, get);
+  (void)server.Process({403, "rescue", "rescue", {}}, "not XML");
+
+  std::vector<std::thread> sessions;
+  for (std::uint32_t id = 410; id < 418; ++id) {
+    sessions.emplace_back([&, id] {
+      (void)server.Process({id, "rescue", "rescue", {}}, get);
+    });
+  }
+  for (std::thread& session : sessions) session.join();
+
+  std::lock_guard lock(records_mutex);
+  ASSERT_EQ(records.size(), 10U);
+  EXPECT_EQ(records.front().session_id, 401U);
+  EXPECT_EQ(records.front().username, "rescue");
+  EXPECT_EQ(records.front().rpc_bytes, get.size());
+  EXPECT_EQ(records[1].session_id, 403U);
+  EXPECT_EQ(records[1].rpc_bytes, 7U);
+  EXPECT_TRUE(std::ranges::all_of(records, [](const RecoveryAuditRecord& record) {
+    return record.username == "rescue" && record.session_id != 402;
+  }));
+
+  server.SetRecoveryAuditSink([](const RecoveryAuditRecord&) {
+    throw std::runtime_error("audit unavailable");
+  });
+  const RpcResponse audit_failed =
+      server.Process({404, "rescue", "rescue", {}}, get);
+  EXPECT_NE(audit_failed.xml.find("operation-failed"), std::string::npos)
+      << audit_failed.xml;
+  EXPECT_NE(audit_failed.xml.find("recovery audit sink failed"),
+            std::string::npos) << audit_failed.xml;
 }
 
 TEST(NetconfServerTest, AuthorizesAndDispatchesSchemaRpc) {

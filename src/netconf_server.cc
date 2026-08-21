@@ -822,16 +822,26 @@ RpcResponse NetconfServer::Process(std::string_view session,
 
 RpcResponse NetconfServer::Process(const RpcSessionContext& session,
                                    std::string_view rpc_xml) {
+  const std::optional<NacmPolicy> policy_snapshot =
+      nacm_ == nullptr ? std::nullopt : std::optional<NacmPolicy>(*nacm_);
+  const NacmPolicy* const nacm =
+      policy_snapshot ? &*policy_snapshot : nullptr;
+  if (nacm != nullptr && nacm->IsRecoveryUser(session.username) &&
+      recovery_audit_sink_) {
+    try {
+      recovery_audit_sink_(
+          {session.session_id, std::string(session.username), rpc_xml.size()});
+    } catch (...) {
+      return {Reply("", ProtocolFailure("recovery audit sink failed",
+                                        "operation-failed")),
+              false};
+    }
+  }
   if (rpc_xml.size() > DefaultResourceLimits().maximum_xml_bytes) {
     return {Reply("", ProtocolFailure("RPC XML exceeds the byte limit",
                                       "too-big")),
             false};
   }
-  const std::optional<NacmPolicy> policy_snapshot =
-      nacm_ == nullptr ? std::nullopt
-                       : std::optional<NacmPolicy>(*nacm_);
-  const NacmPolicy* const nacm =
-      policy_snapshot ? &*policy_snapshot : nullptr;
   pugi::xml_document document;
   const pugi::xml_parse_result parsed =
       document.load_buffer(rpc_xml.data(), rpc_xml.size(), pugi::parse_default);

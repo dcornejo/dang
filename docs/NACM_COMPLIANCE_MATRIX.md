@@ -88,9 +88,14 @@ No open core-server evidence item remains for initial operation.
   independent group sets:
   `NetconfTransportTest.RequiresTrustedCanonicalExternalGroups` and
   `NetconfTransportTest.KeepsTrustedGroupsIsolatedBetweenSessions`.
+- Every RPC attempted by a recovery identity invokes a host audit sink before
+  XML parsing. Records contain the session ID, authenticated username, and byte
+  count but no payload or policy details; ordinary identities do not emit them:
+  `NetconfServerTest.AuditsEveryRecoveryUserRpcAttempt` and
+  `DangdApplicationTest.EmitsSafeRecoveryAuditRecords`.
 
-Open evidence: configurable SAN/SSH identity mapping and recovery-session audit
-records. These remain host/deployment work in `TODO.md`.
+Open evidence: configurable SAN/SSH identity mapping. This remains
+host/deployment work in `TODO.md`.
 
 ## Section 3.4.3: access-denied errors
 

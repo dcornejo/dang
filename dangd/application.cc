@@ -34,6 +34,22 @@ std::string_view LocalName(std::string_view name) {
   return colon == std::string_view::npos ? name : name.substr(colon + 1);
 }
 
+std::string AuditField(std::string_view value) {
+  constexpr char kHex[] = "0123456789ABCDEF";
+  std::string escaped;
+  for (const char character : value) {
+    const auto byte = static_cast<unsigned char>(character);
+    if (byte >= 0x21 && byte <= 0x7e && byte != '%' && byte != '=') {
+      escaped.push_back(static_cast<char>(byte));
+    } else {
+      escaped.push_back('%');
+      escaped.push_back(kHex[byte >> 4]);
+      escaped.push_back(kHex[byte & 0x0f]);
+    }
+  }
+  return escaped;
+}
+
 class OverlayRepository final : public yang::ModuleSourceRepository {
  public:
   explicit OverlayRepository(std::vector<std::filesystem::path> search_paths)
@@ -559,6 +575,15 @@ Application::Application(yang::config::RuntimeSchema schema,
               &operational_, plugins_.get()),
       state_file_(std::move(state_file)),
       snapshot_save_checkpoint_(std::move(snapshot_save_checkpoint)) {
+  server_.SetRecoveryAuditSink(
+      [this](const yang::netconf::RecoveryAuditRecord& record) {
+        std::lock_guard lock(recovery_audit_mutex_);
+        recovery_audit_records_.push_back(
+            "recovery RPC attempt: session=" +
+            std::to_string(record.session_id) + " user=" +
+            AuditField(record.username) +
+            " bytes=" + std::to_string(record.rpc_bytes));
+      });
   notifications_.SetInstanceDataProvider([this] {
     const std::string data =
         "<data>" +
@@ -567,6 +592,13 @@ Application::Application(yang::config::RuntimeSchema schema,
     return operational_.AugmentDataXml(data);
   });
   (void)notifications_.AddStream({});
+}
+
+std::vector<std::string> Application::DrainRecoveryAuditRecords() {
+  std::lock_guard lock(recovery_audit_mutex_);
+  std::vector<std::string> records;
+  records.swap(recovery_audit_records_);
+  return records;
 }
 
 bool Application::PublishYangLibraryUpdate(std::string_view content_id) {
@@ -890,8 +922,8 @@ int RunStreamSession(Application& application, std::istream& input,
     if (response.error) errors << "dangd: " << *response.error << '\n';
     for (const std::string& delta : application.DrainBackendDeltas())
       errors << "dangd: configuration delta: " << delta << '\n';
-    if (application.has_state_file()) {
-    }
+    for (const std::string& audit : application.DrainRecoveryAuditRecords())
+      errors << "dangd: audit: " << audit << '\n';
     if (response.close_transport) return response.error ? 1 : 0;
   }
   session.TransportClosed();
