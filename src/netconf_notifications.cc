@@ -11,6 +11,7 @@
 #include <iomanip>
 #include <map>
 #include <ranges>
+#include <set>
 #include <sstream>
 #include <utility>
 
@@ -51,6 +52,9 @@ bool ValidNotificationContent(
   validate = [&](const pugi::xml_node& parent,
                  const std::vector<config::RuntimeSchemaNodeId>& allowed) {
     std::map<config::RuntimeSchemaNodeId, std::size_t> counts;
+    std::map<config::RuntimeSchemaNodeId, std::set<std::string>> leaf_list_values;
+    std::map<config::RuntimeSchemaNodeId,
+             std::set<std::vector<std::string>>> list_keys;
     for (const pugi::xml_node child : parent.children()) {
       if (child.type() != pugi::node_element) continue;
       const config::QualifiedXmlName name{
@@ -77,8 +81,35 @@ bool ValidNotificationContent(
             return false;
           }
         }
+        if (metadata.kind == semantic::SchemaNodeKind::kLeafList &&
+            !leaf_list_values[*found].insert(child.text().as_string()).second) {
+          return false;
+        }
       } else if (!validate(child, schema.DataChildren(*found))) {
         return false;
+      }
+      if (metadata.kind == semantic::SchemaNodeKind::kList) {
+        std::vector<std::string> key_values;
+        for (config::RuntimeSchemaNodeId key : metadata.keys) {
+          const config::QualifiedXmlName& key_name = schema.Get(key).name;
+          std::optional<std::string> value;
+          for (const pugi::xml_node candidate : child.children()) {
+            if (candidate.type() != pugi::node_element ||
+                config::QualifiedXmlName{
+                    NamespaceFor(candidate),
+                    std::string(LocalName(candidate.name()))} != key_name) {
+              continue;
+            }
+            if (value) return false;
+            value = candidate.text().as_string();
+          }
+          if (!value) return false;
+          key_values.push_back(std::move(*value));
+        }
+        if (!metadata.keys.empty() &&
+            !list_keys[*found].insert(std::move(key_values)).second) {
+          return false;
+        }
       }
     }
     for (config::RuntimeSchemaNodeId id : allowed) {

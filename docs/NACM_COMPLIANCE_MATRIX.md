@@ -236,7 +236,8 @@ integration responsibilities.
   both the modeled XML event root and any associated instance path before NACM
   authorization or queueing. The complete event body is first checked for
   modeled children, scalar types, mandatory nodes, singleton duplication, and
-  list/leaf-list cardinality:
+  list/leaf-list cardinality, required list keys, duplicate key tuples, and
+  duplicate leaf-list values:
   `NetconfNotificationsTest.BindsTopLevelPublicationToModeledIdentity` and
   `NetconfNotificationsTest.DerivesAssociatedNotificationAncestorsFromSchema`.
 - Each replay subscription and live multi-session fanout uses one immutable

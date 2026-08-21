@@ -288,6 +288,7 @@ TEST(NetconfNotificationsTest, BindsTopLevelPublicationToModeledIdentity) {
     notification alarm {
       leaf severity { type enumeration { enum minor; enum major; } mandatory true; }
       leaf-list code { type uint16; min-elements 1; max-elements 2; }
+      list detail { key id; leaf id { type string; } }
     }
   })yang", diagnostics);
   ASSERT_TRUE(source);
@@ -302,7 +303,7 @@ TEST(NetconfNotificationsTest, BindsTopLevelPublicationToModeledIdentity) {
 
   EXPECT_TRUE(manager.Publish("NETCONF", "events", "alarm",
       "<alarm xmlns=\"urn:events\"><severity>major</severity>"
-      "<code>7</code></alarm>"));
+      "<code>7</code><detail><id>one</id></detail></alarm>"));
   EXPECT_FALSE(manager.Publish("NETCONF", "events", "different",
       "<alarm xmlns=\"urn:events\"><severity>major</severity>"
       "<code>7</code></alarm>"));
@@ -322,6 +323,15 @@ TEST(NetconfNotificationsTest, BindsTopLevelPublicationToModeledIdentity) {
   EXPECT_FALSE(manager.Publish("NETCONF", "events", "alarm",
       "<alarm xmlns=\"urn:events\"><severity>major</severity>"
       "<code>7</code><unknown/></alarm>"));
+  EXPECT_FALSE(manager.Publish("NETCONF", "events", "alarm",
+      "<alarm xmlns=\"urn:events\"><severity>major</severity>"
+      "<code>7</code><code>7</code></alarm>"));
+  EXPECT_FALSE(manager.Publish("NETCONF", "events", "alarm",
+      "<alarm xmlns=\"urn:events\"><severity>major</severity>"
+      "<code>7</code><detail/></alarm>"));
+  EXPECT_FALSE(manager.Publish("NETCONF", "events", "alarm",
+      "<alarm xmlns=\"urn:events\"><severity>major</severity><code>7</code>"
+      "<detail><id>same</id></detail><detail><id>same</id></detail></alarm>"));
 }
 }  // namespace
 }  // namespace yang::netconf
