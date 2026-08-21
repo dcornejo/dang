@@ -342,6 +342,9 @@ are reflected in the XML tree.
 [Standards conformance and implementation decisions](docs/STANDARDS.md)
 documents issues found while applying RFC 7950/RFC 6020, how each was resolved,
 and the deliberate boundaries around XSD regex and runtime XPath evaluation.
+The [standards compliance ledger](docs/COMPLIANCE.md) inventories every directly
+implemented or referenced standard, the supported subset, known variances, and
+the release gate required before making an unqualified compliance claim.
 
 Generate Doxygen HTML and PDF API references with:
 

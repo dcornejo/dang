@@ -7,6 +7,8 @@
 
 ### Added
 
+- Documented `dangd` compliance gaps and integration boundaries for NETCONF,
+  NACM, NMDA, YANG Library, transport, notifications, and example models.
 - Expanded the RFC 8344 example's comments with practical Linux backend,
   transaction ordering, rollback, concurrency, and observed-state guidance.
 - ABI v3 schema-bound operational publication, used by the RFC 8344 example

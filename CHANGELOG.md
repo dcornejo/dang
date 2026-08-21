@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added a standards compliance ledger covering implemented scope, integration
+  boundaries, missing behavior, deliberate variances, reference-only RFCs, and
+  the evidence required before an unqualified compliance claim.
 - Added a detailed RFC 8341 NACM and RFC 8342/RFC 8526 NMDA compliance-closure
   checklist, plus production implementation guidance in the RFC 8344 example
   plugin for planning, platform application, rollback, and operational data.
