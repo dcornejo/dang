@@ -42,4 +42,7 @@ The supported request parameter is the `with-defaults` element from the
 Default expansion happens before NACM and subtree/XPath filtering. A default
 that is not readable is therefore removed by NACM just like an explicit node,
 and filters can select synthesized defaults without bypassing access control.
-
+Virtual defaults are not stored configuration and do not generate NACM write
+checks during unrelated edits. Explicitly supplying a default-valued node is a
+configuration creation, however, and removing that explicit node is a deletion;
+both use the corresponding NACM write permission.

@@ -968,6 +968,89 @@ TEST(NetconfServerTest, AuthorizesSpecificLeafListInstances) {
             std::string::npos);
 }
 
+TEST(NetconfServerTest, AuthorizesExplicitDefaultsWithoutPhantomWrites) {
+  VectorDiagnosticSink diagnostics;
+  auto source = SourceFile::Create("defaults.yang", R"yang(module defaults {
+    yang-version 1.1; namespace "urn:defaults-test"; prefix d;
+    container settings {
+      leaf label { type string; }
+      leaf mode { type string; default "auto"; }
+    }
+  })yang", diagnostics);
+  ASSERT_TRUE(source);
+  InMemoryModuleRepository repository;
+  Compiler compiler(repository, diagnostics);
+  auto compilation = compiler.Compile(source);
+  ASSERT_TRUE(compilation);
+  config::RuntimeSchema schema =
+      config::RuntimeSchemaBuilder::FromCompilation(*compilation);
+  auto initial = config::ParseDatastoreXml(schema, R"xml(
+    <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <settings xmlns="urn:defaults-test"><label>old</label></settings>
+    </config>)xml").document;
+  ASSERT_TRUE(initial);
+  DatastoreManager stores(schema, *initial);
+  NacmPolicy policy;
+  policy.set_write_default(AccessAction::kDeny);
+  for (const std::string& user : {"updater", "creator", "deleter"})
+    policy.AddUserToGroup(user, user);
+  const std::string settings = "/{urn:defaults-test}settings";
+  policy.AddRule({"update-label", "updater", "", settings +
+                      "/{urn:defaults-test}label",
+                  AccessMask(AccessOperation::kUpdate), AccessAction::kPermit});
+  policy.AddRule({"create-mode", "creator", "", settings +
+                      "/{urn:defaults-test}mode",
+                  AccessMask(AccessOperation::kCreate), AccessAction::kPermit});
+  policy.AddRule({"delete-mode", "deleter", "", settings +
+                      "/{urn:defaults-test}mode",
+                  AccessMask(AccessOperation::kDelete), AccessAction::kPermit});
+  NetconfServer server(stores, &policy);
+
+  // The virtual default is part of the effective view, not stored
+  // configuration, and therefore must not add a phantom write authorization
+  // check to an unrelated explicit edit.
+  const RpcResponse updated = server.Process("updater", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="update">
+      <edit-config><target><candidate/></target><config>
+        <settings xmlns="urn:defaults-test"><label>new</label></settings>
+      </config></edit-config>
+    </rpc>)xml");
+  EXPECT_NE(updated.xml.find("<ok/>"), std::string::npos) << updated.xml;
+
+  const std::string before = stores.Read(Datastore::kCandidate).ToXml();
+  const RpcResponse denied = server.Process("updater", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="deny">
+      <edit-config><target><candidate/></target><config>
+        <settings xmlns="urn:defaults-test"><mode>auto</mode></settings>
+      </config></edit-config>
+    </rpc>)xml");
+  EXPECT_NE(denied.xml.find("access-denied"), std::string::npos) << denied.xml;
+  EXPECT_EQ(stores.Read(Datastore::kCandidate).ToXml(), before);
+
+  const RpcResponse created = server.Process("creator", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="create">
+      <edit-config><target><candidate/></target><config>
+        <settings xmlns="urn:defaults-test"><mode>auto</mode></settings>
+      </config></edit-config>
+    </rpc>)xml");
+  EXPECT_NE(created.xml.find("<ok/>"), std::string::npos) << created.xml;
+  EXPECT_NE(stores.Read(Datastore::kCandidate).ToXml().find(">auto</"),
+            std::string::npos);
+
+  const RpcResponse deleted = server.Process("deleter", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="delete">
+      <edit-config><target><candidate/></target><config>
+        <settings xmlns="urn:defaults-test">
+          <mode xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0"
+                nc:operation="delete">auto</mode>
+        </settings>
+      </config></edit-config>
+    </rpc>)xml");
+  EXPECT_NE(deleted.xml.find("<ok/>"), std::string::npos) << deleted.xml;
+  EXPECT_EQ(stores.Read(Datastore::kCandidate).ToXml().find(">auto</"),
+            std::string::npos);
+}
+
 TEST(NetconfServerTest, NacmRpcDenialIdentifiesNetconfOperation) {
   VectorDiagnosticSink diagnostics;
   auto fixture = BuildServerFixture(&diagnostics);

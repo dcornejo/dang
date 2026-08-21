@@ -7,6 +7,8 @@
 
 ### Added
 
+- Verified NACM write semantics for virtual defaults and explicitly stored
+  nodes whose value equals the schema default.
 - Applied NACM leaf-list rules to individual values for reads and writes,
   retaining precise predicates when values contain apostrophes.
 - Added ordered list and leaf-list move deltas, NACM update authorization for

@@ -132,6 +132,10 @@ No open core-server evidence item remains for policy snapshot isolation.
   rules can independently filter reads and authorize creation or deletion of a
   particular value. Apostrophes select a double-quoted predicate literal:
   `NetconfServerTest.AuthorizesSpecificLeafListInstances`.
+- Virtual schema defaults do not create datastore write events or phantom NACM
+  checks. Explicitly storing a default-valued node requires `create`, and
+  removing that explicit node requires `delete`, even though the effective
+  value remains available: `NetconfServerTest.AuthorizesExplicitDefaultsWithoutPhantomWrites`.
 - Exact edits, candidate commit, inline/URL replacement, and copy operations are
   authorized atomically before publication. Implicit `choice` and `when`
   removals do not demand separate permission:
@@ -154,8 +158,7 @@ No open core-server evidence item remains for policy snapshot isolation.
   `NetconfServerTest.AuthorizesUrlTargetReplacementBeforeWriting`.
 - Denied write accounting: `NacmTest.CountsDeniedOperationsWritesAndNotifications`.
 
-Open evidence: complete the protocol-level CRUDX suite for defaults and
-remote-to-remote URL provider failure paths.
+Open evidence: complete remote-to-remote URL provider failure-path coverage.
 
 ## Section 3.4.6: outgoing notification authorization
 
