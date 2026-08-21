@@ -212,6 +212,41 @@ TEST(ConfigEditTest, AppliesOrderedByUserInsertionDirectives) {
   EXPECT_LT(xml.find(">b.example</"), xml.find(">c.example</"));
 }
 
+TEST(ConfigEditTest, ReportsMinimalOrderedByUserMoves) {
+  VectorDiagnosticSink diagnostics;
+  auto schema = EditSchema(&diagnostics);
+  ASSERT_TRUE(schema);
+  auto before = ParseDatastoreXml(*schema, R"xml(
+    <system xmlns="urn:edit"><hostname>old</hostname><tcp-port>830</tcp-port>
+      <interface><name>en0</name></interface>
+      <interface><name>en1</name></interface>
+      <interface><name>en2</name></interface>
+      <search-domain>a.example</search-domain>
+      <search-domain>b.example</search-domain></system>)xml").document;
+  auto after = ParseDatastoreXml(*schema, R"xml(
+    <system xmlns="urn:edit"><hostname>old</hostname><tcp-port>830</tcp-port>
+      <interface><name>en1</name></interface>
+      <interface><name>en2</name></interface>
+      <interface><name>en0</name></interface>
+      <search-domain>b.example</search-domain>
+      <search-domain>a.example</search-domain></system>)xml").document;
+  ASSERT_TRUE(before);
+  ASSERT_TRUE(after);
+
+  const std::vector<ChangeEvent> changes =
+      DiffConfigDocuments(*schema, *before, *after);
+  ASSERT_EQ(changes.size(), 2u)
+      << (changes.empty() ? "no changes" : changes.front().instance_path);
+  EXPECT_EQ(changes[0].kind, ChangeKind::kMoved);
+  EXPECT_NE(changes[0].instance_path.find("interface"), std::string::npos);
+  EXPECT_EQ(changes[0].before, "position 1");
+  EXPECT_EQ(changes[0].after, "position 3");
+  EXPECT_EQ(changes[1].kind, ChangeKind::kMoved);
+  EXPECT_NE(changes[1].instance_path.find("search-domain"), std::string::npos);
+  EXPECT_EQ(changes[1].before, "position 2");
+  EXPECT_EQ(changes[1].after, "position 1");
+}
+
 TEST(ConfigEditTest, RejectsInsertionForSystemOrderedCollections) {
   VectorDiagnosticSink diagnostics;
   auto source = SourceFile::Create("system.yang", R"yang(module system {

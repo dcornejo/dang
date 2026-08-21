@@ -123,6 +123,11 @@ No open core-server evidence item remains for policy snapshot isolation.
   tests verify keyed create/delete, scalar update, wrong-bit denial, and
   unchanged target state after denial for both classic `<edit-config>` and
   RFC 8526 `<edit-data>`.
+- An existing `ordered-by user` list or leaf-list instance whose relative
+  position changes is represented as an effective move and requires NACM
+  `update` access. Moves are included in backend deltas and a denial preserves
+  the target order: `ConfigEditTest.ReportsMinimalOrderedByUserMoves` and
+  `NetconfServerTest.RequiresNacmUpdatePermissionForOrderedMove`.
 - Exact edits, candidate commit, inline/URL replacement, and copy operations are
   authorized atomically before publication. Implicit `choice` and `when`
   removals do not demand separate permission:
@@ -145,9 +150,8 @@ No open core-server evidence item remains for policy snapshot isolation.
   `NetconfServerTest.AuthorizesUrlTargetReplacementBeforeWriting`.
 - Denied write accounting: `NacmTest.CountsDeniedOperationsWritesAndNotifications`.
 
-Open evidence: complete the protocol-level CRUDX suite for ordered-by-user
-moves, defaults, leaf-list instances, and remote-to-remote URL provider failure
-paths.
+Open evidence: complete the protocol-level CRUDX suite for defaults, leaf-list
+instances, and remote-to-remote URL provider failure paths.
 
 ## Section 3.4.6: outgoing notification authorization
 

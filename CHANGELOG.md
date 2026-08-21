@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Represented `ordered-by user` list and leaf-list reordering as explicit move
+  deltas, mapped moves to NACM update access, and described their positions to
+  configuration backends.
 - Added RFC 8526 `<edit-data>` protocol evidence for effective NACM create,
   update, delete, wrong-bit denial, and atomic target preservation.
 - Verified that confirmed-commit cancellation and timeout restoration remain

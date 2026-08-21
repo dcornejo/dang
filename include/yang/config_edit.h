@@ -58,13 +58,22 @@ struct EditParseResult {
 [[nodiscard]] EditParseResult ParseEditXml(const RuntimeSchema& schema,
                                            std::string_view xml);
 
-enum class ChangeKind { kCreated, kDeleted, kValueChanged, kSubtreeReplaced };
+enum class ChangeKind {
+  kCreated,
+  kDeleted,
+  kValueChanged,
+  kSubtreeReplaced,
+  /** Existing ordered-by user list or leaf-list instance changed position. */
+  kMoved
+};
 
 /** One deterministic successful candidate change. */
 struct ChangeEvent {
   ChangeKind kind = ChangeKind::kCreated;
   std::string instance_path;
+  /** Previous scalar value, or one-based "position N" for a move. */
   std::optional<std::string> before;
+  /** Resulting scalar value, or one-based "position N" for a move. */
   std::optional<std::string> after;
   RuntimeSchemaNodeId schema = kInvalidRuntimeSchemaNodeId;
 };

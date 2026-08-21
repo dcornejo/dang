@@ -7,6 +7,9 @@
 
 ### Added
 
+- Added ordered list and leaf-list move deltas, NACM update authorization for
+  reordering, and English before/after position descriptions for plugins and
+  operators.
 - Verified that RFC 8526 `<edit-data>` selects effective NACM create, update,
   and delete permissions and preserves the target after wrong-bit denial.
 - Verified confirmed-commit cancel and timeout rollback after live NACM policy

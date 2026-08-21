@@ -211,6 +211,12 @@ configuration node. The editor then applies `first`, `last`, `before`, and
 prefixes are resolved from the edited element's in-scope XML namespace bindings
 and matched to schema keys as expanded names.
 
+Tree differences retain ordering as configuration state. A minimal set of
+existing list or leaf-list instances whose relative positions changed is
+reported as move events, with old and new one-based positions. This makes moves
+visible to plugins and the English backend delta stream and maps them to NACM
+`update` authorization instead of allowing a reorder to bypass write checks.
+
 ### RFC 6242 framing is incremental and bounded
 
 Hello documents always use the legacy end marker. After both capability sets

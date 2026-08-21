@@ -37,6 +37,11 @@ std::string Describe(const yang::config::ChangeEvent& change) {
     return "Changed " + change.instance_path + " from " +
            Quote(change.before) + " to " + Quote(change.after) + ".";
   }
+  if (change.kind == ChangeKind::kMoved) {
+    return "Moved " + change.instance_path + " from " +
+           change.before.value_or("an unknown position") + " to " +
+           change.after.value_or("an unknown position") + ".";
+  }
   return "Replaced the configuration subtree at " + change.instance_path +
          ".";
 }

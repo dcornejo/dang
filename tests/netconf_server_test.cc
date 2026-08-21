@@ -832,6 +832,62 @@ TEST(NetconfServerTest, MapsEffectiveEditDataChangesToCrudBits) {
   EXPECT_EQ(stores.Read(Datastore::kCandidate).ToXml(), before);
 }
 
+TEST(NetconfServerTest, RequiresNacmUpdatePermissionForOrderedMove) {
+  VectorDiagnosticSink diagnostics;
+  auto source = SourceFile::Create("ordered.yang", R"yang(module ordered {
+    yang-version 1.1; namespace "urn:ordered-test"; prefix o;
+    list item { key name; ordered-by user; leaf name { type string; } }
+  })yang", diagnostics);
+  ASSERT_TRUE(source);
+  InMemoryModuleRepository repository;
+  Compiler compiler(repository, diagnostics);
+  auto compilation = compiler.Compile(source);
+  ASSERT_TRUE(compilation);
+  config::RuntimeSchema schema =
+      config::RuntimeSchemaBuilder::FromCompilation(*compilation);
+  auto initial = config::ParseDatastoreXml(schema, R"xml(
+    <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <item xmlns="urn:ordered-test"><name>a</name></item>
+      <item xmlns="urn:ordered-test"><name>b</name></item>
+      <item xmlns="urn:ordered-test"><name>c</name></item>
+    </config>)xml").document;
+  ASSERT_TRUE(initial);
+  DatastoreManager stores(schema, *initial);
+  NacmPolicy policy;
+  policy.set_write_default(AccessAction::kDeny);
+  policy.AddUserToGroup("mover", "movers");
+  policy.AddUserToGroup("creator", "creators");
+  policy.AddRule({"move-item", "movers", "", "/{urn:ordered-test}item",
+                  AccessMask(AccessOperation::kUpdate), AccessAction::kPermit});
+  policy.AddRule({"create-item", "creators", "", "/{urn:ordered-test}item",
+                  AccessMask(AccessOperation::kCreate), AccessAction::kPermit});
+  NetconfServer server(stores, &policy);
+
+  const RpcResponse moved = server.Process("mover", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="move">
+      <edit-config><target><candidate/></target><config>
+        <item xmlns="urn:ordered-test" xmlns:o="urn:ordered-test"
+              xmlns:y="urn:ietf:params:xml:ns:yang:1"
+              y:insert="after" y:key="[o:name='c']"><name>a</name></item>
+      </config></edit-config>
+    </rpc>)xml");
+  EXPECT_NE(moved.xml.find("<ok/>"), std::string::npos) << moved.xml;
+  const std::string reordered = stores.Read(Datastore::kCandidate).ToXml(false);
+  EXPECT_LT(reordered.find(">b</"), reordered.find(">c</"));
+  EXPECT_LT(reordered.find(">c</"), reordered.find(">a</"));
+
+  const RpcResponse denied = server.Process("creator", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="deny-move">
+      <edit-config><target><candidate/></target><config>
+        <item xmlns="urn:ordered-test"
+              xmlns:y="urn:ietf:params:xml:ns:yang:1"
+              y:insert="first"><name>a</name></item>
+      </config></edit-config>
+    </rpc>)xml");
+  EXPECT_NE(denied.xml.find("access-denied"), std::string::npos) << denied.xml;
+  EXPECT_EQ(stores.Read(Datastore::kCandidate).ToXml(false), reordered);
+}
+
 TEST(NetconfServerTest, NacmRpcDenialIdentifiesNetconfOperation) {
   VectorDiagnosticSink diagnostics;
   auto fixture = BuildServerFixture(&diagnostics);

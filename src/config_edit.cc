@@ -706,15 +706,65 @@ std::vector<ChangeEvent> DiffConfigDocuments(
                 const std::vector<ConfigNodeId>& right,
                 std::string_view parent_path) {
     std::vector<bool> matched(right.size(), false);
-    for (ConfigNodeId left_id : left) {
-      std::optional<std::size_t> match;
-      for (std::size_t index = 0; index < right.size(); ++index) {
-        if (!matched[index] &&
-            SameInstance(schema, before, left_id, after, right[index])) {
-          match = index;
+    std::vector<std::optional<std::size_t>> right_match(left.size());
+    for (std::size_t left_index = 0; left_index < left.size(); ++left_index) {
+      for (std::size_t right_index = 0; right_index < right.size();
+           ++right_index) {
+        if (!matched[right_index] &&
+            SameInstance(schema, before, left[left_index], after,
+                         right[right_index])) {
+          right_match[left_index] = right_index;
+          matched[right_index] = true;
           break;
         }
       }
+    }
+
+    // Ordering is configuration for an ordered-by user collection. Find a
+    // longest common subsequence of each sibling collection, then report the
+    // remaining common instances as moves. Creations and deletions are omitted
+    // from the sequence so they do not spuriously make retained nodes move.
+    std::vector<bool> retained_order(left.size(), true);
+    std::vector<RuntimeSchemaNodeId> compared_ordered_schemas;
+    for (std::size_t start = 0; start < left.size(); ++start) {
+      if (!right_match[start]) continue;
+      const RuntimeSchemaNodeId schema_id = before.Get(left[start]).schema;
+      if (schema_id == kInvalidRuntimeSchemaNodeId ||
+          !schema.Get(schema_id).ordered_by_user ||
+          std::ranges::find(compared_ordered_schemas, schema_id) !=
+              compared_ordered_schemas.end()) {
+        continue;
+      }
+      compared_ordered_schemas.push_back(schema_id);
+      std::vector<std::size_t> members;
+      for (std::size_t index = start; index < left.size(); ++index) {
+        if (right_match[index] && before.Get(left[index]).schema == schema_id)
+          members.push_back(index);
+      }
+      std::vector<std::size_t> length(members.size(), 1);
+      std::vector<std::optional<std::size_t>> previous(members.size());
+      std::size_t best = 0;
+      for (std::size_t index = 0; index < members.size(); ++index) {
+        for (std::size_t prior = 0; prior < index; ++prior) {
+          if (*right_match[members[prior]] < *right_match[members[index]] &&
+              length[prior] + 1 > length[index]) {
+            length[index] = length[prior] + 1;
+            previous[index] = prior;
+          }
+        }
+        if (length[index] > length[best]) best = index;
+        retained_order[members[index]] = false;
+      }
+      for (std::optional<std::size_t> index = best; index;
+           index = previous[*index]) {
+        retained_order[members[*index]] = true;
+      }
+    }
+
+    std::fill(matched.begin(), matched.end(), false);
+    for (std::size_t left_index = 0; left_index < left.size(); ++left_index) {
+      const ConfigNodeId left_id = left[left_index];
+      const std::optional<std::size_t> match = right_match[left_index];
       if (!match) {
         add_subtree(before, left_id, parent_path, ChangeKind::kDeleted);
         continue;
@@ -723,6 +773,24 @@ std::vector<ChangeEvent> DiffConfigDocuments(
       const ConfigNode& left_node = before.Get(left_id);
       const ConfigNode& right_node = after.Get(right[*match]);
       const std::string path = InstancePath(schema, before, left_id, parent_path);
+      if (!retained_order[left_index]) {
+        const auto ordinal = [&](const std::vector<ConfigNodeId>& siblings,
+                                 std::size_t end,
+                                 const ConfigDocument& document) {
+          return 1 + std::ranges::count_if(
+                         siblings.begin(),
+                         siblings.begin() +
+                             static_cast<std::ptrdiff_t>(end),
+                         [&](ConfigNodeId id) {
+                           return document.Get(id).schema == left_node.schema;
+                         });
+        };
+        changes.push_back(
+            {ChangeKind::kMoved, path,
+             "position " + std::to_string(ordinal(left, left_index, before)),
+             "position " + std::to_string(ordinal(right, *match, after)),
+             left_node.schema});
+      }
       if (left_node.value != right_node.value) {
         changes.push_back({ChangeKind::kValueChanged, path, left_node.value,
                            right_node.value, left_node.schema});

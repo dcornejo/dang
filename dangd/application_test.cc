@@ -851,6 +851,43 @@ TEST(DangdApplicationTest, CommitReplacesBackendAndDescribesDeltaInEnglish) {
             std::string::npos);
 }
 
+TEST(DangdApplicationTest, DescribesOrderedMoveDeltaInEnglish) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.model = inputs.Write("ordered.yang", R"yang(module ordered {
+    yang-version 1.1; namespace "urn:ordered-test"; prefix o;
+    list item { key name; ordered-by user; leaf name { type string; } }
+  })yang");
+  options.configuration = inputs.Write("ordered.xml", R"xml(
+    <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <item xmlns="urn:ordered-test"><name>a</name></item>
+      <item xmlns="urn:ordered-test"><name>b</name></item>
+    </config>)xml");
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr);
+  const auto edit = loaded.application->server().Process("one", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="move">
+      <edit-config><target><candidate/></target><config>
+        <item xmlns="urn:ordered-test" xmlns:o="urn:ordered-test"
+              xmlns:y="urn:ietf:params:xml:ns:yang:1"
+              y:insert="after" y:key="[o:name='b']"><name>a</name></item>
+      </config></edit-config>
+    </rpc>)xml");
+  ASSERT_NE(edit.xml.find("<ok/>"), std::string::npos) << edit.xml;
+  const auto commit = loaded.application->server().Process("one", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="commit">
+      <commit/>
+    </rpc>)xml");
+  ASSERT_NE(commit.xml.find("<ok/>"), std::string::npos) << commit.xml;
+  const auto deltas = loaded.application->DrainBackendDeltas();
+  ASSERT_EQ(deltas.size(), 1u);
+  EXPECT_NE(deltas.front().find("Moved "), std::string::npos);
+  EXPECT_NE(deltas.front().find("name='b'"), std::string::npos)
+      << deltas.front();
+  EXPECT_NE(deltas.front().find("position 2 to position 1"), std::string::npos)
+      << deltas.front();
+}
+
 TEST(DangdApplicationTest, FailedCommitPreservesRunningAndBackendConfiguration) {
   TemporaryInputs inputs;
   auto loaded = Application::Load(Options(inputs));
