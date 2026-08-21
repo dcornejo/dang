@@ -7,6 +7,9 @@
 
 ### Added
 
+- Added an RFC 8341 section-indexed compliance matrix covering `dangd` policy
+  bootstrap, session identity, operation/data/notification enforcement, and
+  remaining production evidence.
 - Preserved complete backend/plugin deltas while excluding implicit YANG
   `choice` and `when` removals from separate NACM write authorization.
 - Connected notification instance binding to `dangd`'s live operational view,

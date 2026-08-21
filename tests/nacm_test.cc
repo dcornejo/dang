@@ -50,6 +50,65 @@ TEST(NacmTest, RecoveryUsersBypassRules) {
   EXPECT_TRUE(policy.AuthorizeData("root", AccessOperation::kDelete, "/any"));
 }
 
+TEST(NacmTest, DisabledEnforcementBypassesRulesWithoutCountingDenials) {
+  NacmPolicy policy;
+  policy.set_enabled(false);
+  policy.set_read_default(AccessAction::kDeny);
+  policy.set_write_default(AccessAction::kDeny);
+  policy.set_exec_default(AccessAction::kDeny);
+  EXPECT_TRUE(policy.AuthorizeRpc("guest", "ietf-netconf", "delete-config"));
+  EXPECT_TRUE(policy.AuthorizeData(
+      "guest", "example", AccessOperation::kCreate, "/{urn:example}item"));
+  EXPECT_TRUE(policy.AuthorizeData(
+      "guest", "example", AccessOperation::kUpdate, "/{urn:example}item"));
+  EXPECT_TRUE(policy.AuthorizeData(
+      "guest", "example", AccessOperation::kDelete, "/{urn:example}item"));
+  EXPECT_TRUE(policy.AuthorizeNotification("guest", "example", "alarm"));
+  const NacmCounters counters = policy.counters();
+  EXPECT_EQ(counters.denied_operations, 0U);
+  EXPECT_EQ(counters.denied_data_writes, 0U);
+  EXPECT_EQ(counters.denied_notifications, 0U);
+}
+
+TEST(NacmTest, AppliesWildcardGroupsModulesNamesAndCrudxBitsInOrder) {
+  NacmPolicy policy;
+  policy.set_read_default(AccessAction::kDeny);
+  policy.set_write_default(AccessAction::kDeny);
+  policy.set_exec_default(AccessAction::kDeny);
+  NacmRule first;
+  first.name = "permit-all-group-example";
+  first.groups = {"*"};
+  first.module_name = "*";
+  first.path_prefix = "/{urn:example}items";
+  first.operations = AccessMask(AccessOperation::kRead) |
+      AccessMask(AccessOperation::kCreate) |
+      AccessMask(AccessOperation::kUpdate) |
+      AccessMask(AccessOperation::kDelete);
+  first.action = AccessAction::kPermit;
+  policy.AddRule(first);
+  NacmRule later_deny = first;
+  later_deny.name = "later-deny";
+  later_deny.action = AccessAction::kDeny;
+  policy.AddRule(std::move(later_deny));
+  for (const AccessOperation operation : {
+           AccessOperation::kRead, AccessOperation::kCreate,
+           AccessOperation::kUpdate, AccessOperation::kDelete}) {
+    EXPECT_TRUE(policy.AuthorizeData(
+        "unlisted", "example", operation,
+        "/{urn:example}items/{urn:example}item"));
+  }
+
+  NacmRule rpc;
+  rpc.name = "all-rpcs";
+  rpc.groups = {"*"};
+  rpc.module_name = "*";
+  rpc.rpc_name = "*";
+  rpc.operations = AccessMask(AccessOperation::kExecute);
+  rpc.action = AccessAction::kPermit;
+  policy.AddRule(std::move(rpc));
+  EXPECT_TRUE(policy.AuthorizeRpc("unlisted", "vendor", "reboot"));
+}
+
 TEST(NacmTest, SilentlyFiltersDeniedReadSubtrees) {
   NacmPolicy policy;
   policy.AddUserToGroup("guest", "guests");

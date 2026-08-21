@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added a section-indexed RFC 8341 executable-evidence matrix and tests for
+  disabled enforcement, wildcard groups/modules/names, CRUDX bits, ordered
+  first-match behavior, and denial-counter bypass.
 - Distinguished explicit edits from implicit `choice` and `when` removals so
   RFC 8341 authorization does not demand permission for validation side effects
   while backends continue to receive the complete resulting delta.

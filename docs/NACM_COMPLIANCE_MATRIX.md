@@ -1,0 +1,147 @@
+<!-- Copyright 2026 David Cornejo -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+# RFC 8341 NACM compliance matrix
+
+This executable-evidence index follows RFC 8341 section order. A listed test is
+evidence for the stated behavior, not a substitute for independent
+interoperability testing. Open items remain in [TODO.md](../TODO.md); the
+high-level status and variance statement is in [COMPLIANCE.md](COMPLIANCE.md).
+
+## Sections 3.1–3.3: model and policy controls
+
+- User, configured-group, multiple-group, wildcard-group, module, rule-type,
+  operation-bit, action, and ordered-first-match behavior:
+  `NacmTest.LoadsOrderedIetfNetconfAcmConfiguration`,
+  `NacmTest.AppliesOrderedGroupRulesAndDefaults`, and
+  `NacmTest.AppliesWildcardGroupsModulesNamesAndCrudxBitsInOrder`.
+- Recovery-session bypass: `NacmTest.RecoveryUsersBypassRules` and
+  `NacmTest.PreservesRecoveryIdentityWhenManagedPolicyChanges`.
+- `enable-nacm`, `read-default`, `write-default`, `exec-default`, and denial
+  accounting while enforcement is disabled:
+  `NacmTest.DisabledEnforcementBypassesRulesWithoutCountingDenials` and
+  `NacmTest.CountsDeniedOperationsWritesAndNotifications`.
+- `enable-external-groups`: `NacmTest.HonorsExternalGroupsSwitch`.
+- `default-deny-all` and `default-deny-write` inheritance and explicit-rule
+  precedence: `NacmTest.EnforcesDefaultDenyAnnotationsAfterExplicitRules`,
+  `ConfigValidationTest.PropagatesNacmDefaultDenyAnnotations`, and
+  `ConfigValidationTest.PreservesNacmAnnotationsFromYin`.
+- Model loading rejects malformed switches, operations, selectors, duplicate
+  names, and missing actions: `NacmTest.RejectsMalformedModelConfiguration`.
+- Managed bootstrap and datastore policy replacement:
+  `DangdApplicationTest.UsesSecureNacmDefaultsWhenSubtreeIsAbsent`,
+  `DangdApplicationTest.SeedsAndCommitsDatastoreManagedNacm`, and
+  `DangdApplicationTest.LoadsNacmAndUsesAuthenticatedSessionIdentity`.
+
+Open evidence: add a dedicated vector for every `ietf-netconf-acm` leaf's
+default and range, every prohibited selector combination, duplicate membership,
+multiple matching rule-list groups, and concurrent policy replacement.
+
+## Section 3.4.1: initial operation
+
+- Absent managed NACM configuration permits reads and operations but denies
+  ordinary writes, while recovery users can seed policy:
+  `DangdApplicationTest.UsesSecureNacmDefaultsWhenSubtreeIsAbsent` and
+  `DangdApplicationTest.SeedsAndCommitsDatastoreManagedNacm`.
+- Server-initiated initial configuration loading is schema validated without
+  being blocked by the not-yet-installed policy: application load tests.
+
+Open evidence: failure injection for first-boot policy persistence and restart
+after a partially written external state store.
+
+## Section 3.4.2: session establishment
+
+- Authenticated usernames remain separate from NETCONF session identifiers and
+  transport groups are passed without policy-side invention:
+  `DangdApplicationTest.LoadsNacmAndUsesAuthenticatedSessionIdentity`,
+  `NetconfTransportTest` identity tests, and
+  `NacmTest.HonorsExternalGroupsSwitch`.
+
+Open evidence: canonical username rules, ambiguous/missing certificate mapping,
+trusted external-group provenance, recovery-session audit records, and
+multi-session concurrent policy reload. These remain host/deployment work in
+`TODO.md`.
+
+## Section 3.4.3: access-denied errors
+
+- Denied RPC execution and writes return NETCONF `access-denied` without
+  publishing state: `NetconfServerTest.EnforcesNacmBeforePublishingWrites`,
+  `NetconfServerTest.AuthorizesUrlTargetReplacementBeforeWriting`,
+  `NetconfDatastoreTest.AuthorizesExactCommitAndCopyChangesAtomically`, and
+  `DangdApplicationTest.LoadsNacmAndUsesAuthenticatedSessionIdentity`.
+
+Open evidence: clause-level vectors for the exact `error-type`, `error-tag`,
+`error-path`, and information-disclosure requirements for every denied standard
+and application operation.
+
+## Section 3.4.4: incoming RPC validation
+
+- Ordered module/RPC/exec matching, defaults, `default-deny-all`, unconditional
+  `close-session`, and special default denial of `delete-config` and
+  `kill-session`: `NacmTest.DeniesSensitiveRpcByRuleAndDeleteConfigByDefault`,
+  `NacmTest.EnforcesDefaultDenyAnnotationsAfterExplicitRules`, and server RPC
+  dispatch tests.
+- YANG 1.1 actions require readable ancestors, execute permission, a complete
+  keyed path, and an existing operational parent before dispatch:
+  `NacmTest.AppliesRfc8341ActionDecisionSequence`,
+  `NetconfServerTest.RequiresReadableAncestorsBeforeDispatchingAction`, and
+  `NetconfServerTest.RequiresActionParentInstanceAndCompleteListKeys`.
+- One immutable policy copy governs an RPC and its data operations; counters are
+  shared with the live policy. This is implemented by `NetconfServer::Process`.
+
+Open evidence: a concurrent replacement test proving policy snapshot isolation
+through a deliberately blocked multi-stage RPC.
+
+## Section 3.4.5: data-node access validation
+
+- Read-denied data is silently omitted before subtree/XPath selection:
+  `NacmTest.SilentlyFiltersDeniedReadSubtrees`,
+  `NacmTest.FiltersSpecificKeyedListInstances`, and NETCONF filter tests.
+- Expanded names, complete path segments, descendants, list keys, omitted-key
+  wildcards, and non-textual-prefix matching:
+  `NacmTest.MatchesKeyedPathsAndTreatsMissingKeysAsWildcards` and
+  `NacmTest.DoesNotUseTextualPathPrefixes`.
+- Read/create/update/delete bit selection and first-match ordering:
+  `NacmTest.AppliesWildcardGroupsModulesNamesAndCrudxBitsInOrder`.
+- Exact edits, candidate commit, inline/URL replacement, and copy operations are
+  authorized atomically before publication. Implicit `choice` and `when`
+  removals do not demand separate permission:
+  `NetconfDatastoreTest.AuthorizesExactCommitAndCopyChangesAtomically`,
+  `NetconfDatastoreTest.DoesNotAuthorizeImplicitChoiceSideEffect`, and
+  `NetconfDatastoreTest.DoesNotAuthorizeImplicitWhenSideEffect`.
+- Denied write accounting: `NacmTest.CountsDeniedOperationsWritesAndNotifications`.
+
+Open evidence: a single protocol-level CRUDX suite covering every NETCONF and
+RFC 8526 operation-to-access mapping, ordered-by-user moves, defaults, leaf-list
+instances, confirmed-commit rollback, and all URL failure paths.
+
+## Section 3.4.6: outgoing notification authorization
+
+- Top-level notification module/name/read matching, defaults, recovery bypass,
+  and denied-notification counters:
+  `NacmTest.AppliesOrderedNotificationRulesAndRecoveryBypass` and
+  `NacmTest.CountsDeniedOperationsWritesAndNotifications`.
+- Data-associated notifications require concrete existing keyed ancestors and
+  readable access to each ancestor, and are authorized per subscription before
+  replay or live queueing:
+  `NacmTest.AppliesRfc8341DataAssociatedNotificationDecisionSequence`,
+  `NetconfNotificationsTest.DerivesAssociatedNotificationAncestorsFromSchema`,
+  and `NetconfNotificationsTest.AppliesNacmBeforeQueueing`.
+
+Open evidence: concurrent policy replacement during replay/live fanout and an
+external RFC 5277/NACM interoperability run.
+
+## Sections 3.5 and 5: model and security considerations
+
+- The pinned normative `ietf-netconf-acm@2018-02-14.yang` is compiled, exposed
+  through YANG Library and `get-schema`, and used to validate managed policy
+  configuration before `LoadNacmPolicy` constructs the runtime policy.
+- Denial counters are core-owned operational data. Recovery identities and
+  counters survive managed policy replacement.
+- Resource limits and malformed NACM XML/path inputs fail closed; protocol
+  fuzzing includes NACM loading.
+
+Open evidence: durable rollback when policy snapshot persistence fails,
+production authentication/group hardening, a complete security review, fuzzing
+release results, and independent interoperability. No full RFC 8341 compliance
+claim is made until those TODO items and every open entry above are closed.

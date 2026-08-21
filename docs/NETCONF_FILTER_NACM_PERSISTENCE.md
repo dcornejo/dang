@@ -3,6 +3,9 @@
 
 # Retrieval filtering, NACM, and persistence
 
+The [RFC 8341 compliance matrix](NACM_COMPLIANCE_MATRIX.md) maps implemented
+behavior and remaining evidence to the standard's enforcement sections.
+
 ## Subtree filtering
 
 `ApplySubtreeFilter` implements RFC 6241 subtree filtering and is used by

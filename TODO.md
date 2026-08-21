@@ -15,13 +15,11 @@ stays in this file with its remaining work rewritten precisely.
 
 ### RFC 8341 NACM compliance closure
 
-- Complete a requirement-by-requirement RFC 8341 test matrix. Include every
-  decision step and precedence rule, descendant matching, wildcard groups,
-  recovery and disabled-NACM sessions, external groups, all CRUDX transitions,
-  standard and schema-defined operations, nested actions and notifications,
-  read filtering, and all three denial counters. Record the RFC section beside
-  each vector. Implicit `choice` and `when` side-effect authorization is now
-  covered.
+- Close every open evidence item in
+  [`docs/NACM_COMPLIANCE_MATRIX.md`](docs/NACM_COMPLIANCE_MATRIX.md), especially
+  exact access-denied serialization, concurrent policy-snapshot isolation,
+  exhaustive model-loader constraints, and the protocol-level operation-to-
+  CRUDX matrix. Keep each vector indexed to its RFC 8341 section.
 - Make managed NACM policy replacement and durable datastore persistence one
   recoverable transaction, retaining or restoring the last known-good policy
   and running configuration when snapshot persistence fails. Schema validation,

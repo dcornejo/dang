@@ -201,6 +201,9 @@ identity/group hardening, fuzzing, and independent interoperability testing.
 Until the remaining work closes, the project must not describe NACM as fully
 compliant.
 
+The section-indexed implemented and open evidence is maintained in the
+[RFC 8341 NACM compliance matrix](NACM_COMPLIANCE_MATRIX.md).
+
 ### RFC 8342 — NMDA and RFC 8526 — NETCONF NMDA operations
 
 Status: **partial**.
