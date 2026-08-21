@@ -831,7 +831,8 @@ std::string NacmPolicy::FilterReadableData(std::string_view user,
       std::ranges::count_if(document.children(), [](pugi::xml_node node) {
         return node.type() == pugi::node_element;
       }));
-  if (root_elements != 1) return "";
+  if (root_elements != 1 ||
+      SplitName(document.document_element().name()).second != "data") return "";
   std::string resource_error;
   if (!XmlWithinResourceLimits(document, data_xml, DefaultResourceLimits(),
                                &resource_error)) {

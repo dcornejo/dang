@@ -128,7 +128,7 @@ class NacmPolicy {
   [[nodiscard]] NacmCounters counters() const;
   /** Retains host-owned recovery identities and counters across policy reloads. */
   void PreserveRuntimeStateFrom(const NacmPolicy& previous);
-  /** Silently removes read-denied data nodes, as required by RFC 8341. */
+  /** Filters one XML `<data>` envelope, silently removing read-denied nodes. */
   [[nodiscard]] std::string FilterReadableData(std::string_view user,
       std::string_view data_xml,
       std::span<const std::string> external_groups = {},

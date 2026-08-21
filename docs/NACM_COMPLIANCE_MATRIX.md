@@ -18,7 +18,7 @@ high-level status and variance statement is in [COMPLIANCE.md](COMPLIANCE.md).
 - Recovery-session bypass: `NacmTest.RecoveryUsersBypassRules` and
   `NacmTest.PreservesRecoveryIdentityWhenManagedPolicyChanges`. Recovery and
   disabled-enforcement read-filter bypasses still enforce XML syntax, size,
-  node-count, depth, and single-document-element limits.
+  node-count, depth, and one `<data>` document envelope.
 - Host recovery identities must be unique canonical UTF-8 names. Empty,
   oversized, padded, control-containing, embedded-NUL, malformed UTF-8, and
   duplicate values fail before privilege is installed or `dangd` starts:
@@ -163,7 +163,8 @@ No open core-server evidence item remains for policy snapshot isolation.
 - Read-denied data is silently omitted before subtree/XPath selection:
   `NacmTest.SilentlyFiltersDeniedReadSubtrees`,
   `NacmTest.FiltersSpecificKeyedListInstances`, and NETCONF filter tests.
-  Multi-root input fails closed so no sibling root escapes traversal.
+  Missing/incorrect envelopes and multi-root input fail closed so neither the
+  document root nor a sibling root escapes traversal.
 - Schema-aware read filtering fails closed for elements that cannot be resolved
   in the advertised runtime schema, preventing unknown data from bypassing
   module rules or inherited NACM annotations:

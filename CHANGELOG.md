@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Required the readable-data filter's documented `<data>` envelope so a data
+  node supplied as the document root cannot escape NACM authorization.
 - Rejected readable-data XML with multiple top-level elements so later roots
   cannot escape NACM traversal and be serialized without authorization.
 - Applied XML parsing and resource limits before recovery-user or disabled-NACM
