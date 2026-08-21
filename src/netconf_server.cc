@@ -292,6 +292,9 @@ std::string SchemaInstanceComponent(
       if (value.find('\'') == std::string::npos) {
         result += "[{" + key.name.namespace_uri + "}" + key.name.local_name +
                   "='" + value + "']";
+      } else if (value.find('"') == std::string::npos) {
+        result += "[{" + key.name.namespace_uri + "}" + key.name.local_name +
+                  "=\"" + value + "\"]";
       }
       break;
     }
@@ -300,9 +303,16 @@ std::string SchemaInstanceComponent(
 }
 
 struct ActionInstance {
+  struct AncestorSelector {
+    config::QualifiedXmlName name;
+    std::vector<std::pair<config::QualifiedXmlName, std::string>> keys;
+  };
   config::RuntimeSchemaNodeId schema = config::kInvalidRuntimeSchemaNodeId;
   std::string path;
   std::vector<NacmDataNode> ancestors;
+  std::vector<AncestorSelector> selectors;
+  bool has_all_keys = true;
+  bool has_representable_keys = true;
   pugi::xml_node xml;
 };
 
@@ -310,18 +320,42 @@ std::optional<ActionInstance> FindActionInstance(
     const config::RuntimeSchema& schema, const pugi::xml_node& wrapper) {
   std::function<std::optional<ActionInstance>(
       pugi::xml_node, config::RuntimeSchemaNodeId, std::string,
-      std::vector<NacmDataNode>)> visit;
+      std::vector<NacmDataNode>, std::vector<ActionInstance::AncestorSelector>,
+      bool, bool)> visit;
   visit = [&](pugi::xml_node instance, config::RuntimeSchemaNodeId schema_id,
-              std::string parent_path, std::vector<NacmDataNode> ancestors)
+              std::string parent_path, std::vector<NacmDataNode> ancestors,
+              std::vector<ActionInstance::AncestorSelector> selectors,
+              bool has_all_keys, bool has_representable_keys)
       -> std::optional<ActionInstance> {
     const config::RuntimeSchemaNode& metadata = schema.Get(schema_id);
     std::string path = parent_path +
         SchemaInstanceComponent(instance, metadata, schema);
     if (metadata.kind == semantic::SchemaNodeKind::kAction)
       return ActionInstance{schema_id, std::move(path),
-                            std::move(ancestors), instance};
+                            std::move(ancestors), std::move(selectors),
+                            has_all_keys, has_representable_keys, instance};
     ancestors.push_back({metadata.module_name, path,
                          metadata.nacm_default_deny_all});
+    ActionInstance::AncestorSelector selector{metadata.name, {}};
+    for (config::RuntimeSchemaNodeId key_id : metadata.keys) {
+      const config::RuntimeSchemaNode& key = schema.Get(key_id);
+      bool found = false;
+      for (const pugi::xml_node child : instance.children()) {
+        if (child.type() == pugi::node_element &&
+            NamespaceFor(child).value_or("") == key.name.namespace_uri &&
+            LocalName(child.name()) == key.name.local_name) {
+          selector.keys.emplace_back(key.name, child.text().as_string());
+          const std::string_view value = child.text().as_string();
+          if (value.find('\'') != std::string_view::npos &&
+              value.find('"') != std::string_view::npos)
+            has_representable_keys = false;
+          found = true;
+          break;
+        }
+      }
+      has_all_keys = has_all_keys && found;
+    }
+    selectors.push_back(std::move(selector));
     for (const pugi::xml_node child : instance.children()) {
       if (child.type() != pugi::node_element) continue;
       const config::QualifiedXmlName child_name{
@@ -336,7 +370,8 @@ std::optional<ActionInstance> FindActionInstance(
       if (kind != semantic::SchemaNodeKind::kAction &&
           kind != semantic::SchemaNodeKind::kContainer &&
           kind != semantic::SchemaNodeKind::kList) continue;
-      if (auto found = visit(child, *child_schema, path, ancestors)) return found;
+      if (auto found = visit(child, *child_schema, path, ancestors, selectors,
+                             has_all_keys, has_representable_keys)) return found;
     }
     return std::nullopt;
   };
@@ -345,10 +380,42 @@ std::optional<ActionInstance> FindActionInstance(
     const auto root = schema.FindRoot(
         {NamespaceFor(child).value_or(""), std::string(LocalName(child.name()))});
     if (root) {
-      if (auto found = visit(child, *root, "", {})) return found;
+      if (auto found = visit(child, *root, "", {}, {}, true, true)) return found;
     }
   }
   return std::nullopt;
+}
+
+bool ActionParentExists(std::string_view data_xml,
+                        const ActionInstance& action) {
+  pugi::xml_document document;
+  if (!document.load_buffer(data_xml.data(), data_xml.size())) return false;
+  std::vector<pugi::xml_node> candidates{document.document_element()};
+  for (const ActionInstance::AncestorSelector& selector : action.selectors) {
+    std::vector<pugi::xml_node> matches;
+    for (const pugi::xml_node parent : candidates) {
+      for (const pugi::xml_node child : parent.children()) {
+        if (child.type() != pugi::node_element ||
+            NamespaceFor(child).value_or("") != selector.name.namespace_uri ||
+            LocalName(child.name()) != selector.name.local_name) continue;
+        const bool keys_match = std::ranges::all_of(
+            selector.keys, [&](const auto& expected) {
+              for (const pugi::xml_node key : child.children()) {
+                if (key.type() == pugi::node_element &&
+                    NamespaceFor(key).value_or("") ==
+                        expected.first.namespace_uri &&
+                    LocalName(key.name()) == expected.first.local_name &&
+                    key.text().as_string() == expected.second) return true;
+              }
+              return false;
+            });
+        if (keys_match) matches.push_back(child);
+      }
+    }
+    if (matches.empty()) return false;
+    candidates = std::move(matches);
+  }
+  return !candidates.empty();
 }
 
 std::optional<config::RuntimeSchemaNodeId> FindNamedSchema(
@@ -810,9 +877,30 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
         "execution of the requested RPC is denied", "access-denied")), false};
   }
   if (action) {
-    result = ValidateOperationData(datastores_.schema(), action->schema,
-                                   semantic::SchemaNodeKind::kInput,
-                                   action->xml);
+    if (!action->has_all_keys) {
+      result = ProtocolFailure(
+          "action instance is missing one or more list keys",
+          "missing-element");
+    } else if (!action->has_representable_keys) {
+      result = ProtocolFailure(
+          "an action list key cannot be represented in an instance path",
+          "invalid-value");
+    } else {
+      std::string action_data =
+          "<data>" + datastores_.Read(Datastore::kRunning).ToXml(false) +
+          "</data>";
+      if (operational_ != nullptr)
+        action_data = operational_->AugmentDataXml(action_data);
+      if (!ActionParentExists(action_data, *action)) {
+        result = ProtocolFailure(
+            "the parent data instance for the requested action does not exist",
+            "data-missing");
+      } else {
+        result = ValidateOperationData(datastores_.schema(), action->schema,
+                                       semantic::SchemaNodeKind::kInput,
+                                       action->xml);
+      }
+    }
     if (!result.ok) {
       // Schema-invalid input never crosses the plugin boundary.
     } else if (operations_ == nullptr) {

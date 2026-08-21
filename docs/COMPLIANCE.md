@@ -186,10 +186,13 @@ authorization, recovery users, notification authorization, and denial
 counters.
 
 Remaining gaps are tracked in `TODO.md`: concrete datastore-instance binding
-for actions and nested notifications, a clause-indexed decision matrix, full
-schema validation and atomic persistence of policy replacement, production
-identity/group hardening, fuzzing, and independent interoperability testing.
-Until these close, the project must not describe NACM as fully compliant.
+for nested notifications, a clause-indexed decision matrix, full schema
+validation and atomic persistence of policy replacement, production identity/
+group hardening, fuzzing, and independent interoperability testing. Action
+requests are already authorized before their keyed parent instance is resolved,
+so denied users cannot use the existence error to probe datastore contents.
+Until the remaining work closes, the project must not describe NACM as fully
+compliant.
 
 ### RFC 8342 — NMDA and RFC 8526 — NETCONF NMDA operations
 

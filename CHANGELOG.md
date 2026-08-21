@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added authorization-first datastore-instance binding for YANG 1.1 actions,
+  including complete keyed-list selection and missing-parent rejection before
+  application dispatch.
 - Added a standards compliance ledger covering implemented scope, integration
   boundaries, missing behavior, deliberate variances, reference-only RFCs, and
   the evidence required before an unqualified compliance claim.

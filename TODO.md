@@ -15,12 +15,10 @@ stays in this file with its remaining work rewritten precisely.
 
 ### RFC 8341 NACM compliance closure
 
-- Complete datastore-instance binding for schema-defined YANG 1.1 `action`
-  invocations. The existing NACM engine checks readable ancestors and execute
-  access, but dispatch must also reject an action when its parent data instance
-  does not exist in the applicable datastore. Verify the existing equivalent
-  ancestor authorization for nested notifications against concrete list
-  instances rather than schema paths alone.
+- Bind data-associated notifications to concrete datastore list instances and
+  verify ancestor authorization against those instances rather than schema
+  paths alone. Action dispatch now performs this binding, including complete
+  keyed-list selection, after NACM authorization and before plugin invocation.
 - Complete a requirement-by-requirement RFC 8341 test matrix. Include every
   decision step and precedence rule, descendant matching, wildcard groups,
   recovery and disabled-NACM sessions, external groups, all CRUDX transitions,

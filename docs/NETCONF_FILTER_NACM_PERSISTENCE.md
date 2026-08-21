@@ -77,6 +77,12 @@ operational accounting.
 RPC execution is checked before dispatch. Proposed edit changes are checked
 inside the datastore transaction before publication. Read-denied nodes are
 silently removed. Recovery-session identification remains a host decision.
+For a YANG 1.1 action, authorization of readable ancestors and execute access
+precedes parent-instance resolution. An authorized request must name every list
+key and the selected ancestor instance must exist in the operational view;
+otherwise dispatch fails with `missing-element` or `data-missing`. Performing
+authorization first prevents the different existence errors from becoming a
+datastore probe for an unauthorized user.
 The compiler lowers `nacm:default-deny-all` and `nacm:default-deny-write` into
 effective runtime-schema flags inherited by descendants. These flags apply
 after ordered explicit rules, allowing an explicit permit to grant access as

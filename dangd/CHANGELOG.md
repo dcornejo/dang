@@ -7,6 +7,8 @@
 
 ### Added
 
+- Required authorized plugin actions to select an existing operational parent
+  instance with all list keys before the plugin can be invoked.
 - Documented `dangd` compliance gaps and integration boundaries for NETCONF,
   NACM, NMDA, YANG Library, transport, notifications, and example models.
 - Expanded the RFC 8344 example's comments with practical Linux backend,

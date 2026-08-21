@@ -73,6 +73,11 @@ std::optional<ServerFixture> BuildServerFixture(
       leaf hostname { type string; mandatory true; }
       action reset { output { leaf status { type string; } } }
     }
+    list device {
+      key name;
+      leaf name { type string; }
+      action bounce { output { leaf status { type string; } } }
+    }
     rpc ping {
       input { leaf count { type uint16; mandatory true; } }
       output { leaf result { type string; } }
@@ -86,7 +91,10 @@ std::optional<ServerFixture> BuildServerFixture(
   config::RuntimeSchema schema =
       config::RuntimeSchemaBuilder::FromCompilation(*compilation);
   auto initial = config::ParseDatastoreXml(
-      schema, R"xml(<system xmlns="urn:rpc-test"><hostname>old</hostname></system>)xml")
+      schema, R"xml(<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+        <system xmlns="urn:rpc-test"><hostname>old</hostname></system>
+        <device xmlns="urn:rpc-test"><name>edge-1</name></device>
+      </config>)xml")
                      .document;
   if (!initial) return std::nullopt;
   return ServerFixture{std::move(schema), std::move(*initial)};
@@ -176,6 +184,57 @@ TEST(NetconfServerTest, RequiresReadableAncestorsBeforeDispatchingAction) {
   EXPECT_EQ(operations.path,
             "/{urn:rpc-test}system/{urn:rpc-test}reset");
   EXPECT_NE(allowed.xml.find("reset"), std::string::npos) << allowed.xml;
+}
+
+TEST(NetconfServerTest, RequiresActionParentInstanceAndCompleteListKeys) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NacmPolicy nacm;
+  nacm.AddUserToGroup("alice", "operators");
+  nacm.set_read_default(AccessAction::kDeny);
+  nacm.set_exec_default(AccessAction::kDeny);
+  nacm.AddRule({"read", "operators", "", "",
+                AccessMask(AccessOperation::kRead), AccessAction::kPermit,
+                "rpc"});
+  nacm.AddRule({"actions", "operators", "", "",
+                AccessMask(AccessOperation::kExecute), AccessAction::kPermit,
+                "rpc"});
+  RecordingOperationProvider operations;
+  NetconfServer server(stores, &nacm, nullptr, nullptr, std::nullopt, nullptr,
+                       &operations);
+  const auto request = [](std::string_view body) {
+    return "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+           "message-id=\"action-instance\"><action "
+           "xmlns=\"urn:ietf:params:xml:ns:yang:1\">" +
+           std::string(body) + "</action></rpc>";
+  };
+
+  const RpcResponse hidden = server.Process("bob", request(R"xml(
+    <device xmlns="urn:rpc-test"><name>edge-2</name><bounce/></device>)xml"));
+  EXPECT_NE(hidden.xml.find("access-denied"), std::string::npos) << hidden.xml;
+  EXPECT_EQ(hidden.xml.find("data-missing"), std::string::npos) << hidden.xml;
+  EXPECT_TRUE(operations.called.empty());
+
+  const RpcResponse existing = server.Process("alice", request(R"xml(
+    <device xmlns="urn:rpc-test"><name>edge-1</name><bounce/></device>)xml"));
+  EXPECT_EQ(operations.called, "rpc:bounce");
+  EXPECT_NE(existing.xml.find("reset"), std::string::npos) << existing.xml;
+  EXPECT_NE(operations.path.find("name='edge-1'"), std::string::npos)
+      << operations.path;
+
+  operations.called.clear();
+  const RpcResponse absent = server.Process("alice", request(R"xml(
+    <device xmlns="urn:rpc-test"><name>edge-2</name><bounce/></device>)xml"));
+  EXPECT_NE(absent.xml.find("data-missing"), std::string::npos) << absent.xml;
+  EXPECT_TRUE(operations.called.empty());
+
+  const RpcResponse missing_key = server.Process("alice", request(R"xml(
+    <device xmlns="urn:rpc-test"><bounce/></device>)xml"));
+  EXPECT_NE(missing_key.xml.find("missing-element"), std::string::npos)
+      << missing_key.xml;
+  EXPECT_TRUE(operations.called.empty());
 }
 
 TEST(NetconfServerTest, AppliesXPathRetrievalFilter) {
