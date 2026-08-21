@@ -91,7 +91,37 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data,
   }
 
   if (mode == 2) {
-    (void)yang::netconf::LoadNacmPolicy(input);
+    constexpr std::string_view kPathMarker = "\n@@INSTANCE-PATH@@\n";
+    std::size_t separator = input.find('\0');
+    std::size_t separator_length = 1;
+    if (separator == std::string::npos) {
+      separator = input.find(kPathMarker);
+      separator_length = kPathMarker.size();
+    }
+    const std::string_view policy_xml =
+        separator == std::string::npos
+            ? std::string_view(input)
+            : std::string_view(input).substr(0, separator);
+    const std::string_view instance_path =
+        separator == std::string::npos
+            ? std::string_view("/{urn:fuzz}system/{urn:fuzz}name")
+            : std::string_view(input).substr(separator + separator_length);
+    auto loaded = yang::netconf::LoadNacmPolicy(policy_xml);
+    if (loaded.policy) {
+      (void)loaded.policy->AuthorizeData(
+          "fuzz-user", "fuzz", yang::netconf::AccessOperation::kRead,
+          instance_path);
+      (void)loaded.policy->AuthorizeData(
+          "fuzz-user", "fuzz", yang::netconf::AccessOperation::kCreate,
+          instance_path);
+      (void)loaded.policy->AuthorizeData(
+          "fuzz-user", "fuzz", yang::netconf::AccessOperation::kUpdate,
+          instance_path);
+      (void)loaded.policy->AuthorizeData(
+          "fuzz-user", "fuzz", yang::netconf::AccessOperation::kDelete,
+          instance_path);
+      (void)loaded.policy->FilterReadableData("fuzz-user", kFilterData);
+    }
     return 0;
   }
 

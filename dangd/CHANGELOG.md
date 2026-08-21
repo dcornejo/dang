@@ -23,6 +23,8 @@
 
 ### Added
 
+- Extended NACM sanitizer smoke coverage through instance-path authorization
+  and filtering, including keyed and leaf-list predicate corpus seeds.
 - Added `--tls-username-source` with exact CN, DNS SAN, and URI SAN identity
   selection and ambiguity rejection.
 - Added safely encoded diagnostic audit records for every recovery-user RPC

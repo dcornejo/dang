@@ -1,0 +1,3 @@
+n<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm" xmlns:f="urn:fuzz"><groups><group><name>users</name><user-name>fuzz-user</user-name></group></groups><rule-list><name>data</name><group>users</group><rule><name>keyed</name><module-name>fuzz</module-name><path>/f:items/f:item[f:name='edge']/f:value</path><access-operations>read create update delete</access-operations><action>permit</action></rule></rule-list></nacm>
+@@INSTANCE-PATH@@
+/{urn:fuzz}items/{urn:fuzz}item[{{urn:fuzz}name}='edge']/{urn:fuzz}value

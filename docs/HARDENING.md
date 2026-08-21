@@ -28,6 +28,11 @@ loading, and YIN-tree JSON loading. `yang_protocol_fuzz` covers RFC 6242
 framing, RFC 6241 subtree and XPath filters, RFC 8341 NACM loading, and
 versioned datastore snapshot restoration. Persistence exposes an in-memory
 restore entry point so fuzzing does not depend on temporary-file behavior.
+Its NACM mode accepts a policy followed by a binary NUL or the textual
+`@@INSTANCE-PATH@@` marker and an attacker-controlled expanded instance path.
+When policy loading succeeds, the target exercises all four data-write/read
+authorization bits and readable-data filtering. Seeds cover keyed list and
+leaf-list predicates with namespace and quote edge cases.
 Inputs larger than 1 MiB are rejected by each harness so every iteration has a
 deterministic upper bound.
 

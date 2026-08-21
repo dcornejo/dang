@@ -234,8 +234,11 @@ Open evidence: an external RFC 5277/NACM interoperability run.
   configuration before `LoadNacmPolicy` constructs the runtime policy.
 - Denial counters are core-owned operational data. Recovery identities and
   counters survive managed policy replacement.
-- Resource limits and malformed NACM XML/path inputs fail closed; protocol
-  fuzzing includes NACM loading.
+- Resource limits and malformed NACM XML/path inputs fail closed. The protocol
+  fuzz target combines arbitrary NACM XML with attacker-controlled expanded
+  instance paths, then exercises read/create/update/delete authorization and
+  readable-data filtering. Its corpus includes keyed and leaf-list predicates,
+  namespaces, apostrophes, and mixed quote forms.
 
 Live managed-policy commits are transactionally coupled to snapshot
 persistence. Fault injection before and after atomic replacement verifies that
@@ -243,6 +246,6 @@ the prior durable snapshot, running tree, backend, and NACM policy are restored
 before an `operation-failed` reply is returned.
 
 Open evidence: production authentication/group hardening, a complete security
-review, fuzzing release results, and independent interoperability. No full RFC
+review, sustained coverage-guided fuzzing release results, and independent interoperability. No full RFC
 8341 compliance claim is made until those TODO items and every open entry above
 are closed.

@@ -26,6 +26,9 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Extended protocol fuzzing from NACM XML loading through attacker-controlled
+  instance-path CRUD authorization and read filtering, with keyed and leaf-list
+  predicate seeds.
 - Added fail-closed selection of certificate CN, DNS SAN, or URI SAN as the TLS
   NETCONF/NACM username source.
 - Added a structured recovery-user RPC audit hook and concurrent evidence that

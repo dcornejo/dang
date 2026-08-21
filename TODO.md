@@ -64,8 +64,11 @@ stays in this file with its remaining work rewritten precisely.
   requests. Concurrent policy replacement and per-RPC snapshots are covered in
   the core server.
 - Run interoperability and negative-security tests against at least one
-  independent RFC 8341 implementation, fuzz NACM XML and instance-identifier
-  paths, and document any intentional deviations before claiming compliance.
+  independent RFC 8341 implementation, run a sustained coverage-guided NACM
+  fuzz campaign, and document any intentional deviations before claiming
+  compliance. The deterministic sanitizer smoke target mutates NACM XML and
+  attacker-controlled keyed/leaf-list instance paths through policy loading,
+  CRUD authorization, and read filtering.
 
 ### RFC 8342 / RFC 8526 NMDA compliance closure
 

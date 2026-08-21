@@ -196,7 +196,7 @@ requests are authorized before their parent is resolved, so denied users cannot
 use the existence error to probe datastore contents.
 
 Remaining gaps are tracked in `TODO.md`: configurable SSH and deployment-
-specific certificate value mapping, fuzzing, and independent interoperability
+specific certificate value mapping, sustained fuzzing, and independent interoperability
 testing. TLS directly supports CN, DNS SAN, and URI SAN selection. Transport external
 groups require explicit trusted provenance and bounded, unique values. Every
 recovery-user RPC attempt emits a privacy-minimal host audit record. Live
