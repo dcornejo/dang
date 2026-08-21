@@ -756,6 +756,24 @@ TEST(NetconfServerTest, OmitsUnmodeledSchemaAwareNacmReadData) {
   EXPECT_EQ(filtered.find("injected"), std::string::npos);
   EXPECT_EQ(filtered.find("foreign"), std::string::npos);
 
+  NacmPolicy recovery;
+  ASSERT_TRUE(recovery.AddRecoveryUser("root"));
+  const std::string recovery_filtered = recovery.FilterReadableData(
+      "root", data, {}, &fixture->schema);
+  EXPECT_NE(recovery_filtered.find("<hostname>visible</hostname>"),
+            std::string::npos);
+  EXPECT_EQ(recovery_filtered.find("injected"), std::string::npos);
+  EXPECT_EQ(recovery_filtered.find("foreign"), std::string::npos);
+
+  NacmPolicy disabled;
+  disabled.set_enabled(false);
+  const std::string disabled_filtered = disabled.FilterReadableData(
+      "alice", data, {}, &fixture->schema);
+  EXPECT_NE(disabled_filtered.find("<hostname>visible</hostname>"),
+            std::string::npos);
+  EXPECT_EQ(disabled_filtered.find("injected"), std::string::npos);
+  EXPECT_EQ(disabled_filtered.find("foreign"), std::string::npos);
+
   // Without a schema, retain the generic XML filtering API's established
   // behavior; the caller did not supply a model as an authority.
   const std::string generic = policy.FilterReadableData("alice", data);

@@ -7,6 +7,8 @@
 
 ### Fixed
 
+- Kept schema-aware pruning active for recovery and disabled-NACM reads so
+  authorization bypass does not expose unmodeled plugin/provider data.
 - Rejected `<data>` read-filter envelopes in arbitrary model namespaces while
   accepting NETCONF, NMDA, and the internal unqualified representation.
 - Required a `<data>` reply envelope before NACM read filtering so the XML root

@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Kept an explicitly supplied runtime schema active during recovery-user and
+  disabled-NACM read bypass, pruning unmodeled provider data without applying
+  authorization rules.
 - Restricted readable-data envelopes to the NETCONF/NMDA namespaces or the
   internal unqualified form, preventing a modeled `data` node from becoming a
   false transport wrapper.

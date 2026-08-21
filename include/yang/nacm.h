@@ -128,7 +128,7 @@ class NacmPolicy {
   [[nodiscard]] NacmCounters counters() const;
   /** Retains host-owned recovery identities and counters across policy reloads. */
   void PreserveRuntimeStateFrom(const NacmPolicy& previous);
-  /** Filters one NETCONF/NMDA or internal unqualified XML `<data>` envelope. */
+  /** Filters one data envelope; a supplied schema remains active on bypass. */
   [[nodiscard]] std::string FilterReadableData(std::string_view user,
       std::string_view data_xml,
       std::span<const std::string> external_groups = {},

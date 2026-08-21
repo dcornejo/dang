@@ -69,6 +69,8 @@ stays in this file with its remaining work rewritten precisely.
   Recovery and disabled-enforcement read paths retain XML syntax and resource
   checks, including a single `<data>` document envelope, before bypassing
   authorization. Only NETCONF/NMDA or internal unqualified envelopes are valid.
+  An explicitly supplied runtime schema remains active during recovery or
+  disabled-enforcement authorization bypass.
   Concurrent policy replacement and per-RPC snapshots are covered in the core
   server.
 - Resolve SSH server integration with `dangd`. Select and document whether SSH

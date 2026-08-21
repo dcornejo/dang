@@ -211,6 +211,8 @@ disabled-enforcement bypasses do not bypass XML document-shape, syntax, or
 resource limits; readable-data filtering requires one `<data>` envelope.
 NETCONF and NMDA namespaces and the internal unqualified form are accepted;
 arbitrary model namespaces are not treated as envelopes.
+When a runtime schema is supplied, unmodeled data is pruned even for recovery
+users or disabled NACM; only authorization decisions are bypassed.
 Live datastore mutations
 now publish their durable snapshot before success is returned and compensate a
 failed save by restoring the prior snapshot and live backend/NACM state.

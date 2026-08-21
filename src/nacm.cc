@@ -848,8 +848,9 @@ std::string NacmPolicy::FilterReadableData(std::string_view user,
     return "";
   }
   // Recovery and disabled-enforcement sessions bypass authorization, not the
-  // parser and resource limits that protect every XML processing boundary.
-  if (!enabled_ || IsRecovery(user)) return std::string(data_xml);
+  // parser, resource limits, or an explicitly supplied schema boundary.
+  const bool bypass_authorization = !enabled_ || IsRecovery(user);
+  if (bypass_authorization && schema == nullptr) return std::string(data_xml);
   std::function<void(pugi::xml_node, std::string_view,
                      std::optional<config::RuntimeSchemaNodeId>)> filter;
   filter = [&](pugi::xml_node parent, std::string_view parent_path,
@@ -880,7 +881,7 @@ std::string NacmPolicy::FilterReadableData(std::string_view user,
             InstancePathComponent(
                 child, metadata != nullptr &&
                     metadata->kind == semantic::SchemaNodeKind::kLeafList);
-        if (!AuthorizeData(user,
+        if (!bypass_authorization && !AuthorizeData(user,
                            metadata == nullptr ? "" : metadata->module_name,
                            AccessOperation::kRead, path,
                            external_groups,
