@@ -827,6 +827,11 @@ std::string NacmPolicy::FilterReadableData(std::string_view user,
   pugi::xml_document document;
   if (!document.load_buffer(data_xml.data(), data_xml.size(), pugi::parse_default))
     return "";
+  const std::size_t root_elements = static_cast<std::size_t>(
+      std::ranges::count_if(document.children(), [](pugi::xml_node node) {
+        return node.type() == pugi::node_element;
+      }));
+  if (root_elements != 1) return "";
   std::string resource_error;
   if (!XmlWithinResourceLimits(document, data_xml, DefaultResourceLimits(),
                                &resource_error)) {

@@ -57,6 +57,8 @@ TEST(NacmTest, RecoveryUsersBypassRules) {
   const std::string valid = "<data><public>yes</public></data>";
   EXPECT_EQ(policy.FilterReadableData("root", valid), valid);
   EXPECT_TRUE(policy.FilterReadableData("root", "<data>").empty());
+  EXPECT_TRUE(policy.FilterReadableData(
+      "root", "<data><public>yes</public></data><secret>no</secret>").empty());
   std::string too_deep;
   for (std::size_t depth = 0;
        depth <= DefaultResourceLimits().maximum_xml_depth; ++depth) {
@@ -141,6 +143,9 @@ TEST(NacmTest, SilentlyFiltersDeniedReadSubtrees) {
     </data>)xml");
   EXPECT_NE(filtered.find("<public>yes</public>"), std::string::npos);
   EXPECT_EQ(filtered.find("<secret>"), std::string::npos);
+  EXPECT_TRUE(policy.FilterReadableData("guest", R"xml(
+    <data><system xmlns="urn:example"><public>yes</public></system></data>
+    <secret xmlns="urn:example">unfiltered</secret>)xml").empty());
 }
 
 TEST(NacmTest, LoadsOrderedIetfNetconfAcmConfiguration) {

@@ -207,7 +207,8 @@ and URI SAN selection plus exact local-account mapping. Transport external
 groups require explicit trusted provenance and bounded, unique values. Every
 recovery-user RPC attempt emits a privacy-minimal host audit record, and only
 unique canonical UTF-8 identities can receive recovery privilege. Recovery and
-disabled-enforcement bypasses do not bypass XML syntax or resource limits. Live
+disabled-enforcement bypasses do not bypass XML document-shape, syntax, or
+resource limits. Live
 datastore mutations
 now publish their durable snapshot before success is returned and compensate a
 failed save by restoring the prior snapshot and live backend/NACM state.

@@ -7,6 +7,8 @@
 
 ### Fixed
 
+- Rejected multi-root readable-data XML before NACM filtering, including on
+  recovery and disabled-enforcement paths.
 - Kept XML syntax and resource-limit enforcement active for recovery sessions
   and when NACM policy enforcement is disabled.
 - Rejected plugin/host notification bodies that violate their advertised YANG

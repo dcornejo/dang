@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Rejected readable-data XML with multiple top-level elements so later roots
+  cannot escape NACM traversal and be serialized without authorization.
 - Applied XML parsing and resource limits before recovery-user or disabled-NACM
   read-filter bypass, so authorization bypass cannot bypass input safety.
 - Validated schema-aware notification bodies before NACM authorization and
