@@ -7,6 +7,8 @@
 
 ### Added
 
+- Verified that managed NACM policy preserves rule-list order for identities
+  belonging to several configured groups.
 - Rejected every multiple-selector NACM rule combination using XML leaf
   presence, including paths that cannot be expanded.
 - Verified remote-to-remote URL copy failures preserve provider errors and

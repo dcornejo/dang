@@ -27,6 +27,8 @@ stays in this file with its remaining work rewritten precisely.
   content in structural containers while allowing namespace declarations.
   Every prohibited pairwise and three-way `rule-type` selector combination is
   covered, and selector choice validation is based on leaf presence.
+  Global first-match ordering across rule-lists when a user belongs to several
+  configured groups is covered.
   Datastore-source copy filtering and the running-to-startup execute-only
   exception are also covered. URL/datastore copy combinations are covered;
   remote source-read, target-inspection, and atomic write failures preserve

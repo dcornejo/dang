@@ -35,6 +35,9 @@ high-level status and variance statement is in [COMPLIANCE.md](COMPLIANCE.md).
 - Every pairwise and three-way combination of `rpc-name`, `notification-name`,
   and `path` is rejected according to the model's `rule-type` choice:
   `NacmTest.RejectsEveryMultipleRuleTypeCombination`.
+- A user matching several configured groups and ordered rule-lists receives the
+  first matching rule in global model order, while lists for nonmember groups
+  are skipped: `NacmTest.PreservesRuleListOrderWhenSeveralGroupsMatch`.
 - XML shape validation permits namespace declarations but rejects unmodeled
   attributes at every depth and non-whitespace character content in structural
   containers: `NacmTest.RejectsUnmodeledXmlAttributesAndContainerText`.
@@ -46,8 +49,7 @@ high-level status and variance statement is in [COMPLIANCE.md](COMPLIANCE.md).
   `DangdApplicationTest.SeedsAndCommitsDatastoreManagedNacm`, and
   `DangdApplicationTest.LoadsNacmAndUsesAuthenticatedSessionIdentity`.
 
-Open evidence: add dedicated vectors for multiple matching rule-list groups and
-concurrent managed-policy replacement across sessions.
+Open evidence: add concurrent managed-policy replacement across sessions.
 
 ## Section 3.4.1: initial operation
 

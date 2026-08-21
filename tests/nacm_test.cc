@@ -160,6 +160,36 @@ TEST(NacmTest, LoadsOrderedIetfNetconfAcmConfiguration) {
       "/{urn:ietf:params:xml:ns:yang:ietf-interfaces}interfaces"));
 }
 
+TEST(NacmTest, PreservesRuleListOrderWhenSeveralGroupsMatch) {
+  const NacmLoadResult loaded = LoadNacmPolicy(R"xml(
+    <nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+      <exec-default>deny</exec-default>
+      <groups>
+        <group><name>restricted</name><user-name>alice</user-name></group>
+        <group><name>operators</name><user-name>alice</user-name>
+          <user-name>bob</user-name></group>
+      </groups>
+      <rule-list><name>early-restrictions</name>
+        <group>auditors</group><group>restricted</group>
+        <rule><name>deny-commit</name><module-name>ietf-netconf</module-name>
+          <rpc-name>commit</rpc-name><access-operations>exec</access-operations>
+          <action>deny</action></rule>
+      </rule-list>
+      <rule-list><name>later-operator-access</name><group>operators</group>
+        <rule><name>permit-commit</name><module-name>ietf-netconf</module-name>
+          <rpc-name>commit</rpc-name><access-operations>exec</access-operations>
+          <action>permit</action></rule>
+      </rule-list>
+    </nacm>)xml");
+  ASSERT_TRUE(loaded.policy) <<
+      (loaded.errors.empty() ? "" : loaded.errors.front());
+
+  // Alice matches both ordered rule-lists, so the earlier denial wins. Bob
+  // matches only the later list and therefore receives its permission.
+  EXPECT_FALSE(loaded.policy->AuthorizeRpc("alice", "ietf-netconf", "commit"));
+  EXPECT_TRUE(loaded.policy->AuthorizeRpc("bob", "ietf-netconf", "commit"));
+}
+
 TEST(NacmTest, HonorsExternalGroupsSwitch) {
   const std::vector<std::string> transport_groups = {"operators"};
   NacmPolicy enabled;
