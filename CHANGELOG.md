@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Applied XML parsing and resource limits before recovery-user or disabled-NACM
+  read-filter bypass, so authorization bypass cannot bypass input safety.
 - Validated schema-aware notification bodies before NACM authorization and
   queueing, rejecting unknown, missing, duplicate, over-limit, ill-typed,
   keyless, non-unique, or conflicting/absent choice data.

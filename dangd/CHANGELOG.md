@@ -7,6 +7,8 @@
 
 ### Fixed
 
+- Kept XML syntax and resource-limit enforcement active for recovery sessions
+  and when NACM policy enforcement is disabled.
 - Rejected plugin/host notification bodies that violate their advertised YANG
   structure or scalar constraints before NACM authorization and delivery.
 - Rejected plugin/host notifications whose claimed module and name do not match

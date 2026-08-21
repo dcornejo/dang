@@ -66,6 +66,8 @@ stays in this file with its remaining work rewritten precisely.
   attempt emits a host-visible privacy-minimal audit record, including malformed
   requests. Recovery-user configuration rejects duplicate, padded,
   control-containing, embedded-NUL, oversized, and malformed UTF-8 identities.
+  Recovery and disabled-enforcement read paths retain XML syntax and resource
+  checks before bypassing authorization.
   Concurrent policy replacement and per-RPC snapshots are covered in the core
   server.
 - Resolve SSH server integration with `dangd`. Select and document whether SSH

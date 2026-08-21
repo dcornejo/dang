@@ -16,7 +16,9 @@ high-level status and variance statement is in [COMPLIANCE.md](COMPLIANCE.md).
   `NacmTest.AppliesOrderedGroupRulesAndDefaults`, and
   `NacmTest.AppliesWildcardGroupsModulesNamesAndCrudxBitsInOrder`.
 - Recovery-session bypass: `NacmTest.RecoveryUsersBypassRules` and
-  `NacmTest.PreservesRecoveryIdentityWhenManagedPolicyChanges`.
+  `NacmTest.PreservesRecoveryIdentityWhenManagedPolicyChanges`. Recovery and
+  disabled-enforcement read-filter bypasses still enforce XML syntax, size,
+  node-count, and depth limits.
 - Host recovery identities must be unique canonical UTF-8 names. Empty,
   oversized, padded, control-containing, embedded-NUL, malformed UTF-8, and
   duplicate values fail before privilege is installed or `dangd` starts:

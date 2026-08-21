@@ -821,10 +821,9 @@ NacmLoadResult LoadNacmPolicy(std::string_view xml) {
 std::string NacmPolicy::FilterReadableData(std::string_view user,
     std::string_view data_xml,
     std::span<const std::string> external_groups,
-    const config::RuntimeSchema* schema) const {
+  const config::RuntimeSchema* schema) const {
   std::lock_guard lock(mutex_);
   if (data_xml.size() > DefaultResourceLimits().maximum_xml_bytes) return "";
-  if (!enabled_ || IsRecovery(user)) return std::string(data_xml);
   pugi::xml_document document;
   if (!document.load_buffer(data_xml.data(), data_xml.size(), pugi::parse_default))
     return "";
@@ -833,6 +832,9 @@ std::string NacmPolicy::FilterReadableData(std::string_view user,
                                &resource_error)) {
     return "";
   }
+  // Recovery and disabled-enforcement sessions bypass authorization, not the
+  // parser and resource limits that protect every XML processing boundary.
+  if (!enabled_ || IsRecovery(user)) return std::string(data_xml);
   std::function<void(pugi::xml_node, std::string_view,
                      std::optional<config::RuntimeSchemaNodeId>)> filter;
   filter = [&](pugi::xml_node parent, std::string_view parent_path,

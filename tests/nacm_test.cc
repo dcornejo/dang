@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include "yang/nacm.h"
+#include "yang/resource_limits.h"
 
 namespace yang::netconf {
 namespace {
@@ -53,6 +54,19 @@ TEST(NacmTest, RecoveryUsersBypassRules) {
   EXPECT_FALSE(policy.AddRecoveryUser(std::string("bad\xff", 4)));
   EXPECT_TRUE(policy.AuthorizeRpc("root", "delete-config"));
   EXPECT_TRUE(policy.AuthorizeData("root", AccessOperation::kDelete, "/any"));
+  const std::string valid = "<data><public>yes</public></data>";
+  EXPECT_EQ(policy.FilterReadableData("root", valid), valid);
+  EXPECT_TRUE(policy.FilterReadableData("root", "<data>").empty());
+  std::string too_deep;
+  for (std::size_t depth = 0;
+       depth <= DefaultResourceLimits().maximum_xml_depth; ++depth) {
+    too_deep += "<n>";
+  }
+  for (std::size_t depth = 0;
+       depth <= DefaultResourceLimits().maximum_xml_depth; ++depth) {
+    too_deep += "</n>";
+  }
+  EXPECT_TRUE(policy.FilterReadableData("root", too_deep).empty());
 }
 
 TEST(NacmTest, DisabledEnforcementBypassesRulesWithoutCountingDenials) {
@@ -69,6 +83,7 @@ TEST(NacmTest, DisabledEnforcementBypassesRulesWithoutCountingDenials) {
   EXPECT_TRUE(policy.AuthorizeData(
       "guest", "example", AccessOperation::kDelete, "/{urn:example}item"));
   EXPECT_TRUE(policy.AuthorizeNotification("guest", "example", "alarm"));
+  EXPECT_TRUE(policy.FilterReadableData("guest", "<data>").empty());
   const NacmCounters counters = policy.counters();
   EXPECT_EQ(counters.denied_operations, 0U);
   EXPECT_EQ(counters.denied_data_writes, 0U);
