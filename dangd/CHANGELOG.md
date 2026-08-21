@@ -7,6 +7,8 @@
 
 ### Fixed
 
+- Rejected plugin/host notification bodies that violate their advertised YANG
+  structure or scalar constraints before NACM authorization and delivery.
 - Rejected plugin/host notifications whose claimed module and name do not match
   the modeled XML event root or associated instance path.
 - Omitted unmodeled datastore elements at the schema-aware NACM read boundary

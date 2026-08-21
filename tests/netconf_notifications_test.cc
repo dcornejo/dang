@@ -285,7 +285,10 @@ TEST(NetconfNotificationsTest, BindsTopLevelPublicationToModeledIdentity) {
   VectorDiagnosticSink diagnostics;
   auto source = SourceFile::Create("events.yang", R"yang(module events {
     yang-version 1.1; namespace "urn:events"; prefix e;
-    notification alarm;
+    notification alarm {
+      leaf severity { type enumeration { enum minor; enum major; } mandatory true; }
+      leaf-list code { type uint16; min-elements 1; max-elements 2; }
+    }
   })yang", diagnostics);
   ASSERT_TRUE(source);
   InMemoryModuleRepository repository;
@@ -298,13 +301,27 @@ TEST(NetconfNotificationsTest, BindsTopLevelPublicationToModeledIdentity) {
   ASSERT_TRUE(manager.AddStream({}));
 
   EXPECT_TRUE(manager.Publish("NETCONF", "events", "alarm",
-                              "<alarm xmlns=\"urn:events\"/>"));
+      "<alarm xmlns=\"urn:events\"><severity>major</severity>"
+      "<code>7</code></alarm>"));
   EXPECT_FALSE(manager.Publish("NETCONF", "events", "different",
-                               "<alarm xmlns=\"urn:events\"/>"));
+      "<alarm xmlns=\"urn:events\"><severity>major</severity>"
+      "<code>7</code></alarm>"));
   EXPECT_FALSE(manager.Publish("NETCONF", "other", "alarm",
-                               "<alarm xmlns=\"urn:events\"/>"));
+      "<alarm xmlns=\"urn:events\"><severity>major</severity>"
+      "<code>7</code></alarm>"));
   EXPECT_FALSE(manager.Publish("NETCONF", "events", "alarm",
                                "<alarm xmlns=\"urn:other\"/>"));
+  EXPECT_FALSE(manager.Publish("NETCONF", "events", "alarm",
+      "<alarm xmlns=\"urn:events\"><code>7</code></alarm>"));
+  EXPECT_FALSE(manager.Publish("NETCONF", "events", "alarm",
+      "<alarm xmlns=\"urn:events\"><severity>critical</severity>"
+      "<code>7</code></alarm>"));
+  EXPECT_FALSE(manager.Publish("NETCONF", "events", "alarm",
+      "<alarm xmlns=\"urn:events\"><severity>major</severity>"
+      "<code>7</code><code>8</code><code>9</code></alarm>"));
+  EXPECT_FALSE(manager.Publish("NETCONF", "events", "alarm",
+      "<alarm xmlns=\"urn:events\"><severity>major</severity>"
+      "<code>7</code><unknown/></alarm>"));
 }
 }  // namespace
 }  // namespace yang::netconf

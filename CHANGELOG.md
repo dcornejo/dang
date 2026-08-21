@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Validated schema-aware notification bodies before NACM authorization and
+  queueing, rejecting unknown, missing, duplicate, over-limit, or ill-typed data.
 - Bound schema-aware notification publication to the exact modeled XML event
   identity before NACM authorization, replay storage, or subscriber delivery.
 - Made schema-aware NACM read filtering omit unmodeled XML elements instead of

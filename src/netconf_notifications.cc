@@ -9,6 +9,7 @@
 #include <ctime>
 #include <deque>
 #include <iomanip>
+#include <map>
 #include <ranges>
 #include <sstream>
 #include <utility>
@@ -39,6 +40,59 @@ std::string NamespaceFor(const pugi::xml_node& node) {
       return binding.value();
   }
   return {};
+}
+
+bool ValidNotificationContent(
+    const config::RuntimeSchema& schema,
+    config::RuntimeSchemaNodeId notification,
+    const pugi::xml_node& root) {
+  std::function<bool(const pugi::xml_node&,
+                     const std::vector<config::RuntimeSchemaNodeId>&)> validate;
+  validate = [&](const pugi::xml_node& parent,
+                 const std::vector<config::RuntimeSchemaNodeId>& allowed) {
+    std::map<config::RuntimeSchemaNodeId, std::size_t> counts;
+    for (const pugi::xml_node child : parent.children()) {
+      if (child.type() != pugi::node_element) continue;
+      const config::QualifiedXmlName name{
+          NamespaceFor(child), std::string(LocalName(child.name()))};
+      const auto found = std::ranges::find_if(
+          allowed, [&](config::RuntimeSchemaNodeId id) {
+            return schema.Get(id).name == name;
+          });
+      if (found == allowed.end()) return false;
+      const config::RuntimeSchemaNode& metadata = schema.Get(*found);
+      ++counts[*found];
+      const bool scalar = metadata.kind == semantic::SchemaNodeKind::kLeaf ||
+                          metadata.kind == semantic::SchemaNodeKind::kLeafList;
+      if (scalar) {
+        if (std::ranges::any_of(child.children(), [](pugi::xml_node node) {
+              return node.type() == pugi::node_element;
+            })) return false;
+        if (metadata.type) {
+          const bool empty = metadata.type->builtin ==
+                             semantic::BuiltinType::kEmpty;
+          if ((empty && !std::string_view(child.text().as_string()).empty()) ||
+              (!empty && !semantic::ValueMatchesType(
+                             *metadata.type, child.text().as_string()))) {
+            return false;
+          }
+        }
+      } else if (!validate(child, schema.DataChildren(*found))) {
+        return false;
+      }
+    }
+    for (config::RuntimeSchemaNodeId id : allowed) {
+      const config::RuntimeSchemaNode& metadata = schema.Get(id);
+      const std::size_t count = counts[id];
+      if ((metadata.kind != semantic::SchemaNodeKind::kList &&
+           metadata.kind != semantic::SchemaNodeKind::kLeafList && count > 1) ||
+          (metadata.max_elements && count > *metadata.max_elements) ||
+          (metadata.min_elements && count < *metadata.min_elements) ||
+          (metadata.mandatory && count == 0)) return false;
+    }
+    return true;
+  };
+  return validate(root, schema.DataChildren(notification));
 }
 
 std::optional<int> Number(std::string_view value) {
@@ -289,6 +343,7 @@ bool NotificationManager::Publish(std::string_view stream_name,
     return false;
   }
   std::vector<NacmDataNode> ancestors;
+  std::optional<config::RuntimeSchemaNodeId> notification_schema;
   if (schema_ != nullptr && !instance_path.empty()) {
     const auto path_segments = SplitInstancePath(instance_path);
     if (!path_segments) return false;
@@ -304,6 +359,7 @@ bool NotificationManager::Publish(std::string_view stream_name,
             NamespaceFor(content.document_element()) ||
         event_schema.name.local_name !=
             LocalName(content.document_element().name())) return false;
+    notification_schema = resolved.back();
     default_deny_all = default_deny_all || event_schema.nacm_default_deny_all;
     std::vector<InstanceSelector> selectors;
     std::size_t path_end = 0;
@@ -345,8 +401,14 @@ bool NotificationManager::Publish(std::string_view stream_name,
     const config::RuntimeSchemaNode& event_schema = schema_->Get(*metadata);
     if (event_schema.module_name != module_name ||
         event_schema.name.local_name != notification_name) return false;
+    notification_schema = *metadata;
     default_deny_all = default_deny_all ||
         event_schema.nacm_default_deny_all;
+  }
+  if (schema_ != nullptr &&
+      (!notification_schema || !ValidNotificationContent(
+          *schema_, *notification_schema, content.document_element()))) {
+    return false;
   }
   const std::string xml = Wrap(content_xml, event_time);
   const std::optional<NacmPolicy> policy_snapshot =

@@ -195,7 +195,9 @@ Actions and data-associated notifications bind complete keyed ancestor paths to
 the current operational view. Notification authorization consequently applies
 to the concrete publishing instance before replay or live delivery. The host's
 claimed notification identity must also match the modeled XML event root and,
-for associated events, the notification at the end of the instance path. Action
+for associated events, the notification at the end of the instance path. Event
+content is schema checked before NACM grants the event type and its complete
+body as one authorization unit. Action
 requests are authorized before their parent is resolved, so denied users cannot
 use the existence error to probe datastore contents.
 
