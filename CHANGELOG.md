@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Accepted closing brackets inside quoted NACM node-instance predicate values
+  instead of mistaking them for the end of the predicate.
 - Rejected managed NACM XML with multiple top-level elements instead of loading
   only the first policy container and silently ignoring siblings.
 - Removed schema-aware list and leaf-list instances whose identity contains

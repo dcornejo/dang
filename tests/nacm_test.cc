@@ -194,6 +194,35 @@ TEST(NacmTest, LoadsOrderedIetfNetconfAcmConfiguration) {
       "/{urn:ietf:params:xml:ns:yang:ietf-interfaces}interfaces"));
 }
 
+TEST(NacmTest, AcceptsClosingBracketInsidePathPredicateLiteral) {
+  const NacmLoadResult loaded = LoadNacmPolicy(R"xml(
+    <nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm"
+          xmlns:if="urn:ietf:params:xml:ns:yang:ietf-interfaces">
+      <read-default>deny</read-default>
+      <groups><group><name>operators</name><user-name>alice</user-name>
+      </group></groups>
+      <rule-list><name>interface-access</name><group>operators</group>
+        <rule><name>allow-one-interface</name>
+          <path>/if:interfaces/if:interface[if:name='xe]0']</path>
+          <access-operations>read</access-operations>
+          <action>permit</action></rule>
+      </rule-list>
+    </nacm>)xml");
+  ASSERT_TRUE(loaded.policy) <<
+      (loaded.errors.empty() ? "" : loaded.errors.front());
+
+  EXPECT_TRUE(loaded.policy->AuthorizeData(
+      "alice", "ietf-interfaces", AccessOperation::kRead,
+      "/{urn:ietf:params:xml:ns:yang:ietf-interfaces}interfaces/"
+      "{urn:ietf:params:xml:ns:yang:ietf-interfaces}interface"
+      "[{urn:ietf:params:xml:ns:yang:ietf-interfaces}name='xe]0']"));
+  EXPECT_FALSE(loaded.policy->AuthorizeData(
+      "alice", "ietf-interfaces", AccessOperation::kRead,
+      "/{urn:ietf:params:xml:ns:yang:ietf-interfaces}interfaces/"
+      "{urn:ietf:params:xml:ns:yang:ietf-interfaces}interface"
+      "[{urn:ietf:params:xml:ns:yang:ietf-interfaces}name='xe0']"));
+}
+
 TEST(NacmTest, PreservesRuleListOrderWhenSeveralGroupsMatch) {
   const NacmLoadResult loaded = LoadNacmPolicy(R"xml(
     <nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
@@ -286,6 +315,13 @@ TEST(NacmTest, RejectsInvalidModelShapeAndLeafListValues) {
       R"xml(<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
         <rule-list><name>rules</name><group>admins</group><rule>
           <name>duplicate-bit</name><access-operations>read read</access-operations>
+          <action>permit</action></rule></rule-list>
+      </nacm>)xml",
+      R"xml(<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm"
+                  xmlns:if="urn:ietf:params:xml:ns:yang:ietf-interfaces">
+        <rule-list><name>rules</name><group>admins</group><rule>
+          <name>unterminated-path</name>
+          <path>/if:interfaces/if:interface[if:name='xe]0]</path>
           <action>permit</action></rule></rule-list>
       </nacm>)xml",
       R"xml(<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm"/>

@@ -187,8 +187,9 @@ counters. Managed policy input passes the compiled `ietf-netconf-acm` runtime
 schema before policy construction and in-memory publication, and requires one
 top-level NACM container with no ignored sibling roots. Schema-aware read
 filtering omits elements absent from that runtime schema rather than evaluating
-them without module identity or NACM annotations. Explicit edits are authorized,
-while configuration removed implicitly by `choice` or `when`
+them without module identity or NACM annotations. Node-instance predicates
+retain closing brackets inside quoted key and leaf-list values. Explicit edits
+are authorized, while configuration removed implicitly by `choice` or `when`
 evaluation is deliberately excluded from separate write authorization as RFC
 8341 requires; the complete resulting delta still reaches transaction backends.
 

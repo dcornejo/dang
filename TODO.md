@@ -48,7 +48,8 @@ stays in this file with its remaining work rewritten precisely.
   remote source-read, target-inspection, and atomic write failures preserve
   provider errors and target content; independent provider authorization
   remains host policy. Data-write denial paths now use namespace-correct XPath,
-  including keyed instances. Effective
+  including keyed instances, and quoted predicate values containing closing
+  brackets are parsed without truncation. Effective
   `<edit-config>` and RFC 8526 `<edit-data>` create/update/delete mapping is
   covered, as are ordered-by-user moves and instance-specific leaf-list read,
   create, and delete authorization. Virtual defaults are excluded from write

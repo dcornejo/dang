@@ -176,7 +176,10 @@ No open core-server evidence item remains for policy snapshot isolation.
 - Expanded names, complete path segments, descendants, list keys, omitted-key
   wildcards, and non-textual-prefix matching:
   `NacmTest.MatchesKeyedPathsAndTreatsMissingKeysAsWildcards` and
-  `NacmTest.DoesNotUseTextualPathPrefixes`. Schema-aware read paths use exactly
+  `NacmTest.DoesNotUseTextualPathPrefixes`. Quoted predicate values may contain
+  closing brackets without prematurely terminating the predicate:
+  `NacmTest.AcceptsClosingBracketInsidePathPredicateLiteral`. Schema-aware read
+  paths use exactly
   the declared keys in model order and remove entries with missing or duplicate
   keys: `NetconfServerTest.OmitsUnmodeledSchemaAwareNacmReadData`.
 - Read/create/update/delete bit selection and first-match ordering:

@@ -236,6 +236,24 @@ struct PathSegment {
   std::vector<PathPredicate> predicates;
 };
 
+std::optional<std::size_t> PredicateClose(std::string_view value,
+                                          std::size_t open) {
+  char quote = '\0';
+  for (std::size_t position = open + 1; position < value.size(); ++position) {
+    const char character = value[position];
+    if (quote != '\0') {
+      if (character == quote) quote = '\0';
+      continue;
+    }
+    if (character == '\'' || character == '"') {
+      quote = character;
+    } else if (character == ']') {
+      return position;
+    }
+  }
+  return std::nullopt;
+}
+
 std::string_view Trim(std::string_view value) {
   const std::size_t first = value.find_first_not_of(" \t\r\n");
   if (first == std::string_view::npos) return {};
@@ -267,10 +285,10 @@ std::optional<std::vector<PathSegment>> ParseExpandedPath(
     PathSegment segment{std::string(value.substr(position, name_end - position)), {}};
     position = name_end;
     while (position < value.size() && value[position] == '[') {
-      const std::size_t close = value.find(']', position + 1);
-      if (close == std::string_view::npos) return std::nullopt;
+      const auto close = PredicateClose(value, position);
+      if (!close) return std::nullopt;
       const std::string_view expression = value.substr(
-          position + 1, close - position - 1);
+          position + 1, *close - position - 1);
       const std::size_t equals = expression.find('=');
       if (equals == std::string_view::npos) return std::nullopt;
       const std::string_view name = Trim(expression.substr(0, equals));
@@ -282,7 +300,7 @@ std::optional<std::vector<PathSegment>> ParseExpandedPath(
       }
       segment.predicates.push_back(
           {std::string(name), std::string(literal.substr(1, literal.size() - 2))});
-      position = close + 1;
+      position = *close + 1;
     }
     result.push_back(std::move(segment));
     if (position == value.size()) break;
@@ -326,10 +344,10 @@ std::optional<std::string> ExpandPath(const pugi::xml_node& node,
     result += "/" + *expanded_name;
     position = name_end == std::string_view::npos ? value.size() : name_end;
     while (position < value.size() && value[position] == '[') {
-      const std::size_t close = value.find(']', position + 1);
-      if (close == std::string_view::npos) return std::nullopt;
+      const auto close = PredicateClose(value, position);
+      if (!close) return std::nullopt;
       const std::string_view expression = value.substr(
-          position + 1, close - position - 1);
+          position + 1, *close - position - 1);
       const std::size_t equals = expression.find('=');
       if (equals == std::string_view::npos) return std::nullopt;
       const std::string_view key = Trim(expression.substr(0, equals));
@@ -346,7 +364,7 @@ std::optional<std::string> ExpandPath(const pugi::xml_node& node,
         if (!expanded_key) return std::nullopt;
         result += "[" + *expanded_key + "=" + std::string(literal) + "]";
       }
-      position = close + 1;
+      position = *close + 1;
     }
     if (position == value.size()) break;
     if (value[position] != '/' || ++position == value.size()) return std::nullopt;
