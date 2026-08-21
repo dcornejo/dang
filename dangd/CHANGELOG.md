@@ -9,6 +9,8 @@
 
 - Made managed NACM policy compilation fail closed on invalid model structure,
   foreign elements, and group or membership uniqueness violations.
+- Prevented empty managed NACM operation and selector values from becoming
+  wildcard access during policy compilation.
 - Verified that an in-flight RPC retains one NACM policy snapshot while a new
   managed policy becomes effective for subsequent requests.
 - Added RFC 8341 operation-identifying `error-path` serialization for denied

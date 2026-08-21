@@ -18,11 +18,11 @@ stays in this file with its remaining work rewritten precisely.
 - Close every open evidence item in
   [`docs/NACM_COMPLIANCE_MATRIX.md`](docs/NACM_COMPLIANCE_MATRIX.md), especially
   the remaining standard-operation and data-write denial vectors, concurrent
-  managed-policy replacement across sessions, remaining model-loader lexical
-  and XML-attribute boundaries, and the protocol-level operation-to-CRUDX
+  managed-policy replacement across sessions, model-loader XML metadata and
+  attribute boundaries, and the protocol-level operation-to-CRUDX
   matrix. Keep each vector indexed to its RFC 8341 section. Namespace-correct
   RPC denial paths, single-RPC policy snapshots, structural loader constraints,
-  and leaf-list uniqueness/name restrictions are covered.
+  leaf-list uniqueness/name restrictions, and empty lexical values are covered.
 - Make managed NACM policy replacement and durable datastore persistence one
   recoverable transaction, retaining or restoring the last known-good policy
   and running configuration when snapshot persistence fails. Schema validation,

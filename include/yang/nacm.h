@@ -50,6 +50,12 @@ struct NacmRule {
   std::string notification_name;
   /** Ordered rule-list group selectors loaded from ietf-netconf-acm. */
   std::vector<std::string> groups;
+  /** True when rpc-name was explicitly present, including an empty value. */
+  bool rpc_name_present = false;
+  /** True when notification-name was explicitly present, including empty. */
+  bool notification_name_present = false;
+  /** True when module-name was explicitly present, including an empty value. */
+  bool module_name_present = false;
 };
 
 /** Schema-qualified data instance used for ancestor authorization. */

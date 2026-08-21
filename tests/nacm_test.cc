@@ -218,12 +218,38 @@ TEST(NacmTest, RejectsInvalidModelShapeAndLeafListValues) {
         <rule-list><name>rules</name><group>admins</group><rule>
           <name>read</name><rpc-name>get</rpc-name><rpc-name>get-config</rpc-name>
           <action>permit</action></rule></rule-list>
+      </nacm>)xml",
+      R"xml(<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+        <rule-list><name>rules</name><group>admins</group><rule>
+          <name>duplicate-bit</name><access-operations>read read</access-operations>
+          <action>permit</action></rule></rule-list>
       </nacm>)xml"};
   for (const std::string& xml : invalid) {
     const NacmLoadResult loaded = LoadNacmPolicy(xml);
     EXPECT_FALSE(loaded.policy) << xml;
     EXPECT_FALSE(loaded.errors.empty()) << xml;
   }
+}
+
+TEST(NacmTest, DoesNotBroadenExplicitlyEmptyLexicalValues) {
+  const NacmLoadResult loaded = LoadNacmPolicy(R"xml(
+    <nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+      <exec-default>deny</exec-default>
+      <groups><group><name>users</name><user-name>alice</user-name>
+      </group></groups>
+      <rule-list><name>empty-values</name><group>users</group>
+        <rule><name>no-operations</name><access-operations></access-operations>
+          <action>permit</action></rule>
+        <rule><name>empty-rpc</name><rpc-name></rpc-name>
+          <access-operations>exec</access-operations><action>permit</action></rule>
+        <rule><name>empty-module</name><module-name></module-name>
+          <rpc-name>*</rpc-name><access-operations>exec</access-operations>
+          <action>permit</action></rule>
+      </rule-list>
+    </nacm>)xml");
+  ASSERT_TRUE(loaded.policy) <<
+      (loaded.errors.empty() ? "" : loaded.errors.front());
+  EXPECT_FALSE(loaded.policy->AuthorizeRpc("alice", "ietf-netconf", "commit"));
 }
 
 TEST(NacmTest, CountsDeniedOperationsWritesAndNotifications) {

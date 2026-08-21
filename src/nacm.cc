@@ -111,11 +111,14 @@ std::optional<bool> ParseBoolean(std::string_view value) {
 }
 
 std::optional<std::uint8_t> ParseOperations(std::string_view value) {
-  if (value.empty() || value == "*") return static_cast<std::uint8_t>(31);
+  if (value.empty()) return static_cast<std::uint8_t>(0);
+  if (value == "*") return static_cast<std::uint8_t>(31);
   std::uint8_t result = 0;
+  std::set<std::string> seen;
   std::istringstream words{std::string(value)};
   std::string word;
   while (words >> word) {
+    if (!seen.insert(word).second) return std::nullopt;
     if (word == "read") result |= AccessMask(AccessOperation::kRead);
     else if (word == "create") result |= AccessMask(AccessOperation::kCreate);
     else if (word == "update") result |= AccessMask(AccessOperation::kUpdate);
@@ -311,10 +314,13 @@ bool NacmPolicy::AuthorizeRpc(
   for (const NacmRule& rule : rules_) {
     if (!RuleApplies(rule, user, external_groups) ||
         !(rule.operations & AccessMask(AccessOperation::kExecute)) ||
-        !rule.path_prefix.empty() || !rule.notification_name.empty() ||
-        (!rule.module_name.empty() && rule.module_name != "*" &&
+        !rule.path_prefix.empty() || rule.notification_name_present ||
+        !rule.notification_name.empty() ||
+        ((rule.module_name_present || !rule.module_name.empty()) &&
+         rule.module_name != "*" &&
          rule.module_name != module_name) ||
-        (!rule.rpc_name.empty() && rule.rpc_name != "*" &&
+        ((rule.rpc_name_present || !rule.rpc_name.empty()) &&
+         rule.rpc_name != "*" &&
          rule.rpc_name != rpc_name)) {
       continue;
     }
@@ -347,8 +353,10 @@ bool NacmPolicy::AuthorizeAction(
   for (const NacmRule& rule : rules_) {
     if (!RuleApplies(rule, user, external_groups) ||
         !(rule.operations & AccessMask(AccessOperation::kExecute)) ||
-        !rule.rpc_name.empty() || !rule.notification_name.empty() ||
-        (!rule.module_name.empty() && rule.module_name != "*" &&
+        rule.rpc_name_present || !rule.rpc_name.empty() ||
+        rule.notification_name_present || !rule.notification_name.empty() ||
+        ((rule.module_name_present || !rule.module_name.empty()) &&
+         rule.module_name != "*" &&
          rule.module_name != module_name) ||
         (!rule.path_prefix.empty() &&
          !PathMatches(rule.path_prefix, instance_path))) {
@@ -378,8 +386,10 @@ bool NacmPolicy::AuthorizeData(
   for (const NacmRule& rule : rules_) {
     if (!RuleApplies(rule, user, external_groups) ||
         !(rule.operations & AccessMask(operation)) ||
-        !rule.rpc_name.empty() || !rule.notification_name.empty() ||
-        (!rule.module_name.empty() && rule.module_name != "*" &&
+        rule.rpc_name_present || !rule.rpc_name.empty() ||
+        rule.notification_name_present || !rule.notification_name.empty() ||
+        ((rule.module_name_present || !rule.module_name.empty()) &&
+         rule.module_name != "*" &&
          ((module_name.empty() && rule.path_prefix.empty()) ||
           (!module_name.empty() && rule.module_name != module_name))) ||
         (!rule.path_prefix.empty() &&
@@ -410,10 +420,13 @@ bool NacmPolicy::AuthorizeNotification(
   for (const NacmRule& rule : rules_) {
     if (!RuleApplies(rule, user, external_groups) ||
         !(rule.operations & AccessMask(AccessOperation::kRead)) ||
-        !rule.rpc_name.empty() || !rule.path_prefix.empty() ||
-        (!rule.module_name.empty() && rule.module_name != "*" &&
+        rule.rpc_name_present || !rule.rpc_name.empty() ||
+        !rule.path_prefix.empty() ||
+        ((rule.module_name_present || !rule.module_name.empty()) &&
+         rule.module_name != "*" &&
          rule.module_name != module_name) ||
-        (!rule.notification_name.empty() && rule.notification_name != "*" &&
+        ((rule.notification_name_present || !rule.notification_name.empty()) &&
+         rule.notification_name != "*" &&
          rule.notification_name != notification_name)) {
       continue;
     }
@@ -445,10 +458,12 @@ bool NacmPolicy::AuthorizeNotification(
   for (const NacmRule& rule : rules_) {
     if (!RuleApplies(rule, user, external_groups) ||
         !(rule.operations & AccessMask(AccessOperation::kRead)) ||
-        !rule.rpc_name.empty() ||
-        (!rule.module_name.empty() && rule.module_name != "*" &&
+        rule.rpc_name_present || !rule.rpc_name.empty() ||
+        ((rule.module_name_present || !rule.module_name.empty()) &&
+         rule.module_name != "*" &&
          rule.module_name != module_name) ||
-        (!rule.notification_name.empty() && rule.notification_name != "*" &&
+        ((rule.notification_name_present || !rule.notification_name.empty()) &&
+         rule.notification_name != "*" &&
          rule.notification_name != notification_name) ||
         (!rule.path_prefix.empty() &&
          !PathMatches(rule.path_prefix, instance_path))) {
@@ -601,18 +616,23 @@ NacmLoadResult LoadNacmPolicy(std::string_view xml) {
       NacmRule rule;
       rule.name = Child(entry, "name").text().as_string();
       rule.groups = groups;
-      rule.module_name = Child(entry, "module-name")
-          ? Child(entry, "module-name").text().as_string() : "*";
-      rule.rpc_name = Child(entry, "rpc-name").text().as_string();
-      rule.notification_name =
-          Child(entry, "notification-name").text().as_string();
+      const pugi::xml_node module_name = Child(entry, "module-name");
+      rule.module_name_present = static_cast<bool>(module_name);
+      rule.module_name = module_name ? module_name.text().as_string() : "*";
+      const pugi::xml_node rpc_name = Child(entry, "rpc-name");
+      rule.rpc_name_present = static_cast<bool>(rpc_name);
+      rule.rpc_name = rpc_name.text().as_string();
+      const pugi::xml_node notification_name =
+          Child(entry, "notification-name");
+      rule.notification_name_present = static_cast<bool>(notification_name);
+      rule.notification_name = notification_name.text().as_string();
       if (const pugi::xml_node path = Child(entry, "path")) {
         const auto expanded = ExpandPath(path, path.text().as_string());
         if (!expanded) loaded.errors.push_back("NACM rule path is invalid");
         else rule.path_prefix = *expanded;
       }
-      const unsigned selectors = !rule.rpc_name.empty() +
-          !rule.notification_name.empty() + !rule.path_prefix.empty();
+      const unsigned selectors = rule.rpc_name_present +
+          rule.notification_name_present + !rule.path_prefix.empty();
       if (rule.name.empty() || !rule_names.insert(rule.name).second)
         loaded.errors.push_back("NACM rule names must be nonempty and unique within a list");
       if (selectors > 1) loaded.errors.push_back("NACM rule has multiple rule types");

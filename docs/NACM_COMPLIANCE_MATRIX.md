@@ -28,17 +28,21 @@ high-level status and variance statement is in [COMPLIANCE.md](COMPLIANCE.md).
   `ConfigValidationTest.PreservesNacmAnnotationsFromYin`.
 - Model loading rejects malformed switches, operations, selectors, duplicate
   names, duplicate singleton leaves, foreign/config-false elements, invalid
-  group wildcards, duplicate group membership/selectors, and missing actions:
+  group wildcards, duplicate group membership/selectors/operation bits, and
+  missing actions:
   `NacmTest.RejectsMalformedModelConfiguration` and
   `NacmTest.RejectsInvalidModelShapeAndLeafListValues`.
+- Explicit empty YANG `bits`, RPC-name, notification-name, and module-name
+  values retain their distinct no-bit/no-match meaning instead of broadening to
+  wildcard access: `NacmTest.DoesNotBroadenExplicitlyEmptyLexicalValues`.
 - Managed bootstrap and datastore policy replacement:
   `DangdApplicationTest.UsesSecureNacmDefaultsWhenSubtreeIsAbsent`,
   `DangdApplicationTest.SeedsAndCommitsDatastoreManagedNacm`, and
   `DangdApplicationTest.LoadsNacmAndUsesAuthenticatedSessionIdentity`.
 
-Open evidence: add dedicated vectors for remaining lexical boundaries and XML
-attribute handling, every prohibited selector combination, multiple matching
-rule-list groups, and concurrent managed-policy replacement across sessions.
+Open evidence: add dedicated vectors for XML metadata/attribute handling, every
+remaining prohibited selector combination, multiple matching rule-list groups,
+and concurrent managed-policy replacement across sessions.
 
 ## Section 3.4.1: initial operation
 
