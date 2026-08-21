@@ -736,6 +736,33 @@ TEST(NetconfServerTest, AppliesNacmCopyConfigSourceAndStartupSpecialCase) {
             stores.Read(Datastore::kRunning).ToXml());
 }
 
+TEST(NetconfServerTest, OmitsUnmodeledSchemaAwareNacmReadData) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  NacmPolicy policy;
+  policy.set_read_default(AccessAction::kPermit);
+  const std::string data = R"xml(
+    <data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <system xmlns="urn:rpc-test"><hostname>visible</hostname>
+        <injected xmlns="urn:unknown">secret</injected>
+      </system>
+      <foreign xmlns="urn:unknown">secret</foreign>
+    </data>)xml";
+
+  const std::string filtered = policy.FilterReadableData(
+      "alice", data, {}, &fixture->schema);
+  EXPECT_NE(filtered.find("<hostname>visible</hostname>"), std::string::npos);
+  EXPECT_EQ(filtered.find("injected"), std::string::npos);
+  EXPECT_EQ(filtered.find("foreign"), std::string::npos);
+
+  // Without a schema, retain the generic XML filtering API's established
+  // behavior; the caller did not supply a model as an authority.
+  const std::string generic = policy.FilterReadableData("alice", data);
+  EXPECT_NE(generic.find("injected"), std::string::npos);
+  EXPECT_NE(generic.find("foreign"), std::string::npos);
+}
+
 TEST(NetconfServerTest, UsesHostSuppliedUrlDatastores) {
   VectorDiagnosticSink diagnostics;
   auto fixture = BuildServerFixture(&diagnostics);

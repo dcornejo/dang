@@ -7,6 +7,8 @@
 
 ### Fixed
 
+- Omitted unmodeled datastore elements at the schema-aware NACM read boundary
+  instead of applying an annotation-free default read decision.
 - Made startup fail when recovery-user configuration contains an unsafe,
   malformed, oversized, padded, or duplicate privileged identity.
 - Required authenticated provenance for transport-supplied NACM external groups

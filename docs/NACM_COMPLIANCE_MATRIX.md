@@ -161,6 +161,10 @@ No open core-server evidence item remains for policy snapshot isolation.
 - Read-denied data is silently omitted before subtree/XPath selection:
   `NacmTest.SilentlyFiltersDeniedReadSubtrees`,
   `NacmTest.FiltersSpecificKeyedListInstances`, and NETCONF filter tests.
+- Schema-aware read filtering fails closed for elements that cannot be resolved
+  in the advertised runtime schema, preventing unknown data from bypassing
+  module rules or inherited NACM annotations:
+  `NetconfServerTest.OmitsUnmodeledSchemaAwareNacmReadData`.
 - Expanded names, complete path segments, descendants, list keys, omitted-key
   wildcards, and non-textual-prefix matching:
   `NacmTest.MatchesKeyedPathsAndTreatsMissingKeysAsWildcards` and

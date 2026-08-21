@@ -82,7 +82,8 @@ stays in this file with its remaining work rewritten precisely.
   fuzz campaign, and document any intentional deviations before claiming
   compliance. The deterministic sanitizer smoke target mutates NACM XML and
   attacker-controlled keyed/leaf-list instance paths through policy loading,
-  CRUD authorization, and read filtering.
+  CRUD authorization, and read filtering. Schema-aware read filtering rejects
+  unmodeled elements instead of applying annotation-free default access.
 
 ### RFC 8342 / RFC 8526 NMDA compliance closure
 

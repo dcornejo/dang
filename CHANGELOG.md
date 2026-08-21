@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Made schema-aware NACM read filtering omit unmodeled XML elements instead of
+  exposing them through the default read policy without module annotations.
 - Rejected unsafe or duplicate host recovery identities before granting NACM
   bypass privilege.
 - Rejected transport-supplied NACM external groups unless their authenticated

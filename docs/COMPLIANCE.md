@@ -184,8 +184,10 @@ namespace-expanded instance paths and predicates, inherited
 `default-deny-all` and `default-deny-write`, read filtering, atomic write
 authorization, recovery users, notification authorization, and denial
 counters. Managed policy input passes the compiled `ietf-netconf-acm` runtime
-schema before policy construction and in-memory publication. Explicit edits are
-authorized, while configuration removed implicitly by `choice` or `when`
+schema before policy construction and in-memory publication. Schema-aware read
+filtering omits elements absent from that runtime schema rather than evaluating
+them without module identity or NACM annotations. Explicit edits are authorized,
+while configuration removed implicitly by `choice` or `when`
 evaluation is deliberately excluded from separate write authorization as RFC
 8341 requires; the complete resulting delta still reaches transaction backends.
 

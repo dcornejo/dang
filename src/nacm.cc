@@ -847,6 +847,15 @@ std::string NacmPolicy::FilterReadableData(std::string_view user,
               NamespaceFor(child, child_prefix), std::string(child_local)};
           child_schema = parent_schema ? schema->FindChild(*parent_schema, name)
                                        : schema->FindRoot(name);
+          // Schema-aware callers filter modeled datastore content. An
+          // unresolved element has no trustworthy module, NACM annotations,
+          // or descendants, so the ordinary read default would disclose
+          // malformed or host-injected data without a valid policy context.
+          if (!child_schema) {
+            parent.remove_child(child);
+            child = next;
+            continue;
+          }
         }
         const config::RuntimeSchemaNode* metadata =
             child_schema ? &schema->Get(*child_schema) : nullptr;
