@@ -22,6 +22,10 @@ namespace {
 
 constexpr std::string_view kNacmNamespace =
     "urn:ietf:params:xml:ns:yang:ietf-netconf-acm";
+constexpr std::string_view kNetconfNamespace =
+    "urn:ietf:params:xml:ns:netconf:base:1.0";
+constexpr std::string_view kNmdaNamespace =
+    "urn:ietf:params:xml:ns:yang:ietf-netconf-nmda";
 
 bool CanonicalRecoveryIdentity(std::string_view user) {
   if (user.empty() || user.size() > 255 ||
@@ -831,8 +835,13 @@ std::string NacmPolicy::FilterReadableData(std::string_view user,
       std::ranges::count_if(document.children(), [](pugi::xml_node node) {
         return node.type() == pugi::node_element;
       }));
-  if (root_elements != 1 ||
-      SplitName(document.document_element().name()).second != "data") return "";
+  const auto [root_prefix, root_local] =
+      SplitName(document.document_element().name());
+  const std::string root_namespace =
+      NamespaceFor(document.document_element(), root_prefix);
+  if (root_elements != 1 || root_local != "data" ||
+      (!root_namespace.empty() && root_namespace != kNetconfNamespace &&
+       root_namespace != kNmdaNamespace)) return "";
   std::string resource_error;
   if (!XmlWithinResourceLimits(document, data_xml, DefaultResourceLimits(),
                                &resource_error)) {

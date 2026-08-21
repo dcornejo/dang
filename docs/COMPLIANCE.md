@@ -208,8 +208,10 @@ groups require explicit trusted provenance and bounded, unique values. Every
 recovery-user RPC attempt emits a privacy-minimal host audit record, and only
 unique canonical UTF-8 identities can receive recovery privilege. Recovery and
 disabled-enforcement bypasses do not bypass XML document-shape, syntax, or
-resource limits; readable-data filtering requires one `<data>` envelope. Live
-datastore mutations
+resource limits; readable-data filtering requires one `<data>` envelope.
+NETCONF and NMDA namespaces and the internal unqualified form are accepted;
+arbitrary model namespaces are not treated as envelopes.
+Live datastore mutations
 now publish their durable snapshot before success is returned and compensate a
 failed save by restoring the prior snapshot and live backend/NACM state.
 Until the remaining work closes, the project must not describe NACM as fully

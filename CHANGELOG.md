@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Restricted readable-data envelopes to the NETCONF/NMDA namespaces or the
+  internal unqualified form, preventing a modeled `data` node from becoming a
+  false transport wrapper.
 - Required the readable-data filter's documented `<data>` envelope so a data
   node supplied as the document root cannot escape NACM authorization.
 - Rejected readable-data XML with multiple top-level elements so later roots

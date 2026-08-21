@@ -56,10 +56,16 @@ TEST(NacmTest, RecoveryUsersBypassRules) {
   EXPECT_TRUE(policy.AuthorizeData("root", AccessOperation::kDelete, "/any"));
   const std::string valid = "<data><public>yes</public></data>";
   EXPECT_EQ(policy.FilterReadableData("root", valid), valid);
+  const std::string prefixed =
+      "<nc:data xmlns:nc=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
+      "<public>yes</public></nc:data>";
+  EXPECT_EQ(policy.FilterReadableData("root", prefixed), prefixed);
   EXPECT_TRUE(policy.FilterReadableData("root", "<data>").empty());
   EXPECT_TRUE(policy.FilterReadableData(
       "root", "<data><public>yes</public></data><secret>no</secret>").empty());
   EXPECT_TRUE(policy.FilterReadableData("root", "<secret>no</secret>").empty());
+  EXPECT_TRUE(policy.FilterReadableData(
+      "root", "<data xmlns=\"urn:example\"><secret>no</secret></data>").empty());
   std::string too_deep;
   for (std::size_t depth = 0;
        depth <= DefaultResourceLimits().maximum_xml_depth; ++depth) {

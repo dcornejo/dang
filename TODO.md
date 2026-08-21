@@ -68,7 +68,7 @@ stays in this file with its remaining work rewritten precisely.
   control-containing, embedded-NUL, oversized, and malformed UTF-8 identities.
   Recovery and disabled-enforcement read paths retain XML syntax and resource
   checks, including a single `<data>` document envelope, before bypassing
-  authorization.
+  authorization. Only NETCONF/NMDA or internal unqualified envelopes are valid.
   Concurrent policy replacement and per-RPC snapshots are covered in the core
   server.
 - Resolve SSH server integration with `dangd`. Select and document whether SSH
