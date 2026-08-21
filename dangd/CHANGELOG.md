@@ -7,6 +7,9 @@
 
 ### Added
 
+- ABI v3 schema-bound operational publication, used by the RFC 8344 example
+  for simulated interface state, plus `ietf-origin:intended` annotations and
+  RFC 8526 origin selection.
 - A read-only `operational` datastore snapshot containing applied intended
   configuration plus core YANG Library, monitoring, and NACM state, with
   `config-filter` selection and RFC 8525 publication.

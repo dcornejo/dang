@@ -146,6 +146,32 @@ TEST(DangdApplicationTest, RetrievesAndEditsConventionalNmdaDatastores) {
   EXPECT_NE(operational.xml.find("denied-operations"), std::string::npos)
       << operational.xml;
 
+  const auto origins = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="origins"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore>
+        <config-filter>true</config-filter><with-origin/>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_NE(origins.xml.find("or:origin=\"or:intended\""), std::string::npos)
+      << origins.xml;
+
+  const auto other_origins = loaded.application->server().Process(
+      session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="origin-filter"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores"
+         xmlns:or="urn:ietf:params:xml:ns:yang:ietf-origin">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore>
+        <origin-filter>or:unknown</origin-filter>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_EQ(other_origins.xml.find("edge-1"), std::string::npos)
+      << other_origins.xml;
+  EXPECT_NE(other_origins.xml.find("yang-library"), std::string::npos)
+      << other_origins.xml;
+
   const auto edit = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="edit-data"
          xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
@@ -366,6 +392,21 @@ TEST(DangdApplicationTest, IpManagementPluginPublishesRfc8344AndPrintsApplyPlan)
                 .ToXml()
                 .find("192.0.2.1"),
             std::string::npos);
+  const auto state = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="ip-state"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore>
+        <config-filter>false</config-filter>
+        <subtree-filter>
+          <interfaces-state
+              xmlns="urn:ietf:params:xml:ns:yang:ietf-interfaces"/>
+        </subtree-filter>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_NE(state.xml.find("interfaces-state"), std::string::npos) << state.xml;
+  EXPECT_NE(state.xml.find("eth0"), std::string::npos) << state.xml;
+  EXPECT_NE(state.xml.find("oper-status>up"), std::string::npos) << state.xml;
 }
 
 TEST(DangdApplicationTest, AppliesDependentPluginsInDependencyOrder) {

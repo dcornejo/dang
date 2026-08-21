@@ -92,6 +92,23 @@ typedef struct DangPluginV2 {
 /** Type of the optional exported `dang_plugin_init_v2` entry point. */
 typedef const DangPluginV2* (*DangPluginInitV2)(void);
 
+#define DANG_PLUGIN_ABI_V3 3u
+
+/** Borrowed operational-state XML copied before the callback returns. */
+typedef struct DangOperationalDataV1 {
+  const char* data_xml;
+} DangOperationalDataV1;
+
+/** ABI v3 adds read-only operational-state publication. */
+typedef struct DangPluginV3 {
+  DangPluginV2 v2;
+  int (*get_operational_data)(void* context, DangOperationalDataV1* result,
+                              DangPluginErrorV1* error);
+} DangPluginV3;
+
+/** Type of the optional exported `dang_plugin_init_v3` entry point. */
+typedef const DangPluginV3* (*DangPluginInitV3)(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added plugin ABI v3 operational-state publication, schema-bound fragment
+  merging, RFC 8344 example interface state, and RFC 8526 `with-origin` plus
+  positive and negated origin filtering for applied intended configuration.
 - Added an RFC 8342 `operational` retrieval target combining applied intended
   configuration with core schema-bound state, including schema-aware
   `config-filter` separation and read-only enforcement.
@@ -29,6 +32,9 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Evaluate `when` expressions declared on choices and cases from their parent
+  data-node context, allowing the normative RFC 8526 origin feature schema to
+  resolve its datastore condition.
 - Permit standard YANG statements within extension invocations, whose
   substatement grammar is defined by the extension rather than the built-in
   statement registry.

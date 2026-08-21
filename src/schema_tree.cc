@@ -436,7 +436,10 @@ std::optional<SchemaTree> SchemaBuilder::BuildFor(
           StringChild(*source, statement, "ordered-by") == "user";
       node.type = types.Find(*source, statement.id);
       AppendMustConstraints(source, statement, node);
-      AppendWhenConstraints(source, statement, node);
+      AppendWhenConstraints(source, statement, node,
+                            (*kind == SchemaNodeKind::kChoice ||
+                             *kind == SchemaNodeKind::kCase)
+                                ? actual_parent : std::nullopt);
       if (*kind == SchemaNodeKind::kRpc || *kind == SchemaNodeKind::kAction ||
           *kind == SchemaNodeKind::kInput || *kind == SchemaNodeKind::kOutput ||
           *kind == SchemaNodeKind::kNotification) node.declared_config = false;
@@ -801,7 +804,11 @@ std::optional<SchemaContext> SchemaContextBuilder::Build(
             StringChild(*defining_source, statement, "ordered-by") == "user";
         node.type = types.Find(*defining_source, statement.id);
         AppendMustConstraints(defining_source, statement, node);
-        AppendWhenConstraints(defining_source, statement, node);
+        AppendWhenConstraints(defining_source, statement, node,
+                              (*kind == SchemaNodeKind::kChoice ||
+                               *kind == SchemaNodeKind::kCase)
+                                  ? std::optional<SchemaNodeId>(actual_parent)
+                                  : std::nullopt);
         if (*kind == SchemaNodeKind::kRpc || *kind == SchemaNodeKind::kAction ||
             *kind == SchemaNodeKind::kInput || *kind == SchemaNodeKind::kOutput ||
             *kind == SchemaNodeKind::kNotification) node.declared_config = false;

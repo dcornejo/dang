@@ -40,6 +40,8 @@ struct PluginManager::State {
     const DangPluginV1* api = nullptr;
     int (*invoke)(void*, const DangOperationV1*, DangOperationResultV1*,
                   DangPluginErrorV1*) = nullptr;
+    int (*operational)(void*, DangOperationalDataV1*, DangPluginErrorV1*) =
+        nullptr;
     std::string name;
     std::vector<std::string> modules;
     std::vector<std::string> dependencies;
@@ -92,6 +94,12 @@ bool PluginManager::Load(const std::filesystem::path& path,
     return false;
   }
   dlerror();
+  auto initialize_v3 = reinterpret_cast<DangPluginInitV3>(
+      dlsym(library, "dang_plugin_init_v3"));
+  const char* v3_error = dlerror();
+  const DangPluginV3* api_v3 =
+      v3_error == nullptr && initialize_v3 ? initialize_v3() : nullptr;
+  dlerror();
   auto initialize_v2 = reinterpret_cast<DangPluginInitV2>(
       dlsym(library, "dang_plugin_init_v2"));
   const char* v2_error = dlerror();
@@ -101,16 +109,18 @@ bool PluginManager::Load(const std::filesystem::path& path,
   auto initialize = reinterpret_cast<DangPluginInitV1>(
       dlsym(library, "dang_plugin_init_v1"));
   const char* v1_error = dlerror();
-  if (api_v2 == nullptr && v1_error != nullptr) {
+  if (api_v3 == nullptr && api_v2 == nullptr && v1_error != nullptr) {
     errors->push_back("plugin " + path.string() +
-                      " has no dang_plugin_init_v1 or dang_plugin_init_v2 entry point");
+                      " has no supported dang_plugin_init entry point");
     dlclose(library);
     return false;
   }
-  const DangPluginV1* api = api_v2 ? &api_v2->v1
-                                   : (initialize ? initialize() : nullptr);
+  const DangPluginV1* api = api_v3 ? &api_v3->v2.v1
+      : (api_v2 ? &api_v2->v1 : (initialize ? initialize() : nullptr));
   if (!api || api->abi_version !=
-                  (api_v2 ? DANG_PLUGIN_ABI_V2 : DANG_PLUGIN_ABI_V1) ||
+                  (api_v3 ? DANG_PLUGIN_ABI_V3
+                          : (api_v2 ? DANG_PLUGIN_ABI_V2
+                                    : DANG_PLUGIN_ABI_V1)) ||
       !api->plugin_name ||
       !api->yang_source_count || !api->yang_source_at || !api->prepare ||
       !api->validate || !api->apply || !api->rollback || !api->release) {
@@ -138,7 +148,9 @@ bool PluginManager::Load(const std::filesystem::path& path,
   State::Plugin plugin;
   plugin.library = library;
   plugin.api = api;
-  plugin.invoke = api_v2 ? api_v2->invoke : nullptr;
+  plugin.invoke = api_v3 ? api_v3->v2.invoke
+                         : (api_v2 ? api_v2->invoke : nullptr);
+  plugin.operational = api_v3 ? api_v3->get_operational_data : nullptr;
   plugin.name = api->plugin_name;
   std::vector<PluginYangSource> discovered_sources;
   const std::size_t count = api->yang_source_count(api->context);
@@ -236,6 +248,18 @@ bool PluginManager::Load(const std::filesystem::path& path,
 
 const std::vector<PluginYangSource>& PluginManager::yang_sources() const {
   return state_->sources;
+}
+
+std::vector<std::string> PluginManager::OperationalData() const {
+  std::vector<std::string> result;
+  for (const State::Plugin& plugin : state_->plugins) {
+    if (!plugin.operational) continue;
+    DangOperationalDataV1 data{};
+    DangPluginErrorV1 error{};
+    if (plugin.operational(plugin.api->context, &data, &error) && data.data_xml)
+      result.emplace_back(data.data_xml);
+  }
+  return result;
 }
 
 bool PluginManager::ValidateDependencies(

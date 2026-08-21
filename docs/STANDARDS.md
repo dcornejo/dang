@@ -30,9 +30,12 @@ location served by `get-schema`.
 
 RFC 8526 `ietf-netconf-nmda` and its exact dependency sources are compiled and
 retrievable. `<get-data>` and `<edit-data>` operate on the supported
-conventional datastores. The `origin` feature is deliberately not enabled, and
-the `origin` feature remains disabled until per-node origin metadata and
-plugin-supplied system state can be represented truthfully.
+conventional datastores, and ABI-v3 plugins may add schema-bound system state.
+Applied conventional configuration is tagged at each top-level root with inherited
+`ietf-origin:intended` metadata, so the RFC 8526 `origin` feature,
+`with-origin`, and origin filters are enabled. Additional origin identities
+remain future work when dynamic, learned, system, or default configuration is
+published.
 
 ### YANG version is semantic, not merely syntactic
 

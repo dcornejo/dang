@@ -147,7 +147,7 @@ if(YANG_BUILD_DANGD)
   target_include_directories(dangd_ip_management_plugin PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/generated)
   target_link_libraries(dangd_ip_management_plugin PRIVATE
-    nlohmann_json::nlohmann_json)
+    nlohmann_json::nlohmann_json pugixml::pugixml)
   target_compile_options(dangd_ip_management_plugin PRIVATE
     -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
   set_target_properties(dangd_ip_management_plugin PROPERTIES PREFIX "")

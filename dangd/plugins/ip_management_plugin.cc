@@ -7,12 +7,14 @@
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
 #include <nlohmann/json.hpp>
+#include <pugixml.hpp>
 
 namespace {
 
@@ -25,10 +27,14 @@ struct Action {
 
 struct Prepared {
   std::vector<Action> actions;
+  std::string before;
+  std::string proposed;
 };
 
 constexpr std::string_view kInterfacesModule = "ietf-interfaces";
 constexpr std::string_view kIpModule = "ietf-ip";
+std::string active_configuration;
+std::string operational_xml;
 
 size_t SourceCount(void*) { return 2; }
 
@@ -95,6 +101,9 @@ int Prepare(void*, const DangTransactionV1* transaction, void** result,
       if (module == kInterfacesModule || module == kIpModule)
         prepared->actions.push_back(MakeAction(change));
     }
+    prepared->before = transaction->before_xml ? transaction->before_xml : "";
+    prepared->proposed = transaction->proposed_xml
+        ? transaction->proposed_xml : "";
     *result = prepared.release();
     return 1;
   } catch (const json::exception&) {
@@ -114,6 +123,7 @@ int Apply(void*, void* opaque, DangPluginErrorV1*) {
   if (!opaque) return 0;
   for (const Action& action : static_cast<Prepared*>(opaque)->actions)
     std::clog << "ip-management: " << action.forward << '\n';
+  active_configuration = static_cast<Prepared*>(opaque)->proposed;
   return 1;
 }
 
@@ -122,26 +132,60 @@ int Rollback(void*, void* opaque, DangPluginErrorV1*) {
   const auto& actions = static_cast<Prepared*>(opaque)->actions;
   for (auto action = actions.rbegin(); action != actions.rend(); ++action)
     std::clog << "ip-management rollback: " << action->reverse << '\n';
+  active_configuration = static_cast<Prepared*>(opaque)->before;
+  return 1;
+}
+
+int OperationalData(void*, DangOperationalDataV1* result,
+                    DangPluginErrorV1*) {
+  if (!result) return 0;
+  pugi::xml_document configuration;
+  configuration.load_buffer(active_configuration.data(),
+                            active_configuration.size());
+  pugi::xml_document state;
+  pugi::xml_node interfaces_state = state.append_child("interfaces-state");
+  interfaces_state.append_attribute("xmlns") =
+      "urn:ietf:params:xml:ns:yang:ietf-interfaces";
+  interfaces_state.append_attribute("xmlns:if") =
+      "urn:ietf:params:xml:ns:yang:ietf-interfaces";
+  for (const pugi::xml_node root : configuration.document_element().children()) {
+    const std::string_view root_name = root.name();
+    const std::size_t root_colon = root_name.find(':');
+    const std::string_view root_local = root_colon == std::string_view::npos
+        ? root_name : root_name.substr(root_colon + 1);
+    if (root_local != "interfaces") continue;
+    for (const pugi::xml_node interface : root.children()) {
+      const std::string_view interface_name = interface.name();
+      const std::size_t interface_colon = interface_name.find(':');
+      if ((interface_colon == std::string_view::npos
+               ? interface_name : interface_name.substr(interface_colon + 1)) !=
+          "interface") continue;
+      const pugi::xml_node name = interface.child("name");
+      const pugi::xml_node type = interface.child("type");
+      if (!name || !type) continue;
+      pugi::xml_node entry = interfaces_state.append_child("interface");
+      entry.append_child("name").text() = name.text().as_string();
+      entry.append_child("type").text() = type.text().as_string();
+      const pugi::xml_node enabled = interface.child("enabled");
+      entry.append_child("oper-status").text() =
+          !enabled || std::string_view(enabled.text().as_string()) == "true"
+              ? "up" : "down";
+    }
+  }
+  std::ostringstream output;
+  state.print(output, "", pugi::format_raw);
+  operational_xml = output.str();
+  result->data_xml = operational_xml.c_str();
   return 1;
 }
 
 void Release(void*, void* opaque) { delete static_cast<Prepared*>(opaque); }
 
-const DangPluginV1 kPlugin{
-    DANG_PLUGIN_ABI_V1,
-    "dangd-ip-management",
-    nullptr,
-    SourceCount,
-    SourceAt,
-    DependencyCount,
-    DependencyAt,
-    Prepare,
-    Validate,
-    Apply,
-    Rollback,
-    Release,
-    nullptr};
+const DangPluginV3 kPlugin{{{
+    DANG_PLUGIN_ABI_V3, "dangd-ip-management", nullptr, SourceCount, SourceAt,
+    DependencyCount, DependencyAt, Prepare, Validate, Apply, Rollback, Release,
+    nullptr}, nullptr}, OperationalData};
 
 }  // namespace
 
-extern "C" const DangPluginV1* dang_plugin_init_v1() { return &kPlugin; }
+extern "C" const DangPluginV3* dang_plugin_init_v3() { return &kPlugin; }

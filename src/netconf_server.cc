@@ -31,6 +31,8 @@ constexpr std::string_view kNmdaNamespace =
     "urn:ietf:params:xml:ns:yang:ietf-netconf-nmda";
 constexpr std::string_view kDatastoresNamespace =
     "urn:ietf:params:xml:ns:yang:ietf-datastores";
+constexpr std::string_view kOriginNamespace =
+    "urn:ietf:params:xml:ns:yang:ietf-origin";
 
 std::string_view LocalName(std::string_view name) {
   const std::size_t colon = name.find(':');
@@ -182,6 +184,35 @@ std::string FilterConfigKind(std::string_view xml,
   std::ostringstream output;
   document.print(output, "", pugi::format_raw);
   return output.str();
+}
+
+std::string AnnotateIntendedOrigin(std::string_view xml,
+                                   const config::RuntimeSchema& schema,
+                                   bool include_annotations) {
+  pugi::xml_document document;
+  if (!document.load_buffer(xml.data(), xml.size())) return {};
+  pugi::xml_node root = document.document_element();
+  if (include_annotations)
+    root.append_attribute("xmlns:or") = kOriginNamespace.data();
+  for (pugi::xml_node child : root.children()) {
+    if (child.type() != pugi::node_element) continue;
+    const auto schema_id = schema.FindRoot(
+        {NamespaceFor(child).value_or(""),
+         std::string(LocalName(child.name()))});
+    if (!schema_id || !schema.Get(*schema_id).config) continue;
+    if (include_annotations)
+      child.append_attribute("or:origin") = "or:intended";
+  }
+  std::ostringstream output;
+  document.print(output, "", pugi::format_raw);
+  return output.str();
+}
+
+bool OriginValueIsIntended(const pugi::xml_node& node) {
+  const std::string_view value = node.text().as_string();
+  const std::size_t colon = value.find(':');
+  return (colon == std::string_view::npos ? value : value.substr(colon + 1)) ==
+         "intended";
 }
 
 std::optional<config::EditOperation> ParseDefaultOperation(
@@ -809,6 +840,21 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
     const pugi::xml_node xpath = Child(operation, "xpath-filter");
     const pugi::xml_node config_filter = Child(operation, "config-filter");
     const pugi::xml_node maximum_depth = Child(operation, "max-depth");
+    const pugi::xml_node with_origin = Child(operation, "with-origin");
+    bool has_origin_filter = false;
+    bool origin_includes_intended = false;
+    bool origin_excludes_intended = false;
+    for (const pugi::xml_node child : operation.children()) {
+      const std::string_view child_name = LocalName(child.name());
+      if (child_name == "origin-filter") {
+        has_origin_filter = true;
+        origin_includes_intended = origin_includes_intended ||
+                                   OriginValueIsIntended(child);
+      } else if (child_name == "negated-origin-filter") {
+        origin_excludes_intended = origin_excludes_intended ||
+                                   OriginValueIsIntended(child);
+      }
+    }
     unsigned int depth = 0;
     if (maximum_depth &&
         std::string_view(maximum_depth.text().as_string()) != "unbounded") {
@@ -823,6 +869,11 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
         (*source == Datastore::kOperational && operational_ == nullptr)) {
       result = ProtocolFailure("get-data requires one supported datastore",
                                "invalid-value");
+    } else if ((with_origin || has_origin_filter || origin_excludes_intended) &&
+               *source != Datastore::kOperational) {
+      result = ProtocolFailure(
+          "origin selection is only valid for the operational datastore",
+          "invalid-value");
     } else if (config_filter &&
                std::string_view(config_filter.text().as_string()) != "true" &&
                std::string_view(config_filter.text().as_string()) != "false") {
@@ -834,6 +885,10 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
                 datastores_.Read(*source).ToXml(false) + "</data>";
       if (*source == Datastore::kOperational)
         payload = operational_->AugmentDataXml(payload);
+      if (*source == Datastore::kOperational &&
+          ((has_origin_filter && !origin_includes_intended) ||
+           origin_excludes_intended))
+        payload = FilterConfigKind(payload, datastores_.schema(), false);
       if (nacm != nullptr)
         payload = nacm->FilterReadableData(
             session.username, payload, session.external_groups,
@@ -843,6 +898,8 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
             payload, datastores_.schema(),
             std::string_view(config_filter.text().as_string()) == "true");
       }
+      if (*source == Datastore::kOperational && with_origin)
+        payload = AnnotateIntendedOrigin(payload, datastores_.schema(), true);
       if (subtree) {
         pugi::xml_document filter_document;
         pugi::xml_node filter = filter_document.append_child("filter");

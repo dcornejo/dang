@@ -35,7 +35,9 @@ class DangdOperationalData final
   };
   DangdOperationalData(std::string yang_library_xml,
                        std::vector<ModelSource> model_sources,
-                       const yang::netconf::NacmPolicy* nacm);
+                       const yang::netconf::NacmPolicy* nacm,
+                       const PluginManager* plugins,
+                       const yang::config::RuntimeSchema* schema);
   [[nodiscard]] std::string AugmentDataXml(
       std::string_view configuration_data_xml) const override;
   [[nodiscard]] std::vector<std::string> Capabilities() const override;
@@ -53,6 +55,8 @@ class DangdOperationalData final
   std::string monitoring_xml_;
   std::vector<ModelSource> model_sources_;
   const yang::netconf::NacmPolicy* nacm_ = nullptr;
+  const PluginManager* plugins_ = nullptr;
+  const yang::config::RuntimeSchema* schema_ = nullptr;
 };
 
 /**

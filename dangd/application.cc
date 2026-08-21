@@ -29,6 +29,11 @@
 namespace dangd {
 namespace {
 
+std::string_view LocalName(std::string_view name) {
+  const std::size_t colon = name.find(':');
+  return colon == std::string_view::npos ? name : name.substr(colon + 1);
+}
+
 class OverlayRepository final : public yang::ModuleSourceRepository {
  public:
   explicit OverlayRepository(std::vector<std::filesystem::path> search_paths)
@@ -121,6 +126,28 @@ std::string NamespaceFor(pugi::xml_node node, std::string_view prefix) {
       return found.as_string();
   }
   return {};
+}
+
+yang::config::QualifiedXmlName ExpandedName(pugi::xml_node node) {
+  const std::string_view name = node.name();
+  const std::size_t colon = name.find(':');
+  const std::string_view prefix = colon == std::string_view::npos
+      ? std::string_view() : name.substr(0, colon);
+  return {NamespaceFor(node, prefix), std::string(LocalName(name))};
+}
+
+bool FragmentMatchesSchema(const yang::config::RuntimeSchema& schema,
+                           pugi::xml_node node,
+                           std::optional<yang::config::RuntimeSchemaNodeId>
+                               parent = std::nullopt) {
+  const auto schema_id = parent ? schema.FindChild(*parent, ExpandedName(node))
+                                : schema.FindRoot(ExpandedName(node));
+  if (!schema_id) return false;
+  for (const pugi::xml_node child : node.children()) {
+    if (child.type() == pugi::node_element &&
+        !FragmentMatchesSchema(schema, child, *schema_id)) return false;
+  }
+  return true;
 }
 
 std::string SeedNacm(std::string configuration, std::string_view nacm) {
@@ -258,6 +285,8 @@ std::string BuildYangLibraryXml(
                                   "validate", "startup", "xpath"})
         entry.append_child("feature").text() = feature;
     }
+    if (is_implemented && module->name == "ietf-netconf-nmda")
+      entry.append_child("feature").text() = "origin";
     if (is_implemented) {
       for (const std::string& deviation : deviations[module->name])
         entry.append_child("deviation").text() = deviation;
@@ -317,9 +346,11 @@ std::vector<DangdOperationalData::ModelSource> BuildModelSources(
 
 DangdOperationalData::DangdOperationalData(
     std::string yang_library_xml, std::vector<ModelSource> model_sources,
-    const yang::netconf::NacmPolicy* nacm)
+    const yang::netconf::NacmPolicy* nacm, const PluginManager* plugins,
+    const yang::config::RuntimeSchema* runtime_schema)
     : yang_library_xml_(std::move(yang_library_xml)),
-      model_sources_(std::move(model_sources)), nacm_(nacm) {
+      model_sources_(std::move(model_sources)), nacm_(nacm),
+      plugins_(plugins), schema_(runtime_schema) {
   pugi::xml_document library;
   pugi::xml_document legacy;
   if (!library.load_buffer(yang_library_xml_.data(), yang_library_xml_.size()))
@@ -405,6 +436,20 @@ std::string DangdOperationalData::AugmentDataXml(
   pugi::xml_document monitoring;
   if (monitoring.load_buffer(monitoring_xml_.data(), monitoring_xml_.size()))
     data.append_copy(monitoring.document_element());
+  if (plugins_) {
+    for (const std::string& fragment : plugins_->OperationalData()) {
+      pugi::xml_document plugin_data;
+      if (!plugin_data.load_buffer(fragment.data(), fragment.size())) continue;
+      const pugi::xml_node root = plugin_data.document_element();
+      if (std::string_view(LocalName(root.name())) == "data") {
+        for (const pugi::xml_node child : root.children())
+          if (child.type() == pugi::node_element && schema_ &&
+              FragmentMatchesSchema(*schema_, child)) data.append_copy(child);
+      } else if (schema_ && FragmentMatchesSchema(*schema_, root)) {
+        data.append_copy(root);
+      }
+    }
+  }
   pugi::xml_node nacm;
   for (const pugi::xml_node child : data.children()) {
     const std::string_view name = child.name();
@@ -505,7 +550,7 @@ Application::Application(yang::config::RuntimeSchema schema,
       nacm_(std::move(nacm)),
       notifications_(&nacm_, 1024, 16 * 1024 * 1024, &schema_),
       operational_(std::move(yang_library_xml), std::move(model_sources),
-                   &nacm_),
+                   &nacm_, plugins_.get(), &schema_),
       backend_(configuration, plugins_.get(), &nacm_, managed_nacm),
       datastores_(schema_, std::move(configuration), std::nullopt, &backend_),
       server_(datastores_, &nacm_, nullptr, &notifications_, std::nullopt,
@@ -627,7 +672,8 @@ LoadResult Application::Load(const ApplicationOptions& options) {
         {"ietf-netconf", "rollback-on-error"},
         {"ietf-netconf", "validate"},
         {"ietf-netconf", "startup"},
-        {"ietf-netconf", "xpath"}};
+        {"ietf-netconf", "xpath"},
+        {"ietf-netconf-nmda", "origin"}};
     for (const PluginYangSource& plugin_source : plugins->yang_sources()) {
       for (const std::string& feature : plugin_source.enabled_features)
         features.push_back({plugin_source.module_name, feature});
