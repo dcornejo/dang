@@ -45,7 +45,12 @@ TEST(NacmTest, RecoveryUsersBypassRules) {
   policy.set_read_default(AccessAction::kDeny);
   policy.set_write_default(AccessAction::kDeny);
   policy.set_exec_default(AccessAction::kDeny);
-  policy.AddRecoveryUser("root");
+  ASSERT_TRUE(policy.AddRecoveryUser("root"));
+  EXPECT_FALSE(policy.AddRecoveryUser("root"));
+  EXPECT_FALSE(policy.AddRecoveryUser(" root"));
+  EXPECT_FALSE(policy.AddRecoveryUser("line\nroot"));
+  EXPECT_FALSE(policy.AddRecoveryUser(std::string("root\0admin", 10)));
+  EXPECT_FALSE(policy.AddRecoveryUser(std::string("bad\xff", 4)));
   EXPECT_TRUE(policy.AuthorizeRpc("root", "delete-config"));
   EXPECT_TRUE(policy.AuthorizeData("root", AccessOperation::kDelete, "/any"));
 }
@@ -366,7 +371,7 @@ TEST(NacmTest, AppliesOrderedNotificationRulesAndRecoveryBypass) {
   deny.operations = AccessMask(AccessOperation::kRead);
   deny.action = AccessAction::kDeny;
   policy.AddRule(std::move(deny));
-  policy.AddRecoveryUser("root");
+  ASSERT_TRUE(policy.AddRecoveryUser("root"));
   EXPECT_FALSE(policy.AuthorizeNotification(
       "alice", "example-events", "alarm"));
   EXPECT_TRUE(policy.AuthorizeNotification(
@@ -531,7 +536,7 @@ TEST(NacmTest, AppliesRfc8341DataAssociatedNotificationDecisionSequence) {
 
 TEST(NacmTest, PreservesRecoveryIdentityWhenManagedPolicyChanges) {
   NacmPolicy previous;
-  previous.AddRecoveryUser("break-glass");
+  ASSERT_TRUE(previous.AddRecoveryUser("break-glass"));
   previous.set_exec_default(AccessAction::kDeny);
   EXPECT_FALSE(previous.AuthorizeRpc("guest", "delete-config"));
 

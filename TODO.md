@@ -61,8 +61,10 @@ stays in this file with its remaining work rewritten precisely.
   embedded-NUL identities. External groups require explicit trusted provenance,
   bounded canonical values, and per-session isolation. Every recovery-user RPC
   attempt emits a host-visible privacy-minimal audit record, including malformed
-  requests. Concurrent policy replacement and per-RPC snapshots are covered in
-  the core server.
+  requests. Recovery-user configuration rejects duplicate, padded,
+  control-containing, embedded-NUL, oversized, and malformed UTF-8 identities.
+  Concurrent policy replacement and per-RPC snapshots are covered in the core
+  server.
 - Resolve SSH server integration with `dangd`. Select and document whether SSH
   is embedded in `dangd`, supplied by a supervised sidecar, or connected through
   a stable host adapter; do not leave two components responsible for session

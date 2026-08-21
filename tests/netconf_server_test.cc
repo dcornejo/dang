@@ -188,7 +188,7 @@ TEST(NetconfServerTest, AuditsEveryRecoveryUserRpcAttempt) {
   DatastoreManager stores(fixture->schema, fixture->initial);
   NacmPolicy policy;
   policy.set_exec_default(AccessAction::kDeny);
-  policy.AddRecoveryUser("rescue");
+  ASSERT_TRUE(policy.AddRecoveryUser("rescue"));
   NetconfServer server(stores, &policy);
   std::mutex records_mutex;
   std::vector<RecoveryAuditRecord> records;

@@ -7,6 +7,8 @@
 
 ### Fixed
 
+- Made startup fail when recovery-user configuration contains an unsafe,
+  malformed, oversized, padded, or duplicate privileged identity.
 - Required authenticated provenance for transport-supplied NACM external groups
   and rejected invalid, oversized, or duplicate group identities.
 - Moved snapshot saving into the live datastore transaction boundary so a

@@ -4,6 +4,7 @@
 #include "yang/nacm.h"
 
 #include "yang/resource_limits.h"
+#include "yang/utf8.h"
 
 #include <cctype>
 #include <functional>
@@ -21,6 +22,24 @@ namespace {
 
 constexpr std::string_view kNacmNamespace =
     "urn:ietf:params:xml:ns:yang:ietf-netconf-acm";
+
+bool CanonicalRecoveryIdentity(std::string_view user) {
+  if (user.empty() || user.size() > 255 ||
+      std::isspace(static_cast<unsigned char>(user.front())) ||
+      std::isspace(static_cast<unsigned char>(user.back()))) {
+    return false;
+  }
+  while (!user.empty()) {
+    const auto decoded = utf8::Decode(user);
+    if (!decoded || decoded->code_point < 0x20 ||
+        decoded->code_point == 0x7f ||
+        !utf8::IsYangCharacter(decoded->code_point)) {
+      return false;
+    }
+    user.remove_prefix(decoded->byte_count);
+  }
+  return true;
+}
 
 std::pair<std::string_view, std::string_view> SplitName(std::string_view name) {
   const std::size_t colon = name.find(':');
@@ -386,9 +405,10 @@ void NacmPolicy::AddUserToGroup(std::string user, std::string group) {
   memberships_.emplace_back(std::move(user), std::move(group));
 }
 
-void NacmPolicy::AddRecoveryUser(std::string user) {
+bool NacmPolicy::AddRecoveryUser(std::string user) {
+  if (!CanonicalRecoveryIdentity(user)) return false;
   std::lock_guard lock(mutex_);
-  recovery_users_.insert(std::move(user));
+  return recovery_users_.insert(std::move(user)).second;
 }
 
 void NacmPolicy::AddRule(NacmRule rule) {

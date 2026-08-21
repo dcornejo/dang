@@ -193,7 +193,9 @@ the RFC 8341 defaults remain active: reads and operations are permitted, while
 configuration writes are denied. Configure at least one repeatable
 `--recovery-user USER` whose authenticated sessions may bypass NACM to install
 or repair policy. Recovery identities are host configuration, are never read
-from the datastore, and survive NACM commits and `SIGHUP` reloads. Denial
+from the datastore, and survive NACM commits and `SIGHUP` reloads. They must be
+unique canonical UTF-8 names; padded, control-containing, embedded-NUL,
+oversized, malformed, or duplicate identities make startup fail. Denial
 counters remain core-owned operational state and are returned by `<get>`.
 
 Application RPCs and YANG 1.1 actions are resolved against the compiled schema

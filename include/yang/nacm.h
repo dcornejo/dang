@@ -80,7 +80,8 @@ class NacmPolicy {
   void set_exec_default(AccessAction action);
   void set_external_groups_enabled(bool enabled);
   void AddUserToGroup(std::string user, std::string group);
-  void AddRecoveryUser(std::string user);
+  /** Adds one canonical host recovery identity; rejects invalid/duplicate names. */
+  [[nodiscard]] bool AddRecoveryUser(std::string user);
   void AddRule(NacmRule rule);
   /** Returns whether the authenticated identity has host recovery privilege. */
   [[nodiscard]] bool IsRecoveryUser(std::string_view user) const;

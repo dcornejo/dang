@@ -17,6 +17,11 @@ high-level status and variance statement is in [COMPLIANCE.md](COMPLIANCE.md).
   `NacmTest.AppliesWildcardGroupsModulesNamesAndCrudxBitsInOrder`.
 - Recovery-session bypass: `NacmTest.RecoveryUsersBypassRules` and
   `NacmTest.PreservesRecoveryIdentityWhenManagedPolicyChanges`.
+- Host recovery identities must be unique canonical UTF-8 names. Empty,
+  oversized, padded, control-containing, embedded-NUL, malformed UTF-8, and
+  duplicate values fail before privilege is installed or `dangd` starts:
+  `NacmTest.RecoveryUsersBypassRules` and
+  `DangdApplicationTest.RejectsUnsafeOrDuplicateRecoveryUsers`.
 - `enable-nacm`, `read-default`, `write-default`, `exec-default`, and denial
   accounting while enforcement is disabled:
   `NacmTest.DisabledEnforcementBypassesRulesWithoutCountingDenials` and

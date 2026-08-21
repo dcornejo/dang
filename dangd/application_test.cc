@@ -251,7 +251,7 @@ TEST(DangdApplicationTest, LoadsNacmAndUsesAuthenticatedSessionIdentity) {
 TEST(DangdApplicationTest, EmitsSafeRecoveryAuditRecords) {
   TemporaryInputs inputs;
   auto options = Options(inputs);
-  options.recovery_users = {"line\nuser"};
+  options.recovery_users = {"user=name"};
   auto loaded = Application::Load(options);
   ASSERT_NE(loaded.application, nullptr)
       << testing::PrintToString(loaded.errors);
@@ -261,15 +261,34 @@ TEST(DangdApplicationTest, EmitsSafeRecoveryAuditRecords) {
   (void)loaded.application->server().Process(
       {71, "ordinary", "ordinary", {}}, request);
   (void)loaded.application->server().Process(
-      {72, "line\nuser", "line\nuser", {}}, request);
+      {72, "user=name", "user=name", {}}, request);
 
   const std::vector<std::string> records =
       loaded.application->DrainRecoveryAuditRecords();
   ASSERT_EQ(records.size(), 1U);
   EXPECT_NE(records.front().find("session=72"), std::string::npos);
-  EXPECT_NE(records.front().find("user=line%0Auser"), std::string::npos);
+  EXPECT_NE(records.front().find("user=user%3Dname"), std::string::npos);
   EXPECT_EQ(records.front().find('\n'), std::string::npos);
   EXPECT_TRUE(loaded.application->DrainRecoveryAuditRecords().empty());
+}
+
+TEST(DangdApplicationTest, RejectsUnsafeOrDuplicateRecoveryUsers) {
+  const std::vector<std::vector<std::string>> invalid = {
+      {"alice", "alice"},
+      {" alice"},
+      {"alice "},
+      {"line\nuser"},
+      {std::string("root\0admin", 10)},
+      {std::string("bad\xff", 4)}};
+  for (const auto& recovery_users : invalid) {
+    TemporaryInputs inputs;
+    auto options = Options(inputs);
+    options.recovery_users = recovery_users;
+    auto loaded = Application::Load(options);
+    EXPECT_EQ(loaded.application, nullptr);
+    ASSERT_FALSE(loaded.errors.empty());
+    EXPECT_NE(loaded.errors.front().find("canonical UTF-8"), std::string::npos);
+  }
 }
 
 TEST(DangdApplicationTest, SeedsAndCommitsDatastoreManagedNacm) {

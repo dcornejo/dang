@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Rejected unsafe or duplicate host recovery identities before granting NACM
+  bypass privilege.
 - Rejected transport-supplied NACM external groups unless their authenticated
   provenance is explicitly trusted, and rejected malformed or duplicate groups.
 - Coupled persistent datastore mutations to durable snapshot publication and

@@ -771,11 +771,11 @@ LoadResult Application::Load(const ApplicationOptions& options) {
     nacm.set_enabled(true);
   }
   for (const std::string& recovery_user : options.recovery_users) {
-    if (recovery_user.empty()) {
-      result.errors.push_back("NACM recovery user cannot be empty");
+    if (!nacm.AddRecoveryUser(recovery_user)) {
+      result.errors.push_back(
+          "NACM recovery users must be unique canonical UTF-8 identities");
       return result;
     }
-    nacm.AddRecoveryUser(recovery_user);
   }
 
   result.application = std::unique_ptr<Application>(new Application(
