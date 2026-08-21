@@ -129,11 +129,16 @@ No open core-server evidence item remains for policy snapshot isolation.
   permission as specified by RFC 8341 Section 3.2.6:
   `NetconfServerTest.AppliesNacmCopyConfigSourceAndStartupSpecialCase` and
   `NetconfServerTest.CopiesCompleteInlineConfigurationAtomically`.
+- URL combinations apply NACM to each datastore operand: datastore sources are
+  read-filtered before provider writes, and URL sources are fully authorized
+  against datastore targets before atomic publication:
+  `NetconfServerTest.AppliesNacmToDatastoreSidesOfUrlCopies` and
+  `NetconfServerTest.AuthorizesUrlTargetReplacementBeforeWriting`.
 - Denied write accounting: `NacmTest.CountsDeniedOperationsWritesAndNotifications`.
 
 Open evidence: complete the protocol-level CRUDX suite for remaining NETCONF
 and RFC 8526 mappings, ordered-by-user moves, defaults, leaf-list instances,
-confirmed-commit rollback, and all URL source/target authorization paths.
+confirmed-commit rollback, and remote-to-remote URL provider failure paths.
 
 ## Section 3.4.6: outgoing notification authorization
 

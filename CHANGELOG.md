@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added protocol evidence that URL `<copy-config>` combinations read-filter
+  datastore sources and atomically authorize datastore targets.
 - Serialized expanded-name validation and NACM data-write `error-path` values as
   namespace-bound NETCONF XPath, including keyed list predicates.
 - Applied NACM read filtering to datastore `<copy-config>` sources, honored the

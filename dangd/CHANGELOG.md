@@ -7,6 +7,8 @@
 
 ### Added
 
+- Verified NACM filtering and atomic denial for datastore-to-URL and
+  URL-to-datastore copy operations.
 - Returned namespace-correct XPath for configuration and NACM data errors
   instead of internal expanded-name paths.
 - Corrected `<copy-config>` NACM behavior for filtered datastore sources,

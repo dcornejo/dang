@@ -698,5 +698,54 @@ TEST(NetconfServerTest, AuthorizesUrlTargetReplacementBeforeWriting) {
             std::string::npos);
 }
 
+TEST(NetconfServerTest, AppliesNacmToDatastoreSidesOfUrlCopies) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  MemoryUrlProvider urls;
+  urls.values["memory:target"] = R"xml(
+    <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <system xmlns="urn:rpc-test"><hostname>remote-old</hostname></system>
+    </config>)xml";
+  urls.values["memory:source"] = R"xml(
+    <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <system xmlns="urn:rpc-test"><hostname>remote-new</hostname></system>
+    </config>)xml";
+  NacmPolicy policy;
+  policy.set_read_default(AccessAction::kPermit);
+  policy.set_write_default(AccessAction::kPermit);
+  policy.AddUserToGroup("alice", "users");
+  policy.AddRule({"hide-device", "users", "", "/{urn:rpc-test}device",
+                  AccessMask(AccessOperation::kRead), AccessAction::kDeny});
+  NetconfServer server(stores, &policy, &urls);
+
+  const RpcResponse to_url = server.Process("alice", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="to-url">
+      <copy-config><target><url>memory:target</url></target>
+        <source><running/></source></copy-config>
+    </rpc>)xml");
+  EXPECT_NE(to_url.xml.find("<ok/>"), std::string::npos) << to_url.xml;
+  EXPECT_EQ(urls.values["memory:target"].find("device"), std::string::npos)
+      << urls.values["memory:target"];
+
+  policy.AddRule({"deny-hostname", "users", "",
+                  "/{urn:rpc-test}system/{urn:rpc-test}hostname",
+                  static_cast<std::uint8_t>(
+                      AccessMask(AccessOperation::kCreate) |
+                      AccessMask(AccessOperation::kUpdate) |
+                      AccessMask(AccessOperation::kDelete)),
+                  AccessAction::kDeny});
+  const std::string before = stores.Read(Datastore::kCandidate).ToXml();
+  const RpcResponse from_url = server.Process("alice", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="from-url">
+      <copy-config><target><candidate/></target>
+        <source><url>memory:source</url></source></copy-config>
+    </rpc>)xml");
+  EXPECT_NE(from_url.xml.find("access-denied"), std::string::npos)
+      << from_url.xml;
+  EXPECT_EQ(stores.Read(Datastore::kCandidate).ToXml(), before);
+}
+
 }  // namespace
 }  // namespace yang::netconf
