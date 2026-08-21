@@ -55,15 +55,26 @@ stays in this file with its remaining work rewritten precisely.
   the prior durable file, running tree, backend/plugin state, and live policy
   before returning `operation-failed`.
 - Harden authentication-to-NACM identity plumbing for production transports:
-  add a production SSH host and wire its authenticated identity through the
-  shared exact username mapper. TLS can select CN, DNS SAN, or URI SAN and map
-  the selected value to a local account, optionally requiring a match. The TLS
+  TLS can select CN, DNS SAN, or URI SAN and map the selected value to a local
+  account, optionally requiring a match. The TLS
   common-name mapping is fail-closed for absent, ambiguous, noncanonical, and
   embedded-NUL identities. External groups require explicit trusted provenance,
   bounded canonical values, and per-session isolation. Every recovery-user RPC
   attempt emits a host-visible privacy-minimal audit record, including malformed
   requests. Concurrent policy replacement and per-RPC snapshots are covered in
   the core server.
+- Resolve SSH server integration with `dangd`. Select and document whether SSH
+  is embedded in `dangd`, supplied by a supervised sidecar, or connected through
+  a stable host adapter; do not leave two components responsible for session
+  authentication or NETCONF framing. Require host-key and user authentication
+  before constructing `TransportIdentity`, accept only the exact `netconf`
+  subsystem, pass the authenticated username through the shared exact mapper,
+  mark external groups trusted only when supplied by the authenticated SSH
+  authorization source, and propagate disconnect, cancellation, timeout,
+  lock-release, notification, and confirmed-commit lifecycle events. Add
+  negative tests for unauthenticated peers, wrong subsystems, mapping failures,
+  spoofed groups, duplicate session IDs, abrupt disconnects, and backpressure,
+  plus multi-session NACM and independent RFC 6242 interoperability coverage.
 - Run interoperability and negative-security tests against at least one
   independent RFC 8341 implementation, run a sustained coverage-guided NACM
   fuzz campaign, and document any intentional deviations before claiming
