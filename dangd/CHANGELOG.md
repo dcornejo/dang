@@ -7,6 +7,8 @@
 
 ### Fixed
 
+- Rejected missing or ambiguous list identities during schema-aware NACM reads
+  and used only declared keys when matching instance-specific rules.
 - Kept schema-aware pruning active for recovery and disabled-NACM reads so
   authorization bypass does not expose unmodeled plugin/provider data.
 - Rejected `<data>` read-filter envelopes in arbitrary model namespaces while

@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Built schema-aware NACM list paths from declared keys in model order and
+  removed entries with missing or duplicate keys before authorization.
 - Kept an explicitly supplied runtime schema active during recovery-user and
   disabled-NACM read bypass, pruning unmodeled provider data without applying
   authorization rules.

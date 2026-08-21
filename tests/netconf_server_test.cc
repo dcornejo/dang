@@ -747,6 +747,9 @@ TEST(NetconfServerTest, OmitsUnmodeledSchemaAwareNacmReadData) {
       <system xmlns="urn:rpc-test"><hostname>visible</hostname>
         <injected xmlns="urn:unknown">secret</injected>
       </system>
+      <device xmlns="urn:rpc-test"><name>edge-ok</name></device>
+      <device xmlns="urn:rpc-test"><name>one</name><name>two</name></device>
+      <device xmlns="urn:rpc-test"/>
       <foreign xmlns="urn:unknown">secret</foreign>
     </data>)xml";
 
@@ -755,6 +758,12 @@ TEST(NetconfServerTest, OmitsUnmodeledSchemaAwareNacmReadData) {
   EXPECT_NE(filtered.find("<hostname>visible</hostname>"), std::string::npos);
   EXPECT_EQ(filtered.find("injected"), std::string::npos);
   EXPECT_EQ(filtered.find("foreign"), std::string::npos);
+  EXPECT_NE(filtered.find("<name>edge-ok</name>"), std::string::npos);
+  EXPECT_EQ(filtered.find("<name>one</name>"), std::string::npos);
+  EXPECT_EQ(filtered.find("<name>two</name>"), std::string::npos);
+  const std::size_t first_device = filtered.find("<device");
+  ASSERT_NE(first_device, std::string::npos);
+  EXPECT_EQ(filtered.find("<device", first_device + 1), std::string::npos);
 
   NacmPolicy recovery;
   ASSERT_TRUE(recovery.AddRecoveryUser("root"));
@@ -764,6 +773,8 @@ TEST(NetconfServerTest, OmitsUnmodeledSchemaAwareNacmReadData) {
             std::string::npos);
   EXPECT_EQ(recovery_filtered.find("injected"), std::string::npos);
   EXPECT_EQ(recovery_filtered.find("foreign"), std::string::npos);
+  EXPECT_NE(recovery_filtered.find("<name>edge-ok</name>"), std::string::npos);
+  EXPECT_EQ(recovery_filtered.find("<name>one</name>"), std::string::npos);
 
   NacmPolicy disabled;
   disabled.set_enabled(false);
@@ -773,6 +784,8 @@ TEST(NetconfServerTest, OmitsUnmodeledSchemaAwareNacmReadData) {
             std::string::npos);
   EXPECT_EQ(disabled_filtered.find("injected"), std::string::npos);
   EXPECT_EQ(disabled_filtered.find("foreign"), std::string::npos);
+  EXPECT_NE(disabled_filtered.find("<name>edge-ok</name>"), std::string::npos);
+  EXPECT_EQ(disabled_filtered.find("<name>one</name>"), std::string::npos);
 
   // Without a schema, retain the generic XML filtering API's established
   // behavior; the caller did not supply a model as an authority.

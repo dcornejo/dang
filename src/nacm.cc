@@ -81,11 +81,33 @@ std::string PredicateLiteral(std::string_view value) {
   return std::string(1, quote) + std::string(value) + quote;
 }
 
-std::string InstancePathComponent(const pugi::xml_node& node,
-                                  bool leaf_list = false) {
+std::optional<std::string> InstancePathComponent(
+    const pugi::xml_node& node,
+    const config::RuntimeSchemaNode* metadata = nullptr,
+    const config::RuntimeSchema* schema = nullptr) {
   std::string result = PathComponent(node);
-  if (leaf_list) {
+  if (metadata != nullptr &&
+      metadata->kind == semantic::SchemaNodeKind::kLeafList) {
     result += "[.=" + PredicateLiteral(node.text().as_string()) + "]";
+    return result;
+  }
+  if (metadata != nullptr && schema != nullptr &&
+      metadata->kind == semantic::SchemaNodeKind::kList) {
+    for (config::RuntimeSchemaNodeId key : metadata->keys) {
+      const config::QualifiedXmlName& key_name = schema->Get(key).name;
+      std::optional<pugi::xml_node> key_node;
+      for (const pugi::xml_node child : node.children()) {
+        if (child.type() != pugi::node_element) continue;
+        const auto [prefix, local] = SplitName(child.name());
+        if (config::QualifiedXmlName{NamespaceFor(child, prefix),
+                                    std::string(local)} != key_name) continue;
+        if (key_node) return std::nullopt;
+        key_node = child;
+      }
+      if (!key_node || HasElementChild(*key_node)) return std::nullopt;
+      result += "[{" + key_name.namespace_uri + "}" + key_name.local_name +
+          "=" + PredicateLiteral(key_node->text().as_string()) + "]";
+    }
     return result;
   }
   for (const pugi::xml_node child : node.children()) {
@@ -877,10 +899,14 @@ std::string NacmPolicy::FilterReadableData(std::string_view user,
         }
         const config::RuntimeSchemaNode* metadata =
             child_schema ? &schema->Get(*child_schema) : nullptr;
-        const std::string path = std::string(parent_path) +
-            InstancePathComponent(
-                child, metadata != nullptr &&
-                    metadata->kind == semantic::SchemaNodeKind::kLeafList);
+        const std::optional<std::string> component =
+            InstancePathComponent(child, metadata, schema);
+        if (!component) {
+          parent.remove_child(child);
+          child = next;
+          continue;
+        }
+        const std::string path = std::string(parent_path) + *component;
         if (!bypass_authorization && !AuthorizeData(user,
                            metadata == nullptr ? "" : metadata->module_name,
                            AccessOperation::kRead, path,

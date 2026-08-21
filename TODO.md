@@ -71,6 +71,8 @@ stays in this file with its remaining work rewritten precisely.
   authorization. Only NETCONF/NMDA or internal unqualified envelopes are valid.
   An explicitly supplied runtime schema remains active during recovery or
   disabled-enforcement authorization bypass.
+  Schema-aware list reads require one value for each declared key and construct
+  NACM predicates in model order.
   Concurrent policy replacement and per-RPC snapshots are covered in the core
   server.
 - Resolve SSH server integration with `dangd`. Select and document whether SSH
