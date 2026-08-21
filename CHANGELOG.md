@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Verified fail-closed remote URL copies across source reads, NACM target
+  inspection, and atomic provider writes without false NACM denial accounting.
 - Verified that NACM ignores virtual defaults for datastore writes while
   enforcing create/delete access for explicitly stored default-valued nodes.
 - Added instance-specific NACM filtering and create/delete authorization for

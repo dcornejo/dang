@@ -7,6 +7,8 @@
 
 ### Added
 
+- Verified remote-to-remote URL copy failures preserve provider errors and
+  target content without incrementing NACM denial counters.
 - Verified NACM write semantics for virtual defaults and explicitly stored
   nodes whose value equals the schema default.
 - Applied NACM leaf-list rules to individual values for reads and writes,

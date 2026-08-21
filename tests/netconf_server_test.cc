@@ -25,11 +25,21 @@ class MemoryUrlProvider final : public UrlDatastoreProvider {
  public:
   std::vector<std::string> Schemes() const override { return {"memory"}; }
   UrlResult Read(std::string_view url) override {
+    ++read_calls[std::string(url)];
+    if (const auto failed = read_failures.find(std::string(url));
+        failed != read_failures.end()) {
+      return failed->second;
+    }
     const auto found = values.find(std::string(url));
     return found == values.end() ? UrlResult{{}, "not found"}
                                  : UrlResult{found->second, {}};
   }
   UrlResult Write(std::string_view url, std::string_view xml) override {
+    ++write_calls[std::string(url)];
+    if (const auto failed = write_failures.find(std::string(url));
+        failed != write_failures.end()) {
+      return failed->second;
+    }
     values[std::string(url)] = std::string(xml);
     return {};
   }
@@ -38,6 +48,10 @@ class MemoryUrlProvider final : public UrlDatastoreProvider {
     return {};
   }
   std::map<std::string, std::string> values;
+  std::map<std::string, UrlResult> read_failures;
+  std::map<std::string, UrlResult> write_failures;
+  std::map<std::string, std::size_t> read_calls;
+  std::map<std::string, std::size_t> write_calls;
 };
 
 class RecordingOperationProvider final : public OperationProvider {
@@ -1152,6 +1166,69 @@ TEST(NetconfServerTest, AppliesNacmToDatastoreSidesOfUrlCopies) {
   EXPECT_NE(from_url.xml.find("access-denied"), std::string::npos)
       << from_url.xml;
   EXPECT_EQ(stores.Read(Datastore::kCandidate).ToXml(), before);
+}
+
+TEST(NetconfServerTest, FailsRemoteCopiesBeforeTargetMutation) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  MemoryUrlProvider urls;
+  const std::string source_xml = R"xml(
+    <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <system xmlns="urn:rpc-test"><hostname>remote-new</hostname></system>
+    </config>)xml";
+  const std::string target_xml = R"xml(
+    <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <system xmlns="urn:rpc-test"><hostname>remote-old</hostname></system>
+    </config>)xml";
+  urls.values["memory:source"] = source_xml;
+  urls.values["memory:target"] = target_xml;
+  NacmPolicy policy;
+  policy.set_write_default(AccessAction::kPermit);
+  NetconfServer server(stores, &policy, &urls);
+  const auto copy = [&](std::string_view message_id) {
+    return server.Process("alice",
+        "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+        "message-id=\"" + std::string(message_id) + "\">"
+        "<copy-config><target><url>memory:target</url></target>"
+        "<source><url>memory:source</url></source></copy-config></rpc>");
+  };
+
+  urls.read_failures["memory:source"] =
+      UrlResult{{}, "source temporarily unavailable", "resource-denied"};
+  const RpcResponse source_failed = copy("source-failed");
+  EXPECT_NE(source_failed.xml.find("<error-tag>resource-denied</error-tag>"),
+            std::string::npos) << source_failed.xml;
+  EXPECT_NE(source_failed.xml.find("source temporarily unavailable"),
+            std::string::npos) << source_failed.xml;
+  EXPECT_EQ(urls.write_calls["memory:target"], 0u);
+  EXPECT_EQ(urls.values["memory:target"], target_xml);
+  EXPECT_EQ(policy.counters().denied_data_writes, 0u);
+  urls.read_failures.clear();
+
+  urls.read_failures["memory:target"] =
+      UrlResult{{}, "target cannot be inspected", "lock-denied"};
+  const RpcResponse target_read_failed = copy("target-read-failed");
+  EXPECT_NE(target_read_failed.xml.find("<error-tag>lock-denied</error-tag>"),
+            std::string::npos) << target_read_failed.xml;
+  EXPECT_NE(target_read_failed.xml.find("target cannot be inspected"),
+            std::string::npos) << target_read_failed.xml;
+  EXPECT_EQ(urls.write_calls["memory:target"], 0u);
+  EXPECT_EQ(urls.values["memory:target"], target_xml);
+  EXPECT_EQ(policy.counters().denied_data_writes, 0u);
+  urls.read_failures.clear();
+
+  urls.write_failures["memory:target"] =
+      UrlResult{{}, "target write rejected", "resource-denied"};
+  const RpcResponse write_failed = copy("write-failed");
+  EXPECT_NE(write_failed.xml.find("<error-tag>resource-denied</error-tag>"),
+            std::string::npos) << write_failed.xml;
+  EXPECT_NE(write_failed.xml.find("target write rejected"), std::string::npos)
+      << write_failed.xml;
+  EXPECT_EQ(urls.write_calls["memory:target"], 1u);
+  EXPECT_EQ(urls.values["memory:target"], target_xml);
+  EXPECT_EQ(policy.counters().denied_data_writes, 0u);
 }
 
 }  // namespace

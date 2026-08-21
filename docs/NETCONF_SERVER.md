@@ -70,3 +70,7 @@ targets are supported by `delete-config`. URL payloads can also supply
 schema-validated before use or forwarding. Remote-to-remote copies are
 supported when both URLs use allowed schemes; identical URLs are rejected.
 Providers can return a precise NETCONF error tag with an error message.
+Remote source-read and NACM target-inspection failures stop before the provider
+write call. The provider's atomic-write contract requires a reported write
+failure to retain the previous target content; such I/O failures are not NACM
+denials and do not affect NACM counters.

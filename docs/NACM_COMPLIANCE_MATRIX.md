@@ -156,9 +156,16 @@ No open core-server evidence item remains for policy snapshot isolation.
   against datastore targets before atomic publication:
   `NetconfServerTest.AppliesNacmToDatastoreSidesOfUrlCopies` and
   `NetconfServerTest.AuthorizesUrlTargetReplacementBeforeWriting`.
+- Remote-to-remote provider failures preserve precise error tags/messages and
+  target content. Source-read and target-inspection failures occur before a
+  write; an atomic provider write failure also leaves the target unchanged.
+  These transport failures do not increment NACM denial counters:
+  `NetconfServerTest.FailsRemoteCopiesBeforeTargetMutation`.
 - Denied write accounting: `NacmTest.CountsDeniedOperationsWritesAndNotifications`.
 
-Open evidence: complete remote-to-remote URL provider failure-path coverage.
+No open core-server data-node evidence item remains. External interoperability,
+host-provider authorization policy, and long-running concurrency evidence remain
+integration responsibilities.
 
 ## Section 3.4.6: outgoing notification authorization
 

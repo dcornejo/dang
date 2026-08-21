@@ -25,8 +25,10 @@ stays in this file with its remaining work rewritten precisely.
   leaf-list uniqueness/name restrictions, and empty lexical values are covered.
   Datastore-source copy filtering and the running-to-startup execute-only
   exception are also covered. URL/datastore copy combinations are covered;
-  independent provider authorization remains host policy. Data-write denial
-  paths now use namespace-correct XPath, including keyed instances. Effective
+  remote source-read, target-inspection, and atomic write failures preserve
+  provider errors and target content; independent provider authorization
+  remains host policy. Data-write denial paths now use namespace-correct XPath,
+  including keyed instances. Effective
   `<edit-config>` and RFC 8526 `<edit-data>` create/update/delete mapping is
   covered, as are ordered-by-user moves and instance-specific leaf-list read,
   create, and delete authorization. Virtual defaults are excluded from write
