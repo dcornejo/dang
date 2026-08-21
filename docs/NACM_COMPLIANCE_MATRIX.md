@@ -128,6 +128,10 @@ No open core-server evidence item remains for policy snapshot isolation.
   `update` access. Moves are included in backend deltas and a denial preserves
   the target order: `ConfigEditTest.ReportsMinimalOrderedByUserMoves` and
   `NetconfServerTest.RequiresNacmUpdatePermissionForOrderedMove`.
+- Leaf-list values use RFC 7950 self predicates in their instance paths, so
+  rules can independently filter reads and authorize creation or deletion of a
+  particular value. Apostrophes select a double-quoted predicate literal:
+  `NetconfServerTest.AuthorizesSpecificLeafListInstances`.
 - Exact edits, candidate commit, inline/URL replacement, and copy operations are
   authorized atomically before publication. Implicit `choice` and `when`
   removals do not demand separate permission:
@@ -150,8 +154,8 @@ No open core-server evidence item remains for policy snapshot isolation.
   `NetconfServerTest.AuthorizesUrlTargetReplacementBeforeWriting`.
 - Denied write accounting: `NacmTest.CountsDeniedOperationsWritesAndNotifications`.
 
-Open evidence: complete the protocol-level CRUDX suite for defaults, leaf-list
-instances, and remote-to-remote URL provider failure paths.
+Open evidence: complete the protocol-level CRUDX suite for defaults and
+remote-to-remote URL provider failure paths.
 
 ## Section 3.4.6: outgoing notification authorization
 

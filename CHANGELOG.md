@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added instance-specific NACM filtering and create/delete authorization for
+  leaf-list values, including values containing apostrophes.
 - Represented `ordered-by user` list and leaf-list reordering as explicit move
   deltas, mapped moves to NACM update access, and described their positions to
   configuration backends.

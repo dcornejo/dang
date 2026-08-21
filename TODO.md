@@ -28,9 +28,10 @@ stays in this file with its remaining work rewritten precisely.
   independent provider authorization remains host policy. Data-write denial
   paths now use namespace-correct XPath, including keyed instances. Effective
   `<edit-config>` and RFC 8526 `<edit-data>` create/update/delete mapping is
-  covered, as are ordered-by-user moves; defaults and leaf-list instance
-  authorization remain. Confirmed-commit cancellation and timeout rollback
-  under a changed policy are covered.
+  covered, as are ordered-by-user moves and instance-specific leaf-list read,
+  create, and delete authorization; default-node authorization remains.
+  Confirmed-commit cancellation and timeout rollback under a changed policy are
+  covered.
 - Make managed NACM policy replacement and durable datastore persistence one
   recoverable transaction, retaining or restoring the last known-good policy
   and running configuration when snapshot persistence fails. Schema validation,

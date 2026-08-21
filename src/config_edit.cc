@@ -89,6 +89,11 @@ std::string PathComponent(const RuntimeSchemaNode& schema) {
   return "/{" + schema.name.namespace_uri + "}" + schema.name.local_name;
 }
 
+std::string PredicateLiteral(std::string_view value) {
+  const char quote = value.find('\'') == std::string_view::npos ? '\'' : '"';
+  return std::string(1, quote) + std::string(value) + quote;
+}
+
 struct MutableNode {
   RuntimeSchemaNodeId schema = kInvalidRuntimeSchemaNodeId;
   QualifiedXmlName name;
@@ -163,7 +168,7 @@ std::string InstancePath(const RuntimeSchema& runtime,
               ChildValue(document, node, key).value_or("") + "']";
     }
   } else if (schema.kind == semantic::SchemaNodeKind::kLeafList) {
-    path += "[.='" + node.value.value_or("") + "']";
+    path += "[.=" + PredicateLiteral(node.value.value_or("")) + "]";
   }
   return path;
 }

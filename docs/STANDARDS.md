@@ -216,6 +216,11 @@ existing list or leaf-list instances whose relative positions changed is
 reported as move events, with old and new one-based positions. This makes moves
 visible to plugins and the English backend delta stream and maps them to NACM
 `update` authorization instead of allowing a reorder to bypass write checks.
+Leaf-list instance paths include their value as a self predicate for both
+effective write deltas and schema-aware NACM read filtering. Predicate values
+containing an apostrophe use a double-quoted literal, preserving
+instance-specific authorization instead of falling back to collection-wide
+matching.
 
 ### RFC 6242 framing is incremental and bounded
 

@@ -888,6 +888,86 @@ TEST(NetconfServerTest, RequiresNacmUpdatePermissionForOrderedMove) {
   EXPECT_EQ(stores.Read(Datastore::kCandidate).ToXml(false), reordered);
 }
 
+TEST(NetconfServerTest, AuthorizesSpecificLeafListInstances) {
+  VectorDiagnosticSink diagnostics;
+  auto source = SourceFile::Create("leaf-list.yang", R"yang(module leaf-list {
+    yang-version 1.1; namespace "urn:leaf-list-test"; prefix ll;
+    container preferences { leaf-list color { type string; } }
+  })yang", diagnostics);
+  ASSERT_TRUE(source);
+  InMemoryModuleRepository repository;
+  Compiler compiler(repository, diagnostics);
+  auto compilation = compiler.Compile(source);
+  ASSERT_TRUE(compilation);
+  config::RuntimeSchema schema =
+      config::RuntimeSchemaBuilder::FromCompilation(*compilation);
+  auto initial = config::ParseDatastoreXml(schema, R"xml(
+    <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <preferences xmlns="urn:leaf-list-test">
+        <color>red</color><color>black</color><color>user's choice</color>
+      </preferences>
+    </config>)xml").document;
+  ASSERT_TRUE(initial);
+  DatastoreManager stores(schema, *initial);
+  NacmPolicy policy;
+  policy.set_write_default(AccessAction::kDeny);
+  for (const std::string& user : {"creator", "deleter", "viewer"})
+    policy.AddUserToGroup(user, user);
+  const std::string colors =
+      "/{urn:leaf-list-test}preferences/{urn:leaf-list-test}color";
+  policy.AddRule({"create-blue", "creator", "", colors + "[.='blue']",
+                  AccessMask(AccessOperation::kCreate), AccessAction::kPermit});
+  policy.AddRule({"delete-blue", "deleter", "", colors + "[.='blue']",
+                  AccessMask(AccessOperation::kDelete), AccessAction::kPermit});
+  policy.AddRule({"hide-red", "viewer", "", colors + "[.='red']",
+                  AccessMask(AccessOperation::kRead), AccessAction::kDeny});
+  policy.AddRule({"hide-apostrophe", "viewer", "",
+                  colors + "[.=\"user's choice\"]",
+                  AccessMask(AccessOperation::kRead), AccessAction::kDeny});
+  NetconfServer server(stores, &policy);
+
+  const RpcResponse filtered = server.Process("viewer", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="read">
+      <get-config><source><candidate/></source></get-config>
+    </rpc>)xml");
+  EXPECT_EQ(filtered.xml.find(">red</"), std::string::npos) << filtered.xml;
+  EXPECT_EQ(filtered.xml.find("user's choice"), std::string::npos)
+      << filtered.xml;
+  EXPECT_NE(filtered.xml.find(">black</"), std::string::npos) << filtered.xml;
+
+  const RpcResponse created = server.Process("creator", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="create">
+      <edit-config><target><candidate/></target><config>
+        <preferences xmlns="urn:leaf-list-test"><color>blue</color></preferences>
+      </config></edit-config>
+    </rpc>)xml");
+  EXPECT_NE(created.xml.find("<ok/>"), std::string::npos) << created.xml;
+
+  const std::string before = stores.Read(Datastore::kCandidate).ToXml();
+  const RpcResponse wrong_instance = server.Process("creator", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="wrong">
+      <edit-config><target><candidate/></target><config>
+        <preferences xmlns="urn:leaf-list-test"><color>green</color></preferences>
+      </config></edit-config>
+    </rpc>)xml");
+  EXPECT_NE(wrong_instance.xml.find("access-denied"), std::string::npos)
+      << wrong_instance.xml;
+  EXPECT_EQ(stores.Read(Datastore::kCandidate).ToXml(), before);
+
+  const RpcResponse deleted = server.Process("deleter", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="delete">
+      <edit-config><target><candidate/></target><config>
+        <preferences xmlns="urn:leaf-list-test">
+          <color xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0"
+                 nc:operation="delete">blue</color>
+        </preferences>
+      </config></edit-config>
+    </rpc>)xml");
+  EXPECT_NE(deleted.xml.find("<ok/>"), std::string::npos) << deleted.xml;
+  EXPECT_EQ(stores.Read(Datastore::kCandidate).ToXml().find(">blue</"),
+            std::string::npos);
+}
+
 TEST(NetconfServerTest, NacmRpcDenialIdentifiesNetconfOperation) {
   VectorDiagnosticSink diagnostics;
   auto fixture = BuildServerFixture(&diagnostics);

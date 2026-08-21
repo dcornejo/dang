@@ -7,6 +7,8 @@
 
 ### Added
 
+- Applied NACM leaf-list rules to individual values for reads and writes,
+  retaining precise predicates when values contain apostrophes.
 - Added ordered list and leaf-list move deltas, NACM update authorization for
   reordering, and English before/after position descriptions for plugins and
   operators.

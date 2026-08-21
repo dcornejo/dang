@@ -52,15 +52,24 @@ bool HasElementChild(const pugi::xml_node& node) {
   });
 }
 
-std::string InstancePathComponent(const pugi::xml_node& node) {
+std::string PredicateLiteral(std::string_view value) {
+  const char quote = value.find('\'') == std::string_view::npos ? '\'' : '"';
+  return std::string(1, quote) + std::string(value) + quote;
+}
+
+std::string InstancePathComponent(const pugi::xml_node& node,
+                                  bool leaf_list = false) {
   std::string result = PathComponent(node);
+  if (leaf_list) {
+    result += "[.=" + PredicateLiteral(node.text().as_string()) + "]";
+    return result;
+  }
   for (const pugi::xml_node child : node.children()) {
     if (child.type() != pugi::node_element || HasElementChild(child)) continue;
     const auto [prefix, local] = SplitName(child.name());
     const std::string value = child.text().as_string();
-    if (value.find('\'') != std::string::npos) continue;
     result += "[{" + NamespaceFor(child, prefix) + "}" +
-              std::string(local) + "='" + value + "']";
+              std::string(local) + "=" + PredicateLiteral(value) + "]";
   }
   return result;
 }
@@ -674,8 +683,6 @@ std::string NacmPolicy::FilterReadableData(std::string_view user,
     for (pugi::xml_node child = parent.first_child(); child;) {
       pugi::xml_node next = child.next_sibling();
       if (child.type() == pugi::node_element) {
-        const std::string path =
-            std::string(parent_path) + InstancePathComponent(child);
         std::optional<config::RuntimeSchemaNodeId> child_schema;
         if (schema != nullptr) {
           const auto [child_prefix, child_local] = SplitName(child.name());
@@ -686,6 +693,10 @@ std::string NacmPolicy::FilterReadableData(std::string_view user,
         }
         const config::RuntimeSchemaNode* metadata =
             child_schema ? &schema->Get(*child_schema) : nullptr;
+        const std::string path = std::string(parent_path) +
+            InstancePathComponent(
+                child, metadata != nullptr &&
+                    metadata->kind == semantic::SchemaNodeKind::kLeafList);
         if (!AuthorizeData(user,
                            metadata == nullptr ? "" : metadata->module_name,
                            AccessOperation::kRead, path,
