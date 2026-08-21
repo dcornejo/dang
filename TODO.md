@@ -15,69 +15,6 @@ stays in this file with its remaining work rewritten precisely.
 
 ### RFC 8341 NACM compliance closure
 
-- Close every open evidence item in
-  [`docs/NACM_COMPLIANCE_MATRIX.md`](docs/NACM_COMPLIANCE_MATRIX.md), especially
-  the remaining data-write denial vectors and the protocol-level
-  operation-to-CRUDX matrix. Keep each vector indexed to its RFC 8341 section.
-  Namespace-correct
-  RPC denial paths, single-RPC policy snapshots, structural loader constraints,
-  leaf-list uniqueness/name restrictions, and empty lexical values are covered.
-  The managed loader rejects unmodeled attributes and non-whitespace character
-  content in structural containers while allowing namespace declarations, and
-  rejects multiple top-level policy elements.
-  Every prohibited pairwise and three-way `rule-type` selector combination is
-  covered, and selector choice validation is based on leaf presence.
-  Global first-match ordering across rule-lists when a user belongs to several
-  configured groups is covered.
-  Every supported standard operation has protocol-level denial evidence, with
-  namespace-correct error paths, no error-info, and the `close-session`
-  exception verified.
-  Access-denied messages are generic and disclose no internal path notation,
-  rejected non-key value, NACM rule name, or other policy detail beyond the
-  required namespace-bound error-path.
-  Replay authorization and live multi-session notification fanout each retain
-  one policy snapshot during concurrent managed-policy replacement.
-  Schema-aware notification publication rejects mismatches between the claimed
-  identity, modeled XML event root, and associated instance path, and rejects
-  event bodies that violate the advertised YANG schema.
-  With persistence configured, first boot saves the validated datastore and
-  seeded NACM before startup succeeds; interruption at every atomic-save stage
-  restarts with either a safe reseed or the complete saved policy.
-  Datastore-source copy filtering and the running-to-startup execute-only
-  exception are also covered. URL/datastore copy combinations are covered;
-  remote source-read, target-inspection, and atomic write failures preserve
-  provider errors and target content; independent provider authorization
-  remains host policy. Data-write denial paths now use namespace-correct XPath,
-  including keyed instances, and quoted predicate values containing closing
-  brackets are parsed without truncation. Effective
-  `<edit-config>` and RFC 8526 `<edit-data>` create/update/delete mapping is
-  covered, as are ordered-by-user moves and instance-specific leaf-list read,
-  create, and delete authorization. Virtual defaults are excluded from write
-  deltas while explicitly stored default-valued nodes require create/delete
-  access. Confirmed-commit cancellation and timeout rollback under a changed
-  policy are covered. Managed NACM/backend publication and durable persistence
-  now share the datastore transaction boundary: a failed snapshot save restores
-  the prior durable file, running tree, backend/plugin state, and live policy
-  before returning `operation-failed`.
-- Harden authentication-to-NACM identity plumbing for production transports:
-  TLS can select CN, DNS SAN, or URI SAN and map the selected value to a local
-  account, optionally requiring a match. The TLS
-  common-name mapping is fail-closed for absent, ambiguous, noncanonical, and
-  embedded-NUL identities. External groups require explicit trusted provenance,
-  bounded canonical values, and per-session isolation. Every recovery-user RPC
-  attempt emits a host-visible privacy-minimal audit record, including malformed
-  requests. Recovery-user configuration rejects duplicate, padded,
-  control-containing, embedded-NUL, oversized, and malformed UTF-8 identities.
-  Recovery and disabled-enforcement read paths retain XML syntax and resource
-  checks, including a single `<data>` document envelope, before bypassing
-  authorization. Only NETCONF/NMDA or internal unqualified envelopes are valid.
-  An explicitly supplied runtime schema remains active during recovery or
-  disabled-enforcement authorization bypass.
-  Schema-aware list reads require one value for each declared key and construct
-  NACM predicates in model order. Identities requiring forbidden XPath
-  functions to quote fail closed.
-  Concurrent policy replacement and per-RPC snapshots are covered in the core
-  server.
 - Resolve SSH server integration with `dangd`. Select and document whether SSH
   is embedded in `dangd`, supplied by a supervised sidecar, or connected through
   a stable host adapter; do not leave two components responsible for session
@@ -90,6 +27,15 @@ stays in this file with its remaining work rewritten precisely.
   negative tests for unauthenticated peers, wrong subsystems, mapping failures,
   spoofed groups, duplicate session IDs, abrupt disconnects, and backpressure,
   plus multi-session NACM and independent RFC 6242 interoperability coverage.
+- Perform an end-to-end XML injection audit across every untrusted XML input and
+  generated XML/XPath output. Inventory parser entry points and parse flags;
+  verify fail-closed, resource-bounded handling of DTD and external entities,
+  entity expansion, XInclude, multiple roots, namespace rebinding, embedded
+  NULs, malformed UTF-8, CDATA, comments, and processing instructions. Test
+  XPath predicate quoting and XML escaping for configurations, RPC errors,
+  notifications, YANG Library, and model retrieval. Add focused regressions and
+  coverage-guided fuzz seeds for every issue found, and document any parser
+  behavior that is intentionally accepted.
 - Run interoperability and negative-security tests against at least one
   independent RFC 8341 implementation, run a sustained coverage-guided NACM
   fuzz campaign, and document any intentional deviations before claiming

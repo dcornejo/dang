@@ -8,6 +8,11 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- Reconciled the NACM TODO with its compliance matrix and added an explicit
+  end-to-end XML injection audit and regression-testing gate.
+
 ### Fixed
 
 - Accepted closing brackets inside quoted NACM node-instance predicate values

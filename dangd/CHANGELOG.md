@@ -5,6 +5,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Added XML injection auditing to the remaining NACM security work and removed
+  completed core and TLS evidence from the active TODO narrative.
+
 ### Fixed
 
 - Matched valid NACM paths whose quoted key or leaf-list value contains `]`.

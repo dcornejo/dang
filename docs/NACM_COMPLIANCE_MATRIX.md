@@ -179,9 +179,9 @@ No open core-server evidence item remains for policy snapshot isolation.
   `NacmTest.DoesNotUseTextualPathPrefixes`. Quoted predicate values may contain
   closing brackets without prematurely terminating the predicate:
   `NacmTest.AcceptsClosingBracketInsidePathPredicateLiteral`. Schema-aware read
-  paths use exactly
-  the declared keys in model order and remove entries with missing or duplicate
-  keys: `NetconfServerTest.OmitsUnmodeledSchemaAwareNacmReadData`.
+  paths use exactly the declared keys in model order and remove entries with
+  missing or duplicate keys:
+  `NetconfServerTest.OmitsUnmodeledSchemaAwareNacmReadData`.
 - Read/create/update/delete bit selection and first-match ordering:
   `NacmTest.AppliesWildcardGroupsModulesNamesAndCrudxBitsInOrder` and
   `NetconfServerTest.MapsEffectiveEditConfigChangesToCrudBits` and
@@ -281,7 +281,8 @@ persistence. Fault injection before and after atomic replacement verifies that
 the prior durable snapshot, running tree, backend, and NACM policy are restored
 before an `operation-failed` reply is returned.
 
-Open evidence: production authentication/group hardening, a complete security
-review, sustained coverage-guided fuzzing release results, and independent interoperability. No full RFC
-8341 compliance claim is made until those TODO items and every open entry above
-are closed.
+Open evidence: production SSH authentication and group integration, the
+end-to-end XML injection and broader security reviews, sustained
+coverage-guided fuzzing release results, and independent interoperability. No
+full RFC 8341 compliance claim is made until those TODO items and every open
+entry above are closed.
