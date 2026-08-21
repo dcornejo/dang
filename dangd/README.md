@@ -13,7 +13,8 @@ The current foundation:
 - constructs running, candidate, and startup NETCONF datastores;
 - replaces a backend working configuration whenever NETCONF replaces the
   running datastore and reports the schema-aware changes in plain English;
-- optionally restores and saves an atomic datastore snapshot;
+- optionally restores an atomic datastore snapshot and makes each live
+  persistent mutation durable before reporting NETCONF success;
 - provides `--check` startup validation; and
 - provides an RFC 6242 stdin/stdout session for supervised integration tests.
 

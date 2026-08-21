@@ -788,6 +788,65 @@ TEST(DangdApplicationTest, SavesAndRestoresConfiguredStateFile) {
   EXPECT_TRUE(restored.errors.empty());
 }
 
+TEST(DangdApplicationTest, LiveCommitRestoresSnapshotAndBackendOnSaveFailure) {
+  const yang::netconf::SnapshotSaveStage stages[] = {
+      yang::netconf::SnapshotSaveStage::kTemporaryWritten,
+      yang::netconf::SnapshotSaveStage::kTemporarySynchronized,
+      yang::netconf::SnapshotSaveStage::kSnapshotReplaced,
+      yang::netconf::SnapshotSaveStage::kDirectorySynchronized};
+  unsigned sequence = 0;
+  for (const auto interrupted_stage : stages) {
+    TemporaryInputs inputs;
+    auto options = Options(inputs);
+    options.state_file = inputs.Path("state-" + std::to_string(++sequence) +
+                                     ".json");
+    bool armed = false;
+    options.snapshot_save_checkpoint =
+        [&](yang::netconf::SnapshotSaveStage stage) {
+          return !armed || stage != interrupted_stage;
+        };
+    auto loaded = Application::Load(options);
+    ASSERT_NE(loaded.application, nullptr)
+        << testing::PrintToString(loaded.errors);
+    yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+    const auto edited = loaded.application->server().Process(session, R"xml(
+      <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="edit">
+        <edit-config><target><candidate/></target><config>
+          <system xmlns="urn:example:appliance"><hostname>edge-2</hostname></system>
+        </config></edit-config>
+      </rpc>)xml");
+    ASSERT_NE(edited.xml.find("<ok/>"), std::string::npos) << edited.xml;
+    std::ifstream before_input(*options.state_file, std::ios::binary);
+    const std::string durable_before((std::istreambuf_iterator<char>(before_input)),
+                                     std::istreambuf_iterator<char>());
+
+    armed = true;
+    const auto committed = Commit(*loaded.application);
+    ASSERT_NE(committed.xml.find("<rpc-error>"), std::string::npos)
+        << committed.xml;
+    EXPECT_NE(committed.xml.find("operation-failed"), std::string::npos)
+        << committed.xml;
+    EXPECT_NE(committed.xml.find("datastore persistence failed"),
+              std::string::npos) << committed.xml;
+    EXPECT_NE(loaded.application->datastores()
+                  .Read(yang::netconf::Datastore::kRunning)
+                  .ToXml()
+                  .find("edge-1"),
+              std::string::npos);
+    EXPECT_NE(loaded.application->working_configuration().ToXml().find("edge-1"),
+              std::string::npos);
+    EXPECT_NE(loaded.application->datastores()
+                  .Read(yang::netconf::Datastore::kCandidate)
+                  .ToXml()
+                  .find("edge-2"),
+              std::string::npos);
+    std::ifstream after_input(*options.state_file, std::ios::binary);
+    const std::string durable_after((std::istreambuf_iterator<char>(after_input)),
+                                    std::istreambuf_iterator<char>());
+    EXPECT_EQ(durable_after, durable_before);
+  }
+}
+
 TEST(DangdApplicationTest, PersistsManagedNacmBeforeFirstBootCompletes) {
   TemporaryInputs inputs;
   constexpr std::string_view model = R"yang(module persistent-nacm-appliance {

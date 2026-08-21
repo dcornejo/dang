@@ -50,13 +50,10 @@ stays in this file with its remaining work rewritten precisely.
   create, and delete authorization. Virtual defaults are excluded from write
   deltas while explicitly stored default-valued nodes require create/delete
   access. Confirmed-commit cancellation and timeout rollback under a changed
-  policy are covered.
-- Make managed NACM policy replacement and durable datastore persistence one
-  recoverable transaction, retaining or restoring the last known-good policy
-  and running configuration when snapshot persistence fails. Schema validation,
-  policy construction, and in-memory backend publication are already staged
-  atomically before the live policy is replaced. Initial-state persistence is
-  fail-closed and covered separately.
+  policy are covered. Managed NACM/backend publication and durable persistence
+  now share the datastore transaction boundary: a failed snapshot save restores
+  the prior durable file, running tree, backend/plugin state, and live policy
+  before returning `operation-failed`.
 - Harden authentication-to-NACM identity plumbing for production transports:
   add configurable SAN/SSH name mapping, trusted external-group provenance,
   recovery-session auditing, and multi-session identity-mapping tests. The TLS

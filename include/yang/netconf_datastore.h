@@ -66,6 +66,7 @@ struct PersistentDatastoreState {
   std::optional<std::int64_t> confirmation_expiry_unix_seconds;
   std::optional<std::string> confirming_session;
   std::optional<std::string> persist_token;
+  bool operator==(const PersistentDatastoreState&) const = default;
 };
 
 /**
@@ -100,6 +101,14 @@ class RunningConfigBackend {
 class DatastoreManager {
  public:
   using Clock = std::chrono::steady_clock;
+  /**
+   * Publishes one persistent-state transition. A failure must leave durable
+   * storage containing `before`; the manager then restores its live state.
+   */
+  using PersistentStateCommitter = std::function<
+      std::optional<config::ValidationFinding>(
+          const PersistentDatastoreState& before,
+          const PersistentDatastoreState& after)>;
 
   DatastoreManager(const config::RuntimeSchema& schema,
                    config::ConfigDocument running,
@@ -150,8 +159,19 @@ class DatastoreManager {
   /** Atomically replaces unlocked state after parsing and validation. */
   [[nodiscard]] TransactionResult RestorePersistentState(
       const PersistentDatastoreState& state);
+  /** Installs the durability participant used by subsequent mutations. */
+  void SetPersistentStateCommitter(PersistentStateCommitter committer);
 
  private:
+  struct StateSnapshot {
+    config::ConfigDocument running;
+    config::ConfigDocument candidate;
+    config::ConfigDocument startup;
+    std::optional<config::ConfigDocument> rollback_running;
+    std::optional<Clock::time_point> confirmation_deadline;
+    std::optional<std::string> confirming_session;
+    std::optional<std::string> persist_token;
+  };
   [[nodiscard]] config::ConfigDocument& Mutable(Datastore datastore);
   [[nodiscard]] const config::ConfigDocument& Get(Datastore datastore) const;
   [[nodiscard]] TransactionResult CheckWriteAccess(
@@ -161,6 +181,14 @@ class DatastoreManager {
   [[nodiscard]] TransactionResult ReplaceRunning(
       config::ConfigDocument replacement,
       std::vector<config::ChangeEvent> changes);
+  [[nodiscard]] StateSnapshot SnapshotLocked() const;
+  [[nodiscard]] PersistentDatastoreState PersistentStateLocked() const;
+  [[nodiscard]] PersistentDatastoreState PersistentStateOf(
+      const StateSnapshot& snapshot) const;
+  [[nodiscard]] TransactionResult FinishMutation(
+      const StateSnapshot& before, TransactionResult result);
+  [[nodiscard]] std::optional<config::ValidationFinding> RestoreLocked(
+      const StateSnapshot& snapshot);
 
   const config::RuntimeSchema& schema_;
   mutable std::mutex mutex_;
@@ -173,6 +201,7 @@ class DatastoreManager {
   std::optional<std::string> confirming_session_;
   std::optional<std::string> persist_token_;
   RunningConfigBackend* backend_ = nullptr;
+  PersistentStateCommitter persistent_state_committer_;
 };
 
 }  // namespace yang::netconf

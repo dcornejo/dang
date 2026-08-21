@@ -290,11 +290,6 @@ int RunTlsServer(Application& application, const TlsServerOptions& options,
       adapter.Receive(std::string_view(buffer.data(), count));
       for (const std::string& delta : application.DrainBackendDeltas())
         diagnostics << "dangd: configuration delta: " << delta << '\n';
-      if (application.has_state_file()) {
-        if (const auto persistence_error = application.SaveState())
-          diagnostics << "dangd: cannot persist datastore state: "
-                      << *persistence_error << '\n';
-      }
     }
     adapter.TransportClosed();
     SSL_shutdown(tls.get());
@@ -413,11 +408,6 @@ int RunReloadableTlsServer(
         adapter.Receive(std::string_view(buffer.data(), count));
         for (const std::string& delta : application->DrainBackendDeltas())
           diagnostics << "dangd: configuration delta: " << delta << '\n';
-        if (application->has_state_file()) {
-          if (const auto persistence_error = application->SaveState())
-            diagnostics << "dangd: cannot persist datastore state: "
-                        << *persistence_error << '\n';
-        }
       }
       adapter.TransportClosed();
     }

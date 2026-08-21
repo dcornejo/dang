@@ -7,6 +7,9 @@
 
 ### Fixed
 
+- Moved snapshot saving into the live datastore transaction boundary so a
+  failed save rolls back the durable file, backend/plugins, and managed NACM
+  policy before NETCONF sends `operation-failed`.
 - Rejected ambiguous or unsafe certificate common names before constructing a
   NETCONF/NACM session identity.
 - Required the first configured state snapshot, including seeded NACM, to be
@@ -18,6 +21,8 @@
 
 ### Added
 
+- Covered live commit persistence failures both before and after atomic file
+  replacement, including byte-for-byte durable snapshot restoration.
 - Added deterministic first-boot persistence checkpoints and restart coverage
   for every atomic snapshot stage.
 - Kept notification replay and live fanout internally consistent while managed

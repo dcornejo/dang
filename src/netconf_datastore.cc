@@ -48,6 +48,85 @@ TransactionResult DatastoreManager::ReplaceRunning(
   return {true, {}, std::move(changes)};
 }
 
+DatastoreManager::StateSnapshot DatastoreManager::SnapshotLocked() const {
+  return {running_, candidate_, startup_, rollback_running_,
+          confirmation_deadline_, confirming_session_, persist_token_};
+}
+
+PersistentDatastoreState DatastoreManager::PersistentStateLocked() const {
+  return PersistentStateOf(SnapshotLocked());
+}
+
+PersistentDatastoreState DatastoreManager::PersistentStateOf(
+    const StateSnapshot& snapshot) const {
+  PersistentDatastoreState state;
+  state.running_xml = snapshot.running.ToXml();
+  state.candidate_xml = snapshot.candidate.ToXml();
+  state.startup_xml = snapshot.startup.ToXml();
+  if (snapshot.rollback_running)
+    state.rollback_running_xml = snapshot.rollback_running->ToXml();
+  if (snapshot.confirmation_deadline) {
+    const auto remaining = *snapshot.confirmation_deadline - Clock::now();
+    const auto expiry = std::chrono::system_clock::now() + remaining;
+    state.confirmation_expiry_unix_seconds =
+        std::chrono::duration_cast<std::chrono::seconds>(
+            expiry.time_since_epoch()).count();
+  }
+  state.confirming_session = snapshot.confirming_session;
+  state.persist_token = snapshot.persist_token;
+  return state;
+}
+
+std::optional<config::ValidationFinding> DatastoreManager::RestoreLocked(
+    const StateSnapshot& snapshot) {
+  std::vector<config::ChangeEvent> changes =
+      config::DiffConfigDocuments(schema_, running_, snapshot.running);
+  if (!changes.empty()) {
+    TransactionResult restored =
+        ReplaceRunning(snapshot.running, std::move(changes));
+    if (!restored.ok) {
+      return restored.errors.empty()
+          ? std::optional<config::ValidationFinding>(
+                Failure(config::ValidationCode::kInvalidValue,
+                        "live configuration rollback failed", "operation-failed")
+                    .errors.front())
+          : std::optional<config::ValidationFinding>(restored.errors.front());
+    }
+  } else {
+    running_ = snapshot.running;
+  }
+  candidate_ = snapshot.candidate;
+  startup_ = snapshot.startup;
+  rollback_running_ = snapshot.rollback_running;
+  confirmation_deadline_ = snapshot.confirmation_deadline;
+  confirming_session_ = snapshot.confirming_session;
+  persist_token_ = snapshot.persist_token;
+  return std::nullopt;
+}
+
+TransactionResult DatastoreManager::FinishMutation(
+    const StateSnapshot& before, TransactionResult result) {
+  if (!persistent_state_committer_) return result;
+  const PersistentDatastoreState after = PersistentStateLocked();
+
+  const PersistentDatastoreState prior = PersistentStateOf(before);
+  if (prior == after) return result;
+  if (auto persistence_error = persistent_state_committer_(prior, after)) {
+    if (auto rollback_error = RestoreLocked(before)) {
+      persistence_error->message += "; live rollback also failed: " +
+                                    rollback_error->message;
+    }
+    return {false, {std::move(*persistence_error)}, {}};
+  }
+  return result;
+}
+
+void DatastoreManager::SetPersistentStateCommitter(
+    PersistentStateCommitter committer) {
+  std::lock_guard lock(mutex_);
+  persistent_state_committer_ = std::move(committer);
+}
+
 config::ConfigDocument DatastoreManager::Read(Datastore datastore) const {
   std::lock_guard lock(mutex_);
   return Get(datastore);
@@ -123,6 +202,7 @@ TransactionResult DatastoreManager::Validate(Datastore datastore) {
 TransactionResult DatastoreManager::EditConfig(
     const EditConfigRequest& request) {
   std::lock_guard lock(mutex_);
+  const StateSnapshot before = SnapshotLocked();
   if (TransactionResult access = CheckWriteAccess(request.target, request.session);
       !access.ok) return access;
   const config::ConfigDocument original = Get(request.target);
@@ -219,7 +299,8 @@ TransactionResult DatastoreManager::EditConfig(
     }
   }
   std::ranges::sort(result.changes, {}, &config::ChangeEvent::instance_path);
-  return result;
+  if (request.test_option == TestOption::kTestOnly) return result;
+  return FinishMutation(before, std::move(result));
 }
 
 TransactionResult DatastoreManager::Commit(
@@ -227,6 +308,7 @@ TransactionResult DatastoreManager::Commit(
     std::optional<ConfirmedCommitOptions> confirmed,
     std::function<bool(const config::ChangeEvent&)> authorize_change) {
   std::lock_guard lock(mutex_);
+  const StateSnapshot before = SnapshotLocked();
   if (TransactionResult access = CheckWriteAccess(Datastore::kCandidate, session);
       !access.ok) return access;
   if (TransactionResult access = CheckWriteAccess(Datastore::kRunning, session);
@@ -265,12 +347,13 @@ TransactionResult DatastoreManager::Commit(
     confirming_session_.reset();
     persist_token_.reset();
   }
-  return replaced;
+  return FinishMutation(before, std::move(replaced));
 }
 
 TransactionResult DatastoreManager::ConfirmCommit(
     std::string_view session, std::optional<std::string_view> persist_id) {
   std::lock_guard lock(mutex_);
+  const StateSnapshot before = SnapshotLocked();
   if (!rollback_running_)
     return Failure(config::ValidationCode::kInvalidValue,
                    "there is no pending confirmed commit", "operation-failed");
@@ -286,13 +369,14 @@ TransactionResult DatastoreManager::ConfirmCommit(
   confirming_session_.reset();
   persist_token_.reset();
   candidate_ = running_;
-  return {true, {}, {}};
+  return FinishMutation(before, {true, {}, {}});
 }
 
 TransactionResult DatastoreManager::ContinueConfirmedCommit(
     std::string_view session, std::string_view persist_id,
     std::chrono::seconds timeout) {
   std::lock_guard lock(mutex_);
+  const StateSnapshot before = SnapshotLocked();
   if (!rollback_running_ || !persist_token_ || *persist_token_ != persist_id)
     return Failure(config::ValidationCode::kInvalidValue,
                    "confirmed-commit persist-id does not match",
@@ -313,12 +397,13 @@ TransactionResult DatastoreManager::ContinueConfirmedCommit(
   if (!replaced.ok) return replaced;
   confirmation_deadline_ = Clock::now() + timeout;
   confirming_session_ = std::string(session);
-  return {true, {}, std::move(changes)};
+  return FinishMutation(before, {true, {}, std::move(changes)});
 }
 
 TransactionResult DatastoreManager::CancelCommit(
     std::string_view session, std::optional<std::string_view> persist_id) {
   std::lock_guard lock(mutex_);
+  const StateSnapshot before = SnapshotLocked();
   if (!rollback_running_)
     return Failure(config::ValidationCode::kInvalidValue,
                    "there is no pending confirmed commit", "operation-failed");
@@ -338,15 +423,16 @@ TransactionResult DatastoreManager::CancelCommit(
   confirmation_deadline_.reset();
   confirming_session_.reset();
   persist_token_.reset();
-  return {true, {}, std::move(changes)};
+  return FinishMutation(before, {true, {}, std::move(changes)});
 }
 
 TransactionResult DatastoreManager::DiscardChanges(std::string_view session) {
   std::lock_guard lock(mutex_);
+  const StateSnapshot before = SnapshotLocked();
   if (TransactionResult access = CheckWriteAccess(Datastore::kCandidate, session);
       !access.ok) return access;
   candidate_ = running_;
-  return {true, {}, {}};
+  return FinishMutation(before, {true, {}, {}});
 }
 
 TransactionResult DatastoreManager::CopyConfig(std::string_view session,
@@ -354,6 +440,7 @@ TransactionResult DatastoreManager::CopyConfig(std::string_view session,
                                                Datastore target,
     std::function<bool(const config::ChangeEvent&)> authorize_change) {
   std::lock_guard lock(mutex_);
+  const StateSnapshot before = SnapshotLocked();
   if (source == target)
     return Failure(config::ValidationCode::kInvalidValue,
                    "copy-config source and target must be different",
@@ -379,7 +466,7 @@ TransactionResult DatastoreManager::CopyConfig(std::string_view session,
   } else {
     Mutable(target) = Get(source);
   }
-  return {true, {}, std::move(changes)};
+  return FinishMutation(before, {true, {}, std::move(changes)});
 }
 
 TransactionResult DatastoreManager::CopyConfig(
@@ -387,6 +474,7 @@ TransactionResult DatastoreManager::CopyConfig(
     Datastore target,
     std::function<bool(const config::ChangeEvent&)> authorize_change) {
   std::lock_guard lock(mutex_);
+  const StateSnapshot before = SnapshotLocked();
   if (TransactionResult access = CheckWriteAccess(target, session); !access.ok)
     return access;
   TransactionResult validated = ValidateDocument(source);
@@ -410,12 +498,13 @@ TransactionResult DatastoreManager::CopyConfig(
   } else {
     Mutable(target) = source;
   }
-  return {true, {}, std::move(changes)};
+  return FinishMutation(before, {true, {}, std::move(changes)});
 }
 
 TransactionResult DatastoreManager::DeleteConfig(std::string_view session,
                                                  Datastore target) {
   std::lock_guard lock(mutex_);
+  const StateSnapshot before = SnapshotLocked();
   if (target != Datastore::kStartup)
     return Failure(config::ValidationCode::kInvalidValue,
                    "only the startup datastore can be deleted",
@@ -423,11 +512,12 @@ TransactionResult DatastoreManager::DeleteConfig(std::string_view session,
   if (TransactionResult access = CheckWriteAccess(target, session); !access.ok)
     return access;
   startup_ = config::ConfigDocument();
-  return {true, {}, {}};
+  return FinishMutation(before, {true, {}, {}});
 }
 
 void DatastoreManager::CloseSession(std::string_view session) {
   std::lock_guard lock(mutex_);
+  const StateSnapshot before = SnapshotLocked();
   for (auto iterator = locks_.begin(); iterator != locks_.end();) {
     if (iterator->second == session) {
       iterator = locks_.erase(iterator);
@@ -443,11 +533,13 @@ void DatastoreManager::CloseSession(std::string_view session) {
     rollback_running_.reset();
     confirmation_deadline_.reset();
     confirming_session_.reset();
+    (void)FinishMutation(before, {true, {}, {}});
   }
 }
 
 bool DatastoreManager::ProcessTimeouts(Clock::time_point now) {
   std::lock_guard lock(mutex_);
+  const StateSnapshot before = SnapshotLocked();
   if (!confirmation_deadline_ || now < *confirmation_deadline_) return false;
   std::vector<config::ChangeEvent> changes =
       config::DiffConfigDocuments(schema_, running_, *rollback_running_);
@@ -457,26 +549,12 @@ bool DatastoreManager::ProcessTimeouts(Clock::time_point now) {
   confirmation_deadline_.reset();
   confirming_session_.reset();
   persist_token_.reset();
-  return true;
+  return FinishMutation(before, {true, {}, {}}).ok;
 }
 
 PersistentDatastoreState DatastoreManager::ExportPersistentState() const {
   std::lock_guard lock(mutex_);
-  PersistentDatastoreState state;
-  state.running_xml = running_.ToXml();
-  state.candidate_xml = candidate_.ToXml();
-  state.startup_xml = startup_.ToXml();
-  if (rollback_running_) state.rollback_running_xml = rollback_running_->ToXml();
-  if (confirmation_deadline_) {
-    const auto remaining = *confirmation_deadline_ - Clock::now();
-    const auto expiry = std::chrono::system_clock::now() + remaining;
-    state.confirmation_expiry_unix_seconds =
-        std::chrono::duration_cast<std::chrono::seconds>(
-            expiry.time_since_epoch()).count();
-  }
-  state.confirming_session = confirming_session_;
-  state.persist_token = persist_token_;
-  return state;
+  return PersistentStateLocked();
 }
 
 TransactionResult DatastoreManager::RestorePersistentState(

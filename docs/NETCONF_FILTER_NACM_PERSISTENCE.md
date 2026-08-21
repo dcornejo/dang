@@ -156,6 +156,14 @@ This includes a NACM subtree seeded with `--nacm`. Startup fails if the durable
 save fails; after interruption, the next start observes either no snapshot and
 repeats safe seeding, or the complete atomically replaced snapshot.
 
-The host decides when to snapshot, file ownership and permissions, encryption,
-backup rotation, and how to react to storage failure. A production server
-should save after every successful persistent state transition.
+For live operation, `dangd` installs persistence as a participant in every
+persistent datastore mutation. The RPC succeeds only after the new snapshot is
+durable. If saving fails, including after the atomic rename, `dangd` rewrites
+the prior snapshot and restores the running tree, candidate/startup state,
+confirmed-commit metadata, backend/plugins, and managed NACM policy before the
+RPC returns `operation-failed`. Locks remain session state and are excluded.
+
+Library hosts decide when to snapshot, file ownership and permissions,
+encryption, backup rotation, and how to react to storage failure. They can use
+`DatastoreManager::SetPersistentStateCommitter` to place their own durable store
+inside the same transaction boundary.

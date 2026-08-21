@@ -222,7 +222,12 @@ Open evidence: an external RFC 5277/NACM interoperability run.
 - Resource limits and malformed NACM XML/path inputs fail closed; protocol
   fuzzing includes NACM loading.
 
-Open evidence: durable rollback when policy snapshot persistence fails,
-production authentication/group hardening, a complete security review, fuzzing
-release results, and independent interoperability. No full RFC 8341 compliance
-claim is made until those TODO items and every open entry above are closed.
+Live managed-policy commits are transactionally coupled to snapshot
+persistence. Fault injection before and after atomic replacement verifies that
+the prior durable snapshot, running tree, backend, and NACM policy are restored
+before an `operation-failed` reply is returned.
+
+Open evidence: production authentication/group hardening, a complete security
+review, fuzzing release results, and independent interoperability. No full RFC
+8341 compliance claim is made until those TODO items and every open entry above
+are closed.

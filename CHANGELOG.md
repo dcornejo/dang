@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Coupled persistent datastore mutations to durable snapshot publication and
+  restored the prior file, live running backend/plugins, and managed NACM policy
+  before returning an error when persistence fails.
 - Made TLS-to-NACM username mapping fail closed for duplicate, absent, empty,
   oversized, whitespace-padded, control-containing, or embedded-NUL common names.
 - Made configured first-boot persistence fail closed, durably saving validated
@@ -21,6 +24,7 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added transaction fault tests before and after atomic snapshot replacement.
 - Added restart tests that interrupt initial snapshot persistence at every
   atomic-save milestone and verify managed NACM remains enforceable.
 - Applied one immutable NACM snapshot to each notification replay and live

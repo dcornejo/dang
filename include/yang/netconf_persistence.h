@@ -35,6 +35,10 @@ using SnapshotSaveCheckpoint =
 [[nodiscard]] PersistenceResult SaveDatastoreSnapshot(
     const std::filesystem::path& path, const DatastoreManager& datastores,
     const SnapshotSaveCheckpoint& checkpoint = {});
+/** Saves an already captured state without reentering its datastore manager. */
+[[nodiscard]] PersistenceResult SaveDatastoreSnapshot(
+    const std::filesystem::path& path, const PersistentDatastoreState& state,
+    const SnapshotSaveCheckpoint& checkpoint = {});
 /** Loads and restores a versioned JSON snapshot after schema validation. */
 [[nodiscard]] PersistenceResult LoadDatastoreSnapshot(
     const std::filesystem::path& path, DatastoreManager& datastores);

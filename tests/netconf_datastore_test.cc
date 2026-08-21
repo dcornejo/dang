@@ -120,6 +120,45 @@ TEST(NetconfDatastoreTest, LocksEditsCandidateAndCommitsAtomically) {
             std::string::npos);
 }
 
+TEST(NetconfDatastoreTest, PersistenceFailureRollsBackLiveCommit) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  RecordingBackend backend;
+  DatastoreManager stores(fixture->schema, fixture->initial, std::nullopt,
+                          &backend);
+  ASSERT_TRUE(stores.EditConfig(
+      {"one", Datastore::kCandidate,
+       {HostnameEdit(fixture->schema, "new")}}).ok);
+  const std::string candidate_before =
+      stores.Read(Datastore::kCandidate).ToXml();
+  int attempts = 0;
+  stores.SetPersistentStateCommitter(
+      [&](const PersistentDatastoreState& before,
+          const PersistentDatastoreState& after)
+          -> std::optional<config::ValidationFinding> {
+        ++attempts;
+        EXPECT_NE(after.running_xml.find(">new</"), std::string::npos);
+        EXPECT_NE(before.running_xml.find(">old</"), std::string::npos);
+        config::ValidationFinding finding;
+        finding.code = config::ValidationCode::kInvalidValue;
+        finding.state = config::FindingState::kInvalid;
+        finding.netconf_error_tag = "operation-failed";
+        finding.message = "injected persistence failure";
+        return finding;
+      });
+
+  const TransactionResult committed = stores.Commit("one");
+  ASSERT_FALSE(committed.ok);
+  ASSERT_EQ(committed.errors.size(), 1U);
+  EXPECT_EQ(committed.errors.front().netconf_error_tag, "operation-failed");
+  EXPECT_EQ(attempts, 1);
+  EXPECT_NE(stores.Read(Datastore::kRunning).ToXml().find(">old</"),
+            std::string::npos);
+  EXPECT_EQ(stores.Read(Datastore::kCandidate).ToXml(), candidate_before);
+  EXPECT_NE(backend.working_xml.find(">old</"), std::string::npos);
+}
+
 TEST(NetconfDatastoreTest, PublishesExactCommitChangesToRunningBackend) {
   VectorDiagnosticSink diagnostics;
   auto fixture = BuildFixture(&diagnostics);

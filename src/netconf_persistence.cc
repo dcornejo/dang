@@ -81,12 +81,19 @@ bool SyncPath(const std::filesystem::path& path, bool directory = false) {
 PersistenceResult SaveDatastoreSnapshot(
     const std::filesystem::path& path, const DatastoreManager& datastores,
     const SnapshotSaveCheckpoint& checkpoint) {
+  return SaveDatastoreSnapshot(path, datastores.ExportPersistentState(),
+                               checkpoint);
+}
+
+PersistenceResult SaveDatastoreSnapshot(
+    const std::filesystem::path& path, const PersistentDatastoreState& state,
+    const SnapshotSaveCheckpoint& checkpoint) {
   if (path.empty()) return {false, "snapshot path is empty"};
   std::filesystem::path temporary = path;
   temporary += ".tmp-" + std::to_string(std::random_device{}());
   std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
   if (!output) return {false, "cannot open temporary datastore snapshot"};
-  output << ToJson(datastores.ExportPersistentState()).dump(2) << '\n';
+  output << ToJson(state).dump(2) << '\n';
   output.flush();
   if (!output) {
     output.close();

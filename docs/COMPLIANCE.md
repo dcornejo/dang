@@ -195,9 +195,10 @@ to the concrete publishing instance before replay or live delivery. Action
 requests are authorized before their parent is resolved, so denied users cannot
 use the existence error to probe datastore contents.
 
-Remaining gaps are tracked in `TODO.md`: recoverable policy/datastore
-persistence when a live transaction's snapshot save fails, production
-identity/group hardening, fuzzing, and independent interoperability testing.
+Remaining gaps are tracked in `TODO.md`: production identity/group hardening,
+fuzzing, and independent interoperability testing. Live datastore mutations
+now publish their durable snapshot before success is returned and compensate a
+failed save by restoring the prior snapshot and live backend/NACM state.
 Until the remaining work closes, the project must not describe NACM as fully
 compliant.
 

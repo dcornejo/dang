@@ -773,6 +773,31 @@ LoadResult Application::Load(const ApplicationOptions& options) {
       result.application.reset();
     }
   }
+  if (result.application && options.state_file) {
+    Application* application = result.application.get();
+    application->datastores_.SetPersistentStateCommitter(
+        [application](const yang::netconf::PersistentDatastoreState& before,
+                      const yang::netconf::PersistentDatastoreState& after)
+            -> std::optional<yang::config::ValidationFinding> {
+          const auto saved = yang::netconf::SaveDatastoreSnapshot(
+              *application->state_file_, after,
+              application->snapshot_save_checkpoint_);
+          if (saved.ok) return std::nullopt;
+          const auto compensated = yang::netconf::SaveDatastoreSnapshot(
+              *application->state_file_, before);
+          yang::config::ValidationFinding finding;
+          finding.code = yang::config::ValidationCode::kInvalidValue;
+          finding.state = yang::config::FindingState::kInvalid;
+          finding.netconf_error_tag = "operation-failed";
+          finding.message = "datastore persistence failed: " +
+              saved.error.value_or("unknown persistence error");
+          if (!compensated.ok) {
+            finding.message += "; prior snapshot restoration failed: " +
+                compensated.error.value_or("unknown persistence error");
+          }
+          return finding;
+        });
+  }
   return result;
 }
 
@@ -866,11 +891,6 @@ int RunStreamSession(Application& application, std::istream& input,
     for (const std::string& delta : application.DrainBackendDeltas())
       errors << "dangd: configuration delta: " << delta << '\n';
     if (application.has_state_file()) {
-      if (const auto persistence_error = application.SaveState()) {
-        errors << "dangd: cannot persist datastore state: "
-               << *persistence_error << '\n';
-        return 1;
-      }
     }
     if (response.close_transport) return response.error ? 1 : 0;
   }
