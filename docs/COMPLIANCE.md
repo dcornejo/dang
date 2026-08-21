@@ -183,7 +183,11 @@ lists, module/RPC/action/notification/data selectors, CRUDX decisions,
 namespace-expanded instance paths and predicates, inherited
 `default-deny-all` and `default-deny-write`, read filtering, atomic write
 authorization, recovery users, notification authorization, and denial
-counters.
+counters. Managed policy input passes the compiled `ietf-netconf-acm` runtime
+schema before policy construction and in-memory publication. Explicit edits are
+authorized, while configuration removed implicitly by `choice` or `when`
+evaluation is deliberately excluded from separate write authorization as RFC
+8341 requires; the complete resulting delta still reaches transaction backends.
 
 Actions and data-associated notifications bind complete keyed ancestor paths to
 the current operational view. Notification authorization consequently applies
@@ -191,8 +195,8 @@ to the concrete publishing instance before replay or live delivery. Action
 requests are authorized before their parent is resolved, so denied users cannot
 use the existence error to probe datastore contents.
 
-Remaining gaps are tracked in `TODO.md`: a clause-indexed decision matrix, full
-schema validation and atomic persistence of policy replacement, production
+Remaining gaps are tracked in `TODO.md`: a clause-indexed decision matrix,
+recoverable policy/datastore persistence on snapshot failure, production
 identity/group hardening, fuzzing, and independent interoperability testing.
 Until the remaining work closes, the project must not describe NACM as fully
 compliant.

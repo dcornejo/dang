@@ -149,9 +149,21 @@ TransactionResult DatastoreManager::EditConfig(
     std::vector<config::ChangeEvent> exact_changes =
         config::DiffConfigDocuments(schema_, working, *applied.candidate);
     if (request.authorize_change) {
+      const auto requires_authorization = [&](const config::ChangeEvent& change) {
+        if (change.kind != config::ChangeKind::kDeleted) return true;
+        return std::ranges::none_of(
+            applied.implicit_changes,
+            [&](const config::ChangeEvent& implicit) {
+              return change.instance_path == implicit.instance_path ||
+                  (change.instance_path.starts_with(implicit.instance_path) &&
+                   change.instance_path.size() > implicit.instance_path.size() &&
+                   change.instance_path[implicit.instance_path.size()] == '/');
+            });
+      };
       const auto denied = std::ranges::find_if(
           exact_changes, [&](const config::ChangeEvent& change) {
-            return !request.authorize_change(change);
+            return requires_authorization(change) &&
+                   !request.authorize_change(change);
           });
       if (denied != exact_changes.end()) {
         result.ok = false;

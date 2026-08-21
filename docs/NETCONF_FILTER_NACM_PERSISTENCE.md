@@ -102,6 +102,14 @@ nodes can also be checked; inability to inspect it fails closed. Notification
 transport and delivery remain part of the separate RFC 5277 task, while the
 NACM notification authorization decision is available to that adapter.
 
+RFC 8341 does not require permission for changes that are side effects of
+validating an explicitly authorized edit. The editor therefore marks nodes
+removed only because another `choice` case became active or a `when` expression
+became false. Those implicit deletions are omitted from the NACM authorization
+set. They remain in the complete before/after delta supplied to plugins and the
+running backend, so application, rollback, persistence, and diagnostics still
+describe the device's complete resulting change.
+
 ## Durable snapshots
 
 `SaveDatastoreSnapshot` writes versioned JSON containing running, candidate,

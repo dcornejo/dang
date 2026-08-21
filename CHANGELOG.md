@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Distinguished explicit edits from implicit `choice` and `when` removals so
+  RFC 8341 authorization does not demand permission for validation side effects
+  while backends continue to receive the complete resulting delta.
 - Bound data-associated notifications to concrete keyed instances in a supplied
   operational snapshot and applied NACM ancestor checks to those instances
   before replay or live delivery.

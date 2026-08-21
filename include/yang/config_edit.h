@@ -95,7 +95,10 @@ struct EditRequest {
 struct EditResult {
   std::optional<ConfigDocument> candidate;
   std::vector<ValidationFinding> errors;
+  /** Explicit requested changes reported to callers. */
   std::vector<ChangeEvent> changes;
+  /** Validation side effects that RFC 8341 must not authorize separately. */
+  std::vector<ChangeEvent> implicit_changes;
 };
 
 /** Plans and atomically applies core RFC 6241 edits to an immutable target. */

@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <optional>
+#include <ranges>
 
 #include <gtest/gtest.h>
 
@@ -65,7 +66,15 @@ class RejectingBackend final : public RunningConfigBackend {
 std::optional<FixtureData> BuildFixture(VectorDiagnosticSink* diagnostics) {
   auto source = SourceFile::Create("store.yang", R"yang(module store {
     yang-version 1.1; namespace "urn:store"; prefix s;
-    container system { leaf hostname { type string; mandatory true; } }
+    container system {
+      leaf hostname { type string; mandatory true; }
+      leaf enabled { type boolean; }
+      leaf guarded { when "../enabled = 'true'"; type string; }
+      choice transport {
+        case tcp { leaf tcp-port { type uint16; } }
+        case local { leaf socket { type string; } }
+      }
+    }
   })yang", *diagnostics);
   if (!source) return std::nullopt;
   InMemoryModuleRepository repository;
@@ -75,7 +84,9 @@ std::optional<FixtureData> BuildFixture(VectorDiagnosticSink* diagnostics) {
   config::RuntimeSchema schema =
       config::RuntimeSchemaBuilder::FromCompilation(*compilation);
   auto initial = config::ParseDatastoreXml(
-      schema, R"xml(<system xmlns="urn:store"><hostname>old</hostname></system>)xml")
+      schema, R"xml(<system xmlns="urn:store"><hostname>old</hostname>
+        <enabled>true</enabled><guarded>secret</guarded>
+        <tcp-port>830</tcp-port></system>)xml")
                      .document;
   if (!initial) return std::nullopt;
   return FixtureData{std::move(schema), std::move(*initial)};
@@ -293,6 +304,62 @@ TEST(NetconfDatastoreTest, AuthorizesExactCommitAndCopyChangesAtomically) {
   EXPECT_NE(stores.Read(Datastore::kStartup).ToXml().find(">old</"),
             std::string::npos);
   EXPECT_FALSE(observed.empty());
+}
+
+TEST(NetconfDatastoreTest, DoesNotAuthorizeImplicitChoiceSideEffect) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  auto edit = config::ParseEditXml(fixture->schema, R"xml(
+    <system xmlns="urn:store"><socket>/run/store.sock</socket></system>)xml");
+  ASSERT_TRUE(edit.document);
+  std::vector<std::string> authorized_paths;
+  EditConfigRequest request;
+  request.session = "one";
+  request.target = Datastore::kRunning;
+  request.edits.push_back(std::move(*edit.document));
+  request.authorize_change = [&](const config::ChangeEvent& change) {
+    authorized_paths.push_back(change.instance_path);
+    return change.instance_path.find("tcp-port") == std::string::npos;
+  };
+  const TransactionResult changed = stores.EditConfig(request);
+  EXPECT_TRUE(changed.ok) << (changed.errors.empty()
+      ? "no error" : changed.errors.front().message);
+  const std::string running = stores.Read(Datastore::kRunning).ToXml();
+  EXPECT_NE(running.find("store.sock"), std::string::npos) << running;
+  EXPECT_EQ(running.find("tcp-port"), std::string::npos) << running;
+  EXPECT_TRUE(std::ranges::none_of(authorized_paths, [](const std::string& path) {
+    return path.find("tcp-port") != std::string::npos;
+  }));
+}
+
+TEST(NetconfDatastoreTest, DoesNotAuthorizeImplicitWhenSideEffect) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  auto edit = config::ParseEditXml(fixture->schema, R"xml(
+    <system xmlns="urn:store"><enabled>false</enabled></system>)xml");
+  ASSERT_TRUE(edit.document);
+  std::vector<std::string> authorized_paths;
+  EditConfigRequest request;
+  request.session = "one";
+  request.target = Datastore::kRunning;
+  request.edits.push_back(std::move(*edit.document));
+  request.authorize_change = [&](const config::ChangeEvent& change) {
+    authorized_paths.push_back(change.instance_path);
+    return change.instance_path.find("guarded") == std::string::npos;
+  };
+  const TransactionResult changed = stores.EditConfig(request);
+  EXPECT_TRUE(changed.ok) << (changed.errors.empty()
+      ? "no error" : changed.errors.front().message);
+  const std::string running = stores.Read(Datastore::kRunning).ToXml();
+  EXPECT_NE(running.find(">false</"), std::string::npos) << running;
+  EXPECT_EQ(running.find("guarded"), std::string::npos) << running;
+  EXPECT_TRUE(std::ranges::none_of(authorized_paths, [](const std::string& path) {
+    return path.find("guarded") != std::string::npos;
+  }));
 }
 
 TEST(NetconfDatastoreTest, SessionCloseReleasesLocksAndRollsBackConfirmation) {

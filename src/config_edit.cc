@@ -581,7 +581,14 @@ EditResult ConfigEditor::Apply(const EditRequest& request) const {
           if (!selected) continue;
           std::erase_if(match->children, [&](const MutableNode& sibling) {
             const auto active = ChoiceCaseFor(request.schema, choice, sibling.schema);
-            return active && *active != *selected;
+            const bool remove = active && *active != *selected;
+            if (remove) {
+              result.implicit_changes.push_back(
+                  {ChangeKind::kDeleted,
+                   InstancePath(request.schema, sibling, path), sibling.value,
+                   std::nullopt, sibling.schema});
+            }
+            return remove;
           });
         }
       }
@@ -634,25 +641,31 @@ EditResult ConfigEditor::Apply(const EditRequest& request) const {
     std::ranges::sort(inaccessible);
     inaccessible.erase(std::ranges::unique(inaccessible).begin(),
                        inaccessible.end());
-    std::function<std::optional<MutableNode>(ConfigNodeId)> clone_accessible;
-    clone_accessible = [&](ConfigNodeId id) -> std::optional<MutableNode> {
+    std::function<std::optional<MutableNode>(ConfigNodeId, std::string_view)>
+        clone_accessible;
+    clone_accessible = [&](ConfigNodeId id,
+                           std::string_view parent_path)
+        -> std::optional<MutableNode> {
+      const std::string path =
+          InstancePath(request.schema, candidate, id, parent_path);
       if (std::ranges::binary_search(inaccessible, id)) {
-        result.changes.push_back({ChangeKind::kDeleted, "", candidate.Get(id).value,
-                                  std::nullopt, candidate.Get(id).schema});
+        result.implicit_changes.push_back(
+            {ChangeKind::kDeleted, path, candidate.Get(id).value,
+             std::nullopt, candidate.Get(id).schema});
         return std::nullopt;
       }
       const ConfigNode& source = candidate.Get(id);
       MutableNode node{source.schema, source.name, source.value,
                        source.value_namespaces, {}};
       for (ConfigNodeId child : source.children) {
-        if (auto retained = clone_accessible(child))
+        if (auto retained = clone_accessible(child, path))
           node.children.push_back(std::move(*retained));
       }
       return node;
     };
     std::vector<MutableNode> accessible_roots;
     for (ConfigNodeId root : candidate.roots()) {
-      if (auto retained = clone_accessible(root))
+      if (auto retained = clone_accessible(root, ""))
         accessible_roots.push_back(std::move(*retained));
     }
     roots = std::move(accessible_roots);

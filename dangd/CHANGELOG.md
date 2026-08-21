@@ -7,6 +7,8 @@
 
 ### Added
 
+- Preserved complete backend/plugin deltas while excluding implicit YANG
+  `choice` and `when` removals from separate NACM write authorization.
 - Connected notification instance binding to `dangd`'s live operational view,
   failing publication when associated parents or list keys do not exist.
 - Required authorized plugin actions to select an existing operational parent

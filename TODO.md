@@ -18,15 +18,15 @@ stays in this file with its remaining work rewritten precisely.
 - Complete a requirement-by-requirement RFC 8341 test matrix. Include every
   decision step and precedence rule, descendant matching, wildcard groups,
   recovery and disabled-NACM sessions, external groups, all CRUDX transitions,
-  side-effect changes caused by `choice` and `when` (which must not demand
-  access merely because validation changed them), standard and
-  schema-defined operations, nested actions and notifications, read filtering,
-  and all three denial counters. Record the RFC section beside each vector.
-- Validate the live `/nacm` configuration with the compiled
-  `ietf-netconf-acm` schema before constructing policy, including defaults,
-  identity/instance-identifier values, uniqueness, and unknown nodes. Make the
-  policy replacement and its persisted configuration one atomic transaction;
-  retain the last known-good policy on load or persistence failure.
+  standard and schema-defined operations, nested actions and notifications,
+  read filtering, and all three denial counters. Record the RFC section beside
+  each vector. Implicit `choice` and `when` side-effect authorization is now
+  covered.
+- Make managed NACM policy replacement and durable datastore persistence one
+  recoverable transaction, retaining or restoring the last known-good policy
+  and running configuration when snapshot persistence fails. Schema validation,
+  policy construction, and in-memory backend publication are already staged
+  atomically before the live policy is replaced.
 - Harden authentication-to-NACM identity plumbing for production transports:
   define canonical username handling, certificate/SSH name mapping, trusted
   external-group provenance, recovery-session auditing, and fail-closed
