@@ -77,10 +77,15 @@ No open core-server evidence item remains for initial operation.
   `DangdApplicationTest.LoadsNacmAndUsesAuthenticatedSessionIdentity`,
   `NetconfTransportTest` identity tests, and
   `NacmTest.HonorsExternalGroupsSwitch`.
+- TLS certificate mapping requires exactly one bounded, nonempty UTF-8 common
+  name and rejects duplicate names, surrounding whitespace, controls, embedded
+  NUL, missing names, and failed certificate verification:
+  `DangdTlsTransportTest.MapsOnlyOneCanonicalCertificateCommonName` and mutual
+  TLS integration tests.
 
-Open evidence: canonical username rules, ambiguous/missing certificate mapping,
-trusted external-group provenance, and recovery-session audit records. These
-remain host/deployment work in `TODO.md`.
+Open evidence: configurable SAN/SSH identity mapping, trusted external-group
+provenance, and recovery-session audit records. These remain host/deployment
+work in `TODO.md`.
 
 ## Section 3.4.3: access-denied errors
 

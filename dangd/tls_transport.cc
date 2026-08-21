@@ -5,10 +5,12 @@
 
 #include <array>
 #include <cerrno>
+#include <cctype>
 #include <csignal>
 #include <cstring>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <string_view>
 
 #include <netdb.h>
@@ -132,12 +134,7 @@ std::optional<std::string> PeerCommonName(SSL* tls) {
   Certificate certificate(SSL_get1_peer_certificate(tls), X509_free);
   if (!certificate || SSL_get_verify_result(tls) != X509_V_OK)
     return std::nullopt;
-  std::array<char, 256> name{};
-  const int length = X509_NAME_get_text_by_NID(
-      X509_get_subject_name(certificate.get()), NID_commonName, name.data(),
-      static_cast<int>(name.size()));
-  if (length <= 0) return std::nullopt;
-  return std::string(name.data(), static_cast<std::size_t>(length));
+  return CertificateSubjectUsername(X509_get_subject_name(certificate.get()));
 }
 
 bool WriteTls(SSL* tls, std::string_view bytes, std::string* error) {
@@ -195,6 +192,37 @@ class OpenSslStream final : public yang::netconf::SecureByteStream {
 
 }  // namespace
 
+std::optional<std::string> CertificateSubjectUsername(
+    const X509_NAME* subject) {
+  if (subject == nullptr) return std::nullopt;
+  const int first = X509_NAME_get_index_by_NID(subject, NID_commonName, -1);
+  if (first < 0 ||
+      X509_NAME_get_index_by_NID(subject, NID_commonName, first) >= 0) {
+    return std::nullopt;
+  }
+  const X509_NAME_ENTRY* entry = X509_NAME_get_entry(subject, first);
+  if (entry == nullptr) return std::nullopt;
+  unsigned char* utf8 = nullptr;
+  const int length = ASN1_STRING_to_UTF8(
+      &utf8, X509_NAME_ENTRY_get_data(entry));
+  if (length <= 0 || length > 255 || utf8 == nullptr) {
+    OPENSSL_free(utf8);
+    return std::nullopt;
+  }
+  const std::string username(reinterpret_cast<char*>(utf8),
+                             static_cast<std::size_t>(length));
+  OPENSSL_free(utf8);
+  if (username.find('\0') != std::string::npos ||
+      std::isspace(static_cast<unsigned char>(username.front())) ||
+      std::isspace(static_cast<unsigned char>(username.back())) ||
+      std::ranges::any_of(username, [](unsigned char character) {
+        return character < 0x20 || character == 0x7f;
+      })) {
+    return std::nullopt;
+  }
+  return username;
+}
+
 int RunTlsServer(Application& application, const TlsServerOptions& options,
                  std::ostream& diagnostics) {
   Context context(SSL_CTX_new(TLS_server_method()), SSL_CTX_free);
@@ -243,7 +271,8 @@ int RunTlsServer(Application& application, const TlsServerOptions& options,
     }
     const auto username = PeerCommonName(tls.get());
     if (!username) {
-      diagnostics << "dangd: authenticated certificate has no common name\n";
+      diagnostics << "dangd: authenticated certificate has no unique safe "
+                     "common name\n";
       SSL_shutdown(tls.get());
       close(connection);
       continue;
@@ -358,6 +387,8 @@ int RunReloadableTlsServer(
     }
     const auto username = PeerCommonName(tls.get());
     if (!username) {
+      diagnostics << "dangd: authenticated certificate has no unique safe "
+                     "common name\n";
       SSL_shutdown(tls.get());
       close(connection);
       continue;

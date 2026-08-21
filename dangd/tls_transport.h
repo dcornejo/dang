@@ -9,7 +9,10 @@
 #include <filesystem>
 #include <iosfwd>
 #include <memory>
+#include <optional>
 #include <string>
+
+#include <openssl/types.h>
 
 namespace dangd {
 
@@ -36,10 +39,15 @@ struct TlsClientOptions {
   std::filesystem::path trust_anchor;
 };
 
+/** Maps exactly one safe certificate subject common name to a NACM username. */
+[[nodiscard]] std::optional<std::string> CertificateSubjectUsername(
+    const X509_NAME* subject);
+
 /**
  * Serves authenticated NETCONF-over-TLS connections synchronously.
  *
- * Client certificates must chain to trust_anchor. The certificate common name
+ * Client certificates must chain to trust_anchor. Exactly one nonempty, bounded
+ * UTF-8 common name without surrounding whitespace, controls, or embedded NUL
  * becomes the NETCONF username supplied to NACM. Returns after
  * maximum_connections successful TCP accepts, or on a listener failure.
  */

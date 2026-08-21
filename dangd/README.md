@@ -119,7 +119,10 @@ intended configuration.
 
 `dangd` can expose its NETCONF session over a blocking mutual-TLS listener.
 The server validates client certificates against the configured CA and maps
-the verified certificate common name to the NETCONF username used by NACM.
+the verified certificate common name to the NETCONF username used by NACM. A
+certificate must contain exactly one nonempty UTF-8 common name of at most 255
+bytes; surrounding whitespace, control characters, embedded NUL, duplicate
+common names, and missing common names are rejected rather than normalized.
 The example certificate for `alice` therefore selects the `alice` rules in
 `examples/nacm.xml`.
 

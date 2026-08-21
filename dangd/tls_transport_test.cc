@@ -14,11 +14,21 @@
 #include <unistd.h>
 
 #include <gtest/gtest.h>
+#include <openssl/x509.h>
 
 #include "dangd/application.h"
 
 namespace dangd {
 namespace {
+
+using Subject = std::unique_ptr<X509_NAME, decltype(&X509_NAME_free)>;
+
+void AddCommonName(X509_NAME* subject, const unsigned char* value,
+                   int length = -1) {
+  ASSERT_EQ(X509_NAME_add_entry_by_NID(subject, NID_commonName, MBSTRING_UTF8,
+                                       value, length, -1, 0),
+            1);
+}
 
 std::uint16_t AvailableLoopbackPort() {
   const int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -108,6 +118,39 @@ TEST(DangdTlsTransportTest, ExchangesAuthenticatedNetconfRpcOverMutualTls) {
             std::string::npos);
   EXPECT_NE(output.str().find("message-id=\"4\"><ok/>"),
             std::string::npos);
+}
+
+TEST(DangdTlsTransportTest, MapsOnlyOneCanonicalCertificateCommonName) {
+  Subject valid(X509_NAME_new(), X509_NAME_free);
+  ASSERT_TRUE(valid);
+  AddCommonName(valid.get(), reinterpret_cast<const unsigned char*>("alice"));
+  EXPECT_EQ(CertificateSubjectUsername(valid.get()), "alice");
+
+  Subject duplicate(X509_NAME_new(), X509_NAME_free);
+  ASSERT_TRUE(duplicate);
+  AddCommonName(duplicate.get(),
+                reinterpret_cast<const unsigned char*>("alice"));
+  AddCommonName(duplicate.get(),
+                reinterpret_cast<const unsigned char*>("administrator"));
+  EXPECT_FALSE(CertificateSubjectUsername(duplicate.get()));
+
+  Subject whitespace(X509_NAME_new(), X509_NAME_free);
+  ASSERT_TRUE(whitespace);
+  AddCommonName(whitespace.get(),
+                reinterpret_cast<const unsigned char*>(" alice"));
+  EXPECT_FALSE(CertificateSubjectUsername(whitespace.get()));
+
+  Subject embedded_nul(X509_NAME_new(), X509_NAME_free);
+  ASSERT_TRUE(embedded_nul);
+  const unsigned char ambiguous[] = {
+      'a', 'l', 'i', 'c', 'e', 0, 'r', 'o', 'o', 't'};
+  AddCommonName(embedded_nul.get(), ambiguous, sizeof(ambiguous));
+  EXPECT_FALSE(CertificateSubjectUsername(embedded_nul.get()));
+
+  Subject absent(X509_NAME_new(), X509_NAME_free);
+  ASSERT_TRUE(absent);
+  EXPECT_FALSE(CertificateSubjectUsername(absent.get()));
+  EXPECT_FALSE(CertificateSubjectUsername(nullptr));
 }
 
 TEST(DangdTlsTransportTest, RejectsCertificateWithoutClientAuthenticationUse) {

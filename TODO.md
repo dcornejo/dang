@@ -58,10 +58,10 @@ stays in this file with its remaining work rewritten precisely.
   atomically before the live policy is replaced. Initial-state persistence is
   fail-closed and covered separately.
 - Harden authentication-to-NACM identity plumbing for production transports:
-  define canonical username handling, certificate/SSH name mapping, trusted
-  external-group provenance, recovery-session auditing, and fail-closed
-  behavior when identity mapping is absent or ambiguous. Add multi-session
-  identity-mapping tests. Concurrent policy replacement and per-RPC snapshots
+  add configurable SAN/SSH name mapping, trusted external-group provenance,
+  recovery-session auditing, and multi-session identity-mapping tests. The TLS
+  common-name mapping is fail-closed for absent, ambiguous, noncanonical, and
+  embedded-NUL identities. Concurrent policy replacement and per-RPC snapshots
   are covered in the core server.
 - Run interoperability and negative-security tests against at least one
   independent RFC 8341 implementation, fuzz NACM XML and instance-identifier

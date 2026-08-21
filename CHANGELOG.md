@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Made TLS-to-NACM username mapping fail closed for duplicate, absent, empty,
+  oversized, whitespace-padded, control-containing, or embedded-NUL common names.
 - Made configured first-boot persistence fail closed, durably saving validated
   initial datastores and seeded NACM before application startup succeeds.
 - Prevented NACM `access-denied` messages from echoing internal expanded-name

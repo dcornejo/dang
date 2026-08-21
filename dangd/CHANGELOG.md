@@ -7,6 +7,8 @@
 
 ### Fixed
 
+- Rejected ambiguous or unsafe certificate common names before constructing a
+  NETCONF/NACM session identity.
 - Required the first configured state snapshot, including seeded NACM, to be
   durably written before `dangd` startup completes.
 - Kept NACM denial messages generic instead of appending internal datastore
