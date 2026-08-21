@@ -185,12 +185,15 @@ namespace-expanded instance paths and predicates, inherited
 authorization, recovery users, notification authorization, and denial
 counters.
 
-Remaining gaps are tracked in `TODO.md`: concrete datastore-instance binding
-for nested notifications, a clause-indexed decision matrix, full schema
-validation and atomic persistence of policy replacement, production identity/
-group hardening, fuzzing, and independent interoperability testing. Action
-requests are already authorized before their keyed parent instance is resolved,
-so denied users cannot use the existence error to probe datastore contents.
+Actions and data-associated notifications bind complete keyed ancestor paths to
+the current operational view. Notification authorization consequently applies
+to the concrete publishing instance before replay or live delivery. Action
+requests are authorized before their parent is resolved, so denied users cannot
+use the existence error to probe datastore contents.
+
+Remaining gaps are tracked in `TODO.md`: a clause-indexed decision matrix, full
+schema validation and atomic persistence of policy replacement, production
+identity/group hardening, fuzzing, and independent interoperability testing.
 Until the remaining work closes, the project must not describe NACM as fully
 compliant.
 

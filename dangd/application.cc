@@ -556,6 +556,13 @@ Application::Application(yang::config::RuntimeSchema schema,
       server_(datastores_, &nacm_, nullptr, &notifications_, std::nullopt,
               &operational_, plugins_.get()),
       state_file_(std::move(state_file)) {
+  notifications_.SetInstanceDataProvider([this] {
+    const std::string data =
+        "<data>" +
+        datastores_.Read(yang::netconf::Datastore::kRunning).ToXml(false) +
+        "</data>";
+    return operational_.AugmentDataXml(data);
+  });
   (void)notifications_.AddStream({});
 }
 

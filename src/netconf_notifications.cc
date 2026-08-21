@@ -94,6 +94,107 @@ bool ValidFilter(std::string_view filter) {
       ? ApplyXPathFilter(sample, filter) : ApplySubtreeFilter(sample, filter);
   return !result.error.has_value();
 }
+
+struct InstanceSelector {
+  config::QualifiedXmlName name;
+  std::vector<std::pair<config::QualifiedXmlName, std::string>> keys;
+};
+
+std::optional<config::QualifiedXmlName> ExpandedName(std::string_view value) {
+  if (value.empty() || value.front() != '{') return std::nullopt;
+  const std::size_t close = value.find('}');
+  if (close == std::string_view::npos || close + 1 == value.size())
+    return std::nullopt;
+  return config::QualifiedXmlName{std::string(value.substr(1, close - 1)),
+                                  std::string(value.substr(close + 1))};
+}
+
+std::optional<std::vector<std::string_view>> SplitInstancePath(
+    std::string_view path) {
+  if (path.empty() || path.front() != '/') return std::nullopt;
+  std::vector<std::string_view> segments;
+  std::size_t begin = 1;
+  int brackets = 0;
+  char quote = 0;
+  for (std::size_t index = begin; index <= path.size(); ++index) {
+    const char character = index == path.size() ? '/' : path[index];
+    if (quote != 0) {
+      if (character == quote) quote = 0;
+      continue;
+    }
+    if (character == '\'' || character == '"') {
+      quote = character;
+    } else if (character == '[') {
+      ++brackets;
+    } else if (character == ']') {
+      if (--brackets < 0) return std::nullopt;
+    } else if (character == '/' && brackets == 0) {
+      if (index == begin) return std::nullopt;
+      segments.push_back(path.substr(begin, index - begin));
+      begin = index + 1;
+    }
+  }
+  if (quote != 0 || brackets != 0) return std::nullopt;
+  return segments;
+}
+
+std::optional<InstanceSelector> ParseSelector(std::string_view segment) {
+  const std::size_t predicate = segment.find('[');
+  auto name = ExpandedName(segment.substr(0, predicate));
+  if (!name) return std::nullopt;
+  InstanceSelector result{std::move(*name), {}};
+  std::size_t position = predicate;
+  while (position != std::string_view::npos && position < segment.size()) {
+    if (segment[position] != '[') return std::nullopt;
+    const std::size_t equals = segment.find('=', position + 1);
+    if (equals == std::string_view::npos) return std::nullopt;
+    auto key = ExpandedName(segment.substr(position + 1,
+                                            equals - position - 1));
+    if (!key || equals + 1 >= segment.size()) return std::nullopt;
+    const char quote = segment[equals + 1];
+    if (quote != '\'' && quote != '"') return std::nullopt;
+    const std::size_t value_end = segment.find(quote, equals + 2);
+    if (value_end == std::string_view::npos || value_end + 1 >= segment.size() ||
+        segment[value_end + 1] != ']') return std::nullopt;
+    result.keys.emplace_back(
+        std::move(*key),
+        std::string(segment.substr(equals + 2, value_end - equals - 2)));
+    position = value_end + 2;
+    if (position == segment.size()) break;
+  }
+  return result;
+}
+
+bool InstanceExists(std::string_view data_xml,
+                    std::span<const InstanceSelector> selectors) {
+  pugi::xml_document document;
+  if (!document.load_buffer(data_xml.data(), data_xml.size())) return false;
+  std::vector<pugi::xml_node> candidates{document.document_element()};
+  for (const InstanceSelector& selector : selectors) {
+    std::vector<pugi::xml_node> matches;
+    for (const pugi::xml_node parent : candidates) {
+      for (const pugi::xml_node child : parent.children()) {
+        if (child.type() != pugi::node_element ||
+            NamespaceFor(child) != selector.name.namespace_uri ||
+            LocalName(child.name()) != selector.name.local_name) continue;
+        const bool keys_match = std::ranges::all_of(
+            selector.keys, [&](const auto& expected) {
+              for (const pugi::xml_node key : child.children()) {
+                if (key.type() == pugi::node_element &&
+                    NamespaceFor(key) == expected.first.namespace_uri &&
+                    LocalName(key.name()) == expected.first.local_name &&
+                    key.text().as_string() == expected.second) return true;
+              }
+              return false;
+            });
+        if (keys_match) matches.push_back(child);
+      }
+    }
+    if (matches.empty()) return false;
+    candidates = std::move(matches);
+  }
+  return true;
+}
 }  // namespace
 
 NotificationManager::NotificationManager(const NacmPolicy* nacm,
@@ -107,6 +208,12 @@ bool NotificationManager::AddStream(NotificationStreamConfig stream) {
   const std::string name = stream.name;
   std::lock_guard lock(mutex_);
   return streams_.emplace(name, Stream{std::move(stream), {}}).second;
+}
+
+void NotificationManager::SetInstanceDataProvider(
+    std::function<std::string()> provider) {
+  std::lock_guard lock(mutex_);
+  instance_data_provider_ = std::move(provider);
 }
 
 SubscriptionResult NotificationManager::Subscribe(
@@ -179,22 +286,47 @@ bool NotificationManager::Publish(std::string_view stream_name,
   }
   std::vector<NacmDataNode> ancestors;
   if (schema_ != nullptr && !instance_path.empty()) {
+    const auto path_segments = SplitInstancePath(instance_path);
+    if (!path_segments) return false;
     const std::vector<config::RuntimeSchemaNodeId> resolved =
         schema_->ResolveInstancePath(instance_path);
-    if (resolved.empty()) return false;
+    if (resolved.empty() || resolved.size() != path_segments->size())
+      return false;
     const config::RuntimeSchemaNode& event_schema = schema_->Get(resolved.back());
     if (event_schema.kind != semantic::SchemaNodeKind::kNotification ||
         event_schema.module_name != module_name ||
         event_schema.name.local_name != notification_name) return false;
     default_deny_all = default_deny_all || event_schema.nacm_default_deny_all;
+    std::vector<InstanceSelector> selectors;
     std::size_t path_end = 0;
     for (std::size_t index = 0; index + 1 < resolved.size(); ++index) {
       const config::RuntimeSchemaNode& metadata = schema_->Get(resolved[index]);
-      const std::size_t next = instance_path.find('/', path_end + 1);
-      path_end = next == std::string_view::npos ? instance_path.size() : next;
+      auto selector = ParseSelector(path_segments->at(index));
+      if (!selector || selector->name != metadata.name) return false;
+      for (config::RuntimeSchemaNodeId key_id : metadata.keys) {
+        const auto& key = schema_->Get(key_id).name;
+        if (std::ranges::count_if(selector->keys, [&](const auto& predicate) {
+              return predicate.first == key;
+            }) != 1)
+          return false;
+      }
+      if (selector->keys.size() != metadata.keys.size()) return false;
+      selectors.push_back(std::move(*selector));
+      path_end += path_segments->at(index).size() + 1;
       ancestors.push_back({metadata.module_name,
                            std::string(instance_path.substr(0, path_end)),
                            metadata.nacm_default_deny_all});
+    }
+    std::function<std::string()> instance_provider;
+    {
+      std::lock_guard lock(mutex_);
+      instance_provider = instance_data_provider_;
+    }
+    if (!instance_provider) return false;
+    try {
+      if (!InstanceExists(instance_provider(), selectors)) return false;
+    } catch (...) {
+      return false;
     }
   } else if (schema_ != nullptr) {
     const pugi::xml_node root = content.document_element();

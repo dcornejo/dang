@@ -15,10 +15,6 @@ stays in this file with its remaining work rewritten precisely.
 
 ### RFC 8341 NACM compliance closure
 
-- Bind data-associated notifications to concrete datastore list instances and
-  verify ancestor authorization against those instances rather than schema
-  paths alone. Action dispatch now performs this binding, including complete
-  keyed-list selection, after NACM authorization and before plugin invocation.
 - Complete a requirement-by-requirement RFC 8341 test matrix. Include every
   decision step and precedence rule, descendant matching, wildcard groups,
   recovery and disabled-NACM sessions, external groups, all CRUDX transitions,

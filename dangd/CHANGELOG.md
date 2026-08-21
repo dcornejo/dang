@@ -7,6 +7,8 @@
 
 ### Added
 
+- Connected notification instance binding to `dangd`'s live operational view,
+  failing publication when associated parents or list keys do not exist.
 - Required authorized plugin actions to select an existing operational parent
   instance with all list keys before the plugin can be invoked.
 - Documented `dangd` compliance gaps and integration boundaries for NETCONF,

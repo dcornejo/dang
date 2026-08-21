@@ -118,7 +118,17 @@ TEST(NetconfNotificationsTest, DerivesAssociatedNotificationAncestorsFromSchema)
   NacmPolicy policy;
   policy.set_read_default(AccessAction::kDeny);
   policy.AddUserToGroup("alice", "operators");
-  policy.AddRule({"read-events", "operators", "", "",
+  policy.AddRule({"read-eth0", "operators", "",
+                  "/{urn:events}interfaces/{urn:events}interface"
+                  "[{urn:events}name='eth0']",
+                  AccessMask(AccessOperation::kRead),
+                  AccessAction::kPermit, "events"});
+  policy.AddRule({"hide-other-interfaces", "operators", "",
+                  "/{urn:events}interfaces/{urn:events}interface",
+                  AccessMask(AccessOperation::kRead),
+                  AccessAction::kDeny, "events"});
+  policy.AddRule({"read-interfaces", "operators", "",
+                  "/{urn:events}interfaces",
                   AccessMask(AccessOperation::kRead),
                   AccessAction::kPermit, "events"});
   NacmRule notification;
@@ -131,6 +141,12 @@ TEST(NetconfNotificationsTest, DerivesAssociatedNotificationAncestorsFromSchema)
   policy.AddRule(std::move(notification));
 
   NotificationManager manager(&policy, 1024, 16 * 1024 * 1024, &schema);
+  manager.SetInstanceDataProvider([] {
+    return R"xml(<data><interfaces xmlns="urn:events">
+      <interface><name>eth0</name></interface>
+      <interface><name>eth1</name></interface>
+    </interfaces></data>)xml";
+  });
   ASSERT_TRUE(manager.AddStream({}));
   SubscriptionRequest request;
   request.session_id = 5;
@@ -143,6 +159,27 @@ TEST(NetconfNotificationsTest, DerivesAssociatedNotificationAncestorsFromSchema)
       "/{urn:events}interfaces/{urn:events}interface"
       "[{urn:events}name='eth0']/{urn:events}link-change"));
   EXPECT_EQ(manager.Drain(5).size(), 1U);
+
+  EXPECT_TRUE(manager.Publish(
+      "NETCONF", "events", "link-change",
+      "<link-change xmlns=\"urn:events\"/>",
+      std::chrono::system_clock::now(), false,
+      "/{urn:events}interfaces/{urn:events}interface"
+      "[{urn:events}name='eth1']/{urn:events}link-change"));
+  EXPECT_TRUE(manager.Drain(5).empty());
+  EXPECT_FALSE(manager.Publish(
+      "NETCONF", "events", "link-change",
+      "<link-change xmlns=\"urn:events\"/>",
+      std::chrono::system_clock::now(), false,
+      "/{urn:events}interfaces/{urn:events}interface"
+      "[{urn:events}name='eth2']/{urn:events}link-change"));
+  EXPECT_FALSE(manager.Publish(
+      "NETCONF", "events", "link-change",
+      "<link-change xmlns=\"urn:events\"/>",
+      std::chrono::system_clock::now(), false,
+      "/{urn:events}interfaces/{urn:events}interface/"
+      "{urn:events}link-change"));
+  EXPECT_TRUE(manager.Drain(5).empty());
 }
 }  // namespace
 }  // namespace yang::netconf

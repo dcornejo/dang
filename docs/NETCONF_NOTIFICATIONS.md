@@ -10,6 +10,10 @@ advertised only while that stream is configured.
 
 ```cpp
 yang::netconf::NotificationManager notifications(&nacm_policy);
+notifications.SetInstanceDataProvider([&] {
+  // Return one current <data> document containing operational state.
+  return ReadOperationalDataXml();
+});
 notifications.AddStream({
     .name = "NETCONF",
     .replay_supported = true,
@@ -39,6 +43,15 @@ and stop times with time zones and fractional seconds, bounded replay,
 `replayComplete`, `notificationComplete`, and cleanup on session termination.
 NACM notification authorization runs before an event enters a session queue.
 The two completion markers cannot be filtered out.
+
+A data-associated YANG 1.1 notification must be published with its complete
+expanded-name instance path. When a runtime schema is configured, the manager
+requires an instance-data provider, validates the notification schema and every
+list key, and confirms that the ancestor instance exists in the returned
+operational `<data>` document. A missing provider, malformed path, incomplete
+key set, nonexistent instance, provider exception, or malformed snapshot fails
+publication without adding replay or live events. NACM read checks then use the
+same concrete keyed ancestors separately for every subscriber.
 
 Queue count and byte limits are fixed when the manager is constructed. A live
 subscription that exceeds either limit is terminated and its queued data is

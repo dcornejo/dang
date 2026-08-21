@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <optional>
@@ -54,6 +55,8 @@ class NotificationManager {
       std::size_t maximum_queued_bytes = 16 * 1024 * 1024,
       const config::RuntimeSchema* schema = nullptr);
   [[nodiscard]] bool AddStream(NotificationStreamConfig stream);
+  /** Supplies the current operational data used to bind associated events. */
+  void SetInstanceDataProvider(std::function<std::string()> provider);
   [[nodiscard]] SubscriptionResult Subscribe(SubscriptionRequest request,
       std::chrono::system_clock::time_point now =
           std::chrono::system_clock::now());
@@ -93,6 +96,7 @@ class NotificationManager {
   };
   const NacmPolicy* nacm_;
   const config::RuntimeSchema* schema_;
+  std::function<std::string()> instance_data_provider_;
   std::size_t maximum_queued_events_;
   std::size_t maximum_queued_bytes_;
   mutable std::mutex mutex_;

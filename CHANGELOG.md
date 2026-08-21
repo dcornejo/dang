@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Bound data-associated notifications to concrete keyed instances in a supplied
+  operational snapshot and applied NACM ancestor checks to those instances
+  before replay or live delivery.
 - Added authorization-first datastore-instance binding for YANG 1.1 actions,
   including complete keyed-list selection and missing-parent rejection before
   application dispatch.
