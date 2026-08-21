@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Rejected managed NACM XML with multiple top-level elements instead of loading
+  only the first policy container and silently ignoring siblings.
 - Removed schema-aware list and leaf-list instances whose identity contains
   both XPath quote forms and therefore cannot be represented without forbidden
   functions in an NACM node-instance identifier, without treating ordinary

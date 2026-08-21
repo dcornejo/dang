@@ -699,6 +699,14 @@ NacmLoadResult LoadNacmPolicy(std::string_view xml) {
                             parsed.description());
     return loaded;
   }
+  const std::size_t root_elements = static_cast<std::size_t>(
+      std::ranges::count_if(document.children(), [](pugi::xml_node node) {
+        return node.type() == pugi::node_element;
+      }));
+  if (root_elements != 1) {
+    loaded.errors.push_back("NACM XML requires exactly one document element");
+    return loaded;
+  }
   std::string resource_error;
   if (!XmlWithinResourceLimits(document, xml, DefaultResourceLimits(),
                                &resource_error)) {

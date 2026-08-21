@@ -287,6 +287,10 @@ TEST(NacmTest, RejectsInvalidModelShapeAndLeafListValues) {
         <rule-list><name>rules</name><group>admins</group><rule>
           <name>duplicate-bit</name><access-operations>read read</access-operations>
           <action>permit</action></rule></rule-list>
+      </nacm>)xml",
+      R"xml(<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm"/>
+      <nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+        <write-default>permit</write-default>
       </nacm>)xml"};
   for (const std::string& xml : invalid) {
     const NacmLoadResult loaded = LoadNacmPolicy(xml);

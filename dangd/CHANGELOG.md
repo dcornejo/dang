@@ -7,6 +7,7 @@
 
 ### Fixed
 
+- Rejected multi-root managed NACM input before compiling or publishing policy.
 - Failed closed when list keys or leaf-list values contain both XPath quote
   forms and cannot be represented in an RFC 8341 instance path, while keeping
   container paths free of child-value predicates.

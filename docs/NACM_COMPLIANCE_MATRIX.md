@@ -37,7 +37,8 @@ high-level status and variance statement is in [COMPLIANCE.md](COMPLIANCE.md).
 - Model loading rejects malformed switches, operations, selectors, duplicate
   names, duplicate singleton leaves, foreign/config-false elements, invalid
   group wildcards, duplicate group membership/selectors/operation bits, and
-  missing actions:
+  missing actions. It also requires exactly one top-level NACM container so no
+  sibling policy content is silently ignored:
   `NacmTest.RejectsMalformedModelConfiguration` and
   `NacmTest.RejectsInvalidModelShapeAndLeafListValues`.
 - Every pairwise and three-way combination of `rpc-name`, `notification-name`,

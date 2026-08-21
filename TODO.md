@@ -23,7 +23,8 @@ stays in this file with its remaining work rewritten precisely.
   RPC denial paths, single-RPC policy snapshots, structural loader constraints,
   leaf-list uniqueness/name restrictions, and empty lexical values are covered.
   The managed loader rejects unmodeled attributes and non-whitespace character
-  content in structural containers while allowing namespace declarations.
+  content in structural containers while allowing namespace declarations, and
+  rejects multiple top-level policy elements.
   Every prohibited pairwise and three-way `rule-type` selector combination is
   covered, and selector choice validation is based on leaf presence.
   Global first-match ordering across rule-lists when a user belongs to several
