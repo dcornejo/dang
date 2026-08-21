@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Verified that confirmed-commit cancellation and timeout restoration remain
+  server-initiated when a newer NACM policy denies session writes.
 - Added protocol-level NACM CRUD evidence for effective keyed creation,
   scalar update, keyed deletion, wrong-bit denial, and atomic preservation.
 - Added protocol evidence that URL `<copy-config>` combinations read-filter

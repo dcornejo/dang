@@ -1,6 +1,7 @@
 // Copyright 2026 David Cornejo
 // SPDX-License-Identifier: Apache-2.0
 
+#include <chrono>
 #include <condition_variable>
 #include <filesystem>
 #include <fstream>
@@ -457,6 +458,53 @@ TEST(NetconfServerTest, ContinuesPersistentConfirmedCommitSequence) {
     </rpc>)xml").xml.find("<ok/>"), std::string::npos);
   EXPECT_NE(stores.Read(Datastore::kRunning).ToXml().find(">second</"),
             std::string::npos);
+}
+
+TEST(NetconfServerTest, DoesNotApplySessionNacmToConfirmedCommitRollback) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NacmPolicy policy;
+  policy.set_write_default(AccessAction::kPermit);
+  NetconfServer server(stores, &policy);
+  const auto edit_and_confirm = [&](std::string_view value,
+                                    std::string_view message_id) {
+    const std::string edit =
+        "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+        "message-id=\"" + std::string(message_id) +
+        "\"><edit-config><target><candidate/></target><config>"
+        "<system xmlns=\"urn:rpc-test\"><hostname>" + std::string(value) +
+        "</hostname></system></config></edit-config></rpc>";
+    EXPECT_NE(server.Process("alice", edit).xml.find("<ok/>"),
+              std::string::npos);
+    const RpcResponse committed = server.Process("alice", R"xml(
+      <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="commit">
+        <commit><confirmed/><confirm-timeout>60</confirm-timeout></commit>
+      </rpc>)xml");
+    EXPECT_NE(committed.xml.find("<ok/>"), std::string::npos) << committed.xml;
+  };
+
+  edit_and_confirm("temporary", "edit-cancel");
+  ASSERT_NE(stores.Read(Datastore::kRunning).ToXml().find("temporary"),
+            std::string::npos);
+  policy.set_write_default(AccessAction::kDeny);
+  const RpcResponse cancelled = server.Process("alice", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="cancel">
+      <cancel-commit/>
+    </rpc>)xml");
+  EXPECT_NE(cancelled.xml.find("<ok/>"), std::string::npos) << cancelled.xml;
+  EXPECT_NE(stores.Read(Datastore::kRunning).ToXml().find(">old</"),
+            std::string::npos);
+
+  policy.set_write_default(AccessAction::kPermit);
+  edit_and_confirm("expires", "edit-timeout");
+  policy.set_write_default(AccessAction::kDeny);
+  EXPECT_TRUE(stores.ProcessTimeouts(DatastoreManager::Clock::now() +
+                                     std::chrono::hours(1)));
+  EXPECT_NE(stores.Read(Datastore::kRunning).ToXml().find(">old</"),
+            std::string::npos);
+  EXPECT_EQ(policy.counters().denied_data_writes, 0U);
 }
 
 TEST(NetconfServerTest, CopiesCompleteInlineConfigurationAtomically) {

@@ -7,6 +7,8 @@
 
 ### Added
 
+- Verified confirmed-commit cancel and timeout rollback after live NACM policy
+  replacement, without treating restoration as a new session write.
 - Verified end-to-end NACM create/update/delete selection for effective
   `<edit-config>` changes and atomic wrong-bit denial.
 - Verified NACM filtering and atomic denial for datastore-to-URL and

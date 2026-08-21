@@ -127,6 +127,10 @@ No open core-server evidence item remains for policy snapshot isolation.
   `NetconfDatastoreTest.AuthorizesExactCommitAndCopyChangesAtomically`,
   `NetconfDatastoreTest.DoesNotAuthorizeImplicitChoiceSideEffect`, and
   `NetconfDatastoreTest.DoesNotAuthorizeImplicitWhenSideEffect`.
+- Confirmed-commit cancellation and timeout restore the server-held rollback
+  snapshot even after the live policy changes to deny writes. Restoration is
+  server-initiated and does not increment session denied-write counters:
+  `NetconfServerTest.DoesNotApplySessionNacmToConfirmedCommitRollback`.
 - Datastore-source `<copy-config>` silently omits read-denied nodes before exact
   target replacement, while running-to-startup requires only operation execute
   permission as specified by RFC 8341 Section 3.2.6:
@@ -141,7 +145,7 @@ No open core-server evidence item remains for policy snapshot isolation.
 
 Open evidence: complete the protocol-level CRUDX suite for remaining NETCONF
 and RFC 8526 mappings, ordered-by-user moves, defaults, leaf-list instances,
-confirmed-commit rollback, and remote-to-remote URL provider failure paths.
+and remote-to-remote URL provider failure paths.
 
 ## Section 3.4.6: outgoing notification authorization
 
