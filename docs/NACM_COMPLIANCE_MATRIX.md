@@ -99,8 +99,12 @@ remain host/deployment work in `TODO.md`.
   predicates as namespace-bound NETCONF XPath rather than exposing the
   implementation's `{namespace}name` notation:
   `NetconfServerTest.EnforcesNacmBeforePublishingWrites`.
+- NACM error messages remain generic and do not repeat internal expanded paths,
+  rejected non-key values, rule names, or policy details. The required
+  namespace-bound `error-path` remains present, including requester-supplied
+  list keys: `NetconfServerTest.EnforcesNacmBeforePublishingWrites`.
 
-Open evidence: a final information-disclosure review of data-node paths.
+No open core-server evidence item remains for access-denied serialization.
 
 ## Section 3.4.4: incoming RPC validation
 

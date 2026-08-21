@@ -739,7 +739,10 @@ std::string Reply(std::string_view message_id, const TransactionResult& result,
         xml += ">" + Escape(xpath) + "</error-path>";
       }
       std::string message = error.message;
-      if (!error.module_name.empty() || !error.instance_path.empty()) {
+      // Validation diagnostics benefit from schema context, but NACM failures
+      // must not echo internal paths or policy details beyond error-path.
+      if (error.netconf_error_tag != "access-denied" &&
+          (!error.module_name.empty() || !error.instance_path.empty())) {
         message += " (";
         if (!error.module_name.empty())
           message += "module: " + error.module_name;

@@ -7,6 +7,8 @@
 
 ### Fixed
 
+- Kept NACM denial messages generic instead of appending internal datastore
+  paths, while retaining namespace-correct NETCONF `error-path` output.
 - Removed a data race between managed NACM replacement and concurrent server,
   notification, and operational policy readers.
 

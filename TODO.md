@@ -31,6 +31,9 @@ stays in this file with its remaining work rewritten precisely.
   Every supported standard operation has protocol-level denial evidence, with
   namespace-correct error paths, no error-info, and the `close-session`
   exception verified.
+  Access-denied messages are generic and disclose no internal path notation,
+  rejected non-key value, NACM rule name, or other policy detail beyond the
+  required namespace-bound error-path.
   Datastore-source copy filtering and the running-to-startup execute-only
   exception are also covered. URL/datastore copy combinations are covered;
   remote source-read, target-inspection, and atomic write failures preserve

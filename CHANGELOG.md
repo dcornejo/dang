@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Prevented NACM `access-denied` messages from echoing internal expanded-name
+  paths or diagnostic policy context outside the required `error-path`.
 - Synchronized NACM policy mutation, replacement, and snapshot copying so
   concurrent sessions cannot observe a mixture of policy generations.
 

@@ -748,6 +748,9 @@ TEST(NetconfServerTest, EnforcesNacmBeforePublishingWrites) {
   DatastoreManager stores(fixture->schema, fixture->initial);
   NacmPolicy policy;
   policy.AddUserToGroup("guest", "guests");
+  policy.AddRule({"classified-rule-name", "guests", "",
+                  "/{urn:rpc-test}system/{urn:rpc-test}hostname",
+                  AccessMask(AccessOperation::kUpdate), AccessAction::kDeny});
   NetconfServer server(stores, &policy);
   const RpcResponse denied = server.Process("guest", R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="301">
@@ -762,6 +765,14 @@ TEST(NetconfServerTest, EnforcesNacmBeforePublishingWrites) {
             std::string::npos) << denied.xml;
   EXPECT_EQ(denied.xml.find("<error-path>/{urn:"), std::string::npos)
       << denied.xml;
+  EXPECT_EQ(denied.xml.find("{urn:"), std::string::npos) << denied.xml;
+  EXPECT_EQ(denied.xml.find("forbidden"), std::string::npos) << denied.xml;
+  EXPECT_EQ(denied.xml.find("classified-rule-name"), std::string::npos)
+      << denied.xml;
+  EXPECT_NE(denied.xml.find(
+                "<error-message xml:lang=\"en\">access to the proposed "
+                "datastore change is denied</error-message>"),
+            std::string::npos) << denied.xml;
   EXPECT_EQ(stores.Read(Datastore::kCandidate).ToXml().find("forbidden"),
             std::string::npos);
 
