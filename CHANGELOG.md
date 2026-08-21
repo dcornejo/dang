@@ -10,6 +10,10 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added namespace-correct RFC 8341 `error-path` values to NACM-denied standard
+  and schema-defined RPC replies, without disclosing `error-info`.
+- Included the general and NACM compliance documents in installed project
+  documentation.
 - Added a section-indexed RFC 8341 executable-evidence matrix and tests for
   disabled enforcement, wildcard groups/modules/names, CRUDX bits, ordered
   first-match behavior, and denial-counter bypass.

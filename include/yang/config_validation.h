@@ -281,6 +281,10 @@ struct ValidationFinding {
   std::string instance_path;
   std::string netconf_error_tag;
   std::string netconf_error_app_tag;
+  /** RFC 6241 XPath reported in error-path, when distinct from instance_path. */
+  std::string netconf_error_path;
+  /** Namespace URI bound to the `op` prefix in netconf_error_path. */
+  std::string netconf_error_path_namespace;
   std::optional<SourceRange> source_range;
   std::optional<ConfigNodeId> config_node;
   /** YANG module defining the schema node responsible for this finding. */

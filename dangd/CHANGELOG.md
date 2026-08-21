@@ -7,6 +7,8 @@
 
 ### Added
 
+- Added RFC 8341 operation-identifying `error-path` serialization for denied
+  NETCONF and model-defined RPC execution.
 - Added an RFC 8341 section-indexed compliance matrix covering `dangd` policy
   bootstrap, session identity, operation/data/notification enforcement, and
   remaining production evidence.

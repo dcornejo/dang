@@ -17,9 +17,11 @@ stays in this file with its remaining work rewritten precisely.
 
 - Close every open evidence item in
   [`docs/NACM_COMPLIANCE_MATRIX.md`](docs/NACM_COMPLIANCE_MATRIX.md), especially
-  exact access-denied serialization, concurrent policy-snapshot isolation,
-  exhaustive model-loader constraints, and the protocol-level operation-to-
-  CRUDX matrix. Keep each vector indexed to its RFC 8341 section.
+  the remaining standard-operation and data-write denial vectors, concurrent
+  policy-snapshot isolation, exhaustive model-loader constraints, and the
+  protocol-level operation-to-CRUDX matrix. Keep each vector indexed to its
+  RFC 8341 section. Namespace-correct standard and schema-defined RPC denial
+  paths are covered.
 - Make managed NACM policy replacement and durable datastore persistence one
   recoverable transaction, retaining or restoring the last known-good policy
   and running configuration when snapshot persistence fails. Schema validation,

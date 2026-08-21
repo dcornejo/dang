@@ -128,8 +128,11 @@ TEST(NetconfServerTest, AuthorizesAndDispatchesSchemaRpc) {
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="rpc">
       <ping xmlns="urn:rpc-test"><count>7</count></ping>
     </rpc>)xml";
-  EXPECT_NE(denied.Process("alice", request).xml.find("access-denied"),
-            std::string::npos);
+  const RpcResponse denied_rpc = denied.Process("alice", request);
+  EXPECT_NE(denied_rpc.xml.find("access-denied"), std::string::npos);
+  EXPECT_NE(denied_rpc.xml.find(
+                "xmlns:op=\"urn:rpc-test\">/nc:rpc/op:ping</error-path>"),
+            std::string::npos) << denied_rpc.xml;
   EXPECT_TRUE(operations.called.empty());
 
   nacm.AddUserToGroup("alice", "operators");
@@ -510,6 +513,29 @@ TEST(NetconfServerTest, EnforcesNacmBeforePublishingWrites) {
   EXPECT_NE(denied.xml.find("access-denied"), std::string::npos);
   EXPECT_EQ(stores.Read(Datastore::kCandidate).ToXml().find("forbidden"),
             std::string::npos);
+}
+
+TEST(NetconfServerTest, NacmRpcDenialIdentifiesNetconfOperation) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NacmPolicy policy;
+  policy.set_exec_default(AccessAction::kDeny);
+  NetconfServer server(stores, &policy);
+  const RpcResponse denied = server.Process("guest", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="deny">
+      <edit-config><target><candidate/></target><config/></edit-config>
+    </rpc>)xml");
+  EXPECT_NE(denied.xml.find("<error-type>application</error-type>"),
+            std::string::npos) << denied.xml;
+  EXPECT_NE(denied.xml.find("<error-tag>access-denied</error-tag>"),
+            std::string::npos) << denied.xml;
+  EXPECT_NE(denied.xml.find(
+                "xmlns:nc=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
+                "/nc:rpc/nc:edit-config</error-path>"),
+            std::string::npos) << denied.xml;
+  EXPECT_EQ(denied.xml.find("<error-info>"), std::string::npos) << denied.xml;
 }
 
 TEST(NetconfServerTest, AuthorizesUrlTargetReplacementBeforeWriting) {

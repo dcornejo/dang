@@ -514,7 +514,9 @@ TransactionResult ValidateOperationData(
   return {findings.empty(), std::move(findings), {}};
 }
 
-TransactionResult ProtocolFailure(std::string message, std::string tag);
+TransactionResult ProtocolFailure(std::string message, std::string tag,
+                                  std::string error_path = {},
+                                  std::string error_path_namespace = {});
 
 TransactionResult ValidateOperationOutput(
     const config::RuntimeSchema& schema,
@@ -576,12 +578,16 @@ std::string FilterOperationOutput(
   return Serialize(document);
 }
 
-TransactionResult ProtocolFailure(std::string message, std::string tag) {
+TransactionResult ProtocolFailure(std::string message, std::string tag,
+                                  std::string error_path,
+                                  std::string error_path_namespace) {
   config::ValidationFinding finding;
   finding.code = config::ValidationCode::kInvalidValue;
   finding.state = config::FindingState::kInvalid;
   finding.message = std::move(message);
   finding.netconf_error_tag = std::move(tag);
+  finding.netconf_error_path = std::move(error_path);
+  finding.netconf_error_path_namespace = std::move(error_path_namespace);
   return {false, {std::move(finding)}, {}};
 }
 
@@ -660,7 +666,14 @@ std::string Reply(std::string_view message_id, const TransactionResult& result,
       if (!error.netconf_error_app_tag.empty())
         xml += "<error-app-tag>" + Escape(error.netconf_error_app_tag) +
                "</error-app-tag>";
-      if (!error.instance_path.empty())
+      if (!error.netconf_error_path.empty()) {
+        xml += "<error-path xmlns:nc=\"" + std::string(kNetconfNamespace) +
+               "\"";
+        if (!error.netconf_error_path_namespace.empty())
+          xml += " xmlns:op=\"" +
+                 Escape(error.netconf_error_path_namespace) + "\"";
+        xml += ">" + Escape(error.netconf_error_path) + "</error-path>";
+      } else if (!error.instance_path.empty())
         xml += "<error-path>" + Escape(error.instance_path) + "</error-path>";
       std::string message = error.message;
       if (!error.module_name.empty() || !error.instance_path.empty()) {
@@ -873,8 +886,13 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
                 operation_schema != nullptr &&
                     operation_schema->nacm_default_deny_all));
   if (!authorized) {
+    const bool base_operation = operation_namespace == kNetconfNamespace;
+    const std::string error_path = "/nc:rpc/" +
+        std::string(base_operation ? "nc:" : "op:") + std::string(name);
     return {Reply(message_id, ProtocolFailure(
-        "execution of the requested RPC is denied", "access-denied")), false};
+        "execution of the requested RPC is denied", "access-denied",
+        error_path, base_operation ? "" : std::string(operation_namespace))),
+        false};
   }
   if (action) {
     if (!action->has_all_keys) {

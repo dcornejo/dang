@@ -69,10 +69,14 @@ multi-session concurrent policy reload. These remain host/deployment work in
   `NetconfServerTest.AuthorizesUrlTargetReplacementBeforeWriting`,
   `NetconfDatastoreTest.AuthorizesExactCommitAndCopyChangesAtomically`, and
   `DangdApplicationTest.LoadsNacmAndUsesAuthenticatedSessionIdentity`.
+- Protocol-operation denials use `error-type` `application`, identify the
+  requested standard or schema-defined operation with a namespace-correct
+  `error-path`, and include no `error-info`:
+  `NetconfServerTest.NacmRpcDenialIdentifiesNetconfOperation` and
+  `NetconfServerTest.AuthorizesAndDispatchesSchemaRpc`.
 
-Open evidence: clause-level vectors for the exact `error-type`, `error-tag`,
-`error-path`, and information-disclosure requirements for every denied standard
-and application operation.
+Open evidence: clause-level vectors for every denied standard operation and
+data-write error, including information-disclosure review of data-node paths.
 
 ## Section 3.4.4: incoming RPC validation
 
