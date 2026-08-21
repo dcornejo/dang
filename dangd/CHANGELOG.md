@@ -7,6 +7,8 @@
 
 ### Added
 
+- Expanded the RFC 8344 example's comments with practical Linux backend,
+  transaction ordering, rollback, concurrency, and observed-state guidance.
 - ABI v3 schema-bound operational publication, used by the RFC 8344 example
   for simulated interface state, plus `ietf-origin:intended` annotations and
   RFC 8526 origin selection.

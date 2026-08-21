@@ -21,8 +21,7 @@ datastore identity selection, subtree or XPath selection, `config-filter`,
 `max-depth`, and NACM read filtering. RFC 8526 `<edit-data>` supports inline
 configuration for writable conventional datastores and always uses atomic
 rollback-on-error behavior. URL content is unavailable because the core NMDA
-module does not enable the NETCONF `url` feature. The `origin` feature is also
-disabled until the operational datastore supplies per-node origin metadata.
+module does not enable the NETCONF `url` feature.
 The initial read-only `operational` snapshot combines applied intended
 configuration with core YANG Library, NETCONF monitoring, and NACM state.
 Schema-aware `config-filter` processing can select its configuration or state

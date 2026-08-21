@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added a detailed RFC 8341 NACM and RFC 8342/RFC 8526 NMDA compliance-closure
+  checklist, plus production implementation guidance in the RFC 8344 example
+  plugin for planning, platform application, rollback, and operational data.
 - Added plugin ABI v3 operational-state publication, schema-bound fragment
   merging, RFC 8344 example interface state, and RFC 8526 `with-origin` plus
   positive and negated origin filtering for applied intended configuration.
