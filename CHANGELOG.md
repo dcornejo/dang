@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added RFC 8526 `<edit-data>` protocol evidence for effective NACM create,
+  update, delete, wrong-bit denial, and atomic target preservation.
 - Verified that confirmed-commit cancellation and timeout restoration remain
   server-initiated when a newer NACM policy denies session writes.
 - Added protocol-level NACM CRUD evidence for effective keyed creation,

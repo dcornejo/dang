@@ -73,8 +73,10 @@ stays in this file with its remaining work rewritten precisely.
 - Finish the RFC 8526 operation matrix: exercise all datastore identities,
   subtree and XPath choices, `config-filter`, `max-depth`, `with-defaults`,
   `with-origin`, URL-feature behavior if enabled, all `edit-data` default/test/
-  error options, locks, NACM, and protocol-accurate error tags. Add cases where
-  filtering, defaults, origin selection, depth limiting, and NACM interact.
+  error options, locks, and protocol-accurate error tags. Basic NACM effective
+  create, update, delete, wrong-bit denial, and atomic preservation are covered;
+  add cases where filtering, defaults, origin selection, depth limiting, and
+  NACM interact.
 - Verify that every advertised RFC 8525 datastore schema is accurate and that
   `<operational>` is a permitted superset of every configuration-datastore
   schema. Add reload tests for module, feature, deviation, plugin, datastore,

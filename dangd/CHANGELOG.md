@@ -7,6 +7,8 @@
 
 ### Added
 
+- Verified that RFC 8526 `<edit-data>` selects effective NACM create, update,
+  and delete permissions and preserves the target after wrong-bit denial.
 - Verified confirmed-commit cancel and timeout rollback after live NACM policy
   replacement, without treating restoration as a new session write.
 - Verified end-to-end NACM create/update/delete selection for effective

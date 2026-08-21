@@ -118,9 +118,11 @@ No open core-server evidence item remains for policy snapshot isolation.
   `NacmTest.DoesNotUseTextualPathPrefixes`.
 - Read/create/update/delete bit selection and first-match ordering:
   `NacmTest.AppliesWildcardGroupsModulesNamesAndCrudxBitsInOrder` and
-  `NetconfServerTest.MapsEffectiveEditConfigChangesToCrudBits`. The latter
-  verifies keyed create/delete, scalar update, wrong-bit denial, and unchanged
-  target state after denial through the NETCONF protocol.
+  `NetconfServerTest.MapsEffectiveEditConfigChangesToCrudBits` and
+  `NetconfServerTest.MapsEffectiveEditDataChangesToCrudBits`. The protocol
+  tests verify keyed create/delete, scalar update, wrong-bit denial, and
+  unchanged target state after denial for both classic `<edit-config>` and
+  RFC 8526 `<edit-data>`.
 - Exact edits, candidate commit, inline/URL replacement, and copy operations are
   authorized atomically before publication. Implicit `choice` and `when`
   removals do not demand separate permission:
@@ -143,9 +145,9 @@ No open core-server evidence item remains for policy snapshot isolation.
   `NetconfServerTest.AuthorizesUrlTargetReplacementBeforeWriting`.
 - Denied write accounting: `NacmTest.CountsDeniedOperationsWritesAndNotifications`.
 
-Open evidence: complete the protocol-level CRUDX suite for remaining NETCONF
-and RFC 8526 mappings, ordered-by-user moves, defaults, leaf-list instances,
-and remote-to-remote URL provider failure paths.
+Open evidence: complete the protocol-level CRUDX suite for ordered-by-user
+moves, defaults, leaf-list instances, and remote-to-remote URL provider failure
+paths.
 
 ## Section 3.4.6: outgoing notification authorization
 
