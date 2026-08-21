@@ -231,6 +231,35 @@ TEST(NacmTest, RejectsInvalidModelShapeAndLeafListValues) {
   }
 }
 
+TEST(NacmTest, RejectsUnmodeledXmlAttributesAndContainerText) {
+  const NacmLoadResult valid = LoadNacmPolicy(R"xml(
+    <nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm"
+          xmlns:unused="urn:unused">
+      <groups>
+        <group><name>operators</name><user-name>alice</user-name></group>
+      </groups>
+    </nacm>)xml");
+  EXPECT_TRUE(valid.errors.empty());
+  EXPECT_TRUE(valid.policy);
+
+  const std::vector<std::string> invalid = {
+      R"xml(<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm"
+                   vendor-option="ignored"/>)xml",
+      R"xml(<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+        <read-default xml:lang="en">deny</read-default>
+      </nacm>)xml",
+      R"xml(<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+        <groups>unexpected
+          <group><name>operators</name><user-name>alice</user-name></group>
+        </groups>
+      </nacm>)xml"};
+  for (const std::string& xml : invalid) {
+    const NacmLoadResult loaded = LoadNacmPolicy(xml);
+    EXPECT_FALSE(loaded.policy) << xml;
+    EXPECT_FALSE(loaded.errors.empty()) << xml;
+  }
+}
+
 TEST(NacmTest, DoesNotBroadenExplicitlyEmptyLexicalValues) {
   const NacmLoadResult loaded = LoadNacmPolicy(R"xml(
     <nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">

@@ -23,6 +23,8 @@ stays in this file with its remaining work rewritten precisely.
   matrix. Keep each vector indexed to its RFC 8341 section. Namespace-correct
   RPC denial paths, single-RPC policy snapshots, structural loader constraints,
   leaf-list uniqueness/name restrictions, and empty lexical values are covered.
+  The managed loader rejects unmodeled attributes and non-whitespace character
+  content in structural containers while allowing namespace declarations.
   Datastore-source copy filtering and the running-to-startup execute-only
   exception are also covered. URL/datastore copy combinations are covered;
   remote source-read, target-inspection, and atomic write failures preserve

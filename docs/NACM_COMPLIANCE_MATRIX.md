@@ -32,6 +32,9 @@ high-level status and variance statement is in [COMPLIANCE.md](COMPLIANCE.md).
   missing actions:
   `NacmTest.RejectsMalformedModelConfiguration` and
   `NacmTest.RejectsInvalidModelShapeAndLeafListValues`.
+- XML shape validation permits namespace declarations but rejects unmodeled
+  attributes at every depth and non-whitespace character content in structural
+  containers: `NacmTest.RejectsUnmodeledXmlAttributesAndContainerText`.
 - Explicit empty YANG `bits`, RPC-name, notification-name, and module-name
   values retain their distinct no-bit/no-match meaning instead of broadening to
   wildcard access: `NacmTest.DoesNotBroadenExplicitlyEmptyLexicalValues`.
@@ -40,9 +43,9 @@ high-level status and variance statement is in [COMPLIANCE.md](COMPLIANCE.md).
   `DangdApplicationTest.SeedsAndCommitsDatastoreManagedNacm`, and
   `DangdApplicationTest.LoadsNacmAndUsesAuthenticatedSessionIdentity`.
 
-Open evidence: add dedicated vectors for XML metadata/attribute handling, every
-remaining prohibited selector combination, multiple matching rule-list groups,
-and concurrent managed-policy replacement across sessions.
+Open evidence: add dedicated vectors for every remaining prohibited selector
+combination, multiple matching rule-list groups, and concurrent managed-policy
+replacement across sessions.
 
 ## Section 3.4.1: initial operation
 

@@ -82,6 +82,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Rejected unmodeled attributes and mixed character content in managed NACM
+  XML instead of silently ignoring unsupported policy metadata.
 - Evaluate `when` expressions declared on choices and cases from their parent
   data-node context, allowing the normative RFC 8526 origin feature schema to
   resolve its datastore condition.

@@ -5,6 +5,7 @@
 
 #include "yang/resource_limits.h"
 
+#include <cctype>
 #include <functional>
 #include <initializer_list>
 #include <optional>
@@ -103,6 +104,37 @@ void ValidateChildren(
     if (std::ranges::find(repeatable, name) == repeatable.end() &&
         !seen.insert(name).second) {
       errors->push_back("duplicate NACM element " + name);
+    }
+  }
+}
+
+void ValidateXmlShape(const pugi::xml_node& element,
+                      std::vector<std::string>* errors) {
+  for (const pugi::xml_attribute attribute : element.attributes()) {
+    const std::string_view name = attribute.name();
+    if (name == "xmlns" || name.starts_with("xmlns:")) continue;
+    errors->push_back("unexpected NACM attribute " + std::string(name) +
+                      " on " + std::string(LocalName(element.name())));
+  }
+  const bool has_elements = std::ranges::any_of(
+      element.children(), [](const pugi::xml_node& child) {
+        return child.type() == pugi::node_element;
+      });
+  for (const pugi::xml_node child : element.children()) {
+    if (child.type() == pugi::node_element) {
+      ValidateXmlShape(child, errors);
+      continue;
+    }
+    if (!has_elements || (child.type() != pugi::node_pcdata &&
+                          child.type() != pugi::node_cdata)) {
+      continue;
+    }
+    const std::string_view text = child.value();
+    if (std::ranges::any_of(text, [](unsigned char character) {
+          return std::isspace(character) == 0;
+        })) {
+      errors->push_back("unexpected character content in NACM container " +
+                        std::string(LocalName(element.name())));
     }
   }
 }
@@ -520,6 +552,7 @@ NacmLoadResult LoadNacmPolicy(std::string_view xml) {
     loaded.errors.push_back("expected the ietf-netconf-acm nacm container");
     return loaded;
   }
+  ValidateXmlShape(root, &loaded.errors);
   ValidateChildren(root,
                    {"enable-nacm", "read-default", "write-default",
                     "exec-default", "enable-external-groups", "groups",

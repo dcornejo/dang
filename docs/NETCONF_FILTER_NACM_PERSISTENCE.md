@@ -57,6 +57,10 @@ yang::netconf::NetconfServer server(stores, &*loaded.policy);
 The loader supports global enable/default controls, configured groups,
 ordered rule lists, wildcard groups, module rules, protocol-operation rules,
 notification selectors, data-node paths, CRUDX bit sets, and actions.
+It accepts XML namespace declarations but rejects all other unmodeled
+attributes and rejects character content in structural NACM containers. This
+keeps standalone policy loading aligned with schema-bound datastore validation
+instead of silently discarding unsupported metadata.
 Namespace-qualified data paths are compiled into expanded XML names. A host
 can attach authenticated groups with `NetconfSession::set_external_groups`;
 `enable-external-groups` controls whether they participate. Each RPC uses a

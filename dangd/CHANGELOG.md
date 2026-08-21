@@ -108,6 +108,8 @@
 
 ### Fixed
 
+- Made managed NACM loading fail closed on unmodeled XML attributes and
+  character content embedded in structural containers.
 - Preserve schema module and inherited NACM annotation context while checking
   action and data-associated notification ancestors, so module-wide rules work
   consistently with path rules.
