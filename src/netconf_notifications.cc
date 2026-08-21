@@ -47,9 +47,26 @@ bool ValidNotificationContent(
     const config::RuntimeSchema& schema,
     config::RuntimeSchemaNodeId notification,
     const pugi::xml_node& root) {
+  const auto direct_case_for = [&](config::RuntimeSchemaNodeId choice,
+                                   config::RuntimeSchemaNodeId data_node) {
+    std::function<bool(config::RuntimeSchemaNodeId)> contains =
+        [&](config::RuntimeSchemaNodeId id) {
+          return id == data_node ||
+              std::ranges::any_of(schema.Get(id).children, contains);
+        };
+    for (config::RuntimeSchemaNodeId child : schema.Get(choice).children) {
+      if (schema.Get(child).kind == semantic::SchemaNodeKind::kCase &&
+          contains(child)) {
+        return std::optional<config::RuntimeSchemaNodeId>(child);
+      }
+    }
+    return std::optional<config::RuntimeSchemaNodeId>{};
+  };
   std::function<bool(const pugi::xml_node&,
+                     config::RuntimeSchemaNodeId,
                      const std::vector<config::RuntimeSchemaNodeId>&)> validate;
   validate = [&](const pugi::xml_node& parent,
+                 config::RuntimeSchemaNodeId parent_schema,
                  const std::vector<config::RuntimeSchemaNodeId>& allowed) {
     std::map<config::RuntimeSchemaNodeId, std::size_t> counts;
     std::map<config::RuntimeSchemaNodeId, std::set<std::string>> leaf_list_values;
@@ -85,7 +102,7 @@ bool ValidNotificationContent(
             !leaf_list_values[*found].insert(child.text().as_string()).second) {
           return false;
         }
-      } else if (!validate(child, schema.DataChildren(*found))) {
+      } else if (!validate(child, *found, schema.DataChildren(*found))) {
         return false;
       }
       if (metadata.kind == semantic::SchemaNodeKind::kList) {
@@ -112,18 +129,50 @@ bool ValidNotificationContent(
         }
       }
     }
+    std::set<config::RuntimeSchemaNodeId> active_nodes;
+    std::function<bool(const std::vector<config::RuntimeSchemaNodeId>&)>
+        collect_active;
+    collect_active = [&](const std::vector<config::RuntimeSchemaNodeId>& nodes) {
+      for (config::RuntimeSchemaNodeId id : nodes) {
+        const config::RuntimeSchemaNode& node = schema.Get(id);
+        if (!node.supported) continue;
+        if (node.kind == semantic::SchemaNodeKind::kChoice) {
+          std::set<config::RuntimeSchemaNodeId> active_cases;
+          for (const auto& [present, count] : counts) {
+            if (count == 0) continue;
+            if (const auto selected = direct_case_for(id, present))
+              active_cases.insert(*selected);
+          }
+          if (active_cases.size() > 1 ||
+              (node.mandatory && active_cases.empty())) return false;
+          if (!active_cases.empty() &&
+              !collect_active(schema.Get(*active_cases.begin()).children)) {
+            return false;
+          }
+        } else if (node.kind == semantic::SchemaNodeKind::kCase) {
+          if (!collect_active(node.children)) return false;
+        } else {
+          active_nodes.insert(id);
+        }
+      }
+      return true;
+    };
+    if (!collect_active(schema.Get(parent_schema).children)) return false;
     for (config::RuntimeSchemaNodeId id : allowed) {
       const config::RuntimeSchemaNode& metadata = schema.Get(id);
       const std::size_t count = counts[id];
       if ((metadata.kind != semantic::SchemaNodeKind::kList &&
            metadata.kind != semantic::SchemaNodeKind::kLeafList && count > 1) ||
           (metadata.max_elements && count > *metadata.max_elements) ||
-          (metadata.min_elements && count < *metadata.min_elements) ||
-          (metadata.mandatory && count == 0)) return false;
+          (active_nodes.contains(id) && metadata.min_elements &&
+           count < *metadata.min_elements) ||
+          (active_nodes.contains(id) && metadata.mandatory && count == 0)) {
+        return false;
+      }
     }
     return true;
   };
-  return validate(root, schema.DataChildren(notification));
+  return validate(root, notification, schema.DataChildren(notification));
 }
 
 std::optional<int> Number(std::string_view value) {

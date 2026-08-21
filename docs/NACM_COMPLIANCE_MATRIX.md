@@ -237,7 +237,7 @@ integration responsibilities.
   authorization or queueing. The complete event body is first checked for
   modeled children, scalar types, mandatory nodes, singleton duplication, and
   list/leaf-list cardinality, required list keys, duplicate key tuples, and
-  duplicate leaf-list values:
+  duplicate leaf-list values, plus conflicting or absent mandatory choices:
   `NetconfNotificationsTest.BindsTopLevelPublicationToModeledIdentity` and
   `NetconfNotificationsTest.DerivesAssociatedNotificationAncestorsFromSchema`.
 - Each replay subscription and live multi-session fanout uses one immutable
