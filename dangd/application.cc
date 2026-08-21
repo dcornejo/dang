@@ -540,6 +540,8 @@ std::string DangdOperationalData::source_digest() const {
 Application::Application(yang::config::RuntimeSchema schema,
                          yang::config::ConfigDocument configuration,
                          std::optional<std::filesystem::path> state_file,
+                         yang::netconf::SnapshotSaveCheckpoint
+                             snapshot_save_checkpoint,
                          yang::netconf::NacmPolicy nacm, bool managed_nacm,
                          std::unique_ptr<PluginManager> plugins,
                          std::string yang_library_xml,
@@ -555,7 +557,8 @@ Application::Application(yang::config::RuntimeSchema schema,
       datastores_(schema_, std::move(configuration), std::nullopt, &backend_),
       server_(datastores_, &nacm_, nullptr, &notifications_, std::nullopt,
               &operational_, plugins_.get()),
-      state_file_(std::move(state_file)) {
+      state_file_(std::move(state_file)),
+      snapshot_save_checkpoint_(std::move(snapshot_save_checkpoint)) {
   notifications_.SetInstanceDataProvider([this] {
     const std::string data =
         "<data>" +
@@ -745,8 +748,8 @@ LoadResult Application::Load(const ApplicationOptions& options) {
 
   result.application = std::unique_ptr<Application>(new Application(
       std::move(schema), std::move(*parsed.document), options.state_file,
-      std::move(nacm), managed_nacm, std::move(plugins), yang_library_xml,
-      std::move(model_sources)));
+      options.snapshot_save_checkpoint, std::move(nacm), managed_nacm,
+      std::move(plugins), yang_library_xml, std::move(model_sources)));
   if (options.state_file && !options.configuration_override) {
     std::error_code exists_error;
     const bool exists =
@@ -763,6 +766,11 @@ LoadResult Application::Load(const ApplicationOptions& options) {
                                 loaded.error.value_or("unknown error"));
         result.application.reset();
       }
+    } else if (const auto persistence_error =
+                   result.application->SaveState()) {
+      result.errors.push_back("cannot persist initial state file: " +
+                              *persistence_error);
+      result.application.reset();
     }
   }
   return result;
@@ -816,7 +824,8 @@ LoadResult Application::Reload(const ApplicationOptions& options,
 std::optional<std::string> Application::SaveState() const {
   if (!state_file_) return std::nullopt;
   const auto saved =
-      yang::netconf::SaveDatastoreSnapshot(*state_file_, datastores_);
+      yang::netconf::SaveDatastoreSnapshot(
+          *state_file_, datastores_, snapshot_save_checkpoint_);
   if (saved.ok) return std::nullopt;
   return saved.error.value_or("unknown persistence error");
 }

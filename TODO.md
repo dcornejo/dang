@@ -36,6 +36,9 @@ stays in this file with its remaining work rewritten precisely.
   required namespace-bound error-path.
   Replay authorization and live multi-session notification fanout each retain
   one policy snapshot during concurrent managed-policy replacement.
+  With persistence configured, first boot saves the validated datastore and
+  seeded NACM before startup succeeds; interruption at every atomic-save stage
+  restarts with either a safe reseed or the complete saved policy.
   Datastore-source copy filtering and the running-to-startup execute-only
   exception are also covered. URL/datastore copy combinations are covered;
   remote source-read, target-inspection, and atomic write failures preserve
@@ -52,7 +55,8 @@ stays in this file with its remaining work rewritten precisely.
   recoverable transaction, retaining or restoring the last known-good policy
   and running configuration when snapshot persistence fails. Schema validation,
   policy construction, and in-memory backend publication are already staged
-  atomically before the live policy is replaced.
+  atomically before the live policy is replaced. Initial-state persistence is
+  fail-closed and covered separately.
 - Harden authentication-to-NACM identity plumbing for production transports:
   define canonical username handling, certificate/SSH name mapping, trusted
   external-group provenance, recovery-session auditing, and fail-closed

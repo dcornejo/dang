@@ -150,6 +150,12 @@ after a NETCONF `test-option` of `set`. Locks are never persisted. Confirmed
 commits retain their wall-clock expiration across downtime; an already expired
 snapshot rolls running back during restore.
 
+When `dangd` is configured with a state file and that file does not yet exist,
+startup saves the complete validated initial state before accepting sessions.
+This includes a NACM subtree seeded with `--nacm`. Startup fails if the durable
+save fails; after interruption, the next start observes either no snapshot and
+repeats safe seeding, or the complete atomically replaced snapshot.
+
 The host decides when to snapshot, file ownership and permissions, encryption,
 backup rotation, and how to react to storage failure. A production server
 should save after every successful persistent state transition.

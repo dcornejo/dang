@@ -175,7 +175,9 @@ operational monitoring, and protected deployment credentials.
 
 `ietf-netconf-acm` is a core `dangd` model. `--nacm FILE` seeds the initial
 datastore only when the configuration does not already contain `/nacm`; it is
-not a permanent override. Thereafter authorized clients manage NACM through
+not a permanent override. When `--state-file` names a file that does not yet
+exist, this seeded state is durably saved before startup succeeds. Thereafter
+authorized clients manage NACM through
 ordinary candidate edits and commits. The policy active at RPC start
 authorizes the change, and its compiled replacement becomes active only after
 the complete backend transaction succeeds. When the NACM container is absent,

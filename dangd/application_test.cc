@@ -788,6 +788,63 @@ TEST(DangdApplicationTest, SavesAndRestoresConfiguredStateFile) {
   EXPECT_TRUE(restored.errors.empty());
 }
 
+TEST(DangdApplicationTest, PersistsManagedNacmBeforeFirstBootCompletes) {
+  TemporaryInputs inputs;
+  constexpr std::string_view model = R"yang(module persistent-nacm-appliance {
+    yang-version 1.1; namespace "urn:persistent-nacm-appliance"; prefix pna;
+    import ietf-netconf-acm { prefix nacm; revision-date "2018-02-14"; }
+    container system { leaf hostname { type string; mandatory true; } }
+  })yang";
+  const std::filesystem::path source = DANG_TEST_SOURCE_DIR;
+  ApplicationOptions options{
+      .model = inputs.Write("persistent-nacm-appliance.yang", model),
+      .search_paths = {source / "dangd/models"},
+      .configuration = inputs.Write(
+          "persistent-config.xml",
+          "<config xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
+          "<system xmlns=\"urn:persistent-nacm-appliance\">"
+          "<hostname>edge</hostname></system></config>"),
+      .nacm_configuration = source / "dangd/examples/nacm.xml"};
+  const yang::netconf::SnapshotSaveStage stages[] = {
+      yang::netconf::SnapshotSaveStage::kTemporaryWritten,
+      yang::netconf::SnapshotSaveStage::kTemporarySynchronized,
+      yang::netconf::SnapshotSaveStage::kSnapshotReplaced,
+      yang::netconf::SnapshotSaveStage::kDirectorySynchronized};
+
+  unsigned sequence = 0;
+  for (const yang::netconf::SnapshotSaveStage interrupted_stage : stages) {
+    options.state_file = inputs.Path(
+        "first-boot-" + std::to_string(sequence++) + ".json");
+    options.snapshot_save_checkpoint =
+        [interrupted_stage](yang::netconf::SnapshotSaveStage stage) {
+          return stage != interrupted_stage;
+        };
+    auto interrupted = Application::Load(options);
+    EXPECT_EQ(interrupted.application, nullptr);
+    ASSERT_FALSE(interrupted.errors.empty());
+    EXPECT_NE(interrupted.errors.front().find(
+                  "cannot persist initial state file"),
+              std::string::npos) << testing::PrintToString(interrupted.errors);
+
+    options.snapshot_save_checkpoint = {};
+    auto restarted = Application::Load(options);
+    ASSERT_NE(restarted.application, nullptr)
+        << testing::PrintToString(restarted.errors);
+    EXPECT_TRUE(restarted.errors.empty());
+    EXPECT_NE(restarted.application->datastores()
+                  .Read(yang::netconf::Datastore::kRunning)
+                  .ToXml()
+                  .find("<nacm"),
+              std::string::npos);
+    const auto denied = restarted.application->server().Process("bob", R"xml(
+      <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="c">
+        <commit/>
+      </rpc>)xml");
+    EXPECT_NE(denied.xml.find("access-denied"), std::string::npos)
+        << denied.xml;
+  }
+}
+
 TEST(DangdApplicationTest, RejectsCorruptConfiguredStateFile) {
   TemporaryInputs inputs;
   auto options = Options(inputs);

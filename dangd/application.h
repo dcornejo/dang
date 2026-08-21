@@ -19,6 +19,7 @@
 #include "yang/nacm.h"
 #include "yang/netconf_datastore.h"
 #include "yang/netconf_notifications.h"
+#include "yang/netconf_persistence.h"
 #include "yang/netconf_server.h"
 
 namespace dangd {
@@ -71,6 +72,8 @@ struct ApplicationOptions {
   std::filesystem::path configuration;
   /** Optional atomic datastore snapshot restored and updated by the host. */
   std::optional<std::filesystem::path> state_file;
+  /** Optional durable-save checkpoint for fault injection and supervision. */
+  yang::netconf::SnapshotSaveCheckpoint snapshot_save_checkpoint;
   /** Optional RFC 8341 NACM XML configuration loaded at startup. */
   std::optional<std::filesystem::path> nacm_configuration;
   /** Host-authenticated users whose sessions bypass NACM for recovery. */
@@ -132,6 +135,7 @@ class Application {
   Application(yang::config::RuntimeSchema schema,
               yang::config::ConfigDocument configuration,
               std::optional<std::filesystem::path> state_file,
+              yang::netconf::SnapshotSaveCheckpoint snapshot_save_checkpoint,
               yang::netconf::NacmPolicy nacm, bool managed_nacm,
               std::unique_ptr<PluginManager> plugins,
               std::string yang_library_xml,
@@ -146,6 +150,7 @@ class Application {
   yang::netconf::DatastoreManager datastores_;
   yang::netconf::NetconfServer server_;
   std::optional<std::filesystem::path> state_file_;
+  yang::netconf::SnapshotSaveCheckpoint snapshot_save_checkpoint_;
 };
 
 /**

@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Made configured first-boot persistence fail closed, durably saving validated
+  initial datastores and seeded NACM before application startup succeeds.
 - Prevented NACM `access-denied` messages from echoing internal expanded-name
   paths or diagnostic policy context outside the required `error-path`.
 - Synchronized NACM policy mutation, replacement, and snapshot copying so
@@ -17,6 +19,8 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added restart tests that interrupt initial snapshot persistence at every
+  atomic-save milestone and verify managed NACM remains enforceable.
 - Applied one immutable NACM snapshot to each notification replay and live
   multi-session fanout, with concurrent replacement stress coverage.
 - Added a denial matrix for every supported standard NETCONF, notification,

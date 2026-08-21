@@ -7,6 +7,8 @@
 
 ### Fixed
 
+- Required the first configured state snapshot, including seeded NACM, to be
+  durably written before `dangd` startup completes.
 - Kept NACM denial messages generic instead of appending internal datastore
   paths, while retaining namespace-correct NETCONF `error-path` output.
 - Removed a data race between managed NACM replacement and concurrent server,
@@ -14,6 +16,8 @@
 
 ### Added
 
+- Added deterministic first-boot persistence checkpoints and restart coverage
+  for every atomic snapshot stage.
 - Kept notification replay and live fanout internally consistent while managed
   NACM policy is replaced concurrently.
 - Verified NACM execute denial, error paths, accounting, and non-disclosure for

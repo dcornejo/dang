@@ -62,9 +62,13 @@ No open core-server evidence item remains for model and policy controls.
   `DangdApplicationTest.SeedsAndCommitsDatastoreManagedNacm`.
 - Server-initiated initial configuration loading is schema validated without
   being blocked by the not-yet-installed policy: application load tests.
+- When persistence is configured and no snapshot exists, `dangd` durably saves
+  the validated initial datastores and seeded managed NACM before startup
+  succeeds. Fault injection at every atomic-save milestone proves restart sees
+  either no snapshot and reseeds safely, or a complete enforceable snapshot:
+  `DangdApplicationTest.PersistsManagedNacmBeforeFirstBootCompletes`.
 
-Open evidence: failure injection for first-boot policy persistence and restart
-after a partially written external state store.
+No open core-server evidence item remains for initial operation.
 
 ## Section 3.4.2: session establishment
 
