@@ -24,7 +24,8 @@ stays in this file with its remaining work rewritten precisely.
   RPC denial paths, single-RPC policy snapshots, structural loader constraints,
   leaf-list uniqueness/name restrictions, and empty lexical values are covered.
   Datastore-source copy filtering and the running-to-startup execute-only
-  exception are also covered; URL copy combinations remain open.
+  exception are also covered; URL copy combinations remain open. Data-write
+  denial paths now use namespace-correct XPath, including keyed instances.
 - Make managed NACM policy replacement and durable datastore persistence one
   recoverable transaction, retaining or restoring the last known-good policy
   and running configuration when snapshot persistence fails. Schema validation,

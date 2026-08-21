@@ -624,8 +624,24 @@ TEST(NetconfServerTest, EnforcesNacmBeforePublishingWrites) {
       </config></edit-config>
     </rpc>)xml");
   EXPECT_NE(denied.xml.find("access-denied"), std::string::npos);
+  EXPECT_NE(denied.xml.find(
+                "xmlns:n0=\"urn:rpc-test\">/n0:system/n0:hostname"
+                "</error-path>"),
+            std::string::npos) << denied.xml;
+  EXPECT_EQ(denied.xml.find("<error-path>/{urn:"), std::string::npos)
+      << denied.xml;
   EXPECT_EQ(stores.Read(Datastore::kCandidate).ToXml().find("forbidden"),
             std::string::npos);
+
+  const RpcResponse keyed = server.Process("guest", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="302">
+      <edit-config><target><candidate/></target><config>
+        <device xmlns="urn:rpc-test"><name>edge-2</name></device>
+      </config></edit-config>
+    </rpc>)xml");
+  EXPECT_NE(keyed.xml.find(
+                "/n0:device[n0:name=&apos;edge-2&apos;]</error-path>"),
+            std::string::npos) << keyed.xml;
 }
 
 TEST(NetconfServerTest, NacmRpcDenialIdentifiesNetconfOperation) {

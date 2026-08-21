@@ -97,7 +97,8 @@ EnglishConfigurationBackend::PrepareReplacement(
       finding.message = loaded.errors.empty()
                             ? "NACM configuration cannot be compiled"
                             : loaded.errors.front();
-      finding.instance_path = "/nacm:nacm";
+      finding.instance_path =
+          "/{urn:ietf:params:xml:ns:yang:ietf-netconf-acm}nacm";
       finding.module_name = "ietf-netconf-acm";
       finding.netconf_error_tag = "invalid-value";
       finding.netconf_error_app_tag = "invalid-nacm-policy";

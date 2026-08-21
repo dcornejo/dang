@@ -285,7 +285,7 @@ diagnostic context:
   <error-type>application</error-type>
   <error-tag>missing-element</error-tag>
   <error-severity>error</error-severity>
-  <error-path>/{urn:example:appliance}system/{urn:example:appliance}hostname</error-path>
+  <error-path xmlns:n0="urn:example:appliance">/n0:system/n0:hostname</error-path>
   <error-message xml:lang="en">mandatory data node is absent (module: appliance, path: /{urn:example:appliance}system/{urn:example:appliance}hostname)</error-message>
 </rpc-error>
 ```

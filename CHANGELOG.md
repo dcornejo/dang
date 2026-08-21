@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Serialized expanded-name validation and NACM data-write `error-path` values as
+  namespace-bound NETCONF XPath, including keyed list predicates.
 - Applied NACM read filtering to datastore `<copy-config>` sources, honored the
   running-to-startup execute-only exception, and made complete copy sources
   remove omitted top-level nodes from their target.

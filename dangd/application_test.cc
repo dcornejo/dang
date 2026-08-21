@@ -886,8 +886,8 @@ TEST(DangdApplicationTest, FailedCommitPreservesRunningAndBackendConfiguration) 
                 "{urn:example:appliance}hostname)"),
             std::string::npos);
   EXPECT_NE(commit.xml.find(
-                "<error-path>/{urn:example:appliance}system/"
-                "{urn:example:appliance}hostname</error-path>"),
+                "<error-path xmlns:n0=\"urn:example:appliance\">"
+                "/n0:system/n0:hostname</error-path>"),
             std::string::npos);
   EXPECT_NE(loaded.application->datastores()
                 .Read(yang::netconf::Datastore::kRunning)

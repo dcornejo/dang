@@ -691,8 +691,53 @@ std::string Reply(std::string_view message_id, const TransactionResult& result,
           xml += " xmlns:op=\"" +
                  Escape(error.netconf_error_path_namespace) + "\"";
         xml += ">" + Escape(error.netconf_error_path) + "</error-path>";
-      } else if (!error.instance_path.empty())
-        xml += "<error-path>" + Escape(error.instance_path) + "</error-path>";
+      } else if (!error.instance_path.empty()) {
+        std::map<std::string, std::string> namespaces;
+        std::string xpath;
+        char quote = '\0';
+        for (std::size_t position = 0; position < error.instance_path.size();) {
+          const char character = error.instance_path[position];
+          if (character == '\'' || character == '"') {
+            if (quote == '\0') quote = character;
+            else if (quote == character) quote = '\0';
+            xpath += character;
+            ++position;
+            continue;
+          }
+          if (quote == '\0' && character == '{') {
+            const std::size_t close = error.instance_path.find('}', position + 1);
+            if (close != std::string::npos) {
+              const std::string namespace_uri = error.instance_path.substr(
+                  position + 1, close - position - 1);
+              std::size_t name_end = close + 1;
+              while (name_end < error.instance_path.size() &&
+                     std::string_view("/[]='\" \t\r\n").find(
+                         error.instance_path[name_end]) == std::string_view::npos)
+                ++name_end;
+              const std::string name = error.instance_path.substr(
+                  close + 1, name_end - close - 1);
+              if (!name.empty()) {
+                if (namespace_uri.empty()) {
+                  xpath += name;
+                } else {
+                  const auto found = namespaces.try_emplace(
+                      namespace_uri, "n" + std::to_string(namespaces.size()))
+                                         .first;
+                  xpath += found->second + ":" + name;
+                }
+                position = name_end;
+                continue;
+              }
+            }
+          }
+          xpath += character;
+          ++position;
+        }
+        xml += "<error-path";
+        for (const auto& [namespace_uri, prefix] : namespaces)
+          xml += " xmlns:" + prefix + "=\"" + Escape(namespace_uri) + "\"";
+        xml += ">" + Escape(xpath) + "</error-path>";
+      }
       std::string message = error.message;
       if (!error.module_name.empty() || !error.instance_path.empty()) {
         message += " (";

@@ -7,6 +7,8 @@
 
 ### Added
 
+- Returned namespace-correct XPath for configuration and NACM data errors
+  instead of internal expanded-name paths.
 - Corrected `<copy-config>` NACM behavior for filtered datastore sources,
   complete target replacement, and the running-to-startup special case.
 - Made managed NACM policy compilation fail closed on invalid model structure,

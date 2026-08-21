@@ -81,9 +81,13 @@ multi-session concurrent policy reload. These remain host/deployment work in
   `error-path`, and include no `error-info`:
   `NetconfServerTest.NacmRpcDenialIdentifiesNetconfOperation` and
   `NetconfServerTest.AuthorizesAndDispatchesSchemaRpc`.
+- Data-write denials serialize internal expanded instance names and keyed
+  predicates as namespace-bound NETCONF XPath rather than exposing the
+  implementation's `{namespace}name` notation:
+  `NetconfServerTest.EnforcesNacmBeforePublishingWrites`.
 
-Open evidence: clause-level vectors for every denied standard operation and
-data-write error, including information-disclosure review of data-node paths.
+Open evidence: clause-level vectors for every remaining denied standard
+operation and a final information-disclosure review of data-node paths.
 
 ## Section 3.4.4: incoming RPC validation
 
