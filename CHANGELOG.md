@@ -8,8 +8,15 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- Synchronized NACM policy mutation, replacement, and snapshot copying so
+  concurrent sessions cannot observe a mixture of policy generations.
+
 ### Added
 
+- Added a multi-session stress test for live NACM policy replacement and
+  per-RPC generation consistency.
 - Verified global NACM first-match ordering when a user matches several groups
   and ordered rule-lists.
 - Added exhaustive managed NACM rule-type choice tests for every pairwise and

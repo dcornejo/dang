@@ -66,7 +66,9 @@ instead of silently discarding unsupported metadata.
 Namespace-qualified data paths are compiled into expanded XML names. A host
 can attach authenticated groups with `NetconfSession::set_external_groups`;
 `enable-external-groups` controls whether they participate. Each RPC uses a
-policy copy that remains stable for the complete request.
+policy copy that remains stable for the complete request. Copying and live
+replacement are synchronized, so concurrent sessions see either the complete
+old policy or the complete new policy, never a mixture of generations.
 
 Data-node paths support RFC 8341 key and leaf-list predicates. A present key
 predicate selects only the instance with the specified value; an omitted key

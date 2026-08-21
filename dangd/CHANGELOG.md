@@ -5,8 +5,15 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Removed a data race between managed NACM replacement and concurrent server,
+  notification, and operational policy readers.
+
 ### Added
 
+- Verified live managed-policy replacement while several NETCONF sessions take
+  independent request snapshots.
 - Verified that managed NACM policy preserves rule-list order for identities
   belonging to several configured groups.
 - Rejected every multiple-selector NACM rule combination using XML leaf

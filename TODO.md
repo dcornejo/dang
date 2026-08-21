@@ -17,9 +17,8 @@ stays in this file with its remaining work rewritten precisely.
 
 - Close every open evidence item in
   [`docs/NACM_COMPLIANCE_MATRIX.md`](docs/NACM_COMPLIANCE_MATRIX.md), especially
-  the remaining standard-operation and data-write denial vectors, concurrent
-  managed-policy replacement across sessions, model-loader XML metadata and
-  attribute boundaries, and the protocol-level operation-to-CRUDX
+  the remaining standard-operation and data-write denial vectors and the
+  protocol-level operation-to-CRUDX
   matrix. Keep each vector indexed to its RFC 8341 section. Namespace-correct
   RPC denial paths, single-RPC policy snapshots, structural loader constraints,
   leaf-list uniqueness/name restrictions, and empty lexical values are covered.
@@ -49,8 +48,9 @@ stays in this file with its remaining work rewritten precisely.
 - Harden authentication-to-NACM identity plumbing for production transports:
   define canonical username handling, certificate/SSH name mapping, trusted
   external-group provenance, recovery-session auditing, and fail-closed
-  behavior when identity mapping is absent or ambiguous. Add multi-session and
-  concurrent policy-reload tests.
+  behavior when identity mapping is absent or ambiguous. Add multi-session
+  identity-mapping tests. Concurrent policy replacement and per-RPC snapshots
+  are covered in the core server.
 - Run interoperability and negative-security tests against at least one
   independent RFC 8341 implementation, fuzz NACM XML and instance-identifier
   paths, and document any intentional deviations before claiming compliance.

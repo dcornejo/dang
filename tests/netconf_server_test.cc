@@ -1,6 +1,7 @@
 // Copyright 2026 David Cornejo
 // SPDX-License-Identifier: Apache-2.0
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <filesystem>
@@ -106,6 +107,15 @@ class BlockingOperationProvider final : public OperationProvider {
   std::condition_variable changed_;
   bool entered_ = false;
   bool released_ = false;
+};
+
+class StatelessOperationProvider final : public OperationProvider {
+ public:
+  OperationResult InvokeRpc(const RpcSessionContext&,
+      const config::RuntimeSchemaNode&, std::string_view) override {
+    return {{true, {}, {}},
+            R"xml(<result xmlns="urn:rpc-test">concurrent</result>)xml"};
+  }
 };
 
 struct ServerFixture {
@@ -235,6 +245,58 @@ TEST(NetconfServerTest, UsesOneNacmSnapshotForEntireRpcDuringPolicyReplacement) 
   const RpcResponse subsequent = server.Process("alice", request);
   EXPECT_NE(subsequent.xml.find("access-denied"), std::string::npos)
       << subsequent.xml;
+}
+
+TEST(NetconfServerTest, ReplacesPolicySafelyAcrossConcurrentSessions) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NacmPolicy policy;
+  policy.set_exec_default(AccessAction::kPermit);
+  policy.set_read_default(AccessAction::kDeny);
+  StatelessOperationProvider operations;
+  NetconfServer server(stores, &policy, nullptr, nullptr, std::nullopt, nullptr,
+                       &operations);
+  const std::string request = R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="race">
+      <ping xmlns="urn:rpc-test"><count>7</count></ping>
+    </rpc>)xml";
+
+  NacmPolicy deny_execute;
+  deny_execute.set_exec_default(AccessAction::kDeny);
+  deny_execute.set_read_default(AccessAction::kPermit);
+  deny_execute.PreserveRuntimeStateFrom(policy);
+  NacmPolicy permit_execute = policy;
+  std::atomic<bool> start = false;
+  std::atomic<unsigned> leaked_outputs = 0;
+  std::vector<std::thread> sessions;
+  for (unsigned session = 0; session < 4; ++session) {
+    sessions.emplace_back([&, session] {
+      while (!start.load(std::memory_order_acquire)) std::this_thread::yield();
+      const std::string username = "user-" + std::to_string(session);
+      for (unsigned request_number = 0; request_number < 250;
+           ++request_number) {
+        const RpcSessionContext context{session + 1, username, username, {}};
+        const RpcResponse response = server.Process(context, request);
+        // Each complete policy either denies execution or filters the output.
+        // A visible result would combine fields from two policy generations.
+        if (response.xml.find("<result") != std::string::npos)
+          leaked_outputs.fetch_add(1, std::memory_order_relaxed);
+      }
+    });
+  }
+  std::thread replacement([&] {
+    start.store(true, std::memory_order_release);
+    for (unsigned generation = 0; generation < 500; ++generation) {
+      policy = generation % 2 == 0 ? deny_execute : permit_execute;
+      std::this_thread::yield();
+    }
+  });
+  replacement.join();
+  for (std::thread& session : sessions) session.join();
+
+  EXPECT_EQ(leaked_outputs.load(), 0U);
 }
 
 TEST(NetconfServerTest, RequiresReadableAncestorsBeforeDispatchingAction) {

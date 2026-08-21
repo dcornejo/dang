@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <set>
 #include <span>
@@ -65,16 +66,19 @@ struct NacmDataNode {
   bool default_deny_all = false;
 };
 
-/** Small immutable-query RFC 8341 policy engine for host-supplied rules. */
+/** Thread-safe RFC 8341 policy engine supporting atomic live replacement. */
 class NacmPolicy {
  public:
-  void set_enabled(bool enabled) noexcept { enabled_ = enabled; }
-  void set_read_default(AccessAction action) noexcept { read_default_ = action; }
-  void set_write_default(AccessAction action) noexcept { write_default_ = action; }
-  void set_exec_default(AccessAction action) noexcept { exec_default_ = action; }
-  void set_external_groups_enabled(bool enabled) noexcept {
-    external_groups_enabled_ = enabled;
-  }
+  NacmPolicy() = default;
+  NacmPolicy(const NacmPolicy& other);
+  NacmPolicy(NacmPolicy&& other);
+  NacmPolicy& operator=(const NacmPolicy& other);
+  NacmPolicy& operator=(NacmPolicy&& other);
+  void set_enabled(bool enabled);
+  void set_read_default(AccessAction action);
+  void set_write_default(AccessAction action);
+  void set_exec_default(AccessAction action);
+  void set_external_groups_enabled(bool enabled);
   void AddUserToGroup(std::string user, std::string group);
   void AddRecoveryUser(std::string user);
   void AddRule(NacmRule rule);
@@ -118,12 +122,9 @@ class NacmPolicy {
       std::span<const std::string> external_groups = {},
       bool default_deny_all = false) const;
   /** Returns an atomic snapshot of RFC 8341 operational counters. */
-  [[nodiscard]] NacmCounters counters() const noexcept;
+  [[nodiscard]] NacmCounters counters() const;
   /** Retains host-owned recovery identities and counters across policy reloads. */
-  void PreserveRuntimeStateFrom(const NacmPolicy& previous) {
-    counters_ = previous.counters_;
-    recovery_users_ = previous.recovery_users_;
-  }
+  void PreserveRuntimeStateFrom(const NacmPolicy& previous);
   /** Silently removes read-denied data nodes, as required by RFC 8341. */
   [[nodiscard]] std::string FilterReadableData(std::string_view user,
       std::string_view data_xml,
@@ -131,6 +132,8 @@ class NacmPolicy {
       const config::RuntimeSchema* schema = nullptr) const;
 
  private:
+  /** Serializes live replacement with immutable per-operation snapshots. */
+  mutable std::recursive_mutex mutex_;
   [[nodiscard]] bool IsRecovery(std::string_view user) const;
   [[nodiscard]] bool InGroup(std::string_view user,
                              std::string_view group,

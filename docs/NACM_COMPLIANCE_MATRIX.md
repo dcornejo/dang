@@ -48,8 +48,11 @@ high-level status and variance statement is in [COMPLIANCE.md](COMPLIANCE.md).
   `DangdApplicationTest.UsesSecureNacmDefaultsWhenSubtreeIsAbsent`,
   `DangdApplicationTest.SeedsAndCommitsDatastoreManagedNacm`, and
   `DangdApplicationTest.LoadsNacmAndUsesAuthenticatedSessionIdentity`.
+- Policy replacement is synchronized with snapshots taken by several active
+  sessions, preventing requests from observing fields from different policy
+  generations: `NetconfServerTest.ReplacesPolicySafelyAcrossConcurrentSessions`.
 
-Open evidence: add concurrent managed-policy replacement across sessions.
+No open core-server evidence item remains for model and policy controls.
 
 ## Section 3.4.1: initial operation
 
@@ -72,9 +75,8 @@ after a partially written external state store.
   `NacmTest.HonorsExternalGroupsSwitch`.
 
 Open evidence: canonical username rules, ambiguous/missing certificate mapping,
-trusted external-group provenance, recovery-session audit records, and
-multi-session concurrent policy reload. These remain host/deployment work in
-`TODO.md`.
+trusted external-group provenance, and recovery-session audit records. These
+remain host/deployment work in `TODO.md`.
 
 ## Section 3.4.3: access-denied errors
 

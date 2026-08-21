@@ -300,15 +300,99 @@ std::optional<std::string> ExpandPath(const pugi::xml_node& node,
 
 }  // namespace
 
+NacmPolicy::NacmPolicy(const NacmPolicy& other) {
+  std::lock_guard lock(other.mutex_);
+  enabled_ = other.enabled_;
+  read_default_ = other.read_default_;
+  write_default_ = other.write_default_;
+  exec_default_ = other.exec_default_;
+  external_groups_enabled_ = other.external_groups_enabled_;
+  memberships_ = other.memberships_;
+  recovery_users_ = other.recovery_users_;
+  rules_ = other.rules_;
+  counters_ = other.counters_;
+}
+
+NacmPolicy::NacmPolicy(NacmPolicy&& other) {
+  std::lock_guard lock(other.mutex_);
+  enabled_ = other.enabled_;
+  read_default_ = other.read_default_;
+  write_default_ = other.write_default_;
+  exec_default_ = other.exec_default_;
+  external_groups_enabled_ = other.external_groups_enabled_;
+  memberships_ = std::move(other.memberships_);
+  recovery_users_ = std::move(other.recovery_users_);
+  rules_ = std::move(other.rules_);
+  counters_ = other.counters_;
+}
+
+NacmPolicy& NacmPolicy::operator=(const NacmPolicy& other) {
+  if (this == &other) return *this;
+  std::scoped_lock lock(mutex_, other.mutex_);
+  enabled_ = other.enabled_;
+  read_default_ = other.read_default_;
+  write_default_ = other.write_default_;
+  exec_default_ = other.exec_default_;
+  external_groups_enabled_ = other.external_groups_enabled_;
+  memberships_ = other.memberships_;
+  recovery_users_ = other.recovery_users_;
+  rules_ = other.rules_;
+  counters_ = other.counters_;
+  return *this;
+}
+
+NacmPolicy& NacmPolicy::operator=(NacmPolicy&& other) {
+  if (this == &other) return *this;
+  std::scoped_lock lock(mutex_, other.mutex_);
+  enabled_ = other.enabled_;
+  read_default_ = other.read_default_;
+  write_default_ = other.write_default_;
+  exec_default_ = other.exec_default_;
+  external_groups_enabled_ = other.external_groups_enabled_;
+  memberships_ = std::move(other.memberships_);
+  recovery_users_ = std::move(other.recovery_users_);
+  rules_ = std::move(other.rules_);
+  counters_ = other.counters_;
+  return *this;
+}
+
+void NacmPolicy::set_enabled(bool enabled) {
+  std::lock_guard lock(mutex_);
+  enabled_ = enabled;
+}
+
+void NacmPolicy::set_read_default(AccessAction action) {
+  std::lock_guard lock(mutex_);
+  read_default_ = action;
+}
+
+void NacmPolicy::set_write_default(AccessAction action) {
+  std::lock_guard lock(mutex_);
+  write_default_ = action;
+}
+
+void NacmPolicy::set_exec_default(AccessAction action) {
+  std::lock_guard lock(mutex_);
+  exec_default_ = action;
+}
+
+void NacmPolicy::set_external_groups_enabled(bool enabled) {
+  std::lock_guard lock(mutex_);
+  external_groups_enabled_ = enabled;
+}
+
 void NacmPolicy::AddUserToGroup(std::string user, std::string group) {
+  std::lock_guard lock(mutex_);
   memberships_.emplace_back(std::move(user), std::move(group));
 }
 
 void NacmPolicy::AddRecoveryUser(std::string user) {
+  std::lock_guard lock(mutex_);
   recovery_users_.insert(std::move(user));
 }
 
 void NacmPolicy::AddRule(NacmRule rule) {
+  std::lock_guard lock(mutex_);
   rules_.push_back(std::move(rule));
 }
 
@@ -350,6 +434,7 @@ bool NacmPolicy::AuthorizeRpc(
     std::string_view rpc_name,
     std::span<const std::string> external_groups,
     bool default_deny_all) const {
+  std::lock_guard lock(mutex_);
   if (!enabled_ || IsRecovery(user)) return true;
   if (rpc_name == "close-session") return true;
   for (const NacmRule& rule : rules_) {
@@ -381,6 +466,7 @@ bool NacmPolicy::AuthorizeAction(
     std::span<const NacmDataNode> ancestors,
     std::span<const std::string> external_groups,
     bool default_deny_all) const {
+  std::lock_guard lock(mutex_);
   (void)action_name;
   if (!enabled_ || IsRecovery(user)) return true;
   for (const NacmDataNode& ancestor : ancestors) {
@@ -423,6 +509,7 @@ bool NacmPolicy::AuthorizeData(
     AccessOperation operation, std::string_view instance_path,
     std::span<const std::string> external_groups,
     bool default_deny_all, bool default_deny_write) const {
+  std::lock_guard lock(mutex_);
   if (!enabled_ || IsRecovery(user)) return true;
   for (const NacmRule& rule : rules_) {
     if (!RuleApplies(rule, user, external_groups) ||
@@ -457,6 +544,7 @@ bool NacmPolicy::AuthorizeNotification(
     std::string_view notification_name,
     std::span<const std::string> external_groups,
     bool default_deny_all) const {
+  std::lock_guard lock(mutex_);
   if (!enabled_ || IsRecovery(user)) return true;
   for (const NacmRule& rule : rules_) {
     if (!RuleApplies(rule, user, external_groups) ||
@@ -487,6 +575,7 @@ bool NacmPolicy::AuthorizeNotification(
     std::span<const NacmDataNode> ancestors,
     std::span<const std::string> external_groups,
     bool default_deny_all) const {
+  std::lock_guard lock(mutex_);
   if (!enabled_ || IsRecovery(user)) return true;
   for (const NacmDataNode& ancestor : ancestors) {
     if (!AuthorizeData(user, ancestor.module_name, AccessOperation::kRead,
@@ -520,10 +609,18 @@ bool NacmPolicy::AuthorizeNotification(
   return permitted;
 }
 
-NacmCounters NacmPolicy::counters() const noexcept {
+NacmCounters NacmPolicy::counters() const {
+  std::lock_guard lock(mutex_);
   return {counters_->denied_operations.load(),
           counters_->denied_data_writes.load(),
           counters_->denied_notifications.load()};
+}
+
+void NacmPolicy::PreserveRuntimeStateFrom(const NacmPolicy& previous) {
+  if (this == &previous) return;
+  std::scoped_lock lock(mutex_, previous.mutex_);
+  counters_ = previous.counters_;
+  recovery_users_ = previous.recovery_users_;
 }
 
 NacmLoadResult LoadNacmPolicy(std::string_view xml) {
@@ -700,6 +797,7 @@ std::string NacmPolicy::FilterReadableData(std::string_view user,
     std::string_view data_xml,
     std::span<const std::string> external_groups,
     const config::RuntimeSchema* schema) const {
+  std::lock_guard lock(mutex_);
   if (data_xml.size() > DefaultResourceLimits().maximum_xml_bytes) return "";
   if (!enabled_ || IsRecovery(user)) return std::string(data_xml);
   pugi::xml_document document;
