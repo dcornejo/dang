@@ -56,7 +56,9 @@ yang::netconf::NetconfServer server(stores, &*loaded.policy);
 
 The loader supports global enable/default controls, configured groups,
 ordered rule lists, wildcard groups, module rules, protocol-operation rules,
-notification selectors, data-node paths, CRUDX bit sets, and actions.
+notification selectors, data-node paths, CRUDX bit sets, and actions. A rule
+may contain at most one of the RPC, notification, or data-node path selectors;
+managed policy loading rejects every multiple-selector combination.
 It accepts XML namespace declarations but rejects all other unmodeled
 attributes and rejects character content in structural NACM containers. This
 keeps standalone policy loading aligned with schema-bound datastore validation

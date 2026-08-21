@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added exhaustive managed NACM rule-type choice tests for every pairwise and
+  three-way selector combination.
 - Verified fail-closed remote URL copies across source reads, NACM target
   inspection, and atomic provider writes without false NACM denial accounting.
 - Verified that NACM ignores virtual defaults for datastore writes while

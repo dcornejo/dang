@@ -7,6 +7,8 @@
 
 ### Added
 
+- Rejected every multiple-selector NACM rule combination using XML leaf
+  presence, including paths that cannot be expanded.
 - Verified remote-to-remote URL copy failures preserve provider errors and
   target content without incrementing NACM denial counters.
 - Verified NACM write semantics for virtual defaults and explicitly stored

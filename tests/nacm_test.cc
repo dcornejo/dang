@@ -231,6 +231,35 @@ TEST(NacmTest, RejectsInvalidModelShapeAndLeafListValues) {
   }
 }
 
+TEST(NacmTest, RejectsEveryMultipleRuleTypeCombination) {
+  const std::vector<std::string> invalid_selectors = {
+      "<rpc-name>get</rpc-name>"
+      "<notification-name>link-state</notification-name>",
+      "<rpc-name>get</rpc-name>"
+      "<path xmlns:if=\"urn:ietf:params:xml:ns:yang:ietf-interfaces\">"
+      "/if:interfaces</path>",
+      "<notification-name>link-state</notification-name>"
+      "<path xmlns:if=\"urn:ietf:params:xml:ns:yang:ietf-interfaces\">"
+      "/if:interfaces</path>",
+      "<rpc-name>get</rpc-name>"
+      "<notification-name>link-state</notification-name>"
+      "<path xmlns:if=\"urn:ietf:params:xml:ns:yang:ietf-interfaces\">"
+      "/if:interfaces</path>"};
+  for (size_t index = 0; index < invalid_selectors.size(); ++index) {
+    const std::string xml =
+        "<nacm xmlns=\"urn:ietf:params:xml:ns:yang:ietf-netconf-acm\">"
+        "<rule-list><name>rules</name><group>operators</group><rule>"
+        "<name>invalid-" + std::to_string(index) + "</name>" +
+        invalid_selectors[index] +
+        "<action>deny</action></rule></rule-list></nacm>";
+    const NacmLoadResult loaded = LoadNacmPolicy(xml);
+    EXPECT_FALSE(loaded.policy) << xml;
+    EXPECT_NE(std::find(loaded.errors.begin(), loaded.errors.end(),
+                        "NACM rule has multiple rule types"),
+              loaded.errors.end()) << xml;
+  }
+}
+
 TEST(NacmTest, RejectsUnmodeledXmlAttributesAndContainerText) {
   const NacmLoadResult valid = LoadNacmPolicy(R"xml(
     <nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm"

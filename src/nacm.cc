@@ -668,13 +668,14 @@ NacmLoadResult LoadNacmPolicy(std::string_view xml) {
           Child(entry, "notification-name");
       rule.notification_name_present = static_cast<bool>(notification_name);
       rule.notification_name = notification_name.text().as_string();
-      if (const pugi::xml_node path = Child(entry, "path")) {
+      const pugi::xml_node path = Child(entry, "path");
+      if (path) {
         const auto expanded = ExpandPath(path, path.text().as_string());
         if (!expanded) loaded.errors.push_back("NACM rule path is invalid");
         else rule.path_prefix = *expanded;
       }
       const unsigned selectors = rule.rpc_name_present +
-          rule.notification_name_present + !rule.path_prefix.empty();
+          rule.notification_name_present + static_cast<bool>(path);
       if (rule.name.empty() || !rule_names.insert(rule.name).second)
         loaded.errors.push_back("NACM rule names must be nonempty and unique within a list");
       if (selectors > 1) loaded.errors.push_back("NACM rule has multiple rule types");

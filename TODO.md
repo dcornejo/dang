@@ -25,6 +25,8 @@ stays in this file with its remaining work rewritten precisely.
   leaf-list uniqueness/name restrictions, and empty lexical values are covered.
   The managed loader rejects unmodeled attributes and non-whitespace character
   content in structural containers while allowing namespace declarations.
+  Every prohibited pairwise and three-way `rule-type` selector combination is
+  covered, and selector choice validation is based on leaf presence.
   Datastore-source copy filtering and the running-to-startup execute-only
   exception are also covered. URL/datastore copy combinations are covered;
   remote source-read, target-inspection, and atomic write failures preserve
