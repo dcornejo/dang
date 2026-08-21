@@ -15,6 +15,8 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added a denial matrix for every supported standard NETCONF, notification,
+  monitoring, and NMDA operation, including the `close-session` exception.
 - Added a multi-session stress test for live NACM policy replacement and
   per-RPC generation consistency.
 - Verified global NACM first-match ordering when a user matches several groups

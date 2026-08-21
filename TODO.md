@@ -17,9 +17,9 @@ stays in this file with its remaining work rewritten precisely.
 
 - Close every open evidence item in
   [`docs/NACM_COMPLIANCE_MATRIX.md`](docs/NACM_COMPLIANCE_MATRIX.md), especially
-  the remaining standard-operation and data-write denial vectors and the
-  protocol-level operation-to-CRUDX
-  matrix. Keep each vector indexed to its RFC 8341 section. Namespace-correct
+  the remaining data-write denial vectors and the protocol-level
+  operation-to-CRUDX matrix. Keep each vector indexed to its RFC 8341 section.
+  Namespace-correct
   RPC denial paths, single-RPC policy snapshots, structural loader constraints,
   leaf-list uniqueness/name restrictions, and empty lexical values are covered.
   The managed loader rejects unmodeled attributes and non-whitespace character
@@ -28,6 +28,9 @@ stays in this file with its remaining work rewritten precisely.
   covered, and selector choice validation is based on leaf presence.
   Global first-match ordering across rule-lists when a user belongs to several
   configured groups is covered.
+  Every supported standard operation has protocol-level denial evidence, with
+  namespace-correct error paths, no error-info, and the `close-session`
+  exception verified.
   Datastore-source copy filtering and the running-to-startup execute-only
   exception are also covered. URL/datastore copy combinations are covered;
   remote source-read, target-inspection, and atomic write failures preserve

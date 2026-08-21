@@ -12,6 +12,8 @@
 
 ### Added
 
+- Verified NACM execute denial, error paths, accounting, and non-disclosure for
+  every standard operation dispatched by `dangd`.
 - Verified live managed-policy replacement while several NETCONF sessions take
   independent request snapshots.
 - Verified that managed NACM policy preserves rule-list order for identities

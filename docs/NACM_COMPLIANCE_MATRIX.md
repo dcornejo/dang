@@ -90,13 +90,17 @@ remain host/deployment work in `TODO.md`.
   `error-path`, and include no `error-info`:
   `NetconfServerTest.NacmRpcDenialIdentifiesNetconfOperation` and
   `NetconfServerTest.AuthorizesAndDispatchesSchemaRpc`.
+- A table-driven matrix denies every supported standard operation before body
+  dispatch, covering NETCONF base, RFC 5277 notifications, RFC 6022 monitoring,
+  and RFC 8526 NMDA; each denial increments the operation counter, while
+  `close-session` remains unconditionally allowed:
+  `NetconfServerTest.DeniesEverySupportedStandardOperationBeforeDispatch`.
 - Data-write denials serialize internal expanded instance names and keyed
   predicates as namespace-bound NETCONF XPath rather than exposing the
   implementation's `{namespace}name` notation:
   `NetconfServerTest.EnforcesNacmBeforePublishingWrites`.
 
-Open evidence: clause-level vectors for every remaining denied standard
-operation and a final information-disclosure review of data-node paths.
+Open evidence: a final information-disclosure review of data-node paths.
 
 ## Section 3.4.4: incoming RPC validation
 

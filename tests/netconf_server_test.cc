@@ -118,6 +118,14 @@ class StatelessOperationProvider final : public OperationProvider {
   }
 };
 
+class MinimalOperationalProvider final : public OperationalDataProvider {
+ public:
+  std::string AugmentDataXml(
+      std::string_view configuration_data_xml) const override {
+    return std::string(configuration_data_xml);
+  }
+};
+
 struct ServerFixture {
   config::RuntimeSchema schema;
   config::ConfigDocument initial;
@@ -1148,6 +1156,73 @@ TEST(NetconfServerTest, NacmRpcDenialIdentifiesNetconfOperation) {
                 "/nc:rpc/nc:edit-config</error-path>"),
             std::string::npos) << denied.xml;
   EXPECT_EQ(denied.xml.find("<error-info>"), std::string::npos) << denied.xml;
+}
+
+TEST(NetconfServerTest, DeniesEverySupportedStandardOperationBeforeDispatch) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NacmPolicy policy;
+  policy.set_exec_default(AccessAction::kDeny);
+  NotificationManager notifications(&policy);
+  ASSERT_TRUE(notifications.AddStream({}));
+  MinimalOperationalProvider operational;
+  NetconfServer server(stores, &policy, nullptr, &notifications, std::nullopt,
+                       &operational);
+  struct Operation {
+    std::string_view name;
+    std::string_view xml_namespace;
+  };
+  constexpr std::string_view netconf =
+      "urn:ietf:params:xml:ns:netconf:base:1.0";
+  constexpr std::string_view notification =
+      "urn:ietf:params:xml:ns:netconf:notification:1.0";
+  constexpr std::string_view monitoring =
+      "urn:ietf:params:xml:ns:yang:ietf-netconf-monitoring";
+  constexpr std::string_view nmda =
+      "urn:ietf:params:xml:ns:yang:ietf-netconf-nmda";
+  const std::vector<Operation> operations = {
+      {"get-config", netconf}, {"get", netconf},
+      {"edit-config", netconf}, {"lock", netconf},
+      {"unlock", netconf}, {"validate", netconf},
+      {"discard-changes", netconf}, {"commit", netconf},
+      {"cancel-commit", netconf}, {"copy-config", netconf},
+      {"delete-config", netconf}, {"kill-session", netconf},
+      {"create-subscription", notification}, {"get-schema", monitoring},
+      {"get-data", nmda}, {"edit-data", nmda}};
+
+  for (const Operation& operation : operations) {
+    const std::string request =
+        "<rpc xmlns=\"" + std::string(netconf) + "\" message-id=\"deny-" +
+        std::string(operation.name) + "\"><op:" +
+        std::string(operation.name) + " xmlns:op=\"" +
+        std::string(operation.xml_namespace) + "\"/></rpc>";
+    const RpcResponse denied = server.Process("guest", request);
+    EXPECT_NE(denied.xml.find("<error-type>application</error-type>"),
+              std::string::npos) << operation.name << ": " << denied.xml;
+    EXPECT_NE(denied.xml.find("<error-tag>access-denied</error-tag>"),
+              std::string::npos) << operation.name << ": " << denied.xml;
+    const std::string error_path = "/nc:rpc/" +
+        std::string(operation.xml_namespace == netconf ? "nc:" : "op:") +
+        std::string(operation.name) + "</error-path>";
+    EXPECT_NE(denied.xml.find(error_path),
+              std::string::npos) << operation.name << ": " << denied.xml;
+    if (operation.xml_namespace != netconf) {
+      EXPECT_NE(denied.xml.find("xmlns:op=\"" +
+                    std::string(operation.xml_namespace) + "\""),
+                std::string::npos) << operation.name << ": " << denied.xml;
+    }
+    EXPECT_EQ(denied.xml.find("<error-info>"), std::string::npos)
+        << operation.name << ": " << denied.xml;
+  }
+  EXPECT_EQ(policy.counters().denied_operations, operations.size());
+
+  const RpcResponse close = server.Process(
+      "guest", "<rpc xmlns=\"" + std::string(netconf) +
+          "\" message-id=\"close\"><close-session/></rpc>");
+  EXPECT_TRUE(close.close_session);
+  EXPECT_NE(close.xml.find("<ok/>"), std::string::npos) << close.xml;
 }
 
 TEST(NetconfServerTest, AuthorizesUrlTargetReplacementBeforeWriting) {
