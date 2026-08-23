@@ -66,7 +66,8 @@ stays in this file with its remaining work rewritten precisely.
   enforced with deterministic later-provider rejection when their operands are
   present. ABI v5 providers can declare every returned node's child collection
   complete, making missing mandatory children and nested state-to-state
-  leafrefs decisive. Complete cross-fragment `mandatory`, state-to-state
+  leafrefs decisive. Separate model-owner and complete-publisher coverage now
+  enforces mandatory children. Complete cross-fragment state-to-state
   `leafref`, `instance-identifier`, and XPath checks for collections that
   remain selected or whose operands can be published by later providers.
   Callback and validation failures now omit the unsafe fragment and appear with

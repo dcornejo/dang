@@ -605,6 +605,33 @@ TEST(DangdApplicationTest, EnforcesCompleteProviderChildCollections) {
       << response.xml;
 }
 
+TEST(DangdApplicationTest, RejectsMissingMandatoryNodeFromSeparateProvider) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_MANDATORY_OWNER_PLUGIN_PATH,
+                     DANG_TEST_MANDATORY_PUBLISHER_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+  const auto response = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="mandatory"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore><config-filter>false</config-filter>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_EQ(response.xml.find("<name>uplink</name>"), std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find("<provider>test-mandatory-publisher</provider>"),
+            std::string::npos) << response.xml;
+  EXPECT_NE(response.xml.find("<stage>validation</stage>"), std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find("mandatory data node is absent"),
+            std::string::npos) << response.xml;
+  EXPECT_NE(response.xml.find("operational-mandatory}status"),
+            std::string::npos) << response.xml;
+}
+
 TEST(DangdApplicationTest, RejectsLaterOperationalProviderCollision) {
   TemporaryInputs inputs;
   auto options = Options(inputs);

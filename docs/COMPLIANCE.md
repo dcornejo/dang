@@ -278,8 +278,10 @@ also reject the later fragment when their visible operands decide the result.
 Constraints that remain indeterminate between selected state fragments are
 still incomplete. ABI v5 providers may assert complete child collections for
 their returned nodes; omitted mandatory children and unresolved sibling
-leafrefs then become deterministic validation failures. Older providers remain
-selected-data sources for compatibility.
+leafrefs then become deterministic validation failures. Mandatory enforcement
+is also covered when one ABI-v1 plugin owns the model and an independent ABI-v5
+plugin publishes the complete instance, with failure attributed to the
+publisher. Older providers remain selected-data sources for compatibility.
 Callback, validation, and merge failures omit the provider fragment and are
 attributed by provider, stage, instance path, and reason in modeled operational
 reconciliation telemetry, but

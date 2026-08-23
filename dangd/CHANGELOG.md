@@ -7,6 +7,9 @@
 
 ### Changed
 
+- Added multi-plugin coverage proving that an ABI-v5 publisher's complete child
+  collection enforces mandatory operational nodes when a separate ABI-v1
+  plugin owns the YANG model, with failure attributed to the publisher.
 - Added separate Linux and FreeBSD RFC 8343/8344 platform backends for enabled
   state and IPv4/IPv6 address reconciliation, with shell-free execution,
   best-effort compensation, a safe unsupported-host backend, parser tests, and
