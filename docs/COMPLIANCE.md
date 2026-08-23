@@ -266,10 +266,13 @@ so filtering cannot yet select such per-node data. Filtering of applied
 and negated selections, while preserving config-false state and required
 structure. Operational plugin fragments now receive typed partial-instance
 validation, including schema binding, scalar shapes and types, list keys,
-choices, references, and intra-fragment duplicates. Cross-provider constraint
-validation and collision arbitration remain incomplete. Callback and validation
-failures omit the provider fragment and are attributed by provider, stage,
-instance path, and reason in modeled operational reconciliation telemetry, but
+choices, references, and intra-fragment duplicates. Cross-provider validation
+cumulatively rejects a later fragment when it introduces a deterministic
+conflict, with earlier plugin load order taking precedence. Constraints that
+remain indeterminate under selected-data coverage are still incomplete.
+Callback, validation, and merge failures omit the provider fragment and are
+attributed by provider, stage, instance path, and reason in modeled operational
+reconciliation telemetry, but
 are not yet also returned as NETCONF errors where operation semantics permit.
 Dynamic configuration datastores are not implemented. The complete operation,
 filter/default/origin/NACM interaction matrix and external interoperability

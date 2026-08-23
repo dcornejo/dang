@@ -50,9 +50,11 @@ stays in this file with its remaining work rewritten precisely.
   datastore context. Individual fragments are now namespace/schema bound and
   checked as typed partial instance data, including shapes, scalar types, list
   keys, choices, references, and duplicates visible within the fragment.
-  Enforce cross-fragment `mandatory`, `when`, `must`, `leafref`,
-  `instance-identifier`, `unique`, and collision constraints after merging;
-  define deterministic provider precedence or reject conflicting values.
+  Cumulative validation now rejects a later provider whose fragment conflicts
+  with already accepted data, giving earlier plugin load order deterministic
+  precedence. Complete cross-fragment `mandatory`, `when`, `must`, `leafref`,
+  `instance-identifier`, and `unique` checks whose outcome remains
+  indeterminate under selected-data coverage.
   Callback and validation failures now omit the unsafe fragment and appear with
   provider, stage, path, and reason in operational reconciliation telemetry;
   additionally surface them as actionable NETCONF errors where RFC operation

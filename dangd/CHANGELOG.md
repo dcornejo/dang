@@ -7,6 +7,9 @@
 
 ### Changed
 
+- Added deterministic first-provider-wins arbitration for operational data:
+  cumulative snapshots are validated in plugin load order and later conflicts
+  are omitted with merge-stage reconciliation telemetry.
 - Published current operational-provider callback and validation failures in
   `dangd-reconciliation` instead of silently dropping invalid fragments.
 - Replaced top-level-name checks for plugin operational data with reusable typed
@@ -34,6 +37,7 @@
 
 ### Fixed
 
+- Validated duplicate config-false nodes when accepting operational instances.
 - Hardened daemon-facing hello, RPC, configuration, edit, NACM, and filter XML
   parsing against byte smuggling, malformed UTF-8, forbidden characters,
   DTD/entity declarations, resource exhaustion, and unexpected multiple roots.

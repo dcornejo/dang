@@ -577,6 +577,40 @@ TEST(DangdApplicationTest, ReportsAndOmitsInvalidOperationalPluginData) {
       << response.xml;
 }
 
+TEST(DangdApplicationTest, RejectsLaterOperationalProviderCollision) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_COLLISION_FIRST_PLUGIN_PATH,
+                     DANG_TEST_COLLISION_SECOND_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+  const auto response = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="collision"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore><config-filter>false</config-filter>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_NE(response.xml.find(
+                "<counter xmlns=\"urn:dangd:test:operational-collision\">1"
+                "</counter>"),
+            std::string::npos)
+      << response.xml;
+  EXPECT_EQ(response.xml.find(
+                "<counter xmlns=\"urn:dangd:test:operational-collision\">2"
+                "</counter>"),
+            std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find("<provider>test-collision-second</provider>"),
+            std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find("<stage>merge</stage>"), std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find("occurs more than once"), std::string::npos)
+      << response.xml;
+}
+
 TEST(DangdApplicationTest, AppliesDependentPluginsInDependencyOrder) {
   TemporaryInputs inputs;
   auto options = Options(inputs);

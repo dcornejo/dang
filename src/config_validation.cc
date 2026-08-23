@@ -2130,7 +2130,7 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
     for (ConfigNodeId child : config_children) instances[request.document.Get(child).schema].push_back(child);
     for (RuntimeSchemaNodeId schema_id : visible) {
       const RuntimeSchemaNode& node = request.schema.Get(schema_id);
-      if (!node.config) continue;
+      if (!node.config && !request.allow_state_data) continue;
       const Coverage collection_coverage =
           request.document.CollectionCoverage(data_parent, schema_id)
               .value_or(coverage);

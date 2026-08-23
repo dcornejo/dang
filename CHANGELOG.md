@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Arbitrated ABI-v3 operational publication in deterministic plugin load order
+  by validating each cumulative provider snapshot, retaining earlier accepted
+  data and reporting a conflicting later fragment as a merge-stage failure.
 - Attributed ABI-v3 callback and instance-validation failures by provider,
   stage, path, and reason in modeled operational reconciliation telemetry while
   continuing to omit the unsafe fragment.
@@ -44,6 +47,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Included config-false schema nodes in collection-cardinality validation when
+  validating operational instance data, closing duplicate state-node gaps.
 - Added a shared resource-bounded UTF-8 XML parser at the NETCONF hello/RPC,
   configuration/edit, NACM, and filter boundaries. It rejects embedded NULs,
   malformed encodings, forbidden XML characters, DTD/entity declarations, and

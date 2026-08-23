@@ -744,6 +744,10 @@ TEST(ConfigValidationTest, ValidatesPartialOperationalInstanceData) {
            xmlns:or="urn:ietf:params:xml:ns:yang:ietf-origin"
            or:origin="o:not-an-origin"/>
   )xml"));
+  EXPECT_FALSE(validate(R"xml(
+    <state xmlns="urn:operational"/>
+    <state xmlns="urn:operational"/>
+  )xml"));
 }
 
 }  // namespace

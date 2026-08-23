@@ -67,6 +67,7 @@ module dangd-reconciliation {
         type enumeration {
           enum callback;
           enum validation;
+          enum merge;
         }
         mandatory true;
         description "Boundary at which publication failed.";

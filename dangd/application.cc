@@ -485,6 +485,8 @@ std::string DangdOperationalData::AugmentDataXml(
     data.append_copy(monitoring.document_element());
   if (plugins_) {
     std::vector<OperationalProviderFailure> provider_failures;
+    pugi::xml_document accepted_provider_data;
+    pugi::xml_node accepted = accepted_provider_data.append_child("data");
     for (const PluginOperationalFragment& fragment :
          plugins_->OperationalData()) {
       if (fragment.error) {
@@ -501,9 +503,13 @@ std::string DangdOperationalData::AugmentDataXml(
             {fragment.provider, "validation", {}, parsed.message});
         continue;
       }
+      if (!schema_) continue;
       const pugi::xml_node root = plugin_data.document_element();
+      pugi::xml_document candidate_data;
+      pugi::xml_node candidate = candidate_data.append_child("data");
+      for (const pugi::xml_node child : accepted.children())
+        if (child.type() == pugi::node_element) candidate.append_copy(child);
       if (std::string_view(LocalName(root.name())) == "data") {
-        if (!schema_) continue;
         const FragmentValidation validation =
             ValidateFragmentInstance(*schema_, root, true);
         if (!validation.valid) {
@@ -513,19 +519,32 @@ std::string DangdOperationalData::AugmentDataXml(
           continue;
         }
         for (const pugi::xml_node child : root.children())
-          if (child.type() == pugi::node_element) data.append_copy(child);
-      } else if (schema_) {
+          if (child.type() == pugi::node_element) candidate.append_copy(child);
+      } else {
         const FragmentValidation validation =
             ValidateFragmentInstance(*schema_, root, false);
         if (validation.valid) {
-          data.append_copy(root);
+          candidate.append_copy(root);
         } else {
           provider_failures.push_back({fragment.provider, "validation",
                                        validation.instance_path,
                                        validation.reason});
+          continue;
         }
       }
+      const FragmentValidation merged =
+          ValidateFragmentInstance(*schema_, candidate, true);
+      if (!merged.valid) {
+        provider_failures.push_back({fragment.provider, "merge",
+                                     merged.instance_path, merged.reason});
+        continue;
+      }
+      accepted.remove_children();
+      for (const pugi::xml_node child : candidate.children())
+        if (child.type() == pugi::node_element) accepted.append_copy(child);
     }
+    for (const pugi::xml_node child : accepted.children())
+      if (child.type() == pugi::node_element) data.append_copy(child);
     pugi::xml_document reconciliation;
     if (yang::ParseUntrustedXml(plugins_->ReconciliationData(provider_failures),
                                 &reconciliation).ok)

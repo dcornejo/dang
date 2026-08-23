@@ -89,18 +89,23 @@ element or fragment using `DangOperationalDataV1`; the bytes are borrowed and
 copied before the callback returns. `dangd` parses each expanded data node as
 partial instance data and rejects fragments with unknown schema nodes, invalid
 shapes or scalar values, missing list keys, choice conflicts, invalid visible
-references, or duplicate instances. Accepted fragments are merged into the
-read-only operational snapshot before origin handling, NACM, and RFC 8526
-filters. Cross-provider collisions and constraints that require data outside a
-single fragment are not yet arbitrated. The callback must be read-only,
-bounded, and safe to invoke for each retrieval. It must not return configuration
-that has not actually been applied.
+references, or duplicate instances. After validating each fragment alone,
+`dangd` validates the cumulative provider snapshot in plugin load order.
+Earlier providers take precedence: if a later provider introduces a duplicate
+singleton, list-key collision, choice conflict, or another deterministically
+invalid merge, its entire fragment is omitted. Constraints that remain
+indeterminate because providers supplied only selected data are not yet
+enforced. Accepted data is merged into the read-only operational snapshot
+before origin handling, NACM, and RFC 8526 filters. The callback must be
+read-only, bounded, and safe to invoke for each retrieval. It must not return
+configuration that has not actually been applied.
 
 A failed callback or rejected fragment is omitted and reported under
 `dangd-reconciliation:hardware-reconciliation/operational-provider-failure`.
-The record identifies the plugin, callback or validation stage, best available
-instance path, and reason. Providers should still log platform failures locally;
-the telemetry describes the current retrieval and is not a durable event log.
+The record identifies the plugin, callback, validation, or merge stage, best
+available instance path, and reason. Providers should still log platform
+failures locally; the telemetry describes the current retrieval and is not a
+durable event log.
 
 The IP-management example uses ABI v3 to publish RFC 8343
 `/interfaces-state`, deriving `oper-status` from its last successfully applied
