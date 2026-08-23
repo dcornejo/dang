@@ -7,6 +7,9 @@
 
 ### Changed
 
+- Added the built-in `dangd-reconciliation` operational model and retained
+  per-action hardware remnants after incomplete rollback until a later hardware
+  transaction succeeds.
 - Expanded NMDA origin reporting from top-level inheritance to explicit
   per-configuration-node `intended` metadata while preserving provider origins
   and leaving config-false state unannotated.

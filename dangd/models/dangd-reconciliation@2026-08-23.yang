@@ -1,0 +1,57 @@
+module dangd-reconciliation {
+  yang-version 1.1;
+  namespace "urn:dangd:reconciliation";
+  prefix dr;
+
+  organization "dangd project";
+  description
+    "Operational evidence retained when a hardware configuration transaction
+     cannot be completely compensated.  This module reports uncertainty; it
+     does not assert that a remnant is still present after an operator repairs
+     the device outside dangd.";
+
+  revision 2026-08-23 {
+    description "Initial hardware reconciliation state.";
+  }
+
+  container hardware-reconciliation {
+    config false;
+    description
+      "The last incomplete hardware compensation known to dangd.  A later
+       completely successful hardware transaction clears this report.";
+
+    leaf diverged {
+      type boolean;
+      mandatory true;
+      description
+        "True when one or more actions could not be compensated and hardware
+         may therefore differ from the published running configuration.";
+    }
+
+    list remnant {
+      key "action-id";
+      description
+        "One applied action whose rollback failed.  The path identifies the
+         intended configuration instance associated with the hardware work.";
+
+      leaf action-id {
+        type string;
+        description "Transaction-unique action identifier.";
+      }
+      leaf instance-path {
+        type string;
+        mandatory true;
+        description
+          "Canonical schema-aware configuration instance path supplied by the
+           plugin when the action was planned.  This is empty for legacy plugin
+           ABIs whose single transaction callback cannot identify an action
+           path.";
+      }
+      leaf reason {
+        type string;
+        mandatory true;
+        description "Backend explanation returned by the failed rollback.";
+      }
+    }
+  }
+}

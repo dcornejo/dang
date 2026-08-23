@@ -116,8 +116,11 @@ validate callbacks before the planner executes anything. The running datastore
 advances only after every hardware action succeeds. On failure, the planner
 rolls back completed actions in reverse execution order; incomplete rollback
 returns the `hardware-state-diverged` app-tag and explicitly warns that hardware
-may differ from running. ABI v1-v3 plugins remain supported as one reversible
-transaction action per plugin.
+may differ from running. Each failed compensation remains visible under the
+modeled `dangd-reconciliation:hardware-reconciliation` operational tree until
+a fully successful later hardware transaction. ABI v1-v3 plugins remain
+supported as one reversible transaction action per plugin; their remnant path
+is empty because the legacy callback has transaction-wide granularity.
 
 ## Embedded SSH server example
 

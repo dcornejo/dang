@@ -475,6 +475,10 @@ std::string DangdOperationalData::AugmentDataXml(
         data.append_copy(root);
       }
     }
+    pugi::xml_document reconciliation;
+    if (yang::ParseUntrustedXml(plugins_->ReconciliationData(),
+                                &reconciliation).ok)
+      data.append_copy(reconciliation.document_element());
   }
   pugi::xml_node nacm;
   for (const pugi::xml_node child : data.children()) {
@@ -720,6 +724,7 @@ LoadResult Application::Load(const ApplicationOptions& options) {
     add_import("ietf-yang-library", std::string("2019-01-04"));
     add_import("ietf-netconf-monitoring", std::string("2010-10-04"));
     add_import("ietf-netconf-nmda", std::string("2019-01-07"));
+    add_import("dangd-reconciliation", std::string("2026-08-23"));
     for (const PluginYangSource& plugin_source : plugins->yang_sources()) {
       if (plugin_source.role != DANG_YANG_IMPORT_ONLY_V1)
         add_import(plugin_source.module_name, plugin_source.revision);
@@ -755,7 +760,8 @@ LoadResult Application::Load(const ApplicationOptions& options) {
   std::set<std::string> implemented{root_module_name, "ietf-netconf-acm",
                                     "ietf-yang-library",
                                     "ietf-netconf-monitoring",
-                                    "ietf-netconf", "ietf-netconf-nmda"};
+                                    "ietf-netconf", "ietf-netconf-nmda",
+                                    "dangd-reconciliation"};
   for (const PluginYangSource& plugin_source : plugins->yang_sources()) {
     if (plugin_source.role != DANG_YANG_IMPORT_ONLY_V1)
       implemented.insert(plugin_source.module_name);

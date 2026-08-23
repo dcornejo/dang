@@ -24,12 +24,20 @@ struct HardwareAction {
   std::function<std::optional<std::string>()> rollback;
 };
 
+/** One action whose failed compensation may remain present in hardware. */
+struct HardwareRemnant {
+  std::string action_id;
+  std::string instance_path;
+  std::string reason;
+};
+
 /** Result of planning or applying a complete hardware transaction. */
 struct HardwareTransactionResult {
   bool ok = false;
   std::string message;
   std::string instance_path;
   std::vector<std::string> rollback_failures;
+  std::vector<HardwareRemnant> remnants;
   std::vector<std::string> execution_order;
 };
 

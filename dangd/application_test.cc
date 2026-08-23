@@ -122,6 +122,9 @@ TEST(DangdApplicationTest, LoadsModelAndCompleteConfiguration) {
             std::string::npos) << library.xml;
   EXPECT_NE(library.xml.find("<name>ietf-origin</name>"), std::string::npos)
       << library.xml;
+  EXPECT_NE(library.xml.find("<name>dangd-reconciliation</name>"),
+            std::string::npos)
+      << library.xml;
   EXPECT_NE(library.xml.find("<feature>xpath</feature>"), std::string::npos)
       << library.xml;
 }
@@ -634,6 +637,44 @@ TEST(DangdApplicationTest, ReportsApplyAndRollbackFailuresTogether) {
                 .ToXml()
                 .find("consumer-apply-rollback-fail"),
             std::string::npos);
+
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+  const auto reconciliation = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="reconcile"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore><config-filter>false</config-filter>
+        <subtree-filter><hardware-reconciliation
+            xmlns="urn:dangd:reconciliation"/></subtree-filter>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_NE(reconciliation.xml.find("<diverged>true</diverged>"),
+            std::string::npos)
+      << reconciliation.xml;
+  EXPECT_NE(reconciliation.xml.find("simulated provider rollback failure"),
+            std::string::npos)
+      << reconciliation.xml;
+  EXPECT_NE(reconciliation.xml.find("<instance-path"), std::string::npos)
+      << reconciliation.xml;
+
+  ASSERT_NE(SetProviderMode(*loaded.application, "active").xml.find("<ok/>"),
+            std::string::npos);
+  ASSERT_NE(Commit(*loaded.application).xml.find("<ok/>"), std::string::npos);
+  const auto reconciled = loaded.application->server().Process(
+      session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="reconciled"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore><config-filter>false</config-filter>
+        <subtree-filter><hardware-reconciliation
+            xmlns="urn:dangd:reconciliation"/></subtree-filter>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_NE(reconciled.xml.find("<diverged>false</diverged>"),
+            std::string::npos)
+      << reconciled.xml;
+  EXPECT_EQ(reconciled.xml.find("<remnant>"), std::string::npos)
+      << reconciled.xml;
 }
 
 TEST(DangdApplicationTest, RollsPluginBackWithCancelledConfirmedCommit) {
@@ -751,6 +792,12 @@ TEST(DangdApplicationTest, RetrievesBuiltInAndPluginYangSources) {
       "<version>2010-10-04</version>");
   EXPECT_NE(monitoring.xml.find("module ietf-netconf-monitoring"),
             std::string::npos) << monitoring.xml;
+  const auto reconciliation = retrieve(
+      "<identifier>dangd-reconciliation</identifier>"
+      "<version>2026-08-23</version>");
+  EXPECT_NE(reconciliation.xml.find("module dangd-reconciliation"),
+            std::string::npos)
+      << reconciliation.xml;
   EXPECT_NE(retrieve("<identifier>missing</identifier>")
                 .xml.find("invalid-value"),
             std::string::npos);

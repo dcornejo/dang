@@ -24,3 +24,8 @@ module. Its RFC 8342 origin dependency, RFC 7952 metadata dependency, and RFC
 6241/RFC 6243 NETCONF dependencies are pinned beside it. These unmodified
 copies come from the YangModels IETF RFC registry and retain their embedded
 IETF Trust license notices.
+
+`dangd-reconciliation@2026-08-23.yang` is the project-owned operational model
+for hardware actions whose compensation failed. It is implemented by the core,
+published through RFC 8525 YANG Library, and retrievable through RFC 6022
+`get-schema` like the bundled standards modules.

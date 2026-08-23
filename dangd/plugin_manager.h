@@ -47,6 +47,8 @@ class PluginManager : public yang::netconf::OperationProvider {
   [[nodiscard]] const std::vector<PluginYangSource>& yang_sources() const;
   /** Collects one self-contained operational-state fragment per ABI-v3 plugin. */
   [[nodiscard]] std::vector<std::string> OperationalData() const;
+  /** Returns modeled state for hardware changes that could not be rolled back. */
+  [[nodiscard]] std::string ReconciliationData() const;
   /** Prepares and validates every plugin affected by a proposed replacement. */
   [[nodiscard]] std::optional<yang::config::ValidationFinding> Prepare(
       const yang::config::RuntimeSchema& schema,

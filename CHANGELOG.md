@@ -10,6 +10,10 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Retained incomplete hardware rollback actions as modeled operational
+  reconciliation records containing action ID, instance path, and failure
+  reason; published the model through YANG Library and clear stale records only
+  after a completely successful later hardware transaction.
 - Annotated every schema-known applied configuration node with its explicit
   NMDA `intended` origin, preserved provider-supplied origin metadata, and kept
   config-false operational state free of fabricated configuration origins.

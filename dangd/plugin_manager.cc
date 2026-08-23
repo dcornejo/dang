@@ -4,11 +4,13 @@
 #include "dangd/plugin_manager.h"
 
 #include "dangd/hardware_transaction.h"
+#include "yang/xml_security.h"
 
 #include <algorithm>
 #include <dlfcn.h>
 #include <functional>
 #include <iterator>
+#include <mutex>
 #include <set>
 #include <sstream>
 #include <unordered_map>
@@ -64,6 +66,8 @@ struct PluginManager::State {
   std::string before_xml;
   std::string proposed_xml;
   std::string changes_json;
+  mutable std::mutex reconciliation_mutex;
+  std::vector<HardwareRemnant> remnants;
 
   void ReleasePrepared() noexcept {
     for (Plugin& plugin : plugins) {
@@ -295,6 +299,25 @@ std::vector<std::string> PluginManager::OperationalData() const {
       result.emplace_back(data.data_xml);
   }
   return result;
+}
+
+std::string PluginManager::ReconciliationData() const {
+  std::lock_guard lock(state_->reconciliation_mutex);
+  std::ostringstream output;
+  output << "<hardware-reconciliation xmlns=\"urn:dangd:reconciliation\">"
+         << "<diverged>" << (state_->remnants.empty() ? "false" : "true")
+         << "</diverged>";
+  for (const HardwareRemnant& remnant : state_->remnants) {
+    output << "<remnant><action-id>"
+           << yang::EscapeXmlText(remnant.action_id)
+           << "</action-id><instance-path>"
+           << yang::EscapeXmlText(remnant.instance_path)
+           << "</instance-path><reason>"
+           << yang::EscapeXmlText(remnant.reason)
+           << "</reason></remnant>";
+  }
+  output << "</hardware-reconciliation>";
+  return output.str();
 }
 
 bool PluginManager::ValidateDependencies(
@@ -587,6 +610,10 @@ std::optional<yang::config::ValidationFinding> PluginManager::Apply() {
                                 : applied.instance_path.c_str()};
     auto finding = PluginFinding("hardware planner", error, "apply failed");
     if (!applied.rollback_failures.empty()) {
+      {
+        std::lock_guard lock(state_->reconciliation_mutex);
+        state_->remnants = applied.remnants;
+      }
       finding.netconf_error_app_tag = "hardware-state-diverged";
       finding.message +=
           "; rollback incomplete; hardware may diverge from running: ";
@@ -598,6 +625,10 @@ std::optional<yang::config::ValidationFinding> PluginManager::Apply() {
     }
     Abort();
     return finding;
+  }
+  {
+    std::lock_guard lock(state_->reconciliation_mutex);
+    state_->remnants.clear();
   }
   state_->ReleasePrepared();
   return std::nullopt;

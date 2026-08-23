@@ -126,6 +126,9 @@ HardwareTransactionResult HardwareTransactionPlanner::Apply() {
         if (const auto rollback_error = actions_[*rollback].rollback()) {
           result.rollback_failures.push_back(
               actions_[*rollback].id + ": " + *rollback_error);
+          result.remnants.push_back({actions_[*rollback].id,
+                                     actions_[*rollback].instance_path,
+                                     *rollback_error});
         }
       }
       Abort();

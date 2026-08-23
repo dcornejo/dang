@@ -28,12 +28,13 @@ stays in this file with its remaining work rewritten precisely.
 
 ### RFC 8342 / RFC 8526 NMDA compliance closure
 
-- Extend the backend-applied configuration foundation into a per-node state
-  model. `<operational>` now takes configuration from the backend's accepted
-  working snapshot rather than echoing `<running>`. Add plugin/backend reports
-  for transformed, rejected, delayed, and remnant nodes; merge those reports
-  deterministically and expose actionable reconciliation state without
-  publishing unapplied intent as device state.
+- Extend the backend-applied configuration foundation to transformed, rejected,
+  and delayed per-node states. `<operational>` takes configuration from the
+  backend's accepted working snapshot, and failed rollback actions are now
+  retained by action/path under modeled reconciliation state until a successful
+  hardware transaction. Add plugin/backend outcome reports for the remaining
+  states and merge them deterministically without publishing unapplied intent
+  as device state.
 - Derive non-intended per-node origin metadata from actual data sources. Applied
   configuration nodes are now explicitly marked `ietf-origin:intended`,
   provider-supplied origins are preserved, and config-false nodes are not

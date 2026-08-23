@@ -296,8 +296,12 @@ can and preserve diagnostic state for reconciliation. `dangd` reports the
 original apply failure together with every rollback failure and uses the
 `hardware-state-diverged` NETCONF error app-tag. Production providers should
 also log rollback failures through their platform facilities because device
-state may require reconciliation. A future ABI may expose a core
-reconciliation journal.
+state may require reconciliation. The core retains each failed compensation's
+action ID, instance path, and reason in the modeled
+`dangd-reconciliation:hardware-reconciliation` operational tree. A fully
+successful later hardware transaction clears that report. Legacy ABI actions
+have an empty path because their transaction-wide callback cannot identify a
+more precise instance.
 
 ### release
 

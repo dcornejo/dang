@@ -85,6 +85,11 @@ TEST(HardwareTransactionPlannerTest,
   const HardwareTransactionResult result = planner.Apply();
   EXPECT_FALSE(result.ok);
   ASSERT_EQ(result.rollback_failures.size(), 1U);
+  ASSERT_EQ(result.remnants.size(), 1U);
+  EXPECT_EQ(result.remnants.front().action_id, "reserve");
+  EXPECT_EQ(result.remnants.front().instance_path, "/hardware/reservation");
+  EXPECT_EQ(result.remnants.front().reason,
+            "reservation could not be restored");
   EXPECT_NE(result.rollback_failures.front().find("could not be restored"),
             std::string::npos);
   EXPECT_EQ(events, (std::vector<std::string>{"apply reserve", "apply program",
