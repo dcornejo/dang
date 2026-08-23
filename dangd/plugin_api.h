@@ -109,6 +109,42 @@ typedef struct DangPluginV3 {
 /** Type of the optional exported `dang_plugin_init_v3` entry point. */
 typedef const DangPluginV3* (*DangPluginInitV3)(void);
 
+#define DANG_PLUGIN_ABI_V4 4u
+
+/** Generic ordering class for one retained hardware action. */
+typedef enum DangHardwareActionClassV1 {
+  DANG_HARDWARE_NORMAL_V1 = 0,
+  DANG_HARDWARE_ACTIVATE_V1 = 1,
+  DANG_HARDWARE_DEACTIVATE_V1 = 2
+} DangHardwareActionClassV1;
+
+/** Borrowed descriptor copied by dangd while the callback is active. */
+typedef struct DangHardwareActionV1 {
+  const char* action_id;
+  const char* instance_path;
+  uint32_t action_class;
+  const char* const* dependencies;
+  size_t dependency_count;
+} DangHardwareActionV1;
+
+/** ABI v4 exposes fine-grained reversible hardware actions. */
+typedef struct DangPluginV4 {
+  DangPluginV3 v3;
+  size_t (*hardware_action_count)(void* context, void* prepared);
+  int (*hardware_action_at)(void* context, void* prepared, size_t index,
+                            DangHardwareActionV1* action,
+                            DangPluginErrorV1* error);
+  int (*apply_hardware_action)(void* context, void* prepared,
+                               const char* action_id,
+                               DangPluginErrorV1* error);
+  int (*rollback_hardware_action)(void* context, void* prepared,
+                                  const char* action_id,
+                                  DangPluginErrorV1* error);
+} DangPluginV4;
+
+/** Type of the optional exported `dang_plugin_init_v4` entry point. */
+typedef const DangPluginV4* (*DangPluginInitV4)(void);
+
 #ifdef __cplusplus
 }
 #endif

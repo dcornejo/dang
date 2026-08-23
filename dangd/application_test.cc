@@ -430,6 +430,11 @@ TEST(DangdApplicationTest, IpManagementPluginPublishesRfc8344AndPrintsApplyPlan)
       << actions;
   EXPECT_NE(actions.find("eth0"), std::string::npos) << actions;
   EXPECT_NE(actions.find("192.0.2.1"), std::string::npos) << actions;
+  const auto address_action = actions.find("192.0.2.1");
+  const auto activation_action = actions.find("}enabled with value");
+  ASSERT_NE(address_action, std::string::npos) << actions;
+  ASSERT_NE(activation_action, std::string::npos) << actions;
+  EXPECT_LT(address_action, activation_action) << actions;
   EXPECT_NE(loaded.application->datastores()
                 .Read(yang::netconf::Datastore::kRunning)
                 .ToXml()
@@ -512,6 +517,34 @@ TEST(DangdApplicationTest, ValidatesEveryPluginBeforeApplyingAnyPlugin) {
   EXPECT_TRUE(test_plugin::Active("consumer").empty());
 }
 
+TEST(DangdApplicationTest, RejectsExhaustedHardwareBeforeApplyingAnything) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_CONSUMER_PLUGIN_PATH,
+                     DANG_TEST_PROVIDER_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr);
+  test_plugin::ResetTrace();
+
+  ASSERT_NE(SetProviderMode(*loaded.application, "resource-exhausted")
+                .xml.find("<ok/>"),
+            std::string::npos);
+  const auto commit = Commit(*loaded.application);
+  EXPECT_NE(commit.xml.find("simulated hardware capacity exhausted"),
+            std::string::npos) << commit.xml;
+  EXPECT_EQ(test_plugin::Trace(),
+            (std::vector<std::string>{
+                "provider.prepare", "consumer.prepare", "provider.validate",
+                "consumer.validate", "consumer.release", "provider.release"}));
+  EXPECT_TRUE(test_plugin::Active("provider").empty());
+  EXPECT_TRUE(test_plugin::Active("consumer").empty());
+  EXPECT_EQ(loaded.application->datastores()
+                .Read(yang::netconf::Datastore::kRunning)
+                .ToXml()
+                .find("resource-exhausted"),
+            std::string::npos);
+}
+
 TEST(DangdApplicationTest, RollsBackAppliedDependencyAfterConsumerFailure) {
   TemporaryInputs inputs;
   auto options = Options(inputs);
@@ -562,7 +595,7 @@ TEST(DangdApplicationTest, ReportsApplyAndRollbackFailuresTogether) {
             std::string::npos) << commit.xml;
   EXPECT_NE(commit.xml.find("simulated provider rollback failure"),
             std::string::npos) << commit.xml;
-  EXPECT_NE(commit.xml.find("plugin-rollback-failed"), std::string::npos)
+  EXPECT_NE(commit.xml.find("hardware-state-diverged"), std::string::npos)
       << commit.xml;
   EXPECT_NE(test_plugin::Active("provider").find(
                 "consumer-apply-rollback-fail"),

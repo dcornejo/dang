@@ -7,6 +7,10 @@
 
 ### Changed
 
+- Added plugin ABI v4 and the common transactional hardware planner, including
+  dynamic preflight, generic and plugin-declared ordering, reverse compensation,
+  explicit state-divergence errors, legacy ABI compatibility, and a fine-grained
+  RFC 8344 example implementation with failure-injection coverage.
 - Added an embedded libssh NETCONF server with explicit host and authorized
   keys, exact `netconf` subsystem handling, username mapping, trusted NACM group
   records, SIGHUP reload, end-to-end authentication/RPC tests, and an OpenSSH

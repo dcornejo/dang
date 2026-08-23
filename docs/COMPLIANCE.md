@@ -273,15 +273,25 @@ dynamic datastores change, and to complete external interoperability testing.
 Status: **schema support and example plugin; not a real device implementation**.
 
 The pinned normative modules compile, validate configuration, appear in YANG
-Library, and are owned by the ABI-v3 IP-management example. The example prints
-English apply/rollback actions, assumes platform success, and derives a limited
-legacy `/interfaces-state` tree from the last applied configuration.
+Library, and are owned by the ABI-v4 IP-management example. The example emits
+fine-grained reversible actions to the common hardware planner, which applies
+address work before activation and publishes running only after all actions
+succeed. It prints English apply/rollback actions, assumes platform success,
+and derives a limited legacy `/interfaces-state` tree from the last applied
+configuration.
 
 It does not program or inspect host interfaces, addresses, neighbors, MTUs,
 counters, duplicate-address detection, or link state. It therefore demonstrates
 model and plugin integration but does not claim operational compliance with RFC
 8343 or RFC 8344. The plugin source comments describe a practical rtnetlink
 implementation path.
+
+The transaction machinery is implementation safety behavior, not an RFC 8343
+or RFC 8344 compliance claim. Dynamic capacity rejection, dependency cycles,
+activation/deactivation ordering, partial failure, successful compensation, and
+incomplete compensation with explicit `hardware-state-diverged` reporting are
+covered by automated tests. A real device plugin must still reserve platform
+resources during preflight and provide backend-specific dependency edges.
 
 ## Imported typedef and reference RFCs
 

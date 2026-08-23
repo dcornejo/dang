@@ -184,14 +184,17 @@ imports. Importing a typedef or identity does not create a runtime dependency.
 Dependencies serve two purposes:
 
 1. A change to a dependency also marks the dependent plugin as affected.
-2. Dependency providers are prepared, validated, and applied before their
-   dependents.
+2. Dependency providers are prepared and validated before their dependents;
+   the hardware planner makes all provider actions prerequisites of every
+   dependent action.
 
 The initial ABI rejects missing providers and cyclic runtime dependencies.
 Model relationships that form a cycle must therefore be validated from the
-common proposed tree without declaring a cyclic apply dependency. If hardware
-application needs finer ordering, the modules should be owned by one plugin
-until a future operation-plan ABI is available.
+common proposed tree without declaring a cyclic apply dependency. ABI v4 also
+permits finer ordering across modules. A dependency without `:` is local to the
+declaring plugin. A fully qualified `plugin-name:action-id` dependency can name
+another plugin's action; the target must be present in the same affected
+transaction or planning fails.
 
 ## Transaction input
 
@@ -218,7 +221,8 @@ The lifecycle is:
 ```text
 prepare every affected plugin
 validate every affected plugin
-apply each plugin in dependency order
+collect and verify every hardware action plan
+apply actions in dependency-safe order
 release every prepared object
 publish the proposed running datastore
 ```
@@ -241,7 +245,7 @@ resources. Common YANG constraints have already been checked by `dangd`.
 Validation must not mutate externally visible state. It may rely on
 reservations made during preparation.
 
-### apply
+### apply and ABI v4 hardware actions
 
 `apply` performs the exact retained plan. It must not silently reinterpret the
 configuration or redo preparation against a different state. Successful apply
@@ -250,6 +254,29 @@ must leave the resource representing `proposed_xml`.
 An apply operation should be idempotent wherever possible. The plugin must not
 return success until its portion of the proposed state is durable enough to
 satisfy its documented behavior.
+
+ABI v1-v3 use `apply` and `rollback` as one action for the whole plugin. ABI v4
+retains those callbacks for ABI compatibility but supplies
+`hardware_action_count`, `hardware_action_at`, `apply_hardware_action`, and
+`rollback_hardware_action` for actual commits. Each descriptor has:
+
+- a stable, nonempty action ID unique within the prepared object;
+- the affected schema instance path, when known;
+- a normal, activate, or deactivate class;
+- zero or more local or fully qualified prerequisite action IDs.
+
+Descriptions are copied during planning; callback input remains borrowed.
+Action callbacks receive the original local ID. Dangd adds generic safety
+edges, rejects missing or cyclic dependencies, and executes a deterministic
+topological order. All deactivations precede normal and activation work; all
+activations follow other work. For ancestor paths, creation/update proceeds
+parent first and deactivation proceeds child first. Plugins must still declare
+backend-specific edges such as program-ACL before attach-ACL.
+
+On action failure, only completed actions are rolled back, in reverse execution
+order. A rollback failure produces `hardware-state-diverged`; successful
+rollback preserves the previous running datastore. Validate dynamic capacities
+and reserve any resources needed to ensure that apply will not race preflight.
 
 ### rollback
 
@@ -267,7 +294,7 @@ an earlier configuration.
 If rollback itself fails, the plugin should return the most precise error it
 can and preserve diagnostic state for reconciliation. `dangd` reports the
 original apply failure together with every rollback failure and uses the
-`plugin-rollback-failed` NETCONF error app-tag. Production providers should
+`hardware-state-diverged` NETCONF error app-tag. Production providers should
 also log rollback failures through their platform facilities because device
 state may require reconciliation. A future ABI may expose a core
 reconciliation journal.
@@ -328,6 +355,8 @@ Before shipping a plugin, verify that it:
 - declares only genuine runtime dependencies;
 - does no visible work during prepare or validate;
 - retains one exact apply plan through the transaction;
+- classifies activation and deactivation and declares every backend-specific
+  action dependency when using ABI v4;
 - rolls back every applied operation in reverse-safe form;
 - handles a confirmed-commit reversal;
 - reports a module path with actionable failures;

@@ -110,6 +110,7 @@ if(YANG_BUILD_DANGD)
   add_library(dangd_core
     dangd/application.cc
     dangd/configuration_backend.cc
+    dangd/hardware_transaction.cc
     dangd/plugin_manager.cc
     dangd/ssh_transport.cc
     dangd/tls_transport.cc)
@@ -293,7 +294,8 @@ if(YANG_BUILD_TESTS)
 
   if(YANG_BUILD_DANGD)
     add_executable(dangd_tests dangd/application_test.cc
-      dangd/plugin_manager_test.cc dangd/ssh_transport_test.cc
+      dangd/hardware_transaction_test.cc dangd/plugin_manager_test.cc
+      dangd/ssh_transport_test.cc
       dangd/tls_transport_test.cc)
     target_compile_features(dangd_tests PRIVATE cxx_std_20)
     target_link_libraries(dangd_tests PRIVATE dangd_core

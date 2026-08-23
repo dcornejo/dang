@@ -44,8 +44,15 @@ int Prepare(void*, const DangTransactionV1* transaction, void** result,
 }
 int Validate(void*, void* opaque, DangPluginErrorV1* error) {
   dangd::test_plugin::Record("consumer.validate");
-  if (!Contains(static_cast<Prepared*>(opaque),
-                "<mode>consumer-validate-fail</mode>")) return 1;
+  const auto* prepared = static_cast<Prepared*>(opaque);
+  if (Contains(prepared, "<mode>resource-exhausted</mode>")) {
+    if (error) {
+      error->message = "simulated hardware capacity exhausted";
+      error->instance_path = "/provider:provider-settings/provider:mode";
+    }
+    return 0;
+  }
+  if (!Contains(prepared, "<mode>consumer-validate-fail</mode>")) return 1;
   if (error) {
     error->message = "provider mode is incompatible with the consumer";
     error->instance_path = "/provider:provider-settings/provider:mode";

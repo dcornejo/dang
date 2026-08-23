@@ -3,6 +3,8 @@
 
 #include "dangd/plugin_manager.h"
 
+#include "dangd/hardware_transaction.h"
+
 #include <algorithm>
 #include <dlfcn.h>
 #include <functional>
@@ -42,12 +44,18 @@ struct PluginManager::State {
                   DangPluginErrorV1*) = nullptr;
     int (*operational)(void*, DangOperationalDataV1*, DangPluginErrorV1*) =
         nullptr;
+    size_t (*hardware_action_count)(void*, void*) = nullptr;
+    int (*hardware_action_at)(void*, void*, size_t, DangHardwareActionV1*,
+                              DangPluginErrorV1*) = nullptr;
+    int (*apply_hardware_action)(void*, void*, const char*,
+                                 DangPluginErrorV1*) = nullptr;
+    int (*rollback_hardware_action)(void*, void*, const char*,
+                                    DangPluginErrorV1*) = nullptr;
     std::string name;
     std::vector<std::string> modules;
     std::vector<std::string> dependencies;
     void* prepared = nullptr;
     bool affected = false;
-    bool applied = false;
   };
 
   std::vector<Plugin> plugins;
@@ -63,7 +71,6 @@ struct PluginManager::State {
         plugin.api->release(plugin.api->context, plugin.prepared);
       plugin.prepared = nullptr;
       plugin.affected = false;
-      plugin.applied = false;
     }
     order.clear();
     before_xml.clear();
@@ -94,6 +101,12 @@ bool PluginManager::Load(const std::filesystem::path& path,
     return false;
   }
   dlerror();
+  auto initialize_v4 = reinterpret_cast<DangPluginInitV4>(
+      dlsym(library, "dang_plugin_init_v4"));
+  const char* v4_error = dlerror();
+  const DangPluginV4* api_v4 =
+      v4_error == nullptr && initialize_v4 ? initialize_v4() : nullptr;
+  dlerror();
   auto initialize_v3 = reinterpret_cast<DangPluginInitV3>(
       dlsym(library, "dang_plugin_init_v3"));
   const char* v3_error = dlerror();
@@ -109,16 +122,19 @@ bool PluginManager::Load(const std::filesystem::path& path,
   auto initialize = reinterpret_cast<DangPluginInitV1>(
       dlsym(library, "dang_plugin_init_v1"));
   const char* v1_error = dlerror();
-  if (api_v3 == nullptr && api_v2 == nullptr && v1_error != nullptr) {
+  if (api_v4 == nullptr && api_v3 == nullptr && api_v2 == nullptr &&
+      v1_error != nullptr) {
     errors->push_back("plugin " + path.string() +
                       " has no supported dang_plugin_init entry point");
     dlclose(library);
     return false;
   }
-  const DangPluginV1* api = api_v3 ? &api_v3->v2.v1
+  const DangPluginV1* api = api_v4 ? &api_v4->v3.v2.v1
+      : api_v3 ? &api_v3->v2.v1
       : (api_v2 ? &api_v2->v1 : (initialize ? initialize() : nullptr));
   if (!api || api->abi_version !=
-                  (api_v3 ? DANG_PLUGIN_ABI_V3
+                  (api_v4 ? DANG_PLUGIN_ABI_V4
+                          : api_v3 ? DANG_PLUGIN_ABI_V3
                           : (api_v2 ? DANG_PLUGIN_ABI_V2
                                     : DANG_PLUGIN_ABI_V1)) ||
       !api->plugin_name ||
@@ -126,6 +142,16 @@ bool PluginManager::Load(const std::filesystem::path& path,
       !api->validate || !api->apply || !api->rollback || !api->release) {
     errors->push_back("plugin " + path.string() +
                       " does not implement the complete ABI v1 contract");
+    dlclose(library);
+    return false;
+  }
+  if (api_v4 &&
+      (!api_v4->hardware_action_count || !api_v4->hardware_action_at ||
+       !api_v4->apply_hardware_action ||
+       !api_v4->rollback_hardware_action)) {
+    errors->push_back("plugin " + std::string(api->plugin_name) +
+                      " does not implement the complete ABI v4 action plan");
+    if (api->destroy) api->destroy(api->context);
     dlclose(library);
     return false;
   }
@@ -148,9 +174,18 @@ bool PluginManager::Load(const std::filesystem::path& path,
   State::Plugin plugin;
   plugin.library = library;
   plugin.api = api;
-  plugin.invoke = api_v3 ? api_v3->v2.invoke
+  plugin.invoke = api_v4 ? api_v4->v3.v2.invoke
+      : api_v3 ? api_v3->v2.invoke
                          : (api_v2 ? api_v2->invoke : nullptr);
-  plugin.operational = api_v3 ? api_v3->get_operational_data : nullptr;
+  plugin.operational = api_v4 ? api_v4->v3.get_operational_data
+                              : (api_v3 ? api_v3->get_operational_data
+                                        : nullptr);
+  if (api_v4) {
+    plugin.hardware_action_count = api_v4->hardware_action_count;
+    plugin.hardware_action_at = api_v4->hardware_action_at;
+    plugin.apply_hardware_action = api_v4->apply_hardware_action;
+    plugin.rollback_hardware_action = api_v4->rollback_hardware_action;
+  }
   plugin.name = api->plugin_name;
   std::vector<PluginYangSource> discovered_sources;
   const std::size_t count = api->yang_source_count(api->context);
@@ -408,38 +443,161 @@ std::optional<yang::config::ValidationFinding> PluginManager::Prepare(
 }
 
 std::optional<yang::config::ValidationFinding> PluginManager::Apply() {
+  struct PlannedPlugin {
+    std::size_t index = 0;
+    std::vector<std::string> action_ids;
+  };
+  std::vector<PlannedPlugin> planned_plugins;
+  std::vector<HardwareAction> actions;
+  std::unordered_map<std::string, std::size_t> module_owners;
+  for (std::size_t index = 0; index < state_->plugins.size(); ++index)
+    for (const std::string& module : state_->plugins[index].modules)
+      module_owners.emplace(module, index);
+
   for (const std::size_t index : state_->order) {
     State::Plugin& plugin = state_->plugins[index];
-    DangPluginErrorV1 error{};
-    if (!plugin.api->apply(plugin.api->context, plugin.prepared, &error)) {
-      auto finding = PluginFinding(plugin.name, error, "apply failed");
-      std::vector<std::string> rollback_failures;
-      for (auto rollback = state_->order.rbegin();
-           rollback != state_->order.rend(); ++rollback) {
-        State::Plugin& applied = state_->plugins[*rollback];
-        if (!applied.applied) continue;
-        DangPluginErrorV1 rollback_error{};
-        if (!applied.api->rollback(applied.api->context, applied.prepared,
-                                   &rollback_error)) {
-          rollback_failures.push_back(
-              "plugin " + applied.name + ": " +
-              (rollback_error.message ? rollback_error.message
-                                      : "rollback failed"));
-        }
-      }
-      if (!rollback_failures.empty()) {
-        finding.netconf_error_app_tag = "plugin-rollback-failed";
-        finding.message += "; rollback also failed for ";
-        for (std::size_t failure = 0; failure < rollback_failures.size();
-             ++failure) {
-          if (failure != 0) finding.message += ", ";
-          finding.message += rollback_failures[failure];
-        }
-      }
-      Abort();
-      return finding;
+    PlannedPlugin planned{index, {}};
+    if (!plugin.hardware_action_count) {
+      const std::string id = plugin.name + ":transaction";
+      planned.action_ids.push_back(id);
+      actions.push_back({
+          id, "", HardwareActionClass::kNormal, {},
+          [&plugin]() -> std::optional<std::string> {
+            DangPluginErrorV1 error{};
+            if (plugin.api->apply(plugin.api->context, plugin.prepared, &error))
+              return std::nullopt;
+            return error.message ? std::string(error.message) : "apply failed";
+          },
+          [&plugin]() -> std::optional<std::string> {
+            DangPluginErrorV1 error{};
+            if (plugin.api->rollback(plugin.api->context, plugin.prepared,
+                                     &error))
+              return std::nullopt;
+            return error.message ? std::string(error.message)
+                                 : "rollback failed";
+          }});
+      planned_plugins.push_back(std::move(planned));
+      continue;
     }
-    plugin.applied = true;
+
+    const std::size_t count =
+        plugin.hardware_action_count(plugin.api->context, plugin.prepared);
+    for (std::size_t action_index = 0; action_index < count; ++action_index) {
+      DangHardwareActionV1 descriptor{};
+      DangPluginErrorV1 error{};
+      if (!plugin.hardware_action_at(plugin.api->context, plugin.prepared,
+                                     action_index, &descriptor, &error) ||
+          !descriptor.action_id || !*descriptor.action_id ||
+          (descriptor.dependency_count != 0 && !descriptor.dependencies)) {
+        auto finding = PluginFinding(plugin.name, error,
+                                     "invalid hardware action descriptor");
+        Abort();
+        return finding;
+      }
+      const std::string local_id = descriptor.action_id;
+      const std::string id = plugin.name + ":" + local_id;
+      std::vector<std::string> dependencies;
+      for (std::size_t dependency = 0;
+           dependency < descriptor.dependency_count; ++dependency) {
+        if (!descriptor.dependencies[dependency] ||
+            !*descriptor.dependencies[dependency]) {
+          auto finding = PluginFinding(
+              plugin.name, {}, "invalid hardware action dependency");
+          Abort();
+          return finding;
+        }
+        std::string copied = descriptor.dependencies[dependency];
+        if (copied.find(':') == std::string::npos)
+          copied = plugin.name + ":" + copied;
+        dependencies.push_back(std::move(copied));
+      }
+      HardwareActionClass action_class = HardwareActionClass::kNormal;
+      if (descriptor.action_class == DANG_HARDWARE_ACTIVATE_V1)
+        action_class = HardwareActionClass::kActivate;
+      else if (descriptor.action_class == DANG_HARDWARE_DEACTIVATE_V1)
+        action_class = HardwareActionClass::kDeactivate;
+      else if (descriptor.action_class != DANG_HARDWARE_NORMAL_V1) {
+        auto finding = PluginFinding(plugin.name, {},
+                                     "invalid hardware action class");
+        Abort();
+        return finding;
+      }
+      const std::string path =
+          descriptor.instance_path ? descriptor.instance_path : "";
+      planned.action_ids.push_back(id);
+      actions.push_back({
+          id, path, action_class, std::move(dependencies),
+          [&plugin, local_id]() -> std::optional<std::string> {
+            DangPluginErrorV1 error{};
+            if (plugin.apply_hardware_action(
+                    plugin.api->context, plugin.prepared, local_id.c_str(),
+                    &error))
+              return std::nullopt;
+            return error.message ? std::string(error.message) : "apply failed";
+          },
+          [&plugin, local_id]() -> std::optional<std::string> {
+            DangPluginErrorV1 error{};
+            if (plugin.rollback_hardware_action(
+                    plugin.api->context, plugin.prepared, local_id.c_str(),
+                    &error))
+              return std::nullopt;
+            return error.message ? std::string(error.message)
+                                 : "rollback failed";
+          }});
+    }
+    planned_plugins.push_back(std::move(planned));
+  }
+
+  for (const PlannedPlugin& planned : planned_plugins) {
+    const State::Plugin& plugin = state_->plugins[planned.index];
+    for (const std::string& dependency_module : plugin.dependencies) {
+      const auto owner = module_owners.find(dependency_module);
+      if (owner == module_owners.end()) continue;
+      const auto provider = std::ranges::find(
+          planned_plugins, owner->second, &PlannedPlugin::index);
+      if (provider == planned_plugins.end()) continue;
+      for (HardwareAction& action : actions) {
+        if (std::ranges::find(planned.action_ids, action.id) ==
+            planned.action_ids.end())
+          continue;
+        action.dependencies.insert(action.dependencies.end(),
+                                   provider->action_ids.begin(),
+                                   provider->action_ids.end());
+      }
+    }
+  }
+
+  HardwareTransactionPlanner planner;
+  HardwareTransactionResult planned = planner.Plan(std::move(actions));
+  if (!planned.ok) {
+    DangPluginErrorV1 error{planned.message.c_str(),
+                            planned.instance_path.empty()
+                                ? nullptr
+                                : planned.instance_path.c_str()};
+    auto finding = PluginFinding("hardware planner", error, "planning failed");
+    finding.netconf_error_app_tag = "hardware-plan-invalid";
+    Abort();
+    return finding;
+  }
+  HardwareTransactionResult applied = planner.Apply();
+  if (!applied.ok) {
+    DangPluginErrorV1 error{applied.message.c_str(),
+                            applied.instance_path.empty()
+                                ? nullptr
+                                : applied.instance_path.c_str()};
+    auto finding = PluginFinding("hardware planner", error, "apply failed");
+    if (!applied.rollback_failures.empty()) {
+      finding.netconf_error_app_tag = "hardware-state-diverged";
+      finding.message +=
+          "; rollback incomplete; hardware may diverge from running: ";
+      for (std::size_t index = 0; index < applied.rollback_failures.size();
+           ++index) {
+        if (index != 0) finding.message += ", ";
+        finding.message += applied.rollback_failures[index];
+      }
+    }
+    Abort();
+    return finding;
   }
   state_->ReleasePrepared();
   return std::nullopt;

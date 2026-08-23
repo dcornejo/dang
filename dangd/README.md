@@ -73,10 +73,12 @@ Safe application should be divided into three layers:
    into actions connected by dependencies. It topologically orders that graph
    instead of executing the raw delta order.
 
-The action vocabulary should distinguish creating, populating, binding,
-activating, deactivating, unbinding, and destroying resources. Activation is
-last and deactivation is first. An ACL-protected interface would normally be
-applied as:
+ABI v4 plugins expose retained, reversible actions with stable identifiers,
+schema instance paths, explicit dependencies, and normal, activate, or
+deactivate classes. The common planner rejects missing dependencies and cycles,
+orders deactivation first and activation last, and infers parent-before-child
+creation plus child-before-parent deactivation. An ACL-protected interface
+would normally be applied as:
 
 ```text
 create ACL -> program rules -> attach ACL -> enable interface
@@ -102,19 +104,20 @@ belong in the device backend or a backend policy module. Optional YANG
 extensions may annotate lifecycle roles, but should provide planning metadata
 rather than attempt to encode an imperative hardware program.
 
-A production backend boundary will consequently need two explicit stages:
+The implemented backend boundary has two explicit stages:
 
 ```text
 plan(before, after, changes) -> execution plan or preflight error
 apply(plan)                  -> success or failure with rollback status
 ```
 
-The plan must record dependencies, preconditions, rollback actions,
-reversibility, disruption, and module/path context for failures. The running
-datastore advances only after successful hardware application. On failure, the
-backend rolls back completed actions; if rollback is incomplete, the NETCONF
-error must explicitly report possible divergence between hardware and the
-intended configuration.
+Plugins perform dynamic resource preflight in side-effect-free prepare and
+validate callbacks before the planner executes anything. The running datastore
+advances only after every hardware action succeeds. On failure, the planner
+rolls back completed actions in reverse execution order; incomplete rollback
+returns the `hardware-state-diverged` app-tag and explicitly warns that hardware
+may differ from running. ABI v1-v3 plugins remain supported as one reversible
+transaction action per plugin.
 
 ## Embedded SSH server example
 

@@ -4,6 +4,7 @@
 #include "dangd/plugin_api.h"
 #include "ip_management_models.h"
 
+#include <algorithm>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -27,6 +28,10 @@ struct Action {
   // idempotence, precise errors, and rollback do not depend on parsing text.
   std::string forward;
   std::string reverse;
+  std::string id;
+  std::string instance_path;
+  uint32_t action_class = DANG_HARDWARE_NORMAL_V1;
+  bool applied = false;
 };
 
 struct Prepared {
@@ -84,7 +89,7 @@ std::string Quoted(const std::optional<std::string>& value) {
   return value ? json(*value).dump() : "<absent>";
 }
 
-Action MakeAction(const json& change) {
+Action MakeAction(const json& change, std::size_t index) {
   // dangd supplies a schema-aware delta, including stable instance paths and
   // before/after values. A Linux implementation could translate these paths
   // to rtnetlink messages through libmnl/libnl or direct NETLINK_ROUTE calls.
@@ -94,25 +99,35 @@ Action MakeAction(const json& change) {
   //
   // Never assume delta order is safe for hardware. Construct dependencies so
   // addresses, routes, ACL references, and other prerequisites are installed
-  // before an interface is enabled; reverse that order during removal. The
-  // future common transaction planner is tracked in TODO.md.
+  // before an interface is enabled; reverse that order during removal. ABI v4
+  // publishes the classification below to dangd's common transaction planner.
   const int kind = change.at("kind").get<int>();
   const std::string path = change.at("path").get<std::string>();
   const auto before = JsonValue(change.at("before"));
   const auto after = JsonValue(change.at("after"));
+  const std::string id = "change-" + std::to_string(index);
+  uint32_t action_class = DANG_HARDWARE_NORMAL_V1;
+  if (kind == 1 ||
+      (path.ends_with("}enabled") && after && *after == "false"))
+    action_class = DANG_HARDWARE_DEACTIVATE_V1;
+  else if (path.ends_with("}enabled") && after && *after == "true")
+    action_class = DANG_HARDWARE_ACTIVATE_V1;
   if (kind == 0) {
     return {"create " + path + (after ? " with value " + Quoted(after) : ""),
-            "delete " + path};
+            "delete " + path, id, path, action_class, false};
   }
   if (kind == 1) {
     return {"delete " + path,
-            "create " + path + (before ? " with value " + Quoted(before) : "")};
+            "create " + path + (before ? " with value " + Quoted(before) : ""),
+            id, path, action_class, false};
   }
   if (kind == 2) {
     return {"set " + path + " from " + Quoted(before) + " to " + Quoted(after),
-            "set " + path + " from " + Quoted(after) + " to " + Quoted(before)};
+            "set " + path + " from " + Quoted(after) + " to " + Quoted(before),
+            id, path, action_class, false};
   }
-  return {"replace subtree " + path, "restore subtree " + path};
+  return {"replace subtree " + path, "restore subtree " + path, id, path,
+          action_class, false};
 }
 
 int Prepare(void*, const DangTransactionV1* transaction, void** result,
@@ -125,10 +140,11 @@ int Prepare(void*, const DangTransactionV1* transaction, void** result,
   if (!transaction || !transaction->changes_json || !result) return 0;
   try {
     auto prepared = std::make_unique<Prepared>();
+    std::size_t action_index = 0;
     for (const json& change : json::parse(transaction->changes_json)) {
       const std::string module = change.at("module").get<std::string>();
       if (module == kInterfacesModule || module == kIpModule)
-        prepared->actions.push_back(MakeAction(change));
+        prepared->actions.push_back(MakeAction(change, action_index++));
     }
     prepared->before = transaction->before_xml ? transaction->before_xml : "";
     prepared->proposed = transaction->proposed_xml
@@ -182,6 +198,56 @@ int Rollback(void*, void* opaque, DangPluginErrorV1*) {
   const auto& actions = static_cast<Prepared*>(opaque)->actions;
   for (auto action = actions.rbegin(); action != actions.rend(); ++action)
     std::clog << "ip-management rollback: " << action->reverse << '\n';
+  active_configuration = static_cast<Prepared*>(opaque)->before;
+  return 1;
+}
+
+size_t HardwareActionCount(void*, void* opaque) {
+  return opaque ? static_cast<Prepared*>(opaque)->actions.size() : 0;
+}
+
+int HardwareActionAt(void*, void* opaque, size_t index,
+                     DangHardwareActionV1* result, DangPluginErrorV1*) {
+  if (!opaque || !result) return 0;
+  auto& actions = static_cast<Prepared*>(opaque)->actions;
+  if (index >= actions.size()) return 0;
+  const Action& action = actions[index];
+  *result = {action.id.c_str(), action.instance_path.c_str(),
+             action.action_class, nullptr, 0};
+  return 1;
+}
+
+Action* FindAction(void* opaque, const char* id) {
+  if (!opaque || !id) return nullptr;
+  auto& actions = static_cast<Prepared*>(opaque)->actions;
+  const auto found = std::ranges::find(actions, id, &Action::id);
+  return found == actions.end() ? nullptr : &*found;
+}
+
+int ApplyHardwareAction(void*, void* opaque, const char* id,
+                        DangPluginErrorV1* error) {
+  Action* action = FindAction(opaque, id);
+  if (!action || action->applied) {
+    if (error) error->message = "unknown or duplicate hardware action";
+    return 0;
+  }
+  std::clog << "ip-management: " << action->forward << '\n';
+  action->applied = true;
+  auto* prepared = static_cast<Prepared*>(opaque);
+  if (std::ranges::all_of(prepared->actions, &Action::applied))
+    active_configuration = prepared->proposed;
+  return 1;
+}
+
+int RollbackHardwareAction(void*, void* opaque, const char* id,
+                           DangPluginErrorV1* error) {
+  Action* action = FindAction(opaque, id);
+  if (!action || !action->applied) {
+    if (error) error->message = "unknown or unapplied hardware action";
+    return 0;
+  }
+  std::clog << "ip-management rollback: " << action->reverse << '\n';
+  action->applied = false;
   active_configuration = static_cast<Prepared*>(opaque)->before;
   return 1;
 }
@@ -245,14 +311,13 @@ int OperationalData(void*, DangOperationalDataV1* result,
 
 void Release(void*, void* opaque) { delete static_cast<Prepared*>(opaque); }
 
-// Keep older ABI members as the exact struct prefix required by plugin_api.h.
-// Exporting only v3 is intentional: the loader falls back to v2/v1 for old
-// plugins, while this plugin requires v3 to advertise operational data.
-const DangPluginV3 kPlugin{{{
-    DANG_PLUGIN_ABI_V3, "dangd-ip-management", nullptr, SourceCount, SourceAt,
+// ABI v4 retains the v1-v3 prefix and adds fine-grained hardware operations.
+const DangPluginV4 kPlugin{{{{
+    DANG_PLUGIN_ABI_V4, "dangd-ip-management", nullptr, SourceCount, SourceAt,
     DependencyCount, DependencyAt, Prepare, Validate, Apply, Rollback, Release,
-    nullptr}, nullptr}, OperationalData};
+    nullptr}, nullptr}, OperationalData}, HardwareActionCount, HardwareActionAt,
+    ApplyHardwareAction, RollbackHardwareAction};
 
 }  // namespace
 
-extern "C" const DangPluginV3* dang_plugin_init_v3() { return &kPlugin; }
+extern "C" const DangPluginV4* dang_plugin_init_v4() { return &kPlugin; }

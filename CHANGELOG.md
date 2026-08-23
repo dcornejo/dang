@@ -10,6 +10,12 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Added a transactional hardware action planner and plugin ABI v4. Plugins can
+  publish reversible actions with paths, safety classes, and dependencies;
+  dangd preflights all affected plugins, applies a deterministic dependency
+  graph with deactivation first and activation last, rolls back partial work,
+  reports incomplete rollback as explicit hardware-state divergence, and only
+  then publishes running. The RFC 8344 example now uses the action interface.
 - Added an embedded public-key-only libssh host to `dangd`, with exact subsystem
   enforcement, authenticated identity mapping, trusted local group provenance,
   lifecycle cleanup, reload support, test keys, live negative coverage, and an

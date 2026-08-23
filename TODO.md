@@ -80,13 +80,3 @@ stays in this file with its remaining work rewritten precisely.
   malformed-provider, provider-timeout, and resource-limit tests. Document
   unsupported optional features and deviations before making an RFC 8342 or
   RFC 8526 compliance claim.
-
-### Backend transaction ordering
-
-- Design and implement a transactional hardware application planner for
-  `dangd`: preflight dynamic platform limits, derive generic and backend-specific
-  action dependencies, enforce activation-last/deactivation-first ordering,
-  apply the resulting graph with rollback, and publish the running datastore
-  only after the hardware transaction succeeds. Include failure-injection tests
-  for unsafe ordering, exhausted resources, partial application, successful
-  rollback, and rollback failure with explicit state-divergence reporting.
