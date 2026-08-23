@@ -34,11 +34,12 @@ stays in this file with its remaining work rewritten precisely.
   for transformed, rejected, delayed, and remnant nodes; merge those reports
   deterministically and expose actionable reconciliation state without
   publishing unapplied intent as device state.
-- Generalize origin metadata from the current inherited
-  `ietf-origin:intended` value to per-node origins. Support `intended`,
-  `default`, `system`, `learned`, `dynamic`, `unknown`, and derived identities;
-  obey the non-presence-container inheritance rules and preserve plugin origins
-  without fabricating metadata for config-false nodes.
+- Derive non-intended per-node origin metadata from actual data sources. Applied
+  configuration nodes are now explicitly marked `ietf-origin:intended`,
+  provider-supplied origins are preserved, and config-false nodes are not
+  annotated. Add sources for `default`, `system`, `learned`, `dynamic`,
+  `unknown`, and derived identities; validate those identities and optionally
+  compact redundant annotations using the RFC 8342 inheritance rules.
 - Implement RFC 8526 origin filtering over identity derivation, not literal
   string recognition. Correctly handle repeated positive or repeated negated
   filters, reject their simultaneous use through model validation, and retain

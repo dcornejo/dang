@@ -7,6 +7,9 @@
 
 ### Changed
 
+- Expanded NMDA origin reporting from top-level inheritance to explicit
+  per-configuration-node `intended` metadata while preserving provider origins
+  and leaving config-false state unannotated.
 - Made operational configuration originate from the hardware backend's accepted
   working snapshot rather than an approximation copied from running.
 - Added plugin ABI v4 and the common transactional hardware planner, including

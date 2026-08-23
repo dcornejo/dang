@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Annotated every schema-known applied configuration node with its explicit
+  NMDA `intended` origin, preserved provider-supplied origin metadata, and kept
+  config-false operational state free of fabricated configuration origins.
 - Based NMDA `<operational>` configuration content on the backend's accepted
   working snapshot instead of the server's running-tree input, establishing the
   applied-state boundary needed for later transformation and remnant reporting.

@@ -171,6 +171,20 @@ TEST(DangdApplicationTest, RetrievesAndEditsConventionalNmdaDatastores) {
     </rpc>)xml");
   EXPECT_NE(origins.xml.find("or:origin=\"or:intended\""), std::string::npos)
       << origins.xml;
+  EXPECT_NE(origins.xml.find("<hostname or:origin=\"or:intended\">edge-1"),
+            std::string::npos)
+      << origins.xml;
+
+  const auto mixed_origins = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="mixed-origins"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore><with-origin/>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_EQ(mixed_origins.xml.find("denied-operations or:origin"),
+            std::string::npos)
+      << mixed_origins.xml;
 
   const auto other_origins = loaded.application->server().Process(
       session, R"xml(

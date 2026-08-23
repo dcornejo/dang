@@ -184,16 +184,55 @@ std::string AnnotateIntendedOrigin(std::string_view xml,
   pugi::xml_document document;
   if (!ParseUntrustedXml(xml, &document).ok) return {};
   pugi::xml_node root = document.document_element();
-  if (include_annotations)
+  if (include_annotations && !root.attribute("xmlns:or"))
     root.append_attribute("xmlns:or") = kOriginNamespace.data();
+
+  // Operational providers may attach a more specific origin to configuration
+  // that they publish.  Preserve any such metadata and fill only missing
+  // origins from the applied configuration snapshot.  Annotating each config
+  // node explicitly avoids making the result depend on origin inheritance
+  // across presence containers or provider fragment boundaries.
+  std::function<void(pugi::xml_node, config::RuntimeSchemaNodeId)> annotate;
+  annotate = [&](pugi::xml_node node,
+                 config::RuntimeSchemaNodeId schema_id) {
+    const config::RuntimeSchemaNode& metadata = schema.Get(schema_id);
+    if (!metadata.config) return;
+    if (include_annotations) {
+      bool has_origin = false;
+      for (const pugi::xml_attribute attribute : node.attributes()) {
+        if (LocalName(attribute.name()) != "origin") continue;
+        const std::string_view name = attribute.name();
+        const std::size_t colon = name.find(':');
+        if (colon == std::string_view::npos) continue;
+        const std::string declaration =
+            "xmlns:" + std::string(name.substr(0, colon));
+        for (pugi::xml_node current = node; current;
+             current = current.parent()) {
+          const pugi::xml_attribute binding =
+              current.attribute(declaration.c_str());
+          if (binding && std::string_view(binding.value()) == kOriginNamespace) {
+            has_origin = true;
+            break;
+          }
+        }
+      }
+      if (!has_origin)
+        node.append_attribute("or:origin") = "or:intended";
+    }
+    for (pugi::xml_node child : node.children()) {
+      if (child.type() != pugi::node_element) continue;
+      const auto child_schema = schema.FindChild(
+          schema_id, {NamespaceFor(child).value_or(""),
+                      std::string(LocalName(child.name()))});
+      if (child_schema) annotate(child, *child_schema);
+    }
+  };
   for (pugi::xml_node child : root.children()) {
     if (child.type() != pugi::node_element) continue;
     const auto schema_id = schema.FindRoot(
         {NamespaceFor(child).value_or(""),
          std::string(LocalName(child.name()))});
-    if (!schema_id || !schema.Get(*schema_id).config) continue;
-    if (include_annotations)
-      child.append_attribute("or:origin") = "or:intended";
+    if (schema_id) annotate(child, *schema_id);
   }
   std::ostringstream output;
   document.print(output, "", pugi::format_raw);

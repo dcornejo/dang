@@ -255,9 +255,11 @@ positive/negative origin selection are enabled for the currently known
 
 Applied configuration now comes from dangd's backend working snapshot after
 successful hardware application, rather than being copied from the committed
-running tree. Per-node transformed, rejected, delayed, and remnant states are
-not yet represented. Origins other
-than inherited `intended` are not populated, identity derivation is not used by
+running tree. Each schema-known configuration node is explicitly annotated as
+`intended` when requested, provider-supplied origin metadata is preserved, and
+config-false state is not annotated. Per-node transformed, rejected, delayed,
+and remnant states are not yet represented. Origins other than `intended` are
+not derived from data sources, identity derivation is not used by
 origin filtering, and operational plugin fragments receive structural name
 binding rather than complete instance validation and collision arbitration.
 Dynamic configuration datastores are not implemented. The complete operation,

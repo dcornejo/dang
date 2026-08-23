@@ -26,8 +26,10 @@ The initial read-only `operational` snapshot combines applied intended
 configuration with core YANG Library, NETCONF monitoring, and NACM state.
 Schema-aware `config-filter` processing can select its configuration or state
 portion while retaining required ancestor shells and list keys.
-Top-level applied configuration carries inherited `ietf-origin:intended`
-metadata internally. The RFC 8526 `origin` feature is advertised;
+Every applied configuration node carries explicit `ietf-origin:intended`
+metadata when requested. More specific origin metadata already supplied by an
+operational provider is preserved, while config-false state is never assigned
+a fabricated configuration origin. The RFC 8526 `origin` feature is advertised;
 `with-origin`, positive origin filters, and negated origin filters expose or
 select that metadata without affecting config-false system state.
 
