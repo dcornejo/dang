@@ -4,6 +4,7 @@
 #ifndef YANG_NETCONF_FILTER_H_
 #define YANG_NETCONF_FILTER_H_
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -19,9 +20,11 @@ struct FilterResult {
 /** Applies an RFC 6241 subtree filter to an XML data wrapper. */
 [[nodiscard]] FilterResult ApplySubtreeFilter(std::string_view data_xml,
                                               std::string_view filter_xml);
-/** Applies an RFC 6241 :xpath filter to an XML data wrapper. */
+/** Applies an XPath filter and optional selection-relative maximum depth. */
 [[nodiscard]] FilterResult ApplyXPathFilter(std::string_view data_xml,
-                                            std::string_view filter_xml);
+                                            std::string_view filter_xml,
+                                            std::optional<std::uint16_t>
+                                                maximum_depth = std::nullopt);
 
 }  // namespace yang::netconf
 

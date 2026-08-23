@@ -540,6 +540,22 @@ TEST(DangdApplicationTest, ComposesNmdaReadFiltersWithNacm) {
   EXPECT_EQ(response.xml.find("seven"), std::string::npos) << response.xml;
   EXPECT_EQ(response.xml.find("yang-library"), std::string::npos)
       << response.xml;
+
+  const auto xpath = loaded.application->server().Process(alice, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="xpath-depth"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores"
+         xmlns:a="urn:example:appliance">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore>
+        <xpath-filter>/a:system/a:rack</xpath-filter>
+        <config-filter>true</config-filter><max-depth>1</max-depth>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_EQ(xpath.xml.find("<rpc-error>"), std::string::npos) << xpath.xml;
+  EXPECT_NE(xpath.xml.find("<a:system"), std::string::npos) << xpath.xml;
+  EXPECT_NE(xpath.xml.find("<a:rack"), std::string::npos) << xpath.xml;
+  EXPECT_EQ(xpath.xml.find("seven"), std::string::npos) << xpath.xml;
+  EXPECT_EQ(xpath.xml.find("edge-1"), std::string::npos) << xpath.xml;
 }
 
 TEST(DangdApplicationTest, UsesSecureNacmDefaultsWhenSubtreeIsAbsent) {

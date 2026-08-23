@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Applied RFC 8526 `max-depth` relative to each XPath-selected node instead of
+  the reply wrapper, retaining required ancestors without charging them against
+  the selected subtree's depth allowance.
 - Added combined RFC 8526 retrieval coverage for NACM read denial,
   configuration filtering, origin annotation, subtree selection, and maximum
   depth, verifying denied and out-of-scope data remain absent.

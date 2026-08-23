@@ -1220,8 +1220,10 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
               filter.append_attribute(attribute.name()) = attribute.value();
           }
         }
-        FilterResult filtered = ApplyXPathFilter(payload,
-                                                 Serialize(filter_document));
+        FilterResult filtered = ApplyXPathFilter(
+            payload, Serialize(filter_document),
+            depth == 0 ? std::nullopt
+                       : std::optional<std::uint16_t>(depth));
         if (!filtered.xml) {
           result = ProtocolFailure(*filtered.error,
               filtered.error_tag.value_or("invalid-value"));
@@ -1230,7 +1232,8 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
           payload = std::move(*filtered.xml);
         }
       }
-      if (result.ok && depth != 0) payload = ApplyMaximumDepth(payload, depth);
+      if (result.ok && depth != 0 && !xpath)
+        payload = ApplyMaximumDepth(payload, depth);
     }
   } else if (edit_data) {
     const auto target = ParseNmdaDatastore(Child(operation, "datastore"));

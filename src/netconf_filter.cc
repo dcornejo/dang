@@ -6,6 +6,7 @@
 #include "yang/resource_limits.h"
 #include "yang/xml_security.h"
 
+#include <algorithm>
 #include <cctype>
 #include <optional>
 #include <ranges>
@@ -143,6 +144,30 @@ void CopyXPathSelection(const pugi::xml_node& source,
   }
 }
 
+void CopyXPathSelectionAtDepth(
+    const pugi::xml_node& source,
+    const std::vector<pugi::xml_node>& selected, pugi::xml_node output_parent,
+    std::uint16_t inherited_levels, std::uint16_t maximum_depth) {
+  const bool selected_here =
+      std::ranges::find(selected, source) != selected.end();
+  if (inherited_levels == 0 && !ContainsSelected(source, selected)) return;
+
+  const std::uint16_t included_levels = selected_here
+      ? std::max(inherited_levels, maximum_depth)
+      : inherited_levels;
+  pugi::xml_node output = output_parent.append_child(source.name());
+  CopyShell(source, output);
+  for (const pugi::xml_node child : source.children()) {
+    if (child.type() == pugi::node_element) {
+      CopyXPathSelectionAtDepth(
+          child, selected, output,
+          included_levels == 0 ? 0 : included_levels - 1, maximum_depth);
+    } else {
+      output.append_copy(child);
+    }
+  }
+}
+
 bool ApplyNode(const pugi::xml_node& data, const pugi::xml_node& filter,
                pugi::xml_node output_parent) {
   if (!NameMatches(data, filter) || !AttributesMatch(data, filter)) return false;
@@ -244,7 +269,8 @@ FilterResult ApplySubtreeFilter(std::string_view data_xml,
 }
 
 FilterResult ApplyXPathFilter(std::string_view data_xml,
-                              std::string_view filter_xml) {
+                              std::string_view filter_xml,
+                              std::optional<std::uint16_t> maximum_depth) {
   const ResourceLimits& limits = DefaultResourceLimits();
   pugi::xml_document data_document;
   pugi::xml_document filter_document;
@@ -320,8 +346,12 @@ FilterResult ApplyXPathFilter(std::string_view data_xml,
       output.append_attribute(name.c_str()).set_value(namespace_uri.c_str());
   }
   for (const pugi::xml_node child : xpath_document.children())
-    if (child.type() == pugi::node_element)
-      CopyXPathSelection(child, selected, output);
+    if (child.type() == pugi::node_element) {
+      if (maximum_depth)
+        CopyXPathSelectionAtDepth(child, selected, output, 0, *maximum_depth);
+      else
+        CopyXPathSelection(child, selected, output);
+    }
   std::ostringstream serialized;
   output_document.print(serialized, "", pugi::format_raw);
   return {serialized.str(), std::nullopt, std::nullopt};

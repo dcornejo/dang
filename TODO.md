@@ -97,8 +97,9 @@ stays in this file with its remaining work rewritten precisely.
   create, update, delete, wrong-bit denial, and atomic preservation are covered;
   operational subtree selection combined with `config-filter`, `with-origin`,
   `max-depth`, and NACM read denial is covered without denied-data leakage.
-  Add the remaining XPath, origin selection, defaults, and non-operational
-  cross-product cases.
+  XPath selections now apply `max-depth` relative to every selected node while
+  retaining otherwise uncounted ancestor paths. Add the remaining origin
+  selection, defaults, and non-operational cross-product cases.
 - Verify that every advertised RFC 8525 datastore schema is accurate and that
   `<operational>` is a permitted superset of every configuration-datastore
   schema. Add reload tests for module, feature, deviation, plugin, datastore,

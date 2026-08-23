@@ -45,6 +45,11 @@ operation rather than as children of the operation schema. If the NMDA
 `with-defaults` feature is not enabled, `<get-data>` rejects that parameter with
 `invalid-value`.
 
+For `<get-data>` XPath selections, `max-depth` starts at each selected node.
+Ancestors included only to identify a selected node do not consume the depth
+allowance. Multiple selections are combined, and each selection can therefore
+retain its own permitted descendants.
+
 RFC 8526 `<edit-data>` supports `merge`, `replace`, and `none` as its
 `default-operation` and always rolls the target back to its complete pre-edit
 state when an error occurs. The RFC 8526 datastore identity augmentation is

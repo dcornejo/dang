@@ -269,8 +269,11 @@ Combined retrieval coverage applies NACM read filtering, configuration-only
 selection, intended-origin annotation, subtree selection, and maximum depth in
 one operational request. It verifies that denied leaves and unrelated state do
 not leak, permitted ancestors and leaves retain origin metadata, and children
-beyond the requested depth are removed. The remaining XPath/origin/default and
-non-operational interaction cross-product is not yet complete.
+beyond the requested depth are removed. XPath depth limiting is independently
+applied from every selected node rather than from the reply wrapper, and keeps
+the selected nodes' ancestor paths without counting those ancestors against
+the limit. The remaining origin/default and non-operational interaction
+cross-product is not yet complete.
 
 Applied configuration now comes from dangd's backend working snapshot after
 successful hardware application, rather than being copied from the committed
