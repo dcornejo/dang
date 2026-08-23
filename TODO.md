@@ -69,8 +69,10 @@ stays in this file with its remaining work rewritten precisely.
   leafrefs decisive. Separate model-owner and complete-publisher coverage now
   enforces mandatory children. Complete state-to-state leafref collections now
   remain closed across later provider merges, resolving valid references and
-  rejecting missing targets. Complete cross-fragment `instance-identifier` and XPath checks for collections that
-  remain selected or whose operands can be published by later providers.
+  rejecting missing targets. Instance-identifiers likewise resolve across
+  providers and reject missing paths into closed operational subtrees. Complete
+  the remaining cross-fragment XPath checks for collections that remain
+  selected or whose operands can be published by later providers.
   Callback and validation failures now omit the unsafe fragment and appear with
   provider, stage, path, and reason in operational reconciliation telemetry;
   additionally surface them as actionable NETCONF errors where RFC operation

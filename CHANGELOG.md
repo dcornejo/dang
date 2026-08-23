@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Made required instance-identifiers decisive when they select an absent node
+  inside an operational subtree previously declared complete.
 - Preserved ABI-v5 operational subtree completeness across cumulative provider
   merges, making cross-provider state leafrefs reject targets proven absent.
 - Added plugin ABI v5 operational completeness assertions, allowing providers

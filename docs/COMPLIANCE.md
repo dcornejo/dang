@@ -286,6 +286,11 @@ Completeness of an ABI-v5 top-level subtree is retained across subsequent
 provider merges. A later state-to-state leafref therefore resolves against an
 earlier target provider, or is rejected and attributed to the later provider
 when the closed target list proves that the requested instance is absent.
+Required instance-identifiers use the same cumulative semantics: paths can
+resolve into an earlier provider's state, while a path into an ABI-v5-complete
+top-level subtree is rejected when its selected instance is absent. New
+instance-identifier fixtures use ABI v5 exclusively; compatibility with older
+plugin ABIs is not a release constraint.
 Callback, validation, and merge failures omit the provider fragment and are
 attributed by provider, stage, instance path, and reason in modeled operational
 reconciliation telemetry, but

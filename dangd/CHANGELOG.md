@@ -7,6 +7,8 @@
 
 ### Changed
 
+- Added ABI-v5-only cross-provider instance-identifier resolution and rejection
+  for paths whose target is proven absent from a complete operational subtree.
 - Preserved complete operational subtrees across later provider merges and
   added positive and negative multi-plugin state-to-state leafref coverage.
 - Added multi-plugin coverage proving that an ABI-v5 publisher's complete child

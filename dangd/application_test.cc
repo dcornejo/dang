@@ -684,6 +684,55 @@ TEST(DangdApplicationTest, RejectsUnresolvedStateLeafrefFromLaterProvider) {
             std::string::npos) << response.xml;
 }
 
+TEST(DangdApplicationTest, ResolvesInstanceIdentifierAcrossStateProviders) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_INSTANCE_OWNER_PLUGIN_PATH,
+                     DANG_TEST_INSTANCE_TARGET_PLUGIN_PATH,
+                     DANG_TEST_INSTANCE_VALID_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+  const auto response = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="instance-ok"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore><config-filter>false</config-filter>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_NE(response.xml.find("oi:name='present'"), std::string::npos)
+      << response.xml;
+  EXPECT_EQ(response.xml.find("<provider>test-instance-valid</provider>"),
+            std::string::npos) << response.xml;
+}
+
+TEST(DangdApplicationTest, RejectsInstanceIdentifierIntoClosedStateSubtree) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_INSTANCE_OWNER_PLUGIN_PATH,
+                     DANG_TEST_INSTANCE_TARGET_PLUGIN_PATH,
+                     DANG_TEST_INSTANCE_INVALID_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+  const auto response = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="instance-bad"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore><config-filter>false</config-filter>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_EQ(response.xml.find("oi:name='missing'"), std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find("<provider>test-instance-invalid</provider>"),
+            std::string::npos) << response.xml;
+  EXPECT_NE(response.xml.find("<stage>merge</stage>"), std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find(
+                "instance-identifier does not select an existing data node"),
+            std::string::npos) << response.xml;
+}
+
 TEST(DangdApplicationTest, RejectsLaterOperationalProviderCollision) {
   TemporaryInputs inputs;
   auto options = Options(inputs);

@@ -287,6 +287,35 @@ if(YANG_BUILD_DANGD)
       set_target_properties(dangd_test_leafref_${leafref_provider}_plugin
         PROPERTIES PREFIX "")
     endforeach()
+    foreach(instance_provider IN ITEMS owner target valid invalid)
+      add_library(dangd_test_instance_${instance_provider}_plugin MODULE
+        dangd/test_plugins/operational_instance_identifier_plugin.cc)
+      target_include_directories(dangd_test_instance_${instance_provider}_plugin
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+      target_compile_definitions(dangd_test_instance_${instance_provider}_plugin
+        PRIVATE DANG_INSTANCE_PROVIDER_NAME="test-instance-${instance_provider}")
+      if(instance_provider STREQUAL "owner")
+        target_compile_definitions(dangd_test_instance_${instance_provider}_plugin
+          PRIVATE DANG_INSTANCE_MODEL_OWNER=1)
+      elseif(instance_provider STREQUAL "target")
+        target_compile_definitions(dangd_test_instance_${instance_provider}_plugin
+          PRIVATE DANG_INSTANCE_TARGET_PROVIDER=1)
+      else()
+        target_compile_definitions(dangd_test_instance_${instance_provider}_plugin
+          PRIVATE DANG_INSTANCE_REFERENCE_PROVIDER=1)
+        if(instance_provider STREQUAL "valid")
+          target_compile_definitions(dangd_test_instance_${instance_provider}_plugin
+            PRIVATE DANG_INSTANCE_VALUE="present")
+        else()
+          target_compile_definitions(dangd_test_instance_${instance_provider}_plugin
+            PRIVATE DANG_INSTANCE_VALUE="missing")
+        endif()
+      endif()
+      target_compile_options(dangd_test_instance_${instance_provider}_plugin
+        PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+      set_target_properties(dangd_test_instance_${instance_provider}_plugin
+        PROPERTIES PREFIX "")
+    endforeach()
     add_library(dangd_test_broken_discovery_plugin MODULE
       dangd/test_plugins/broken_discovery_plugin.cc)
     target_include_directories(dangd_test_broken_discovery_plugin PRIVATE
@@ -478,6 +507,11 @@ if(YANG_BUILD_TESTS)
       DANG_TEST_LEAFREF_TARGET_PLUGIN_PATH="$<TARGET_FILE:dangd_test_leafref_target_plugin>"
       DANG_TEST_LEAFREF_VALID_PLUGIN_PATH="$<TARGET_FILE:dangd_test_leafref_valid_plugin>"
       DANG_TEST_LEAFREF_INVALID_PLUGIN_PATH="$<TARGET_FILE:dangd_test_leafref_invalid_plugin>")
+    target_compile_definitions(dangd_tests PRIVATE
+      DANG_TEST_INSTANCE_OWNER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_instance_owner_plugin>"
+      DANG_TEST_INSTANCE_TARGET_PLUGIN_PATH="$<TARGET_FILE:dangd_test_instance_target_plugin>"
+      DANG_TEST_INSTANCE_VALID_PLUGIN_PATH="$<TARGET_FILE:dangd_test_instance_valid_plugin>"
+      DANG_TEST_INSTANCE_INVALID_PLUGIN_PATH="$<TARGET_FILE:dangd_test_instance_invalid_plugin>")
     add_dependencies(dangd_tests dangd_example_plugin dangd_ip_management_plugin
       dangd_test_provider_plugin dangd_test_consumer_plugin
       dangd_test_broken_discovery_plugin dangd_test_broken_operational_plugin
@@ -491,6 +525,8 @@ if(YANG_BUILD_TESTS)
       dangd_test_mandatory_publisher_plugin
       dangd_test_leafref_owner_plugin dangd_test_leafref_target_plugin
       dangd_test_leafref_valid_plugin dangd_test_leafref_invalid_plugin
+      dangd_test_instance_owner_plugin dangd_test_instance_target_plugin
+      dangd_test_instance_valid_plugin dangd_test_instance_invalid_plugin
       dangd_test_deviation_plugin)
     target_compile_options(dangd_tests PRIVATE
       -Wall -Wextra -Wpedantic -Wconversion -Wshadow)

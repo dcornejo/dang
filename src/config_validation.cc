@@ -587,6 +587,23 @@ InstanceLookupResult ResolveInstanceIdentifier(const RuntimeSchema& schema,
   return {true, !current.empty()};
 }
 
+bool InstanceIdentifierTargetComplete(const ConfigDocument& document,
+                                      const ConfigNode& context,
+                                      std::string_view value) {
+  const auto parts = SplitInstancePath(value);
+  if (!parts || parts->empty()) return false;
+  const auto first = ParseInstanceSegment(context, parts->front());
+  if (!first) return false;
+  bool saw_root = false;
+  for (ConfigNodeId root : document.roots()) {
+    const ConfigNode& candidate = document.Get(root);
+    if (candidate.name != first->name) continue;
+    saw_root = true;
+    if (candidate.child_coverage != Coverage::kComplete) return false;
+  }
+  return saw_root;
+}
+
 std::string_view TrimView(std::string_view value) {
   while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front())))
     value.remove_prefix(1);
@@ -2434,7 +2451,10 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
       } else if (!lookup.found && schema.require_instance) {
         ValidationFinding finding = Finding(
             ValidationCode::kUnresolvedReference,
-            complete ? FindingState::kInvalid : FindingState::kIndeterminate,
+            (complete || InstanceIdentifierTargetComplete(
+                             request.document, config, *config.value))
+                ? FindingState::kInvalid
+                : FindingState::kIndeterminate,
             "instance-identifier does not select an existing data node",
             paths.at(id), "data-missing");
         finding.netconf_error_app_tag = "instance-required";
