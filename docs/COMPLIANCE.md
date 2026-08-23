@@ -305,21 +305,22 @@ dynamic datastores change, and to complete external interoperability testing.
 
 ### RFC 8343 — interface management and RFC 8344 — IP management
 
-Status: **schema support and example plugin; not a real device implementation**.
+Status: **schema support and partial Linux/FreeBSD device implementation**.
 
 The pinned normative modules compile, validate configuration, appear in YANG
 Library, and are owned by the ABI-v4 IP-management example. The example emits
 fine-grained reversible actions to the common hardware planner, which applies
 address work before activation and publishes running only after all actions
-succeed. It prints English apply/rollback actions, assumes platform success,
-and derives a limited legacy `/interfaces-state` tree from the last applied
-configuration.
+succeed. It prints English apply/rollback actions and, on Linux or FreeBSD,
+reconciles enabled state and IPv4/IPv6 addresses using the host administration
+utility without invoking a shell. It derives a limited legacy
+`/interfaces-state` tree from the last applied configuration.
 
-It does not program or inspect host interfaces, addresses, neighbors, MTUs,
-counters, duplicate-address detection, or link state. It therefore demonstrates
-model and plugin integration but does not claim operational compliance with RFC
-8343 or RFC 8344. The plugin source comments describe a practical rtnetlink
-implementation path.
+It does not create/delete interfaces or inspect live addresses, neighbors, MTUs,
+counters, duplicate-address detection, or link state. Kernel drift and changes
+made by other agents are not reconciled, and command-level compensation is best
+effort. It therefore does not claim operational compliance with RFC 8343 or RFC
+8344.
 
 The transaction machinery is implementation safety behavior, not an RFC 8343
 or RFC 8344 compliance claim. Dynamic capacity rejection, dependency cycles,

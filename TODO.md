@@ -13,6 +13,13 @@ stays in this file with its remaining work rewritten precisely.
 
 ## Active tasks
 
+### RFC 8343/8344 native IP management closure
+
+- Replace the initial Linux `/sbin/ip` and FreeBSD `/sbin/ifconfig` adapters
+  with direct kernel APIs, publish live link/address/neighbor state, reconcile
+  external drift, cover MTU and neighbor configuration, and test privileged
+  apply plus partial-failure compensation on both operating systems.
+
 ### RFC 8341 NACM compliance closure
 
 - Run interoperability and negative-security tests against at least one

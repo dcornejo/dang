@@ -7,6 +7,10 @@
 
 ### Changed
 
+- Added separate Linux and FreeBSD RFC 8343/8344 platform backends for enabled
+  state and IPv4/IPv6 address reconciliation, with shell-free execution,
+  best-effort compensation, a safe unsupported-host backend, parser tests, and
+  documented privilege and compliance limits.
 - Added ABI v5 `get_operational_data_v2`, whose explicit completeness assertion
   enables absence-sensitive validation without changing ABI v3/v4 behavior.
 - Added paired ABI-v3 provider coverage for cumulative `must` and `when`

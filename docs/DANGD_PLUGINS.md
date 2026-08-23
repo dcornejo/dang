@@ -48,9 +48,19 @@ normative RFC 8343 `ietf-interfaces` and RFC 8344 `ietf-ip` modules. The build
 embeds the pinned YANG sources in `dangd_ip_management_plugin`, so the shared
 library remains self-contained. It converts each interface or IP delta into a
 retained forward and reverse action plan. Its demonstration `apply` and
-`rollback` callbacks print those actions to the daemon's diagnostic stream and
-assume they succeeded; replace those two callbacks when adapting it to real
-network interfaces.
+`rollback` callbacks print those actions to the daemon's diagnostic stream.
+Common parsing and execution live under `dangd/plugins/ip_management`; native
+implementations are isolated in its `linux` and `freebsd` directories. Linux
+applies enabled state and IPv4/IPv6 addresses through `/sbin/ip`; FreeBSD uses
+`/sbin/ifconfig`. Arguments are executed directly, never through a shell. A
+logging-only backend is selected on unsupported development hosts.
+
+The daemon needs host networking privileges (normally root, Linux
+`CAP_NET_ADMIN`, or an equivalent service grant). Reconciliation occurs only
+after the common planner reaches its final action. A failed command is returned
+to NETCONF and triggers a best-effort transition to the captured before state.
+The initial native backends do not create interfaces, manage MTUs or neighbors,
+discover external drift, or publish live kernel state.
 
 For example, start `dangd` with the plugin using the module filename produced
 by CMake:

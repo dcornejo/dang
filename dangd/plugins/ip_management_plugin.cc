@@ -3,6 +3,7 @@
 
 #include "dangd/plugin_api.h"
 #include "ip_management_models.h"
+#include "dangd/plugins/ip_management/platform_backend.h"
 
 #include <algorithm>
 #include <iostream>
@@ -53,6 +54,19 @@ std::string active_configuration;
 // protect them with a reader/writer lock; these globals are acceptable only
 // for this single-instance teaching plugin.
 std::string operational_xml;
+std::string backend_error;
+auto platform_backend = dangd::ip_management::MakePlatformBackend();
+
+bool Reconcile(std::string_view before, std::string_view desired,
+               DangPluginErrorV1* error) {
+  backend_error.clear();
+  if (platform_backend->Reconcile(before, desired, &backend_error)) return true;
+  if (error) {
+    error->message = backend_error.c_str();
+    error->instance_path = nullptr;
+  }
+  return false;
+}
 
 size_t SourceCount(void*) { return 2; }
 
@@ -171,24 +185,26 @@ int Validate(void*, void* opaque, DangPluginErrorV1*) {
   return opaque != nullptr;
 }
 
-int Apply(void*, void* opaque, DangPluginErrorV1*) {
-  // A real implementation performs the prepared operations here and waits for
-  // an acknowledgement for each one. Record which steps completed before
-  // returning failure; Rollback may then compensate only completed work. Treat
-  // "already exists" or "not found" as success only when observation proves
-  // that the resulting object exactly matches the requested state.
+int Apply(void*, void* opaque, DangPluginErrorV1* error) {
+  // The selected platform backend performs the complete snapshot transition.
+  // Linux and FreeBSD wait for each administration command; other build hosts
+  // deliberately retain the logging-only teaching behavior. A direct kernel
+  // implementation should retain per-operation completion and acknowledgements
+  // here so compensation can restore an exact observed snapshot.
   //
-  // active_configuration is updated only after every simulated action succeeds.
+  // active_configuration is updated only after every backend action succeeds.
   // That ordering is essential: operational publication must describe applied
   // device state, never merely the configuration that dangd proposed.
   if (!opaque) return 0;
-  for (const Action& action : static_cast<Prepared*>(opaque)->actions)
+  auto* prepared = static_cast<Prepared*>(opaque);
+  for (const Action& action : prepared->actions)
     std::clog << "ip-management: " << action.forward << '\n';
-  active_configuration = static_cast<Prepared*>(opaque)->proposed;
+  if (!Reconcile(prepared->before, prepared->proposed, error)) return 0;
+  active_configuration = prepared->proposed;
   return 1;
 }
 
-int Rollback(void*, void* opaque, DangPluginErrorV1*) {
+int Rollback(void*, void* opaque, DangPluginErrorV1* error) {
   // Compensation runs in reverse dependency order. Production code should use
   // captured pre-change kernel values rather than assuming the inverse of an
   // operation restores reality; asynchronous kernel changes or another agent
@@ -198,7 +214,9 @@ int Rollback(void*, void* opaque, DangPluginErrorV1*) {
   const auto& actions = static_cast<Prepared*>(opaque)->actions;
   for (auto action = actions.rbegin(); action != actions.rend(); ++action)
     std::clog << "ip-management rollback: " << action->reverse << '\n';
-  active_configuration = static_cast<Prepared*>(opaque)->before;
+  auto* prepared = static_cast<Prepared*>(opaque);
+  if (!Reconcile(prepared->proposed, prepared->before, error)) return 0;
+  active_configuration = prepared->before;
   return 1;
 }
 
@@ -234,8 +252,19 @@ int ApplyHardwareAction(void*, void* opaque, const char* id,
   std::clog << "ip-management: " << action->forward << '\n';
   action->applied = true;
   auto* prepared = static_cast<Prepared*>(opaque);
-  if (std::ranges::all_of(prepared->actions, &Action::applied))
+  if (std::ranges::all_of(prepared->actions, &Action::applied)) {
+    if (!Reconcile(prepared->before, prepared->proposed, error)) {
+      const std::string apply_error = backend_error;
+      std::string ignored;
+      platform_backend->Reconcile(prepared->proposed, prepared->before,
+                                  &ignored);
+      backend_error = apply_error;
+      if (error) error->message = backend_error.c_str();
+      action->applied = false;
+      return 0;
+    }
     active_configuration = prepared->proposed;
+  }
   return 1;
 }
 
@@ -247,8 +276,14 @@ int RollbackHardwareAction(void*, void* opaque, const char* id,
     return 0;
   }
   std::clog << "ip-management rollback: " << action->reverse << '\n';
+  auto* prepared = static_cast<Prepared*>(opaque);
+  // The native transition is performed atomically at the final planned action,
+  // so the first compensation restores the complete pre-transaction snapshot.
+  if (std::ranges::all_of(prepared->actions, [](const Action& candidate) {
+        return candidate.applied;
+      }) && !Reconcile(prepared->proposed, prepared->before, error)) return 0;
   action->applied = false;
-  active_configuration = static_cast<Prepared*>(opaque)->before;
+  active_configuration = prepared->before;
   return 1;
 }
 

@@ -148,8 +148,18 @@ if(YANG_BUILD_DANGD)
     DANGD_IETF_IP_YANG)
   configure_file(dangd/plugins/ip_management_models.h.in
     ${CMAKE_CURRENT_BINARY_DIR}/generated/ip_management_models.h @ONLY)
+  set(DANGD_IP_PLATFORM_SOURCE
+    dangd/plugins/ip_management/unsupported/backend.cc)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(DANGD_IP_PLATFORM_SOURCE dangd/plugins/ip_management/linux/backend.cc)
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+    set(DANGD_IP_PLATFORM_SOURCE dangd/plugins/ip_management/freebsd/backend.cc)
+  endif()
   add_library(dangd_ip_management_plugin MODULE
-    dangd/plugins/ip_management_plugin.cc)
+    dangd/plugins/ip_management_plugin.cc
+    dangd/plugins/ip_management/platform_config.cc
+    dangd/plugins/ip_management/command_runner.cc
+    ${DANGD_IP_PLATFORM_SOURCE})
   target_compile_features(dangd_ip_management_plugin PRIVATE cxx_std_20)
   target_include_directories(dangd_ip_management_plugin PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/generated)
@@ -381,6 +391,8 @@ if(YANG_BUILD_TESTS)
   if(YANG_BUILD_DANGD)
     add_executable(dangd_tests dangd/application_test.cc
       dangd/hardware_transaction_test.cc dangd/plugin_manager_test.cc
+      dangd/ip_management_platform_test.cc
+      dangd/plugins/ip_management/platform_config.cc
       dangd/ssh_transport_test.cc
       dangd/tls_transport_test.cc)
     target_compile_features(dangd_tests PRIVATE cxx_std_20)
