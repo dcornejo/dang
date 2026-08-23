@@ -4,6 +4,7 @@
 #include "dangd/application.h"
 #include "dangd/test_plugins/plugin_test_support.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -1284,6 +1285,50 @@ TEST(DangdApplicationTest, DispatchesPluginOwnedSchemaRpc) {
     </rpc>)xml");
   EXPECT_NE(response.xml.find("<status"), std::string::npos) << response.xml;
   EXPECT_NE(response.xml.find("ready"), std::string::npos) << response.xml;
+}
+
+TEST(DangdApplicationTest, PublishesBackendAppliedStateAndNodeOutcomes) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_PROVIDER_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(SetProviderMode(*loaded.application, "backend-transform")
+                .xml.find("<ok/>"), std::string::npos);
+  ASSERT_NE(Commit(*loaded.application).xml.find("<ok/>"), std::string::npos);
+
+  const auto response = loaded.application->server().Process("alice", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="state">
+      <get/>
+    </rpc>)xml");
+  EXPECT_NE(response.xml.find("device-normalized"), std::string::npos)
+      << response.xml;
+  EXPECT_EQ(response.xml.find("backend-transform"), std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find("<disposition>transformed</disposition>"),
+            std::string::npos) << response.xml;
+  EXPECT_NE(response.xml.find("<disposition>rejected</disposition>"),
+            std::string::npos) << response.xml;
+  EXPECT_NE(response.xml.find("<disposition>delayed</disposition>"),
+            std::string::npos) << response.xml;
+}
+
+TEST(DangdApplicationTest, RejectsAndCompensatesInvalidAppliedStateReport) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_PROVIDER_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  test_plugin::ResetTrace();
+  ASSERT_NE(SetProviderMode(*loaded.application, "backend-invalid-report")
+                .xml.find("<ok/>"), std::string::npos);
+
+  const auto commit = Commit(*loaded.application);
+  EXPECT_NE(commit.xml.find("invalid applied state"), std::string::npos)
+      << commit.xml;
+  const auto trace = test_plugin::Trace();
+  EXPECT_NE(std::find(trace.begin(), trace.end(), "provider.rollback"),
+            trace.end());
 }
 
 TEST(DangdApplicationTest, ValidatesEveryPluginBeforeApplyingAnyPlugin) {

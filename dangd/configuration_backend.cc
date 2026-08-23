@@ -119,12 +119,21 @@ EnglishConfigurationBackend::PrepareReplacement(
 
 std::optional<yang::config::ValidationFinding>
 EnglishConfigurationBackend::Replace(
-    const yang::config::RuntimeSchema&,
+    const yang::config::RuntimeSchema& schema,
     const yang::config::ConfigDocument&,
     const yang::config::ConfigDocument& after,
     std::span<const yang::config::ChangeEvent> changes) {
   if (plugins_) {
-    if (auto error = plugins_->Apply()) return error;
+    PluginApplyResult applied = plugins_->Apply(schema, after);
+    if (applied.error) return applied.error;
+    if (applied.applied) {
+      std::lock_guard lock(mutex_);
+      for (const auto& change : changes) deltas_.push_back(Describe(change));
+      working_ = std::move(*applied.applied);
+      if (prepared_nacm_ && nacm_) *nacm_ = std::move(*prepared_nacm_);
+      prepared_nacm_.reset();
+      return std::nullopt;
+    }
   }
   std::lock_guard lock(mutex_);
   for (const auto& change : changes) deltas_.push_back(Describe(change));

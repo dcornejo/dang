@@ -46,6 +46,20 @@ struct OperationalProviderFailure {
   std::string reason;
 };
 
+/** One plugin-attributed post-apply configuration result. */
+struct ConfigurationOutcome {
+  std::string provider;
+  std::string instance_path;
+  std::uint32_t disposition = DANG_CONFIGURATION_APPLIED_V1;
+  std::string reason;
+};
+
+/** Successful applied snapshot, or a transaction failure. */
+struct PluginApplyResult {
+  std::optional<yang::config::ValidationFinding> error;
+  std::optional<yang::config::ConfigDocument> applied;
+};
+
 /** Loads ABI-v1 plugins and coordinates their configuration transactions. */
 class PluginManager : public yang::netconf::OperationProvider {
  public:
@@ -73,8 +87,10 @@ class PluginManager : public yang::netconf::OperationProvider {
       const yang::config::ConfigDocument& before,
       const yang::config::ConfigDocument& after,
       std::span<const yang::config::ChangeEvent> changes);
-  /** Applies prepared plugins in dependency order with reverse rollback. */
-  [[nodiscard]] std::optional<yang::config::ValidationFinding> Apply();
+  /** Applies and schema-validates ABI-v6 reports of actual backend state. */
+  [[nodiscard]] PluginApplyResult Apply(
+      const yang::config::RuntimeSchema& schema,
+      const yang::config::ConfigDocument& proposed);
   /** Releases every retained preparation without applying it. */
   void Abort() noexcept;
   [[nodiscard]] yang::netconf::OperationResult InvokeRpc(

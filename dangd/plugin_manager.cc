@@ -55,6 +55,9 @@ struct PluginManager::State {
                                  DangPluginErrorV1*) = nullptr;
     int (*rollback_hardware_action)(void*, void*, const char*,
                                     DangPluginErrorV1*) = nullptr;
+    int (*reconcile_applied)(void*, void*, const char*,
+                             DangAppliedConfigurationV1*,
+                             DangPluginErrorV1*) = nullptr;
     std::string name;
     std::vector<std::string> modules;
     std::vector<std::string> dependencies;
@@ -70,6 +73,7 @@ struct PluginManager::State {
   std::string changes_json;
   mutable std::mutex reconciliation_mutex;
   std::vector<HardwareRemnant> remnants;
+  std::vector<ConfigurationOutcome> outcomes;
 
   void ReleasePrepared() noexcept {
     for (Plugin& plugin : plugins) {
@@ -107,6 +111,12 @@ bool PluginManager::Load(const std::filesystem::path& path,
     return false;
   }
   dlerror();
+  auto initialize_v6 = reinterpret_cast<DangPluginInitV6>(
+      dlsym(library, "dang_plugin_init_v6"));
+  const char* v6_error = dlerror();
+  const DangPluginV6* api_v6 =
+      v6_error == nullptr && initialize_v6 ? initialize_v6() : nullptr;
+  dlerror();
   auto initialize_v5 = reinterpret_cast<DangPluginInitV5>(
       dlsym(library, "dang_plugin_init_v5"));
   const char* v5_error = dlerror();
@@ -134,21 +144,23 @@ bool PluginManager::Load(const std::filesystem::path& path,
   auto initialize = reinterpret_cast<DangPluginInitV1>(
       dlsym(library, "dang_plugin_init_v1"));
   const char* v1_error = dlerror();
-  if (api_v5 == nullptr && api_v4 == nullptr && api_v3 == nullptr &&
-      api_v2 == nullptr && v1_error != nullptr) {
+  if (api_v6 == nullptr && api_v5 == nullptr && api_v4 == nullptr &&
+      api_v3 == nullptr && api_v2 == nullptr && v1_error != nullptr) {
     errors->push_back("plugin " + path.string() +
                       " has no supported dang_plugin_init entry point");
     dlclose(library);
     return false;
   }
   const DangPluginV1* api =
-      api_v5   ? &api_v5->v4.v3.v2.v1
+      api_v6   ? &api_v6->v5.v4.v3.v2.v1
+      : api_v5 ? &api_v5->v4.v3.v2.v1
       : api_v4 ? &api_v4->v3.v2.v1
       : api_v3 ? &api_v3->v2.v1
       : api_v2 ? &api_v2->v1
                : (initialize ? initialize() : nullptr);
   if (!api || api->abi_version !=
-                  (api_v5 ? DANG_PLUGIN_ABI_V5
+                  (api_v6 ? DANG_PLUGIN_ABI_V6
+                          : api_v5 ? DANG_PLUGIN_ABI_V5
                           : api_v4 ? DANG_PLUGIN_ABI_V4
                           : api_v3 ? DANG_PLUGIN_ABI_V3
                           : (api_v2 ? DANG_PLUGIN_ABI_V2
@@ -161,7 +173,8 @@ bool PluginManager::Load(const std::filesystem::path& path,
     dlclose(library);
     return false;
   }
-  const DangPluginV4* action_api = api_v5 ? &api_v5->v4 : api_v4;
+  const DangPluginV5* complete_api = api_v6 ? &api_v6->v5 : api_v5;
+  const DangPluginV4* action_api = complete_api ? &complete_api->v4 : api_v4;
   if (action_api &&
       (!action_api->hardware_action_count || !action_api->hardware_action_at ||
        !action_api->apply_hardware_action ||
@@ -172,7 +185,7 @@ bool PluginManager::Load(const std::filesystem::path& path,
     dlclose(library);
     return false;
   }
-  if (api_v5 && !api_v5->get_operational_data_v2) {
+  if (complete_api && !complete_api->get_operational_data_v2) {
     errors->push_back("plugin " + std::string(api->plugin_name) +
                       " does not implement ABI v5 operational publication");
     if (api->destroy) api->destroy(api->context);
@@ -198,17 +211,22 @@ bool PluginManager::Load(const std::filesystem::path& path,
   State::Plugin plugin;
   plugin.library = library;
   plugin.api = api;
-  plugin.invoke = api_v5   ? api_v5->v4.v3.v2.invoke
+  plugin.invoke = api_v6   ? api_v6->v5.v4.v3.v2.invoke
+                  : api_v5 ? api_v5->v4.v3.v2.invoke
                   : api_v4 ? api_v4->v3.v2.invoke
                   : api_v3 ? api_v3->v2.invoke
                   : api_v2 ? api_v2->invoke
                            : nullptr;
   plugin.operational =
-      api_v5   ? api_v5->v4.v3.get_operational_data
+      api_v6   ? api_v6->v5.v4.v3.get_operational_data
+      : api_v5 ? api_v5->v4.v3.get_operational_data
       : api_v4 ? api_v4->v3.get_operational_data
       : api_v3 ? api_v3->get_operational_data
                : nullptr;
-  plugin.operational_v2 = api_v5 ? api_v5->get_operational_data_v2 : nullptr;
+  plugin.operational_v2 =
+      complete_api ? complete_api->get_operational_data_v2 : nullptr;
+  plugin.reconcile_applied =
+      api_v6 ? api_v6->reconcile_applied_configuration : nullptr;
   if (action_api) {
     plugin.hardware_action_count = action_api->hardware_action_count;
     plugin.hardware_action_at = action_api->hardware_action_at;
@@ -367,6 +385,24 @@ std::string PluginManager::ReconciliationData(
            << "</instance-path><reason>"
            << yang::EscapeXmlText(remnant.reason)
            << "</reason></remnant>";
+  }
+  for (const ConfigurationOutcome& outcome : state_->outcomes) {
+    const char* disposition =
+        outcome.disposition == DANG_CONFIGURATION_APPLIED_V1 ? "applied"
+        : outcome.disposition == DANG_CONFIGURATION_TRANSFORMED_V1
+            ? "transformed"
+        : outcome.disposition == DANG_CONFIGURATION_REJECTED_V1 ? "rejected"
+                                                               : "delayed";
+    output << "<configuration-outcome><provider>"
+           << yang::EscapeXmlText(outcome.provider)
+           << "</provider><instance-path>"
+           << yang::EscapeXmlText(outcome.instance_path)
+           << "</instance-path><disposition>" << disposition
+           << "</disposition>";
+    if (!outcome.reason.empty())
+      output << "<reason>" << yang::EscapeXmlText(outcome.reason)
+             << "</reason>";
+    output << "</configuration-outcome>";
   }
   for (const OperationalProviderFailure& failure : provider_failures) {
     output << "<operational-provider-failure><provider>"
@@ -529,7 +565,9 @@ std::optional<yang::config::ValidationFinding> PluginManager::Prepare(
   return std::nullopt;
 }
 
-std::optional<yang::config::ValidationFinding> PluginManager::Apply() {
+PluginApplyResult PluginManager::Apply(
+    const yang::config::RuntimeSchema& schema,
+    const yang::config::ConfigDocument& proposed) {
   struct PlannedPlugin {
     std::size_t index = 0;
     std::vector<std::string> action_ids;
@@ -579,7 +617,7 @@ std::optional<yang::config::ValidationFinding> PluginManager::Apply() {
         auto finding = PluginFinding(plugin.name, error,
                                      "invalid hardware action descriptor");
         Abort();
-        return finding;
+        return {finding, std::nullopt};
       }
       const std::string local_id = descriptor.action_id;
       const std::string id = plugin.name + ":" + local_id;
@@ -591,7 +629,7 @@ std::optional<yang::config::ValidationFinding> PluginManager::Apply() {
           auto finding = PluginFinding(
               plugin.name, {}, "invalid hardware action dependency");
           Abort();
-          return finding;
+          return {finding, std::nullopt};
         }
         std::string copied = descriptor.dependencies[dependency];
         if (copied.find(':') == std::string::npos)
@@ -607,7 +645,7 @@ std::optional<yang::config::ValidationFinding> PluginManager::Apply() {
         auto finding = PluginFinding(plugin.name, {},
                                      "invalid hardware action class");
         Abort();
-        return finding;
+        return {finding, std::nullopt};
       }
       const std::string path =
           descriptor.instance_path ? descriptor.instance_path : "";
@@ -664,7 +702,7 @@ std::optional<yang::config::ValidationFinding> PluginManager::Apply() {
     auto finding = PluginFinding("hardware planner", error, "planning failed");
     finding.netconf_error_app_tag = "hardware-plan-invalid";
     Abort();
-    return finding;
+    return {finding, std::nullopt};
   }
   HardwareTransactionResult applied = planner.Apply();
   if (!applied.ok) {
@@ -688,14 +726,110 @@ std::optional<yang::config::ValidationFinding> PluginManager::Apply() {
       }
     }
     Abort();
-    return finding;
+    return {finding, std::nullopt};
   }
   {
     std::lock_guard lock(state_->reconciliation_mutex);
     state_->remnants.clear();
   }
+  yang::config::ConfigDocument accepted = proposed;
+  std::vector<ConfigurationOutcome> outcomes;
+  std::set<std::string> claimed_paths;
+  for (const std::size_t index : state_->order) {
+    State::Plugin& plugin = state_->plugins[index];
+    if (!plugin.reconcile_applied) continue;
+    const std::string current_xml = accepted.ToXml();
+    DangAppliedConfigurationV1 report{};
+    DangPluginErrorV1 error{};
+    if (!plugin.reconcile_applied(plugin.api->context, plugin.prepared,
+                                  current_xml.c_str(), &report, &error) ||
+        !report.applied_xml ||
+        (report.outcome_count != 0 && !report.outcomes)) {
+      auto finding = PluginFinding(plugin.name, error,
+                                   "invalid applied-state report");
+      for (auto rollback = state_->order.rbegin();
+           rollback != state_->order.rend(); ++rollback) {
+        State::Plugin& applied_plugin = state_->plugins[*rollback];
+        DangPluginErrorV1 ignored{};
+        applied_plugin.api->rollback(applied_plugin.api->context,
+                                     applied_plugin.prepared, &ignored);
+      }
+      Abort();
+      return {finding, std::nullopt};
+    }
+    auto parsed = yang::config::ParseDatastoreXml(schema, report.applied_xml);
+    if (!parsed.document) {
+      auto finding = parsed.findings.empty()
+          ? PluginFinding(plugin.name, {}, "applied-state XML is invalid")
+          : parsed.findings.front();
+      finding.message = "plugin " + plugin.name +
+                        " returned invalid applied state: " + finding.message;
+      for (auto rollback = state_->order.rbegin();
+           rollback != state_->order.rend(); ++rollback) {
+        State::Plugin& applied_plugin = state_->plugins[*rollback];
+        DangPluginErrorV1 ignored{};
+        applied_plugin.api->rollback(applied_plugin.api->context,
+                                     applied_plugin.prepared, &ignored);
+      }
+      Abort();
+      return {finding, std::nullopt};
+    }
+    for (const auto& change : yang::config::DiffConfigDocuments(
+             schema, accepted, *parsed.document)) {
+      const std::string& module = schema.Get(change.schema).module_name;
+      if (std::ranges::find(plugin.modules, module) != plugin.modules.end())
+        continue;
+      auto finding = PluginFinding(
+          plugin.name, {},
+          "applied-state report modified a module it does not own");
+      finding.instance_path = change.instance_path;
+      finding.module_name = module;
+      for (auto rollback = state_->order.rbegin();
+           rollback != state_->order.rend(); ++rollback) {
+        State::Plugin& applied_plugin = state_->plugins[*rollback];
+        DangPluginErrorV1 ignored{};
+        applied_plugin.api->rollback(applied_plugin.api->context,
+                                     applied_plugin.prepared, &ignored);
+      }
+      Abort();
+      return {finding, std::nullopt};
+    }
+    for (std::size_t outcome_index = 0;
+         outcome_index < report.outcome_count; ++outcome_index) {
+      const DangConfigurationOutcomeV1& outcome =
+          report.outcomes[outcome_index];
+      const bool valid_disposition =
+          outcome.disposition >= DANG_CONFIGURATION_APPLIED_V1 &&
+          outcome.disposition <= DANG_CONFIGURATION_DELAYED_V1;
+      if (!outcome.instance_path || !*outcome.instance_path ||
+          !valid_disposition ||
+          !claimed_paths.insert(outcome.instance_path).second) {
+        auto finding = PluginFinding(
+            plugin.name, {}, "invalid or duplicate configuration outcome");
+        finding.instance_path =
+            outcome.instance_path ? outcome.instance_path : "";
+        for (auto rollback = state_->order.rbegin();
+             rollback != state_->order.rend(); ++rollback) {
+          State::Plugin& applied_plugin = state_->plugins[*rollback];
+          DangPluginErrorV1 ignored{};
+          applied_plugin.api->rollback(applied_plugin.api->context,
+                                       applied_plugin.prepared, &ignored);
+        }
+        Abort();
+        return {finding, std::nullopt};
+      }
+      outcomes.push_back({plugin.name, outcome.instance_path,
+                          outcome.disposition,
+                          outcome.reason ? outcome.reason : ""});
+    }
+    accepted = std::move(*parsed.document);
+  }
+  {
+    std::lock_guard lock(state_->reconciliation_mutex);
+    state_->outcomes = std::move(outcomes);
+  }
   state_->ReleasePrepared();
-  return std::nullopt;
+  return {std::nullopt, std::move(accepted)};
 }
 
 void PluginManager::Abort() noexcept { state_->ReleasePrepared(); }

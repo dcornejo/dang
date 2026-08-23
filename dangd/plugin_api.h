@@ -163,6 +163,47 @@ typedef struct DangPluginV5 {
 /** Type of the optional exported `dang_plugin_init_v5` entry point. */
 typedef const DangPluginV5* (*DangPluginInitV5)(void);
 
+#define DANG_PLUGIN_ABI_V6 6u
+
+/** How one requested configuration node exists after hardware application. */
+typedef enum DangConfigurationDispositionV1 {
+  DANG_CONFIGURATION_APPLIED_V1 = 1,
+  DANG_CONFIGURATION_TRANSFORMED_V1 = 2,
+  DANG_CONFIGURATION_REJECTED_V1 = 3,
+  DANG_CONFIGURATION_DELAYED_V1 = 4
+} DangConfigurationDispositionV1;
+
+/** Borrowed, per-node result copied by dangd before the callback returns. */
+typedef struct DangConfigurationOutcomeV1 {
+  const char* instance_path;
+  uint32_t disposition;
+  const char* reason;
+} DangConfigurationOutcomeV1;
+
+/**
+ * Actual complete configuration and its noteworthy per-node outcomes.
+ *
+ * `applied_xml` is the complete configuration currently accepted by the
+ * backend, not the requested intent. It may equal `current_xml`. Outcome paths
+ * must be unique across every plugin participating in the transaction.
+ */
+typedef struct DangAppliedConfigurationV1 {
+  const char* applied_xml;
+  const DangConfigurationOutcomeV1* outcomes;
+  size_t outcome_count;
+} DangAppliedConfigurationV1;
+
+/** ABI v6 lets a backend report its actual post-apply configuration. */
+typedef struct DangPluginV6 {
+  DangPluginV5 v5;
+  int (*reconcile_applied_configuration)(
+      void* context, void* prepared, const char* current_xml,
+      DangAppliedConfigurationV1* result, DangPluginErrorV1* error);
+} DangPluginV6;
+
+/** Type of the optional exported `dang_plugin_init_v6` entry point. */
+typedef const DangPluginV6* (*DangPluginInitV6)(void);
+
 #ifdef __cplusplus
 }
 #endif

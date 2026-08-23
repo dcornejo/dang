@@ -128,6 +128,19 @@ filtered, paged, cached-partial, or collaboratively published subtrees. ABI v3
 and v4 callbacks always retain selected-data semantics. A false completeness
 assertion can cause valid state to be rejected and violates the plugin contract.
 
+ABI v6 extends ABI v5 with `reconcile_applied_configuration`. Dangd calls it
+after successful hardware application and before releasing the prepared
+transaction. `current_xml` is the complete applied snapshot accepted from the
+proposed configuration and all earlier dependency-ordered plugins. Return a
+complete schema-valid `applied_xml`; copy `current_xml` unchanged when the
+backend applied the request exactly. A plugin may change only nodes belonging
+to modules it declares as implemented; cross-module changes fail closed. The
+optional outcome array identifies
+unique canonical instance paths and one of `APPLIED`, `TRANSFORMED`,
+`REJECTED`, or `DELAYED`. Never report desired values as applied. Invalid XML,
+unknown dispositions, and duplicate path claims fail the commit and invoke
+rollback callbacks in reverse dependency order.
+
 A failed callback or rejected fragment is omitted and reported under
 `dangd-reconciliation:hardware-reconciliation/operational-provider-failure`.
 The record identifies the plugin, callback, validation, or merge stage, best

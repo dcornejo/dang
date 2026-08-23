@@ -54,6 +54,25 @@ module dangd-reconciliation {
       }
     }
 
+    list configuration-outcome {
+      key "provider instance-path";
+      description
+        "A plugin-reported per-node result from the most recent successful
+         hardware transaction. The operational configuration contains the
+         reported applied snapshot, never the unapplied requested value.";
+      leaf provider { type string; }
+      leaf instance-path { type string; }
+      leaf disposition {
+        type enumeration {
+          enum applied;
+          enum transformed;
+          enum rejected;
+          enum delayed;
+        }
+      }
+      leaf reason { type string; }
+    }
+
     list operational-provider-failure {
       key "provider";
       description

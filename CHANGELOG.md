@@ -10,6 +10,11 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Added plugin ABI v6 applied-state reconciliation: dependency-ordered plugins
+  may return a schema-validated actual configuration plus unique per-path
+  applied, transformed, rejected, or delayed outcomes. Operational reads now
+  publish that accepted snapshot and modeled outcome telemetry, never replaced
+  requested intent; invalid reports fail the commit and trigger compensation.
 - Applied `max-depth` from each terminal nested subtree-filter selection,
   retaining containment ancestors without incorrectly consuming the selected
   subtree's depth allowance.

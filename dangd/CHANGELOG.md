@@ -7,6 +7,10 @@
 
 ### Changed
 
+- Added ABI-v6 post-apply configuration reconciliation and modeled per-node
+  applied/transformed/rejected/delayed results, with deterministic plugin
+  ordering, duplicate-path rejection, schema validation, and compensation on
+  invalid reports.
 - Corrected nested subtree-filter depth limiting so containment ancestors do
   not prune or consume the allowance of deeply selected nodes.
 - Corrected XPath plus `max-depth` retrieval so depth begins at each selected

@@ -81,9 +81,11 @@ see [Safe hardware application ordering](../dangd/README.md#safe-hardware-applic
 Dangd retains the backend's accepted working configuration separately from the
 protocol datastore objects. NMDA `<operational>` configuration is built from
 that applied snapshot and then augmented with observed plugin and core state;
-it does not blindly echo the server's running-tree input. The current backend
-accepts or rejects complete transactions. Per-node transformations, delayed
-application, and remnant reconciliation remain future plugin/backend reports.
+it does not blindly echo the server's running-tree input. ABI-v6 backends can
+report a different schema-valid applied snapshot and per-node applied,
+transformed, rejected, or delayed results. These appear under
+`dangd-reconciliation`; unapplied requested values do not appear as device
+state.
 
 ### Serve NETCONF
 

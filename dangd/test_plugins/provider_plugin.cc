@@ -71,11 +71,75 @@ int Invoke(void*, const DangOperationV1* operation,
       "<status xmlns=\"urn:dangd:test:provider\">ready</status>";
   return 1;
 }
+int OperationalV2(void*, DangOperationalDataV2* result, DangPluginErrorV1*) {
+  if (!result) return 0;
+  *result = {"<data/>", 1};
+  return 1;
+}
+size_t HardwareActionCount(void*, void*) { return 1; }
+int HardwareActionAt(void*, void*, size_t index, DangHardwareActionV1* action,
+                     DangPluginErrorV1*) {
+  if (index != 0 || !action) return 0;
+  *action = {"transaction", "", DANG_HARDWARE_NORMAL_V1, nullptr, 0};
+  return 1;
+}
+int ApplyHardwareAction(void* context, void* prepared, const char*,
+                        DangPluginErrorV1* error) {
+  return Apply(context, prepared, error);
+}
+int RollbackHardwareAction(void* context, void* prepared, const char*,
+                           DangPluginErrorV1* error) {
+  return Rollback(context, prepared, error);
+}
+int ReconcileApplied(void*, void* opaque, const char* current_xml,
+                     DangAppliedConfigurationV1* result,
+                     DangPluginErrorV1*) {
+  if (!opaque || !current_xml || !result) return 0;
+  static thread_local std::string applied;
+  static thread_local DangConfigurationOutcomeV1 outcomes[3];
+  applied = current_xml;
+  if (applied.find("<mode>backend-invalid-report</mode>") !=
+      std::string::npos) {
+    *result = {"<config>", nullptr, 0};
+    return 1;
+  }
+  const std::string requested = "<mode>backend-transform</mode>";
+  const std::size_t position = applied.find(requested);
+  if (position == std::string::npos) {
+    *result = {applied.c_str(), nullptr, 0};
+    return 1;
+  }
+  applied.replace(position, requested.size(), "<mode>device-normalized</mode>");
+  constexpr const char* kPath =
+      "/{urn:dangd:test:provider}provider-settings/mode";
+  outcomes[0] = {kPath, DANG_CONFIGURATION_TRANSFORMED_V1,
+                 "hardware normalized the requested mode"};
+  outcomes[1] = {
+      "/{urn:dangd:test:provider}provider-settings/rejected-example",
+      DANG_CONFIGURATION_REJECTED_V1, "unsupported optional setting"};
+  outcomes[2] = {
+      "/{urn:dangd:test:provider}provider-settings/delayed-example",
+      DANG_CONFIGURATION_DELAYED_V1, "awaiting asynchronous convergence"};
+  *result = {applied.c_str(), outcomes, 3};
+  return 1;
+}
 
-const DangPluginV2 kPlugin{{DANG_PLUGIN_ABI_V2, "test-provider", nullptr,
-                            SourceCount, SourceAt, nullptr, nullptr, Prepare,
-                            Validate, Apply, Rollback, Release, nullptr}, Invoke};
+DangPluginV6 MakePlugin() {
+  DangPluginV6 plugin{};
+  plugin.v5.v4.v3.v2.v1 =
+      {DANG_PLUGIN_ABI_V6, "test-provider", nullptr, SourceCount, SourceAt,
+       nullptr, nullptr, Prepare, Validate, Apply, Rollback, Release, nullptr};
+  plugin.v5.v4.v3.v2.invoke = Invoke;
+  plugin.v5.v4.hardware_action_count = HardwareActionCount;
+  plugin.v5.v4.hardware_action_at = HardwareActionAt;
+  plugin.v5.v4.apply_hardware_action = ApplyHardwareAction;
+  plugin.v5.v4.rollback_hardware_action = RollbackHardwareAction;
+  plugin.v5.get_operational_data_v2 = OperationalV2;
+  plugin.reconcile_applied_configuration = ReconcileApplied;
+  return plugin;
+}
+const DangPluginV6 kPlugin = MakePlugin();
 
 }  // namespace
 
-extern "C" const DangPluginV2* dang_plugin_init_v2() { return &kPlugin; }
+extern "C" const DangPluginV6* dang_plugin_init_v6() { return &kPlugin; }

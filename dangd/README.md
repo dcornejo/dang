@@ -95,6 +95,14 @@ completeness assertion. It lets a provider state that omitted children of each
 returned node are truly absent, enabling mandatory and required-reference
 validation without imposing that assumption on older or partial providers.
 
+ABI v6 adds post-apply state fidelity. After hardware actions succeed, affected
+plugins run in dependency order and receive the complete snapshot accepted so
+far. Each may return a schema-valid replacement plus unique per-node
+`applied`, `transformed`, `rejected`, or `delayed` results. Dangd publishes only
+the final accepted snapshot in `<operational>` and exposes the results through
+the reconciliation model. Invalid XML, invalid dispositions, or duplicate path
+claims fail closed and initiate transaction compensation.
+
 On hardware with staging support, replacement can program a new ACL in an
 inactive slot, atomically switch the interface binding, and then remove the old
 ACL.
