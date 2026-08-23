@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Attributed ABI-v3 callback and instance-validation failures by provider,
+  stage, path, and reason in modeled operational reconciliation telemetry while
+  continuing to omit the unsafe fragment.
 - Validated each ABI-v3 operational fragment as typed partial instance data,
   rejecting unknown nodes, malformed shapes and values, missing list keys,
   choice/reference violations, and visible duplicates before publication.

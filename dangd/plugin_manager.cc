@@ -289,19 +289,29 @@ const std::vector<PluginYangSource>& PluginManager::yang_sources() const {
   return state_->sources;
 }
 
-std::vector<std::string> PluginManager::OperationalData() const {
-  std::vector<std::string> result;
+std::vector<PluginOperationalFragment> PluginManager::OperationalData() const {
+  std::vector<PluginOperationalFragment> result;
   for (const State::Plugin& plugin : state_->plugins) {
     if (!plugin.operational) continue;
     DangOperationalDataV1 data{};
     DangPluginErrorV1 error{};
-    if (plugin.operational(plugin.api->context, &data, &error) && data.data_xml)
-      result.emplace_back(data.data_xml);
+    if (!plugin.operational(plugin.api->context, &data, &error)) {
+      result.push_back({plugin.name, {}, error.message
+          ? std::optional<std::string>(error.message)
+          : std::optional<std::string>("operational callback failed"),
+          error.instance_path ? error.instance_path : ""});
+    } else if (!data.data_xml) {
+      result.push_back(
+          {plugin.name, {}, "callback returned no XML data", {}});
+    } else {
+      result.push_back({plugin.name, data.data_xml, std::nullopt, {}});
+    }
   }
   return result;
 }
 
-std::string PluginManager::ReconciliationData() const {
+std::string PluginManager::ReconciliationData(
+    std::span<const OperationalProviderFailure> provider_failures) const {
   std::lock_guard lock(state_->reconciliation_mutex);
   std::ostringstream output;
   output << "<hardware-reconciliation xmlns=\"urn:dangd:reconciliation\">"
@@ -315,6 +325,18 @@ std::string PluginManager::ReconciliationData() const {
            << "</instance-path><reason>"
            << yang::EscapeXmlText(remnant.reason)
            << "</reason></remnant>";
+  }
+  for (const OperationalProviderFailure& failure : provider_failures) {
+    output << "<operational-provider-failure><provider>"
+           << yang::EscapeXmlText(failure.provider)
+           << "</provider><stage>" << yang::EscapeXmlText(failure.stage)
+           << "</stage>";
+    if (!failure.instance_path.empty())
+      output << "<instance-path>"
+             << yang::EscapeXmlText(failure.instance_path)
+             << "</instance-path>";
+    output << "<reason>" << yang::EscapeXmlText(failure.reason)
+           << "</reason></operational-provider-failure>";
   }
   output << "</hardware-reconciliation>";
   return output.str();

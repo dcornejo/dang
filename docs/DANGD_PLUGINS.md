@@ -96,6 +96,12 @@ single fragment are not yet arbitrated. The callback must be read-only,
 bounded, and safe to invoke for each retrieval. It must not return configuration
 that has not actually been applied.
 
+A failed callback or rejected fragment is omitted and reported under
+`dangd-reconciliation:hardware-reconciliation/operational-provider-failure`.
+The record identifies the plugin, callback or validation stage, best available
+instance path, and reason. Providers should still log platform failures locally;
+the telemetry describes the current retrieval and is not a durable event log.
+
 The IP-management example uses ABI v3 to publish RFC 8343
 `/interfaces-state`, deriving `oper-status` from its last successfully applied
 configuration. This remains simulated state: it does not inspect host network

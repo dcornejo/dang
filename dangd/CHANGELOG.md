@@ -7,6 +7,8 @@
 
 ### Changed
 
+- Published current operational-provider callback and validation failures in
+  `dangd-reconciliation` instead of silently dropping invalid fragments.
 - Replaced top-level-name checks for plugin operational data with reusable typed
   partial-instance validation before fragments enter `<operational>`.
 - Made NMDA origin filters use runtime identity inheritance rather than literal

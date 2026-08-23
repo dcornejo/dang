@@ -145,8 +145,15 @@ std::string NamespaceFor(pugi::xml_node node, std::string_view prefix) {
   return {};
 }
 
-bool FragmentIsValidInstance(const yang::config::RuntimeSchema& schema,
-                             pugi::xml_node root, bool data_wrapper) {
+struct FragmentValidation {
+  bool valid = false;
+  std::string instance_path;
+  std::string reason;
+};
+
+FragmentValidation ValidateFragmentInstance(
+    const yang::config::RuntimeSchema& schema, pugi::xml_node root,
+    bool data_wrapper) {
   pugi::xml_document wrapped;
   pugi::xml_node data = wrapped.append_child("data");
   data.append_attribute("xmlns") =
@@ -162,12 +169,23 @@ bool FragmentIsValidInstance(const yang::config::RuntimeSchema& schema,
   const auto parsed = yang::config::ParseDatastoreXml(
       schema, xml.str(), {.coverage = yang::config::Coverage::kSelected,
                           .allow_origin_metadata = true});
-  if (!parsed.document) return false;
+  if (!parsed.document) {
+    if (parsed.findings.empty()) return {false, {}, "fragment cannot be parsed"};
+    return {false, parsed.findings.front().instance_path,
+            parsed.findings.front().message};
+  }
   const auto validation = yang::config::ConfigValidator().Validate(
       {schema, *parsed.document,
        yang::config::ValidationScope::kPartialStandalone, nullptr,
        std::nullopt, true});
-  return validation.valid;
+  if (validation.valid) return {true, {}, {}};
+  const auto finding = std::ranges::find_if(
+      validation.findings, [](const yang::config::ValidationFinding& value) {
+        return value.state == yang::config::FindingState::kInvalid;
+      });
+  if (finding == validation.findings.end())
+    return {false, {}, "fragment validation is incomplete"};
+  return {false, finding->instance_path, finding->message};
 }
 
 std::string SeedNacm(std::string configuration, std::string_view nacm) {
@@ -466,21 +484,50 @@ std::string DangdOperationalData::AugmentDataXml(
   if (yang::ParseUntrustedXml(monitoring_xml_, &monitoring).ok)
     data.append_copy(monitoring.document_element());
   if (plugins_) {
-    for (const std::string& fragment : plugins_->OperationalData()) {
+    std::vector<OperationalProviderFailure> provider_failures;
+    for (const PluginOperationalFragment& fragment :
+         plugins_->OperationalData()) {
+      if (fragment.error) {
+        provider_failures.push_back(
+            {fragment.provider, "callback", fragment.error_path,
+             *fragment.error});
+        continue;
+      }
       pugi::xml_document plugin_data;
-      if (!yang::ParseUntrustedXml(fragment, &plugin_data).ok) continue;
+      const auto parsed =
+          yang::ParseUntrustedXml(fragment.data_xml, &plugin_data);
+      if (!parsed.ok) {
+        provider_failures.push_back(
+            {fragment.provider, "validation", {}, parsed.message});
+        continue;
+      }
       const pugi::xml_node root = plugin_data.document_element();
       if (std::string_view(LocalName(root.name())) == "data") {
-        if (!schema_ || !FragmentIsValidInstance(*schema_, root, true))
+        if (!schema_) continue;
+        const FragmentValidation validation =
+            ValidateFragmentInstance(*schema_, root, true);
+        if (!validation.valid) {
+          provider_failures.push_back({fragment.provider, "validation",
+                                       validation.instance_path,
+                                       validation.reason});
           continue;
+        }
         for (const pugi::xml_node child : root.children())
           if (child.type() == pugi::node_element) data.append_copy(child);
-      } else if (schema_ && FragmentIsValidInstance(*schema_, root, false)) {
-        data.append_copy(root);
+      } else if (schema_) {
+        const FragmentValidation validation =
+            ValidateFragmentInstance(*schema_, root, false);
+        if (validation.valid) {
+          data.append_copy(root);
+        } else {
+          provider_failures.push_back({fragment.provider, "validation",
+                                       validation.instance_path,
+                                       validation.reason});
+        }
       }
     }
     pugi::xml_document reconciliation;
-    if (yang::ParseUntrustedXml(plugins_->ReconciliationData(),
+    if (yang::ParseUntrustedXml(plugins_->ReconciliationData(provider_failures),
                                 &reconciliation).ok)
       data.append_copy(reconciliation.document_element());
   }

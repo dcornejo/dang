@@ -5,10 +5,10 @@ module dangd-reconciliation {
 
   organization "dangd project";
   description
-    "Operational evidence retained when a hardware configuration transaction
-     cannot be completely compensated.  This module reports uncertainty; it
-     does not assert that a remnant is still present after an operator repairs
-     the device outside dangd.";
+    "Operational evidence for incomplete hardware compensation and provider
+     failures observed while constructing the current operational snapshot.
+     This module reports uncertainty; it does not assert that a remnant is
+     still present after an operator repairs the device outside dangd.";
 
   revision 2026-08-23 {
     description "Initial hardware reconciliation state.";
@@ -51,6 +51,34 @@ module dangd-reconciliation {
         type string;
         mandatory true;
         description "Backend explanation returned by the failed rollback.";
+      }
+    }
+
+    list operational-provider-failure {
+      key "provider";
+      description
+        "A callback or instance-validation failure observed while constructing
+         the current operational response. The provider's fragment is omitted.";
+      leaf provider {
+        type string;
+        description "Plugin name copied from its host-validated manifest.";
+      }
+      leaf stage {
+        type enumeration {
+          enum callback;
+          enum validation;
+        }
+        mandatory true;
+        description "Boundary at which publication failed.";
+      }
+      leaf instance-path {
+        type string;
+        description "Best available schema-aware path to invalid data.";
+      }
+      leaf reason {
+        type string;
+        mandatory true;
+        description "Callback message or instance-validation diagnostic.";
       }
     }
   }
