@@ -55,16 +55,7 @@ std::optional<std::string> NamespaceFor(const pugi::xml_node& node) {
 }
 
 std::string Escape(std::string_view value) {
-  std::string result;
-  for (char character : value) {
-    if (character == '&') result += "&amp;";
-    else if (character == '<') result += "&lt;";
-    else if (character == '>') result += "&gt;";
-    else if (character == '"') result += "&quot;";
-    else if (character == '\'') result += "&apos;";
-    else result += character;
-  }
-  return result;
+  return EscapeXmlText(value);
 }
 
 std::optional<Datastore> ParseDatastore(const pugi::xml_node& parent) {
@@ -111,7 +102,7 @@ std::optional<Datastore> ParseNmdaDatastore(const pugi::xml_node& node) {
 
 std::string ApplyMaximumDepth(std::string_view xml, unsigned int maximum) {
   pugi::xml_document document;
-  if (!document.load_buffer(xml.data(), xml.size())) return {};
+  if (!ParseUntrustedXml(xml, &document).ok) return {};
   std::function<void(pugi::xml_node, unsigned int)> prune;
   prune = [&](pugi::xml_node parent, unsigned int depth) {
     for (pugi::xml_node child = parent.first_child(); child;) {
@@ -141,7 +132,7 @@ std::string FilterConfigKind(std::string_view xml,
                              const config::RuntimeSchema& schema,
                              bool want_config) {
   pugi::xml_document document;
-  if (!document.load_buffer(xml.data(), xml.size())) return {};
+  if (!ParseUntrustedXml(xml, &document).ok) return {};
   std::function<bool(pugi::xml_node, config::RuntimeSchemaNodeId, bool)> visit;
   visit = [&](pugi::xml_node node, config::RuntimeSchemaNodeId schema_id,
               bool list_key) {
@@ -191,7 +182,7 @@ std::string AnnotateIntendedOrigin(std::string_view xml,
                                    const config::RuntimeSchema& schema,
                                    bool include_annotations) {
   pugi::xml_document document;
-  if (!document.load_buffer(xml.data(), xml.size())) return {};
+  if (!ParseUntrustedXml(xml, &document).ok) return {};
   pugi::xml_node root = document.document_element();
   if (include_annotations)
     root.append_attribute("xmlns:or") = kOriginNamespace.data();
@@ -390,7 +381,7 @@ std::optional<ActionInstance> FindActionInstance(
 bool ActionParentExists(std::string_view data_xml,
                         const ActionInstance& action) {
   pugi::xml_document document;
-  if (!document.load_buffer(data_xml.data(), data_xml.size())) return false;
+  if (!ParseUntrustedXml(data_xml, &document).ok) return false;
   std::vector<pugi::xml_node> candidates{document.document_element()};
   for (const ActionInstance::AncestorSelector& selector : action.selectors) {
     std::vector<pugi::xml_node> matches;
@@ -591,7 +582,7 @@ std::string FilterDatastoreCopySource(
   const std::string filtered = nacm.FilterReadableData(
       session.username, data, session.external_groups, &schema);
   pugi::xml_document parsed;
-  if (!parsed.load_buffer(filtered.data(), filtered.size())) return {};
+  if (!ParseUntrustedXml(filtered, &parsed).ok) return {};
   pugi::xml_document result;
   pugi::xml_node config = result.append_child("config");
   config.append_attribute("xmlns") = kNetconfNamespace.data();

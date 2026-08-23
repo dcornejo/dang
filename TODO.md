@@ -15,26 +15,6 @@ stays in this file with its remaining work rewritten precisely.
 
 ### RFC 8341 NACM compliance closure
 
-- Perform an end-to-end XML injection audit across every untrusted XML input and
-  generated XML/XPath output. Inventory parser entry points and parse flags;
-  verify fail-closed, resource-bounded handling of DTD and external entities,
-  entity expansion, XInclude, multiple roots, namespace rebinding, embedded
-  NULs, malformed UTF-8, CDATA, comments, and processing instructions. Test
-  XPath predicate quoting and XML escaping for configurations, RPC errors,
-  notifications, YANG Library, and model retrieval. Add focused regressions and
-  coverage-guided fuzz seeds for every issue found, and document any parser
-  behavior that is intentionally accepted. NETCONF `<hello>` and `<rpc>`
-  transport boundaries and complete datastore parsing now reject multiple
-  top-level document elements; intentional edit fragments remain a separately
-  defined input shape. A shared strict parser now protects hello, RPC, complete
-  configuration, edit fragments, NACM, and subtree/XPath filters; it validates
-  UTF-8/XML characters, rejects embedded NULs and DTD/entity declarations,
-  bounds resources, and treats comments, CDATA, processing instructions, and
-  XInclude as inert syntax. Notification filters/events, URL sources, plugin
-  operation and operational output, readable-data filtering, and persistence
-  snapshot imports now use the same contract. Finish the trust classification
-  for internal reparsing of generated XML, complete the line-by-line
-  output-escaping inventory, and add coverage-guided seeds for every boundary.
 - Run interoperability and negative-security tests against at least one
   independent RFC 8341 implementation, run a sustained coverage-guided NACM
   fuzz campaign, and document any intentional deviations before claiming

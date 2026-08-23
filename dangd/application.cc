@@ -170,8 +170,8 @@ bool FragmentMatchesSchema(const yang::config::RuntimeSchema& schema,
 std::string SeedNacm(std::string configuration, std::string_view nacm) {
   pugi::xml_document config_document;
   pugi::xml_document nacm_document;
-  if (!config_document.load_buffer(configuration.data(), configuration.size()) ||
-      !nacm_document.load_buffer(nacm.data(), nacm.size())) return configuration;
+  if (!yang::ParseUntrustedXml(configuration, &config_document).ok ||
+      !yang::ParseUntrustedXml(nacm, &nacm_document).ok) return configuration;
   pugi::xml_node root = config_document.document_element();
   for (const pugi::xml_node child : root.children()) {
     const std::string_view name = child.name();
@@ -194,7 +194,7 @@ std::string SeedNacm(std::string configuration, std::string_view nacm) {
 std::string NacmSubtree(const yang::config::ConfigDocument& configuration) {
   pugi::xml_document document;
   const std::string xml = configuration.ToXml();
-  if (!document.load_buffer(xml.data(), xml.size())) return {};
+  if (!yang::ParseUntrustedXml(xml, &document).ok) return {};
   for (const pugi::xml_node child : document.document_element().children()) {
     const std::string_view name = child.name();
     const std::size_t colon = name.find(':');
@@ -370,7 +370,7 @@ DangdOperationalData::DangdOperationalData(
       plugins_(plugins), schema_(runtime_schema) {
   pugi::xml_document library;
   pugi::xml_document legacy;
-  if (!library.load_buffer(yang_library_xml_.data(), yang_library_xml_.size()))
+  if (!yang::ParseUntrustedXml(yang_library_xml_, &library).ok)
     return;
   const pugi::xml_node set =
       library.document_element().child("module-set");
@@ -439,19 +439,17 @@ DangdOperationalData::DangdOperationalData(
 std::string DangdOperationalData::AugmentDataXml(
     std::string_view configuration_data_xml) const {
   pugi::xml_document document;
-  if (!document.load_buffer(configuration_data_xml.data(),
-                            configuration_data_xml.size()))
+  if (!yang::ParseUntrustedXml(configuration_data_xml, &document).ok)
     return {};
   pugi::xml_node data = document.document_element();
   pugi::xml_document library;
-  if (library.load_buffer(yang_library_xml_.data(), yang_library_xml_.size()))
+  if (yang::ParseUntrustedXml(yang_library_xml_, &library).ok)
     data.append_copy(library.document_element());
   pugi::xml_document modules_state;
-  if (modules_state.load_buffer(modules_state_xml_.data(),
-                                modules_state_xml_.size()))
+  if (yang::ParseUntrustedXml(modules_state_xml_, &modules_state).ok)
     data.append_copy(modules_state.document_element());
   pugi::xml_document monitoring;
-  if (monitoring.load_buffer(monitoring_xml_.data(), monitoring_xml_.size()))
+  if (yang::ParseUntrustedXml(monitoring_xml_, &monitoring).ok)
     data.append_copy(monitoring.document_element());
   if (plugins_) {
     for (const std::string& fragment : plugins_->OperationalData()) {
@@ -502,7 +500,7 @@ std::string DangdOperationalData::AugmentDataXml(
 
 std::vector<std::string> DangdOperationalData::Capabilities() const {
   pugi::xml_document document;
-  if (!document.load_buffer(yang_library_xml_.data(), yang_library_xml_.size()))
+  if (!yang::ParseUntrustedXml(yang_library_xml_, &document).ok)
     return {};
   const pugi::xml_node content =
       document.document_element().child("content-id");
@@ -534,7 +532,7 @@ DangdOperationalData::GetSchema(
 
 std::string DangdOperationalData::content_id() const {
   pugi::xml_document document;
-  if (!document.load_buffer(yang_library_xml_.data(), yang_library_xml_.size()))
+  if (!yang::ParseUntrustedXml(yang_library_xml_, &document).ok)
     return {};
   return document.document_element().child("content-id").text().as_string();
 }
@@ -604,18 +602,25 @@ std::vector<std::string> Application::DrainRecoveryAuditRecords() {
 
 bool Application::PublishYangLibraryUpdate(std::string_view content_id) {
   if (content_id == operational_.content_id()) return true;
+  const auto notification = [content_id](std::string_view root,
+                                         std::string_view leaf) {
+    const std::string value(content_id);
+    if (value.find('\0') != std::string::npos) return std::string{};
+    pugi::xml_document document;
+    pugi::xml_node event = document.append_child(root.data());
+    event.append_attribute("xmlns") =
+        "urn:ietf:params:xml:ns:yang:ietf-yang-library";
+    event.append_child(leaf.data()).text() = value.c_str();
+    std::ostringstream output;
+    document.print(output, "", pugi::format_raw);
+    return output.str();
+  };
   const std::string content =
-      "<yang-library-update "
-      "xmlns=\"urn:ietf:params:xml:ns:yang:ietf-yang-library\">"
-      "<content-id>" + std::string(content_id) +
-      std::string("</content-id></yang-library-update>");
+      notification("yang-library-update", "content-id");
   const bool current = notifications_.Publish(
       "NETCONF", "ietf-yang-library", "yang-library-update", content);
   const std::string legacy =
-      "<yang-library-change "
-      "xmlns=\"urn:ietf:params:xml:ns:yang:ietf-yang-library\">"
-      "<module-set-id>" + std::string(content_id) +
-      "</module-set-id></yang-library-change>";
+      notification("yang-library-change", "module-set-id");
   const bool compatible = notifications_.Publish(
       "NETCONF", "ietf-yang-library", "yang-library-change", legacy);
   return current && compatible;

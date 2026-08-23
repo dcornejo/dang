@@ -66,4 +66,27 @@ UntrustedXmlResult ParseUntrustedXml(std::string_view xml,
   return {true, false, {}};
 }
 
+std::string EscapeXmlText(std::string_view value) {
+  std::string escaped;
+  std::size_t offset = 0;
+  while (offset < value.size()) {
+    const auto decoded = utf8::Decode(value.substr(offset));
+    if (!decoded) {
+      escaped += "\xef\xbf\xbd";
+      ++offset;
+      continue;
+    }
+    const std::string_view bytes = value.substr(offset, decoded->byte_count);
+    if (!IsXmlCharacter(decoded->code_point)) escaped += "\xef\xbf\xbd";
+    else if (decoded->code_point == U'&') escaped += "&amp;";
+    else if (decoded->code_point == U'<') escaped += "&lt;";
+    else if (decoded->code_point == U'>') escaped += "&gt;";
+    else if (decoded->code_point == U'\"') escaped += "&quot;";
+    else if (decoded->code_point == U'\'') escaped += "&apos;";
+    else escaped.append(bytes);
+    offset += decoded->byte_count;
+  }
+  return escaped;
+}
+
 }  // namespace yang

@@ -32,6 +32,9 @@ and releases follow Semantic Versioning.
 - Extended strict parsing to notification filters and events, URL-provider
   configuration, plugin operation and operational output, NACM readable data,
   and snapshot XML imported through datastore validation.
+- Completed the XML construction/reparse audit, routed all core internal
+  reparses through the strict parser, added UTF-8-safe output escaping and
+  protocol fuzz seeds, and fixed raw YANG Library notification ID insertion.
 - Rejected multiple top-level configuration elements before datastore schema
   binding instead of validating only the first root and ignoring siblings.
 - Rejected multiple top-level XML elements at the NETCONF `<hello>` and RPC

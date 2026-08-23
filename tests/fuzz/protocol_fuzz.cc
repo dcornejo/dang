@@ -17,6 +17,7 @@
 #include "yang/netconf_framing.h"
 #include "yang/netconf_persistence.h"
 #include "yang/source_file.h"
+#include "yang/xml_security.h"
 
 namespace {
 
@@ -64,6 +65,8 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data,
   if (size == 0 || size > kMaximumFuzzInput) return 0;
   const std::uint8_t mode = data[0] % 4;
   const std::string input(reinterpret_cast<const char*>(data + 1), size - 1);
+  pugi::xml_document xml;
+  (void)yang::ParseUntrustedXml(input, &xml);
 
   if (mode == 0) {
     const auto version = (data[0] & 4U) == 0

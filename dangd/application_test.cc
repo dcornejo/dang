@@ -780,6 +780,23 @@ TEST(DangdApplicationTest, PublishesYangLibraryUpdateToSubscribers) {
   EXPECT_NE(notifications.back().find(
                 "<module-set-id>replacement-id</module-set-id>"),
             std::string::npos);
+  ASSERT_TRUE(loaded.application->PublishYangLibraryUpdate(
+      "x</content-id><injected/>&\"'"));
+  const auto escaped =
+      loaded.application->server().DrainNotifications(session.session_id);
+  ASSERT_EQ(escaped.size(), 2u);
+  for (const std::string& event : escaped) {
+    EXPECT_EQ(event.find("<injected"), std::string::npos) << event;
+    EXPECT_NE(event.find("&lt;/"), std::string::npos) << event;
+    EXPECT_NE(event.find("&amp;"), std::string::npos) << event;
+  }
+  std::string embedded_nul = "identifier";
+  embedded_nul.push_back('\0');
+  embedded_nul += "hidden";
+  EXPECT_FALSE(loaded.application->PublishYangLibraryUpdate(embedded_nul));
+  EXPECT_TRUE(loaded.application->server()
+                  .DrainNotifications(session.session_id)
+                  .empty());
   EXPECT_TRUE(loaded.application->PublishYangLibraryUpdate(
       loaded.application->yang_library_content_id()));
   EXPECT_TRUE(loaded.application->server()

@@ -24,15 +24,16 @@ arena, so the implementation now reacquires nodes by stable ID after growth.
 ## Fuzzing
 
 `yang_frontend_fuzz` covers UTF-8 decoding, lexing, statement parsing, YIN XML
-loading, and YIN-tree JSON loading. `yang_protocol_fuzz` covers RFC 6242
-framing, RFC 6241 subtree and XPath filters, RFC 8341 NACM loading, and
-versioned datastore snapshot restoration. Persistence exposes an in-memory
+loading, and YIN-tree JSON loading. `yang_protocol_fuzz` covers the shared
+strict XML parser, RFC 6242 framing, RFC 6241 subtree and XPath filters, RFC
+8341 NACM loading, and versioned datastore snapshot restoration. Persistence exposes an in-memory
 restore entry point so fuzzing does not depend on temporary-file behavior.
 Its NACM mode accepts a policy followed by a binary NUL or the textual
 `@@INSTANCE-PATH@@` marker and an attacker-controlled expanded instance path.
 When policy loading succeeds, the target exercises all four data-write/read
 authorization bits and readable-data filtering. Seeds cover keyed list and
-leaf-list predicates with namespace and quote edge cases.
+leaf-list predicates with namespace and quote edge cases, plus DTD/entity,
+multiple-root, CDATA, comment, processing-instruction, and inert-XInclude XML.
 Inputs larger than 1 MiB are rejected by each harness so every iteration has a
 deterministic upper bound.
 

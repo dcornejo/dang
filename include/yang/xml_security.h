@@ -38,6 +38,9 @@ struct UntrustedXmlResult {
     const UntrustedXmlPolicy& policy = {},
     const ResourceLimits& limits = DefaultResourceLimits());
 
+/** Escapes text and replaces malformed or forbidden XML characters. */
+[[nodiscard]] std::string EscapeXmlText(std::string_view value);
+
 }  // namespace yang
 
 #endif  // YANG_XML_SECURITY_H_

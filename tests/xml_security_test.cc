@@ -48,5 +48,18 @@ TEST(XmlSecurityTest, AllowsExplicitFragmentPolicy) {
   EXPECT_TRUE(ParseUntrustedXml("<first/><second/>", &document, policy).ok);
 }
 
+TEST(XmlSecurityTest, EscapesMarkupAndRepairsInvalidOutputCharacters) {
+  std::string value = "<&>\"'";
+  value.push_back('\0');
+  value += "\xc0\xaf";
+  value += " caf\xc3\xa9";
+  const std::string escaped = EscapeXmlText(value);
+  EXPECT_EQ(escaped,
+            "&lt;&amp;&gt;&quot;&apos;\xef\xbf\xbd"
+            "\xef\xbf\xbd\xef\xbf\xbd caf\xc3\xa9");
+  pugi::xml_document document;
+  EXPECT_TRUE(ParseUntrustedXml("<root>" + escaped + "</root>", &document).ok);
+}
+
 }  // namespace
 }  // namespace yang

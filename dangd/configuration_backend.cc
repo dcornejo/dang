@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "dangd/configuration_backend.h"
+#include "yang/xml_security.h"
 
 #include <sstream>
 #include <utility>
@@ -49,7 +50,7 @@ std::string Describe(const yang::config::ChangeEvent& change) {
 std::string ManagedNacmXml(const yang::config::ConfigDocument& document) {
   pugi::xml_document parsed;
   const std::string xml = document.ToXml();
-  if (!parsed.load_buffer(xml.data(), xml.size())) return {};
+  if (!yang::ParseUntrustedXml(xml, &parsed).ok) return {};
   constexpr std::string_view kNamespace =
       "urn:ietf:params:xml:ns:yang:ietf-netconf-acm";
   for (const pugi::xml_node child : parsed.document_element().children()) {
