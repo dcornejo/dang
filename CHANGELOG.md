@@ -10,6 +10,10 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Completed the RFC 8525 datastore-schema and reload audit: verified all five
+  advertised datastores reference the rebuilt compiled schema, and covered
+  deviation/plugin inventory changes, content IDs, both update notifications,
+  runtime schema availability, and source retrieval after atomic reload.
 - Completed the internal RFC 8526 retrieval matrix across running, candidate,
   startup, intended, and operational: added conventional-datastore subtree,
   XPath, configuration/state, depth, origin-error, and unknown-identity cases.

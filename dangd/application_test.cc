@@ -3,6 +3,7 @@
 
 #include "dangd/application.h"
 #include "dangd/test_plugins/plugin_test_support.h"
+#include "yang/xml_security.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -1834,6 +1835,68 @@ TEST(DangdApplicationTest, AtomicallyReloadsSchemaWithRunningConfiguration) {
   EXPECT_EQ(rejected.application, nullptr);
   EXPECT_FALSE(rejected.errors.empty());
   EXPECT_EQ(replacement.application->yang_library_content_id(), replacement_id);
+}
+
+TEST(DangdApplicationTest, ReloadsLibraryInventoryAndAdvertisedDatastoreSchema) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  auto base = Application::Load(options);
+  ASSERT_NE(base.application, nullptr) << testing::PrintToString(base.errors);
+  yang::netconf::RpcSessionContext session{77, "alice", "alice", {}};
+  ASSERT_NE(base.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="sub">
+      <create-subscription
+        xmlns="urn:ietf:params:xml:ns:netconf:notification:1.0"/>
+    </rpc>)xml").xml.find("<ok/>"), std::string::npos);
+  const std::string base_id = base.application->yang_library_content_id();
+
+  options.plugins = {DANG_TEST_DEVIATION_PLUGIN_PATH};
+  auto deviated = Application::Reload(options, *base.application);
+  ASSERT_NE(deviated.application, nullptr)
+      << testing::PrintToString(deviated.errors);
+  const std::string deviation_id =
+      deviated.application->yang_library_content_id();
+  EXPECT_NE(deviation_id, base_id);
+  ASSERT_TRUE(base.application->PublishYangLibraryUpdate(deviation_id));
+  const auto updates =
+      base.application->server().DrainNotifications(session.session_id);
+  ASSERT_EQ(updates.size(), 2u);
+  EXPECT_NE(updates[0].find("yang-library-update"), std::string::npos);
+  EXPECT_NE(updates[1].find("yang-library-change"), std::string::npos);
+
+  options.plugins = {DANG_TEST_PLUGIN_PATH};
+  auto plugin = Application::Reload(options, *deviated.application);
+  ASSERT_NE(plugin.application, nullptr) << testing::PrintToString(plugin.errors);
+  EXPECT_NE(plugin.application->yang_library_content_id(), deviation_id);
+  EXPECT_TRUE(plugin.application->schema()
+                  .FindRoot({"urn:dangd:example-plugin", "plugin-settings"})
+                  .has_value());
+
+  const auto library = plugin.application->server().Process("alice", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="library">
+      <get/>
+    </rpc>)xml");
+  pugi::xml_document parsed;
+  ASSERT_TRUE(yang::ParseUntrustedXml(library.xml, &parsed).ok) << library.xml;
+  const pugi::xml_node library_node =
+      parsed.document_element().child("data").child("yang-library");
+  ASSERT_TRUE(library_node) << library.xml;
+  std::size_t datastore_count = 0;
+  for (const pugi::xml_node datastore : library_node.children("datastore")) {
+    ++datastore_count;
+    EXPECT_STREQ(datastore.child("schema").text().as_string(), "dangd-schema");
+  }
+  EXPECT_EQ(datastore_count, 5u);
+
+  const auto source = plugin.application->server().Process("alice", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="source">
+      <get-schema xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-monitoring">
+        <identifier>dangd-example-plugin</identifier>
+        <version>2026-08-13</version>
+      </get-schema>
+    </rpc>)xml");
+  EXPECT_NE(source.xml.find("module dangd-example-plugin"), std::string::npos)
+      << source.xml;
 }
 
 TEST(DangdApplicationTest, RejectsSchemaInvalidConfiguration) {

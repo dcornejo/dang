@@ -35,11 +35,6 @@ stays in this file with its remaining work rewritten precisely.
 
 ### RFC 8342 / RFC 8526 NMDA compliance closure
 
-- Verify that every advertised RFC 8525 datastore schema is accurate and that
-  `<operational>` is a permitted superset of every configuration-datastore
-  schema. Add reload tests for module, feature, deviation, plugin, datastore,
-  and content changes, including update notifications and built-in source
-  retrieval.
 - Run an external NMDA interoperability suite and long-running concurrency,
   malformed-provider, provider-timeout, and resource-limit tests. Document
   unsupported optional features and deviations before making an RFC 8342 or

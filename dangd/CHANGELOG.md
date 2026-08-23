@@ -7,6 +7,9 @@
 
 ### Changed
 
+- Added atomic reload coverage across deviation and plugin inventory changes,
+  including content identifiers, current/legacy notifications, five datastore
+  schema references, compiled plugin data, and post-reload `get-schema`.
 - Added cross-product retrieval coverage for every conventional NMDA datastore,
   both selection forms, `config-filter`, `max-depth`, invalid non-operational
   origin requests, and an unsupported datastore identity.

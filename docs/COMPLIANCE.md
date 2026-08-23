@@ -349,16 +349,21 @@ external interoperability remains. `TODO.md` is the normative work list.
 
 ### RFC 8525 — YANG Library
 
-Status: **substantial, final NMDA audit pending**.
+Status: **substantial, external interoperability pending**.
 
 The live library publishes implemented and import-only modules, features,
 submodules, deviations, datastore schemas, a content identifier, update
 notifications, source retrieval locations, and the deprecated RFC 7895
 `/modules-state` compatibility view. Plugin load/reload updates the inventory.
 
-Remaining work is to prove that every advertised datastore schema remains
-accurate as operational providers, features, deviations, plugins, and future
-dynamic datastores change, and to complete external interoperability testing.
+All five conventional/NMDA datastores reference the same rebuilt compiled
+schema: configuration datastores use its config-true subset and operational may
+use the full schema, making it the permitted superset. Atomic reload tests cover
+module revision/content changes, deviation and plugin inventory replacement,
+content identifiers, current and legacy update notifications, compiled plugin
+nodes, and source retrieval. Feature enablement and datastore membership are
+fixed inputs to each rebuilt application; dynamic datastores are not
+advertised. External interoperability testing remains.
 
 ## Example management models
 
