@@ -7,6 +7,8 @@
 
 ### Changed
 
+- Made NMDA origin filters use runtime identity inheritance rather than literal
+  identity names, with namespace validation and repeated-filter coverage.
 - Added the built-in `dangd-reconciliation` operational model and retained
   per-action hardware remnants after incomplete rollback until a later hardware
   transaction succeeds.

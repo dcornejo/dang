@@ -204,6 +204,65 @@ TEST(DangdApplicationTest, RetrievesAndEditsConventionalNmdaDatastores) {
   EXPECT_NE(other_origins.xml.find("yang-library"), std::string::npos)
       << other_origins.xml;
 
+  const auto derived_origin = loaded.application->server().Process(
+      session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="derived-origin"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores"
+         xmlns:or="urn:ietf:params:xml:ns:yang:ietf-origin">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore>
+        <origin-filter>or:unknown</origin-filter>
+        <origin-filter>or:origin</origin-filter>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_NE(derived_origin.xml.find("edge-1"), std::string::npos)
+      << derived_origin.xml;
+
+  const auto negated_base = loaded.application->server().Process(
+      session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="negated-base"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores"
+         xmlns:or="urn:ietf:params:xml:ns:yang:ietf-origin">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore>
+        <negated-origin-filter>or:origin</negated-origin-filter>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_EQ(negated_base.xml.find("edge-1"), std::string::npos)
+      << negated_base.xml;
+  EXPECT_NE(negated_base.xml.find("yang-library"), std::string::npos)
+      << negated_base.xml;
+
+  const auto invalid_origin = loaded.application->server().Process(
+      session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="bad-origin"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores"
+         xmlns:bad="urn:example:appliance">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore>
+        <origin-filter>bad:not-an-origin</origin-filter>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_NE(invalid_origin.xml.find("invalid-value"), std::string::npos)
+      << invalid_origin.xml;
+  EXPECT_NE(invalid_origin.xml.find("not derived from ietf-origin:origin"),
+            std::string::npos)
+      << invalid_origin.xml;
+
+  const auto conflicting_origins = loaded.application->server().Process(
+      session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="conflict"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores"
+         xmlns:or="urn:ietf:params:xml:ns:yang:ietf-origin">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore>
+        <origin-filter>or:intended</origin-filter>
+        <negated-origin-filter>or:unknown</negated-origin-filter>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_NE(conflicting_origins.xml.find("invalid-value"), std::string::npos)
+      << conflicting_origins.xml;
+
   const auto edit = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="edit-data"
          xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">

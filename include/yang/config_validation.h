@@ -10,6 +10,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <pugixml.hpp>
@@ -144,11 +145,17 @@ class RuntimeSchema {
   /** Returns supported data children with choices and cases flattened. */
   [[nodiscard]] std::vector<RuntimeSchemaNodeId> DataChildren(
       RuntimeSchemaNodeId parent) const;
+  /** Returns whether an identity equals or transitively derives from a base. */
+  [[nodiscard]] bool IdentityIsDerivedFrom(
+      const QualifiedXmlName& identity,
+      const QualifiedXmlName& base) const;
 
  private:
   friend class RuntimeSchemaBuilder;
   std::vector<RuntimeSchemaNode> nodes_;
   std::vector<RuntimeSchemaNodeId> roots_;
+  std::vector<std::pair<QualifiedXmlName, QualifiedXmlName>>
+      identity_derivations_;
 };
 
 /** Lowers existing semantic compilation results to a runtime schema. */

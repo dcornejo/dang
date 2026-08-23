@@ -1311,6 +1311,14 @@ std::vector<RuntimeSchemaNodeId> RuntimeSchema::DataChildren(
   return result;
 }
 
+bool RuntimeSchema::IdentityIsDerivedFrom(
+    const QualifiedXmlName& identity, const QualifiedXmlName& base) const {
+  return identity == base ||
+         std::ranges::find(identity_derivations_,
+                           std::pair(identity, base)) !=
+             identity_derivations_.end();
+}
+
 RuntimeSchema RuntimeSchemaBuilder::FromCompilation(const Compilation& compilation) {
   RuntimeSchema result;
   const auto has_nacm_annotation = [&](const semantic::SchemaNode& node,
@@ -1341,7 +1349,8 @@ RuntimeSchema RuntimeSchemaBuilder::FromCompilation(const Compilation& compilati
   std::ranges::sort(modules, {}, [](const ResolvedModule* module) {
     return std::pair(module->name, module->revision.value_or(""));
   });
-  for (const ResolvedModule* module : modules) namespaces[module->name] = module->namespace_uri;
+  for (const ResolvedModule* module : modules)
+    namespaces[module->name] = module->namespace_uri;
   std::unordered_map<const ResolvedModule*, std::vector<RuntimeSchemaNodeId>> ids;
   for (const ResolvedModule* module : modules) {
     const semantic::SchemaTree* tree = compilation.schemas.Find(*module);
@@ -1389,18 +1398,36 @@ RuntimeSchema RuntimeSchemaBuilder::FromCompilation(const Compilation& compilati
         if (source.type->builtin == semantic::BuiltinType::kIdentityRef) {
           node.reference_kind = RuntimeReferenceKind::kIdentityRef;
           for (const auto& base : source.type->resolved_identity_bases) {
-            const auto add_identity = [&](const semantic::QualifiedSymbolName& identity) {
+            std::vector<semantic::QualifiedSymbolName> identities{
+                {base.module, base.name}};
+            const auto derived = compilation.identities.identities.DerivedFrom(
+                {base.module, base.name});
+            identities.insert(identities.end(), derived.begin(), derived.end());
+            const auto add_identity = [&](const semantic::QualifiedSymbolName&
+                                              identity) {
               const auto namespace_found = namespaces.find(identity.module);
               if (namespace_found != namespaces.end()) {
                 node.identity_values.push_back(
                     {namespace_found->second, identity.name});
               }
             };
-            add_identity({base.module, base.name});
-            for (const auto& identity :
-                 compilation.identities.identities.DerivedFrom(
-                     {base.module, base.name})) {
-              add_identity(identity);
+            for (const auto& identity : identities) add_identity(identity);
+            for (const auto& identity : identities) {
+              for (const auto& possible_base : identities) {
+                if (!compilation.identities.identities.IsDerivedFrom(
+                        identity, possible_base))
+                  continue;
+                const auto identity_namespace =
+                    namespaces.find(identity.module);
+                const auto base_namespace =
+                    namespaces.find(possible_base.module);
+                if (identity_namespace != namespaces.end() &&
+                    base_namespace != namespaces.end()) {
+                  result.identity_derivations_.push_back(
+                      {{identity_namespace->second, identity.name},
+                       {base_namespace->second, possible_base.name}});
+                }
+              }
             }
           }
           std::ranges::sort(node.identity_values, {},
@@ -1577,6 +1604,13 @@ RuntimeSchema RuntimeSchemaBuilder::FromCompilation(const Compilation& compilati
                 .at(constraint.constrained_node.node))
         .xpath_constraints.push_back(std::move(lowered));
   }
+  std::ranges::sort(result.identity_derivations_, {}, [](const auto& value) {
+    return std::tuple(value.first.namespace_uri, value.first.local_name,
+                      value.second.namespace_uri, value.second.local_name);
+  });
+  result.identity_derivations_.erase(
+      std::ranges::unique(result.identity_derivations_).begin(),
+      result.identity_derivations_.end());
   return result;
 }
 

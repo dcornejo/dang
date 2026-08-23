@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Lowered identity inheritance into the common runtime schema and made RFC 8526
+  origin selection namespace- and derivation-aware, including repeated and
+  negated filters, base-identity matches, and explicit invalid-value errors.
 - Retained incomplete hardware rollback actions as modeled operational
   reconciliation records containing action ID, instance path, and failure
   reason; published the model through YANG Library and clear stale records only

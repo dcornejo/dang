@@ -289,6 +289,12 @@ TEST(ConfigValidationTest, ValidatesIdentityrefLeafrefAndInstanceIdentifier) {
   VectorDiagnosticSink diagnostics;
   auto schema = CompileSchema(&diagnostics);
   ASSERT_TRUE(schema);
+  EXPECT_TRUE(schema->IdentityIsDerivedFrom(
+      {"urn:identities", "ethernet"}, {"urn:identities", "endpoint"}));
+  EXPECT_FALSE(schema->IdentityIsDerivedFrom(
+      {"urn:identities", "endpoint"}, {"urn:identities", "ethernet"}));
+  EXPECT_FALSE(schema->IdentityIsDerivedFrom(
+      {"urn:device", "unrelated"}, {"urn:identities", "endpoint"}));
   auto parsed = ParseDatastoreXml(*schema, R"xml(
     <system xmlns="urn:device" xmlns:d="urn:device">
       <hostname>edge-1</hostname><tcp-port>830</tcp-port>

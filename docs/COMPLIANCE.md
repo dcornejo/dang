@@ -261,8 +261,10 @@ config-false state is not annotated. Failed hardware compensation is retained
 as modeled per-action/path remnant state until a successful later hardware
 transaction. Per-node transformed, rejected, and delayed states are not yet
 represented. Origins other than `intended` are not derived from data sources,
-identity derivation is not used by
-origin filtering, and operational plugin fragments receive structural name
+so filtering cannot yet select such per-node data. Filtering of applied
+`intended` data is namespace- and identity-derivation-aware, including repeated
+and negated selections, while preserving config-false state and required
+structure. Operational plugin fragments receive structural name
 binding rather than complete instance validation and collision arbitration.
 Dynamic configuration datastores are not implemented. The complete operation,
 filter/default/origin/NACM interaction matrix and external interoperability

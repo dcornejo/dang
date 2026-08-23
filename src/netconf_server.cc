@@ -239,11 +239,35 @@ std::string AnnotateIntendedOrigin(std::string_view xml,
   return output.str();
 }
 
-bool OriginValueIsIntended(const pugi::xml_node& node) {
-  const std::string_view value = node.text().as_string();
+std::optional<config::QualifiedXmlName> ParseIdentityValue(
+    const pugi::xml_node& node) {
+  std::string_view value = node.text().as_string();
+  while (!value.empty() && std::isspace(
+             static_cast<unsigned char>(value.front()))) value.remove_prefix(1);
+  while (!value.empty() && std::isspace(
+             static_cast<unsigned char>(value.back()))) value.remove_suffix(1);
+  if (value.empty()) return std::nullopt;
   const std::size_t colon = value.find(':');
-  return (colon == std::string_view::npos ? value : value.substr(colon + 1)) ==
-         "intended";
+  if (colon == 0 || colon + 1 == value.size() ||
+      (colon != std::string_view::npos &&
+       value.find(':', colon + 1) != std::string_view::npos))
+    return std::nullopt;
+  const std::string_view prefix =
+      colon == std::string_view::npos ? std::string_view()
+                                      : value.substr(0, colon);
+  const std::string declaration =
+      prefix.empty() ? "xmlns" : "xmlns:" + std::string(prefix);
+  for (pugi::xml_node current = node; current; current = current.parent()) {
+    if (const pugi::xml_attribute binding =
+            current.attribute(declaration.c_str())) {
+      return config::QualifiedXmlName{
+          binding.value(),
+          std::string(colon == std::string_view::npos
+                          ? value
+                          : value.substr(colon + 1))};
+    }
+  }
+  return std::nullopt;
 }
 
 std::optional<config::EditOperation> ParseDefaultOperation(
@@ -1045,20 +1069,41 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
     const pugi::xml_node config_filter = Child(operation, "config-filter");
     const pugi::xml_node maximum_depth = Child(operation, "max-depth");
     const pugi::xml_node with_origin = Child(operation, "with-origin");
-    bool has_origin_filter = false;
-    bool origin_includes_intended = false;
-    bool origin_excludes_intended = false;
+    std::vector<config::QualifiedXmlName> origin_filters;
+    std::vector<config::QualifiedXmlName> negated_origin_filters;
+    bool invalid_origin_filter = false;
     for (const pugi::xml_node child : operation.children()) {
       const std::string_view child_name = LocalName(child.name());
       if (child_name == "origin-filter") {
-        has_origin_filter = true;
-        origin_includes_intended = origin_includes_intended ||
-                                   OriginValueIsIntended(child);
+        const auto identity = ParseIdentityValue(child);
+        if (identity) origin_filters.push_back(*identity);
+        else invalid_origin_filter = true;
       } else if (child_name == "negated-origin-filter") {
-        origin_excludes_intended = origin_excludes_intended ||
-                                   OriginValueIsIntended(child);
+        const auto identity = ParseIdentityValue(child);
+        if (identity) negated_origin_filters.push_back(*identity);
+        else invalid_origin_filter = true;
       }
     }
+    const config::QualifiedXmlName origin_identity{
+        std::string(kOriginNamespace), "origin"};
+    const config::QualifiedXmlName intended_identity{
+        std::string(kOriginNamespace), "intended"};
+    const auto valid_origin = [&](const config::QualifiedXmlName& identity) {
+      return datastores_.schema().IdentityIsDerivedFrom(identity,
+                                                        origin_identity);
+    };
+    invalid_origin_filter =
+        invalid_origin_filter ||
+        !std::ranges::all_of(origin_filters, valid_origin) ||
+        !std::ranges::all_of(negated_origin_filters, valid_origin);
+    const auto matches_intended = [&](const config::QualifiedXmlName& base) {
+      return datastores_.schema().IdentityIsDerivedFrom(intended_identity,
+                                                        base);
+    };
+    const bool origin_includes_intended =
+        std::ranges::any_of(origin_filters, matches_intended);
+    const bool origin_excludes_intended =
+        std::ranges::any_of(negated_origin_filters, matches_intended);
     unsigned int depth = 0;
     if (maximum_depth &&
         std::string_view(maximum_depth.text().as_string()) != "unbounded") {
@@ -1069,11 +1114,20 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
           converted.ptr != value.data() + value.size() || depth == 0)
         result = ProtocolFailure("invalid get-data max-depth", "invalid-value");
     }
-    if (!source || (subtree && xpath) ||
+    if (invalid_origin_filter) {
+      result = ProtocolFailure(
+          "origin filter is not derived from ietf-origin:origin",
+          "invalid-value");
+    } else if (!origin_filters.empty() && !negated_origin_filters.empty()) {
+      result = ProtocolFailure(
+          "origin-filter and negated-origin-filter cannot be combined",
+          "invalid-value");
+    } else if (!source || (subtree && xpath) ||
         (*source == Datastore::kOperational && operational_ == nullptr)) {
       result = ProtocolFailure("get-data requires one supported datastore",
                                "invalid-value");
-    } else if ((with_origin || has_origin_filter || origin_excludes_intended) &&
+    } else if ((with_origin || !origin_filters.empty() ||
+                !negated_origin_filters.empty()) &&
                *source != Datastore::kOperational) {
       result = ProtocolFailure(
           "origin selection is only valid for the operational datastore",
@@ -1090,7 +1144,7 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
       if (*source == Datastore::kOperational)
         payload = operational_->AugmentDataXml(payload);
       if (*source == Datastore::kOperational &&
-          ((has_origin_filter && !origin_includes_intended) ||
+          ((!origin_filters.empty() && !origin_includes_intended) ||
            origin_excludes_intended))
         payload = FilterConfigKind(payload, datastores_.schema(), false);
       if (nacm != nullptr)

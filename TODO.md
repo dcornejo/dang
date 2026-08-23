@@ -41,10 +41,11 @@ stays in this file with its remaining work rewritten precisely.
   annotated. Add sources for `default`, `system`, `learned`, `dynamic`,
   `unknown`, and derived identities; validate those identities and optionally
   compact redundant annotations using the RFC 8342 inheritance rules.
-- Implement RFC 8526 origin filtering over identity derivation, not literal
-  string recognition. Correctly handle repeated positive or repeated negated
-  filters, reject their simultaneous use through model validation, and retain
-  ancestors and list keys needed to encode selected descendants.
+- Extend origin filtering from the current identity-aware applied-`intended`
+  selection to the non-intended per-node origins as those data sources are
+  added. Runtime identity derivation, namespace validation, repeated positive
+  and negated values, conflicting-choice rejection, and preservation of state
+  nodes and required configuration structure are implemented.
 - Validate ABI-v3 operational fragments as complete typed instance data before
   publication: namespace and schema binding, scalar types, list keys,
   `mandatory`, `when`, `must`, `leafref`, `instance-identifier`, `unique`, and

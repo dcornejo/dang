@@ -31,7 +31,10 @@ metadata when requested. More specific origin metadata already supplied by an
 operational provider is preserved, while config-false state is never assigned
 a fabricated configuration origin. The RFC 8526 `origin` feature is advertised;
 `with-origin`, positive origin filters, and negated origin filters expose or
-select that metadata without affecting config-false system state.
+select that metadata without affecting config-false system state. Filter
+identityrefs are resolved by namespace and use transitive identity derivation;
+repeated values have union semantics, and invalid or conflicting selections
+return `invalid-value`.
 
 ```cpp
 #include <chrono>
