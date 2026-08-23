@@ -145,26 +145,29 @@ std::string NamespaceFor(pugi::xml_node node, std::string_view prefix) {
   return {};
 }
 
-yang::config::QualifiedXmlName ExpandedName(pugi::xml_node node) {
-  const std::string_view name = node.name();
-  const std::size_t colon = name.find(':');
-  const std::string_view prefix = colon == std::string_view::npos
-      ? std::string_view() : name.substr(0, colon);
-  return {NamespaceFor(node, prefix), std::string(LocalName(name))};
-}
-
-bool FragmentMatchesSchema(const yang::config::RuntimeSchema& schema,
-                           pugi::xml_node node,
-                           std::optional<yang::config::RuntimeSchemaNodeId>
-                               parent = std::nullopt) {
-  const auto schema_id = parent ? schema.FindChild(*parent, ExpandedName(node))
-                                : schema.FindRoot(ExpandedName(node));
-  if (!schema_id) return false;
-  for (const pugi::xml_node child : node.children()) {
-    if (child.type() == pugi::node_element &&
-        !FragmentMatchesSchema(schema, child, *schema_id)) return false;
+bool FragmentIsValidInstance(const yang::config::RuntimeSchema& schema,
+                             pugi::xml_node root, bool data_wrapper) {
+  pugi::xml_document wrapped;
+  pugi::xml_node data = wrapped.append_child("data");
+  data.append_attribute("xmlns") =
+      "urn:ietf:params:xml:ns:netconf:base:1.0";
+  if (data_wrapper) {
+    for (const pugi::xml_node child : root.children())
+      if (child.type() == pugi::node_element) data.append_copy(child);
+  } else {
+    data.append_copy(root);
   }
-  return true;
+  std::ostringstream xml;
+  wrapped.print(xml, "", pugi::format_raw);
+  const auto parsed = yang::config::ParseDatastoreXml(
+      schema, xml.str(), {.coverage = yang::config::Coverage::kSelected,
+                          .allow_origin_metadata = true});
+  if (!parsed.document) return false;
+  const auto validation = yang::config::ConfigValidator().Validate(
+      {schema, *parsed.document,
+       yang::config::ValidationScope::kPartialStandalone, nullptr,
+       std::nullopt, true});
+  return validation.valid;
 }
 
 std::string SeedNacm(std::string configuration, std::string_view nacm) {
@@ -468,10 +471,11 @@ std::string DangdOperationalData::AugmentDataXml(
       if (!yang::ParseUntrustedXml(fragment, &plugin_data).ok) continue;
       const pugi::xml_node root = plugin_data.document_element();
       if (std::string_view(LocalName(root.name())) == "data") {
+        if (!schema_ || !FragmentIsValidInstance(*schema_, root, true))
+          continue;
         for (const pugi::xml_node child : root.children())
-          if (child.type() == pugi::node_element && schema_ &&
-              FragmentMatchesSchema(*schema_, child)) data.append_copy(child);
-      } else if (schema_ && FragmentMatchesSchema(*schema_, root)) {
+          if (child.type() == pugi::node_element) data.append_copy(child);
+      } else if (schema_ && FragmentIsValidInstance(*schema_, root, false)) {
         data.append_copy(root);
       }
     }

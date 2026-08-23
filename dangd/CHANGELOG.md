@@ -7,6 +7,8 @@
 
 ### Changed
 
+- Replaced top-level-name checks for plugin operational data with reusable typed
+  partial-instance validation before fragments enter `<operational>`.
 - Made NMDA origin filters use runtime identity inheritance rather than literal
   identity names, with namespace validation and repeated-filter coverage.
 - Added the built-in `dangd-reconciliation` operational model and retained

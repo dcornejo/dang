@@ -46,12 +46,15 @@ stays in this file with its remaining work rewritten precisely.
   added. Runtime identity derivation, namespace validation, repeated positive
   and negated values, conflicting-choice rejection, and preservation of state
   nodes and required configuration structure are implemented.
-- Validate ABI-v3 operational fragments as complete typed instance data before
-  publication: namespace and schema binding, scalar types, list keys,
-  `mandatory`, `when`, `must`, `leafref`, `instance-identifier`, `unique`, and
-  duplicate/collision handling across providers. Define deterministic provider
-  precedence or reject conflicting values, and surface callback failures as
-  actionable NETCONF errors and telemetry.
+- Complete ABI-v3 operational publication validation across provider and
+  datastore context. Individual fragments are now namespace/schema bound and
+  checked as typed partial instance data, including shapes, scalar types, list
+  keys, choices, references, and duplicates visible within the fragment.
+  Enforce cross-fragment `mandatory`, `when`, `must`, `leafref`,
+  `instance-identifier`, `unique`, and collision constraints after merging;
+  define deterministic provider precedence or reject conflicting values, and
+  surface callback and validation failures as actionable NETCONF errors and
+  telemetry rather than silently omitting a fragment.
 - Define explicit schemas and lifecycle rules for any dynamic configuration
   datastores. Publish each datastore and its schema through RFC 8525, define
   supported protocol operations, validation and persistence semantics, and map

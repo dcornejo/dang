@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Validated each ABI-v3 operational fragment as typed partial instance data,
+  rejecting unknown nodes, malformed shapes and values, missing list keys,
+  choice/reference violations, and visible duplicates before publication.
 - Lowered identity inheritance into the common runtime schema and made RFC 8526
   origin selection namespace- and derivation-aware, including repeated and
   negated filters, base-identity matches, and explicit invalid-value errors.

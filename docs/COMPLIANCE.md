@@ -264,8 +264,11 @@ represented. Origins other than `intended` are not derived from data sources,
 so filtering cannot yet select such per-node data. Filtering of applied
 `intended` data is namespace- and identity-derivation-aware, including repeated
 and negated selections, while preserving config-false state and required
-structure. Operational plugin fragments receive structural name
-binding rather than complete instance validation and collision arbitration.
+structure. Operational plugin fragments now receive typed partial-instance
+validation, including schema binding, scalar shapes and types, list keys,
+choices, references, and intra-fragment duplicates. Cross-provider constraint
+validation, collision arbitration, and actionable provider-failure telemetry
+remain incomplete.
 Dynamic configuration datastores are not implemented. The complete operation,
 filter/default/origin/NACM interaction matrix and external interoperability
 remain. `TODO.md` is the normative work list.

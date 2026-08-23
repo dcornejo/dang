@@ -301,6 +301,8 @@ struct ValidationFinding {
 struct ConfigParseOptions {
   Coverage coverage = Coverage::kComplete;
   std::optional<RuntimeSchemaNodeId> attachment_parent;
+  /** Accepts and validates RFC 8342 ietf-origin metadata on instance data. */
+  bool allow_origin_metadata = false;
 };
 
 struct ConfigParseResult {
@@ -318,17 +320,21 @@ struct ValidationRequest {
                     const ConfigDocument& request_document,
                     ValidationScope request_scope = ValidationScope::kComplete,
                     const ConfigDocument* request_context = nullptr,
-                    std::optional<ConfigNodeId> request_attachment = std::nullopt)
+                    std::optional<ConfigNodeId> request_attachment = std::nullopt,
+                    bool request_allow_state_data = false)
       : schema(request_schema),
         document(request_document),
         scope(request_scope),
         context(request_context),
-        context_attachment(request_attachment) {}
+        context_attachment(request_attachment),
+        allow_state_data(request_allow_state_data) {}
   const RuntimeSchema& schema;
   const ConfigDocument& document;
   ValidationScope scope = ValidationScope::kComplete;
   const ConfigDocument* context = nullptr;
   std::optional<ConfigNodeId> context_attachment;
+  /** Allows config-false nodes while retaining all other instance checks. */
+  bool allow_state_data = false;
 };
 
 struct ValidationResult {
@@ -337,7 +343,7 @@ struct ValidationResult {
   std::vector<ValidationFinding> findings;
 };
 
-/** Pure structural and value validator for explicit configuration trees. */
+/** Pure structural and value validator for explicit config or instance trees. */
 class ConfigValidator {
  public:
   [[nodiscard]] ValidationResult Validate(

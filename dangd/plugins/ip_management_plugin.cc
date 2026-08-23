@@ -266,8 +266,9 @@ int OperationalData(void*, DangOperationalDataV1* result,
   // /interfaces-state compatibility tree from the last successfully applied
   // configuration. It intentionally omits volatile counters and IP/neighbor
   // state. Each returned element must use the model's exact XML namespace;
-  // dangd copies the borrowed string immediately and rejects unknown schema
-  // names, but the plugin remains responsible for producing coherent values.
+  // dangd copies the borrowed string immediately and validates it as typed
+  // partial instance data. A real provider should still build one coherent
+  // snapshot because constraints spanning providers cannot yet be checked.
   if (!result) return 0;
   pugi::xml_document configuration;
   configuration.load_buffer(active_configuration.data(),

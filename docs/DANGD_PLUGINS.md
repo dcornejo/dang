@@ -86,12 +86,15 @@ Plugins that publish operational state use ABI v3 and export
 `dang_plugin_init_v3`. `DangPluginV3` preserves the ABI-v2 prefix and adds
 `get_operational_data`. The callback returns one self-contained XML data
 element or fragment using `DangOperationalDataV1`; the bytes are borrowed and
-copied before the callback returns. `dangd` accepts only expanded data nodes
-that bind to the active compiled schema, merges accepted fragments into the
-read-only operational snapshot, then applies origin handling, NACM, and RFC
-8526 filters. The callback must be read-only, bounded, and safe to invoke for
-each retrieval. It must not return configuration that has not actually been
-applied.
+copied before the callback returns. `dangd` parses each expanded data node as
+partial instance data and rejects fragments with unknown schema nodes, invalid
+shapes or scalar values, missing list keys, choice conflicts, invalid visible
+references, or duplicate instances. Accepted fragments are merged into the
+read-only operational snapshot before origin handling, NACM, and RFC 8526
+filters. Cross-provider collisions and constraints that require data outside a
+single fragment are not yet arbitrated. The callback must be read-only,
+bounded, and safe to invoke for each retrieval. It must not return configuration
+that has not actually been applied.
 
 The IP-management example uses ABI v3 to publish RFC 8343
 `/interfaces-state`, deriving `oper-status` from its last successfully applied

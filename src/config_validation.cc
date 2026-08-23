@@ -202,8 +202,46 @@ class XmlBinder {
     for (const pugi::xml_attribute attribute : xml.attributes()) {
       const std::string_view attribute_name = attribute.name();
       if (attribute_name == "xmlns" || attribute_name.starts_with("xmlns:")) continue;
+      const std::size_t colon = attribute_name.find(':');
+      const std::string_view prefix = colon == std::string_view::npos
+          ? std::string_view() : attribute_name.substr(0, colon);
+      const auto namespace_found = namespaces.find(std::string(prefix));
+      constexpr std::string_view kOriginNamespace =
+          "urn:ietf:params:xml:ns:yang:ietf-origin";
+      const std::string_view local = colon == std::string_view::npos
+          ? attribute_name : attribute_name.substr(colon + 1);
+      std::string_view origin_value = attribute.value();
+      while (!origin_value.empty() && std::isspace(
+                 static_cast<unsigned char>(origin_value.front())))
+        origin_value.remove_prefix(1);
+      while (!origin_value.empty() && std::isspace(
+                 static_cast<unsigned char>(origin_value.back())))
+        origin_value.remove_suffix(1);
+      const std::size_t value_colon = origin_value.find(':');
+      const std::string value_prefix = value_colon == std::string_view::npos
+          ? std::string() : std::string(origin_value.substr(0, value_colon));
+      const auto value_namespace = namespaces.find(value_prefix);
+      const std::optional<QualifiedXmlName> origin =
+          origin_value.empty() || value_namespace == namespaces.end() ||
+              (value_colon != std::string_view::npos &&
+               (value_colon == 0 || value_colon + 1 == origin_value.size() ||
+                origin_value.find(':', value_colon + 1) !=
+                    std::string_view::npos))
+          ? std::nullopt
+          : std::optional<QualifiedXmlName>({
+                value_namespace->second,
+                std::string(value_colon == std::string_view::npos
+                                ? origin_value
+                                : origin_value.substr(value_colon + 1))});
+      if (options_.allow_origin_metadata && colon != std::string_view::npos &&
+          namespace_found != namespaces.end() &&
+          namespace_found->second == kOriginNamespace && local == "origin" &&
+          origin && schema_.IdentityIsDerivedFrom(
+                        *origin, {std::string(kOriginNamespace), "origin"})) {
+        continue;
+      }
       Error(ValidationCode::kInvalidNodeShape,
-            "attributes are not permitted in datastore configuration XML", path,
+            "attribute is not permitted or is invalid instance metadata", path,
             "unknown-attribute");
     }
     const auto schema_id = schema_parent ? schema_.FindChild(*schema_parent, *name)
@@ -2153,7 +2191,7 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
     const RuntimeSchemaNode& schema = request.schema.Get(config.schema);
     const std::string parent_path = config.parent ? paths.at(*config.parent) : std::string();
     paths.at(id) = parent_path + PathComponent(config.name);
-    if (!schema.config)
+    if (!schema.config && !request.allow_state_data)
       result.findings.push_back(Finding(ValidationCode::kStateDataInConfiguration,
           FindingState::kInvalid, "configuration content contains a config false data node",
           paths.at(id), "operation-not-supported"));

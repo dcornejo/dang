@@ -684,5 +684,67 @@ TEST(ConfigValidationTest,
   EXPECT_TRUE(result.valid) << testing::PrintToString(result.findings);
 }
 
+TEST(ConfigValidationTest, ValidatesPartialOperationalInstanceData) {
+  VectorDiagnosticSink diagnostics;
+  auto source = SourceFile::Create("operational.yang", R"yang(
+    module operational {
+      yang-version 1.1; namespace "urn:operational"; prefix o;
+      import ietf-origin { prefix or; }
+      leaf selected-origin { type identityref { base or:origin; } }
+      container state {
+        config false;
+        list entry {
+          key "name";
+          leaf name { type string; }
+          leaf count { type uint16; mandatory true; }
+        }
+      }
+    })yang", diagnostics);
+  ASSERT_TRUE(source);
+  InMemoryModuleRepository repository;
+  repository.Add("ietf-origin", R"yang(
+    module ietf-origin {
+      yang-version 1.1;
+      namespace "urn:ietf:params:xml:ns:yang:ietf-origin";
+      prefix or;
+      identity origin;
+      identity learned { base origin; }
+    })yang");
+  Compiler compiler(repository, diagnostics);
+  auto compilation = compiler.Compile(source);
+  ASSERT_TRUE(compilation);
+  const RuntimeSchema schema =
+      RuntimeSchemaBuilder::FromCompilation(*compilation);
+  const auto validate = [&](std::string_view xml) {
+    auto parsed = ParseDatastoreXml(
+        schema, xml, {.coverage = Coverage::kSelected,
+                      .allow_origin_metadata = true});
+    if (!parsed.document) return false;
+    return ConfigValidator()
+        .Validate({schema, *parsed.document,
+                   ValidationScope::kPartialStandalone, nullptr,
+                   std::nullopt, true})
+        .valid;
+  };
+  EXPECT_TRUE(validate(R"xml(
+    <state xmlns="urn:operational"
+           xmlns:or="urn:ietf:params:xml:ns:yang:ietf-origin"
+           or:origin="or:learned">
+      <entry><name>one</name><count>7</count></entry>
+    </state>)xml"));
+  EXPECT_FALSE(validate(R"xml(
+    <state xmlns="urn:operational">
+      <entry><name>one</name><count>not-a-number</count></entry>
+    </state>)xml"));
+  EXPECT_FALSE(validate(R"xml(
+    <state xmlns="urn:operational"><entry><count>7</count></entry></state>
+  )xml"));
+  EXPECT_FALSE(validate(R"xml(
+    <state xmlns="urn:operational" xmlns:o="urn:operational"
+           xmlns:or="urn:ietf:params:xml:ns:yang:ietf-origin"
+           or:origin="o:not-an-origin"/>
+  )xml"));
+}
+
 }  // namespace
 }  // namespace yang::config
