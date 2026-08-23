@@ -23,6 +23,8 @@
 - Hardened daemon-facing hello, RPC, configuration, edit, NACM, and filter XML
   parsing against byte smuggling, malformed UTF-8, forbidden characters,
   DTD/entity declarations, resource exhaustion, and unexpected multiple roots.
+- Applied the same strict contract to notification publication, URL data,
+  plugin replies and operational fragments, and restored snapshot content.
 - Closed multi-root XML configuration smuggling before datastore validation.
 - Closed multi-root XML message smuggling at NETCONF session negotiation and
   RPC dispatch.

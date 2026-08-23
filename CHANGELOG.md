@@ -29,6 +29,9 @@ and releases follow Semantic Versioning.
   configuration/edit, NACM, and filter boundaries. It rejects embedded NULs,
   malformed encodings, forbidden XML characters, DTD/entity declarations, and
   unexpected multiple roots while keeping edit fragments explicitly supported.
+- Extended strict parsing to notification filters and events, URL-provider
+  configuration, plugin operation and operational output, NACM readable data,
+  and snapshot XML imported through datastore validation.
 - Rejected multiple top-level configuration elements before datastore schema
   binding instead of validating only the first root and ignoring siblings.
 - Rejected multiple top-level XML elements at the NETCONF `<hello>` and RPC

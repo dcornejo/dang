@@ -219,10 +219,11 @@ resource limits; readable-data filtering requires one `<data>` envelope.
 NETCONF and NMDA namespaces and the internal unqualified form are accepted;
 arbitrary model namespaces are not treated as envelopes.
 The XML-injection audit now has a shared strict parser at the hello, RPC,
-configuration/edit, NACM, and filter boundaries. It rejects invalid UTF-8/XML
-characters, embedded NULs, DTD/entity declarations, excess resources, and
-unexpected multiple roots. Remaining parser and output boundaries are listed
-in [XML_SECURITY.md](XML_SECURITY.md) and `TODO.md`.
+configuration/edit, NACM, filter, notification, URL-provider, plugin-output,
+and snapshot-import boundaries. It rejects invalid UTF-8/XML characters,
+embedded NULs, DTD/entity declarations, excess resources, and unexpected
+multiple roots. The remaining internal-reparse and output-escaping inventory is
+listed in [XML_SECURITY.md](XML_SECURITY.md) and `TODO.md`.
 When a runtime schema is supplied, unmodeled data is pruned even for recovery
 users or disabled NACM; only authorization decisions are bypassed. Keyed list
 identity is derived only from declared keys, and incomplete or ambiguous entries

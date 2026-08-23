@@ -25,6 +25,7 @@
 #include "yang/netconf_persistence.h"
 #include "yang/resource_limits.h"
 #include "yang/source_file.h"
+#include "yang/xml_security.h"
 
 namespace dangd {
 namespace {
@@ -455,7 +456,7 @@ std::string DangdOperationalData::AugmentDataXml(
   if (plugins_) {
     for (const std::string& fragment : plugins_->OperationalData()) {
       pugi::xml_document plugin_data;
-      if (!plugin_data.load_buffer(fragment.data(), fragment.size())) continue;
+      if (!yang::ParseUntrustedXml(fragment, &plugin_data).ok) continue;
       const pugi::xml_node root = plugin_data.document_element();
       if (std::string_view(LocalName(root.name())) == "data") {
         for (const pugi::xml_node child : root.children())

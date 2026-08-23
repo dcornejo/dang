@@ -64,8 +64,7 @@ class RecordingOperationProvider final : public OperationProvider {
       std::string_view operation_xml) override {
     called = operation.module_name + ":" + operation.name.local_name;
     input = operation_xml;
-    return {{true, {}, {}},
-            R"xml(<result xmlns="urn:rpc-test">pong</result>)xml"};
+    return {{true, {}, {}}, rpc_output};
   }
   OperationResult InvokeAction(const RpcSessionContext&,
       const config::RuntimeSchemaNode& action, std::string_view instance_path,
@@ -79,6 +78,8 @@ class RecordingOperationProvider final : public OperationProvider {
   std::string called;
   std::string path;
   std::string input;
+  std::string rpc_output =
+      R"xml(<result xmlns="urn:rpc-test">pong</result>)xml";
 };
 
 class BlockingOperationProvider final : public OperationProvider {
@@ -269,6 +270,17 @@ TEST(NetconfServerTest, AuthorizesAndDispatchesSchemaRpc) {
   const RpcResponse allowed = denied.Process("alice", request);
   EXPECT_EQ(operations.called, "rpc:ping");
   EXPECT_NE(allowed.xml.find("pong"), std::string::npos) << allowed.xml;
+
+  operations.rpc_output =
+      "<!DOCTYPE result [<!ENTITY x 'smuggled'>]>"
+      "<result xmlns='urn:rpc-test'>&x;</result>";
+  const RpcResponse malicious_output = denied.Process("alice", request);
+  EXPECT_NE(malicious_output.xml.find("operation-failed"), std::string::npos)
+      << malicious_output.xml;
+  EXPECT_EQ(malicious_output.xml.find("smuggled"), std::string::npos)
+      << malicious_output.xml;
+  operations.rpc_output =
+      R"xml(<result xmlns="urn:rpc-test">pong</result>)xml";
 
   operations.called.clear();
   const RpcResponse invalid = denied.Process("alice", R"xml(
@@ -872,6 +884,19 @@ TEST(NetconfServerTest, UsesHostSuppliedUrlDatastores) {
         <source><url>memory:invalid</url></source></copy-config></rpc>)xml");
   EXPECT_NE(invalid_remote.xml.find("rpc-error"), std::string::npos);
   EXPECT_FALSE(urls.values.contains("memory:must-not-write"));
+  urls.values["memory:entity"] =
+      "<!DOCTYPE config [<!ENTITY host 'smuggled'>]>"
+      "<config xmlns='urn:ietf:params:xml:ns:netconf:base:1.0'>"
+      "<system xmlns='urn:rpc-test'><hostname>&host;</hostname></system>"
+      "</config>";
+  const RpcResponse entity_remote = server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="entity-url">
+      <edit-config><target><candidate/></target><url>memory:entity</url>
+      </edit-config></rpc>)xml");
+  EXPECT_NE(entity_remote.xml.find("invalid-value"), std::string::npos)
+      << entity_remote.xml;
+  EXPECT_EQ(stores.Read(Datastore::kCandidate).ToXml().find("smuggled"),
+            std::string::npos);
   EXPECT_NE(server.Process("17", R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="missing-url">
       <validate><source><url>memory:missing</url></source></validate></rpc>)xml")

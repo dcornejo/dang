@@ -25,15 +25,18 @@ The strict helper currently protects:
 - NETCONF client `<hello>` and `<rpc>` messages;
 - complete datastore configuration and edit fragments;
 - datastore-managed and file-loaded NACM policy;
-- subtree and XPath filter documents and the data passed through them.
+- subtree and XPath filter documents and the data passed through them;
+- notification subscription filters, published event content, and instance data;
+- host URL-provider configuration;
+- plugin RPC/action output and operational-data fragments;
+- persistent snapshot XML, through strict datastore import validation.
 
 Generated error paths and XML text use XML escaping, while YANG Library and
 other structured replies are constructed as XML nodes so the serializer escapes
 values. NACM instance predicates use dedicated quote-selection rules and fail
 closed when a value cannot be represented safely.
 
-The remaining audit covers notification filters and event payloads, URL-source
-documents, plugin RPC/action output, plugin operational fragments, persistence
-snapshots, and every internal reparse of generated XML. Those paths must either
-adopt the helper or document why their producer is trusted, and need boundary
-regressions plus fuzz seeds before the project closes the XML-injection TODO.
+The remaining audit covers every internal reparse of generated XML and a
+line-by-line output-escaping inventory. Those paths must either adopt the helper
+or document why their producer is trusted. Coverage-guided seeds must exercise
+each boundary before the project closes the XML-injection TODO.

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "yang/netconf_notifications.h"
+#include "yang/xml_security.h"
 
 #include "yang/resource_limits.h"
 
@@ -197,14 +198,14 @@ std::string Marker(std::string_view name,
 
 bool MatchesFilter(std::string_view notification, std::string_view filter) {
   pugi::xml_document parsed;
-  if (!parsed.load_buffer(filter.data(), filter.size())) return false;
+  if (!ParseUntrustedXml(filter, &parsed).ok) return false;
   const std::string_view type = parsed.document_element().attribute("type").value();
   FilterResult result = type == "xpath"
       ? ApplyXPathFilter(notification, filter)
       : ApplySubtreeFilter(notification, filter);
   if (!result.xml) return false;
   pugi::xml_document selected;
-  if (!selected.load_string(result.xml->c_str())) return false;
+  if (!ParseUntrustedXml(*result.xml, &selected).ok) return false;
   const pugi::xml_node root = selected.document_element();
   for (const pugi::xml_node child : root.children()) {
     const std::string_view name = child.name();
@@ -214,9 +215,8 @@ bool MatchesFilter(std::string_view notification, std::string_view filter) {
 }
 
 bool ValidFilter(std::string_view filter) {
-  if (filter.size() > DefaultResourceLimits().maximum_xml_bytes) return false;
   pugi::xml_document parsed;
-  if (!parsed.load_buffer(filter.data(), filter.size())) return false;
+  if (!ParseUntrustedXml(filter, &parsed).ok) return false;
   const pugi::xml_node root = parsed.document_element();
   const std::string_view type = root.attribute("type").value();
   if (!type.empty() && type != "subtree" && type != "xpath") return false;
@@ -302,7 +302,7 @@ std::optional<InstanceSelector> ParseSelector(std::string_view segment) {
 bool InstanceExists(std::string_view data_xml,
                     std::span<const InstanceSelector> selectors) {
   pugi::xml_document document;
-  if (!document.load_buffer(data_xml.data(), data_xml.size())) return false;
+  if (!ParseUntrustedXml(data_xml, &document).ok) return false;
   std::vector<pugi::xml_node> candidates{document.document_element()};
   for (const InstanceSelector& selector : selectors) {
     std::vector<pugi::xml_node> matches;
@@ -410,18 +410,8 @@ bool NotificationManager::Publish(std::string_view stream_name,
     std::string_view module_name, std::string_view notification_name,
     std::string_view content_xml, std::chrono::system_clock::time_point event_time,
     bool default_deny_all, std::string_view instance_path) {
-  if (content_xml.size() > DefaultResourceLimits().maximum_xml_bytes) {
-    return false;
-  }
   pugi::xml_document content;
-  if (!content.load_buffer(content_xml.data(), content_xml.size()) ||
-      !content.document_element() ||
-      content.document_element().next_sibling()) return false;
-  std::string resource_error;
-  if (!XmlWithinResourceLimits(content, content_xml, DefaultResourceLimits(),
-                               &resource_error)) {
-    return false;
-  }
+  if (!ParseUntrustedXml(content_xml, &content).ok) return false;
   std::vector<NacmDataNode> ancestors;
   std::optional<config::RuntimeSchemaNodeId> notification_schema;
   if (schema_ != nullptr && !instance_path.empty()) {

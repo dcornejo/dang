@@ -30,10 +30,11 @@ stays in this file with its remaining work rewritten precisely.
   configuration, edit fragments, NACM, and subtree/XPath filters; it validates
   UTF-8/XML characters, rejects embedded NULs and DTD/entity declarations,
   bounds resources, and treats comments, CDATA, processing instructions, and
-  XInclude as inert syntax. Finish migration and boundary tests for notification
-  filters/events, URL sources, plugin operation output, plugin operational data,
-  persistence snapshots, and internal reparsing of generated XML; complete the
-  output-escaping inventory and add the resulting fuzz seeds.
+  XInclude as inert syntax. Notification filters/events, URL sources, plugin
+  operation and operational output, readable-data filtering, and persistence
+  snapshot imports now use the same contract. Finish the trust classification
+  for internal reparsing of generated XML, complete the line-by-line
+  output-escaping inventory, and add coverage-guided seeds for every boundary.
 - Run interoperability and negative-security tests against at least one
   independent RFC 8341 implementation, run a sustained coverage-guided NACM
   fuzz campaign, and document any intentional deviations before claiming

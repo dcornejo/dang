@@ -529,9 +529,12 @@ TransactionResult ValidateOperationOutput(
                                  semantic::SchemaNodeKind::kOutput,
                                  output.document_element());
   }
-  if (!output.load_buffer(output_xml.data(), output_xml.size()))
-    return ProtocolFailure("plugin returned malformed operation output",
-                           "operation-failed");
+  const UntrustedXmlResult parsed = ParseUntrustedXml(output_xml, &output);
+  if (!parsed.ok)
+    return ProtocolFailure("plugin returned invalid operation output: " +
+                               parsed.message,
+                           parsed.resource_limit ? "too-big"
+                                                 : "operation-failed");
   return ValidateOperationData(schema, operation,
                                semantic::SchemaNodeKind::kOutput, output);
 }
@@ -542,7 +545,7 @@ std::string FilterOperationOutput(
     config::RuntimeSchemaNodeId operation, std::string_view base_path,
     std::string_view output_xml) {
   pugi::xml_document document;
-  if (!document.load_buffer(output_xml.data(), output_xml.size())) return {};
+  if (!ParseUntrustedXml(output_xml, &document).ok) return {};
   std::function<void(pugi::xml_node,
                      const std::vector<config::RuntimeSchemaNodeId>&,
                      std::string_view)> filter;
@@ -1291,11 +1294,14 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
         result = UrlFailure(read, "URL read failed");
       } else {
         url_config = std::move(*read.config_xml);
-        if (url_config.size() > DefaultResourceLimits().maximum_xml_bytes) {
-          result = ProtocolFailure("URL configuration exceeds the byte limit",
-                                   "too-big");
-        } else if (url_document.load_buffer(url_config.data(), url_config.size(),
-                                            pugi::parse_default)) {
+        const UntrustedXmlResult url_parsed =
+            ParseUntrustedXml(url_config, &url_document);
+        if (!url_parsed.ok) {
+          result = ProtocolFailure("invalid URL configuration: " +
+                                       url_parsed.message,
+                                   url_parsed.resource_limit ? "too-big"
+                                                             : "invalid-value");
+        } else {
           config = url_document.document_element();
         }
       }

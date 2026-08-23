@@ -867,26 +867,15 @@ std::string NacmPolicy::FilterReadableData(std::string_view user,
     std::span<const std::string> external_groups,
   const config::RuntimeSchema* schema) const {
   std::lock_guard lock(mutex_);
-  if (data_xml.size() > DefaultResourceLimits().maximum_xml_bytes) return "";
   pugi::xml_document document;
-  if (!document.load_buffer(data_xml.data(), data_xml.size(), pugi::parse_default))
-    return "";
-  const std::size_t root_elements = static_cast<std::size_t>(
-      std::ranges::count_if(document.children(), [](pugi::xml_node node) {
-        return node.type() == pugi::node_element;
-      }));
+  if (!ParseUntrustedXml(data_xml, &document).ok) return "";
   const auto [root_prefix, root_local] =
       SplitName(document.document_element().name());
   const std::string root_namespace =
       NamespaceFor(document.document_element(), root_prefix);
-  if (root_elements != 1 || root_local != "data" ||
+  if (root_local != "data" ||
       (!root_namespace.empty() && root_namespace != kNetconfNamespace &&
        root_namespace != kNmdaNamespace)) return "";
-  std::string resource_error;
-  if (!XmlWithinResourceLimits(document, data_xml, DefaultResourceLimits(),
-                               &resource_error)) {
-    return "";
-  }
   // Recovery and disabled-enforcement sessions bypass authorization, not the
   // parser, resource limits, or an explicitly supplied schema boundary.
   const bool bypass_authorization = !enabled_ || IsRecovery(user);

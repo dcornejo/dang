@@ -74,6 +74,24 @@ TEST(NetconfNotificationsTest, RejectsInvalidRequestsAndReplayOverflow) {
   invalid_filter.filter_xml = "<filter type=\"xpath\"/>";
   EXPECT_EQ(manager.Subscribe(std::move(invalid_filter), now).error_tag,
             "invalid-value");
+  SubscriptionRequest entity_filter;
+  entity_filter.session_id = 4;
+  entity_filter.username = "alice";
+  entity_filter.filter_xml =
+      "<!DOCTYPE filter [<!ENTITY x 'xpath'>]>"
+      "<filter type='&x;' select='/*'/>";
+  EXPECT_EQ(manager.Subscribe(std::move(entity_filter), now).error_tag,
+            "invalid-value");
+  std::string embedded_nul = "<one xmlns=\"urn:events\">";
+  embedded_nul.push_back('\0');
+  embedded_nul += "hidden</one>";
+  EXPECT_FALSE(manager.Publish("NETCONF", "events", "one", embedded_nul,
+                               now));
+  EXPECT_FALSE(manager.Publish(
+      "NETCONF", "events", "one",
+      "<!DOCTYPE one [<!ENTITY x 'hidden'>]>"
+      "<one xmlns='urn:events'>&x;</one>",
+      now));
   ASSERT_TRUE(manager.Publish("NETCONF", "events", "one",
                               "<one xmlns=\"urn:events\"/>", now - 2s));
   SubscriptionRequest replay;
