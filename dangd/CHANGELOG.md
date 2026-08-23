@@ -7,6 +7,8 @@
 
 ### Changed
 
+- Completed `<edit-data>` default-operation and rollback coverage and enabled
+  RFC 8526 datastore identity targets for `<lock>` and `<unlock>`.
 - Added schema-bound RFC 8526 RPC input validation, including atomic rejection
   of unknown or duplicate parameters and unsupported NMDA `with-defaults`.
 - Returned operational-provider callback, validation, and merge failures from

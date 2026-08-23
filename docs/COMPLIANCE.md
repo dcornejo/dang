@@ -260,6 +260,11 @@ datastore. The NMDA `with-defaults` feature and the separate
 `:with-operational-defaults` capability are not advertised; a `with-defaults`
 parameter on `<get-data>` is therefore rejected with `invalid-value` as RFC
 8526 requires.
+`<edit-data>` implements `merge`, `replace`, and `none` default operations and
+restores the complete pre-edit datastore on error. RFC 8526 datastore identity
+leaves are accepted as `<lock>` and `<unlock>` targets for supported writable
+datastores; competing sessions receive `lock-denied`, while `intended` and
+`operational` targets receive `invalid-value`.
 
 Applied configuration now comes from dangd's backend working snapshot after
 successful hardware application, rather than being copied from the committed

@@ -138,8 +138,7 @@ TransactionResult DatastoreManager::Lock(Datastore datastore,
   if (datastore == Datastore::kIntended ||
       datastore == Datastore::kOperational)
     return Failure(config::ValidationCode::kInvalidValue,
-                   "the intended datastore is read-only",
-                   "operation-not-supported");
+                   "the selected datastore is read-only", "invalid-value");
   if (session.empty())
     return Failure(config::ValidationCode::kInvalidValue,
                    "a non-empty NETCONF session identifier is required",

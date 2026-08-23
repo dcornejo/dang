@@ -1444,7 +1444,10 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
       }
     }
   } else if (name == "lock" || name == "unlock") {
-    const auto target = ParseDatastore(Child(operation, "target"));
+    const pugi::xml_node target_node = Child(operation, "target");
+    auto target = ParseDatastore(target_node);
+    if (!target)
+      target = ParseNmdaDatastore(Child(target_node, "datastore"));
     if (!target) result = ProtocolFailure("invalid lock target", "invalid-value");
     else result = name == "lock"
         ? datastores_.Lock(*target, session.datastore_owner)

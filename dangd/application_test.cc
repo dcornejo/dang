@@ -348,6 +348,132 @@ TEST(DangdApplicationTest, ValidatesCompleteNmdaOperationInput) {
             std::string::npos) << unsupported_defaults.xml;
 }
 
+TEST(DangdApplicationTest, AppliesNmdaDefaultOperationsAndLocks) {
+  TemporaryInputs inputs;
+  constexpr std::string_view model = R"yang(
+    module appliance {
+      yang-version 1.1;
+      namespace "urn:example:appliance";
+      prefix a;
+      container system {
+        leaf hostname { type string; mandatory true; }
+        leaf location { type string; }
+      }
+    }
+  )yang";
+  constexpr std::string_view configuration = R"xml(
+    <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <system xmlns="urn:example:appliance">
+        <hostname>edge-1</hostname><location>rack-1</location>
+      </system>
+    </config>
+  )xml";
+  auto options = Options(inputs);
+  options.model = inputs.Write("operations.yang", model);
+  options.configuration = inputs.Write("operations.xml", configuration);
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  yang::netconf::RpcSessionContext alice{1, "alice", "alice", {}};
+  yang::netconf::RpcSessionContext other{2, "alice", "other", {}};
+
+  const auto edit = [&](const yang::netconf::RpcSessionContext& session,
+                        std::string_view operation,
+                        std::string_view hostname) {
+    return loaded.application->server().Process(
+        session,
+        "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+        "message-id=\"edit\" xmlns:ds=\"urn:ietf:params:xml:ns:yang:"
+        "ietf-datastores\"><edit-data xmlns=\"urn:ietf:params:xml:ns:yang:"
+        "ietf-netconf-nmda\"><datastore>ds:candidate</datastore>"
+        "<default-operation>" + std::string(operation) +
+        "</default-operation><config><system "
+        "xmlns=\"urn:example:appliance\"><hostname>" +
+        std::string(hostname) + "</hostname></system></config>"
+        "</edit-data></rpc>");
+  };
+
+  EXPECT_NE(edit(alice, "merge", "edge-merge").xml.find("<ok/>"),
+            std::string::npos);
+  std::string candidate = loaded.application->datastores()
+                              .Read(yang::netconf::Datastore::kCandidate)
+                              .ToXml();
+  EXPECT_NE(candidate.find("edge-merge"), std::string::npos) << candidate;
+  EXPECT_NE(candidate.find("rack-1"), std::string::npos) << candidate;
+
+  EXPECT_NE(edit(alice, "replace", "edge-replace").xml.find("<ok/>"),
+            std::string::npos);
+  candidate = loaded.application->datastores()
+                  .Read(yang::netconf::Datastore::kCandidate)
+                  .ToXml();
+  EXPECT_NE(candidate.find("edge-replace"), std::string::npos) << candidate;
+  EXPECT_EQ(candidate.find("rack-1"), std::string::npos) << candidate;
+
+  EXPECT_NE(edit(alice, "none", "ignored").xml.find("<ok/>"),
+            std::string::npos);
+  candidate = loaded.application->datastores()
+                  .Read(yang::netconf::Datastore::kCandidate)
+                  .ToXml();
+  EXPECT_NE(candidate.find("edge-replace"), std::string::npos) << candidate;
+  EXPECT_EQ(candidate.find("ignored"), std::string::npos) << candidate;
+
+  const auto invalid = loaded.application->server().Process(alice, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="rollback"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <edit-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:candidate</datastore>
+        <config><system xmlns="urn:example:appliance"
+                        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+          <location>must-rollback</location>
+          <hostname nc:operation="delete"/>
+        </system></config>
+      </edit-data>
+    </rpc>)xml");
+  EXPECT_NE(invalid.xml.find("<rpc-error>"), std::string::npos) << invalid.xml;
+  candidate = loaded.application->datastores()
+                  .Read(yang::netconf::Datastore::kCandidate)
+                  .ToXml();
+  EXPECT_NE(candidate.find("edge-replace"), std::string::npos) << candidate;
+  EXPECT_EQ(candidate.find("must-rollback"), std::string::npos) << candidate;
+
+  const auto lock = loaded.application->server().Process(alice, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="lock"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores"
+         xmlns:nmda="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+      <lock><target><nmda:datastore>ds:candidate</nmda:datastore></target></lock>
+    </rpc>)xml");
+  EXPECT_NE(lock.xml.find("<ok/>"), std::string::npos) << lock.xml;
+  EXPECT_NE(edit(other, "merge", "locked-out").xml.find("lock-denied"),
+            std::string::npos);
+
+  const auto wrong_unlock = loaded.application->server().Process(other, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="unlock"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores"
+         xmlns:nmda="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+      <unlock><target><nmda:datastore>ds:candidate</nmda:datastore></target></unlock>
+    </rpc>)xml");
+  EXPECT_NE(wrong_unlock.xml.find("lock-denied"), std::string::npos)
+      << wrong_unlock.xml;
+
+  const auto unlock = loaded.application->server().Process(alice, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="unlock"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores"
+         xmlns:nmda="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+      <unlock><target><nmda:datastore>ds:candidate</nmda:datastore></target></unlock>
+    </rpc>)xml");
+  EXPECT_NE(unlock.xml.find("<ok/>"), std::string::npos) << unlock.xml;
+  EXPECT_NE(edit(other, "merge", "after-unlock").xml.find("<ok/>"),
+            std::string::npos);
+
+  const auto readonly_lock = loaded.application->server().Process(alice, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="readonly"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores"
+         xmlns:nmda="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+      <lock><target><nmda:datastore>ds:operational</nmda:datastore></target></lock>
+    </rpc>)xml");
+  EXPECT_NE(readonly_lock.xml.find("<error-tag>invalid-value</error-tag>"),
+            std::string::npos) << readonly_lock.xml;
+}
+
 TEST(DangdApplicationTest, UsesSecureNacmDefaultsWhenSubtreeIsAbsent) {
   TemporaryInputs inputs;
   auto options = Options(inputs);

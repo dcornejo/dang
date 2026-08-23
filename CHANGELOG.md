@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Accepted RFC 8526 datastore identity leaves for `<lock>` and `<unlock>`, and
+  returned `invalid-value` for read-only NMDA targets as required; added full
+  `<edit-data>` default-operation, rollback, and lock interaction coverage.
 - Validated RFC 8526 `<get-data>` and `<edit-data>` inputs against their enabled
   YANG operation schema, rejecting unknown and duplicate parameters before any
   mutation and returning `invalid-value` for unsupported `with-defaults`.

@@ -84,8 +84,12 @@ stays in this file with its remaining work rewritten precisely.
   its applied content and derived origin identity into `<operational>`.
 - Finish the RFC 8526 operation matrix: exercise all datastore identities,
   subtree and XPath choices, `config-filter`, `max-depth`, `with-defaults`,
-  `with-origin`, URL-feature behavior if enabled, all `edit-data` default/test/
-  error options, locks, and protocol-accurate error tags. `<get-data>` and
+  `with-origin`, URL-feature behavior if enabled, and protocol-accurate error
+  tags. All three `<edit-data>` `default-operation` values, mandatory rollback
+  on validation failure, and RFC 8526 datastore-identity lock/unlock targets
+  are covered; read-only lock targets return `invalid-value`. (`test-option`
+  and `error-option` belong to `<edit-config>`, not RFC 8526 `<edit-data>`.)
+  `<get-data>` and
   `<edit-data>` inputs are now checked against their enabled YANG schema before
   execution, including unknown nodes, duplicate singleton parameters, scalar
   types, and mandatory elements; unsupported NMDA `with-defaults` is rejected

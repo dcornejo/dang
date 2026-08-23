@@ -45,6 +45,13 @@ operation rather than as children of the operation schema. If the NMDA
 `with-defaults` feature is not enabled, `<get-data>` rejects that parameter with
 `invalid-value`.
 
+RFC 8526 `<edit-data>` supports `merge`, `replace`, and `none` as its
+`default-operation` and always rolls the target back to its complete pre-edit
+state when an error occurs. The RFC 8526 datastore identity augmentation is
+accepted for `<lock>` and `<unlock>` targets in addition to the legacy NETCONF
+target elements. Read-only `intended` and `operational` lock targets are
+rejected with `invalid-value`.
+
 Replies preserve and XML-escape `message-id`, return one or more `rpc-error`
 elements, and carry existing validator instance paths where available.
 
