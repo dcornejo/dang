@@ -580,6 +580,12 @@ TEST(DangdApplicationTest, ReportsAndOmitsInvalidOperationalPluginData) {
 TEST(DangdApplicationTest, RejectsLaterOperationalProviderCollision) {
   TemporaryInputs inputs;
   auto options = Options(inputs);
+  options.configuration = inputs.Write("collision.xml", R"xml(
+    <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <system xmlns="urn:example:appliance"><hostname>edge-1</hostname></system>
+      <configured-counter xmlns="urn:dangd:test:operational-collision">1</configured-counter>
+    </config>
+  )xml");
   options.plugins = {DANG_TEST_COLLISION_FIRST_PLUGIN_PATH,
                      DANG_TEST_COLLISION_SECOND_PLUGIN_PATH};
   auto loaded = Application::Load(options);
@@ -608,6 +614,40 @@ TEST(DangdApplicationTest, RejectsLaterOperationalProviderCollision) {
   EXPECT_NE(response.xml.find("<stage>merge</stage>"), std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find("occurs more than once"), std::string::npos)
+      << response.xml;
+}
+
+TEST(DangdApplicationTest, RejectsOperationalReferenceMissingFromAppliedData) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.configuration = inputs.Write("collision.xml", R"xml(
+    <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <system xmlns="urn:example:appliance"><hostname>edge-1</hostname></system>
+      <configured-counter xmlns="urn:dangd:test:operational-collision">2</configured-counter>
+    </config>
+  )xml");
+  options.plugins = {DANG_TEST_COLLISION_FIRST_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+  const auto response = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="reference"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore><config-filter>false</config-filter>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_EQ(response.xml.find(
+                "<counter xmlns=\"urn:dangd:test:operational-collision\">"),
+            std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find("<provider>test-collision-first</provider>"),
+            std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find("<stage>merge</stage>"), std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find("leafref value has no matching target instance"),
+            std::string::npos)
       << response.xml;
 }
 

@@ -153,7 +153,8 @@ struct FragmentValidation {
 
 FragmentValidation ValidateFragmentInstance(
     const yang::config::RuntimeSchema& schema, pugi::xml_node root,
-    bool data_wrapper) {
+    bool data_wrapper,
+    const yang::config::ConfigDocument* context = nullptr) {
   pugi::xml_document wrapped;
   pugi::xml_node data = wrapped.append_child("data");
   data.append_attribute("xmlns") =
@@ -176,7 +177,9 @@ FragmentValidation ValidateFragmentInstance(
   }
   const auto validation = yang::config::ConfigValidator().Validate(
       {schema, *parsed.document,
-       yang::config::ValidationScope::kPartialStandalone, nullptr,
+       context ? yang::config::ValidationScope::kPartialWithContext
+               : yang::config::ValidationScope::kPartialStandalone,
+       context,
        std::nullopt, true});
   if (validation.valid) return {true, {}, {}};
   const auto finding = std::ranges::find_if(
@@ -474,6 +477,34 @@ std::string DangdOperationalData::AugmentDataXml(
     document.append_copy(applied.document_element());
   }
   pugi::xml_node data = document.document_element();
+  std::optional<yang::config::ConfigDocument> applied_context;
+  std::optional<FragmentValidation> applied_context_error;
+  if (plugins_ && schema_) {
+    pugi::xml_document wrapped_context;
+    pugi::xml_node context_data = wrapped_context.append_child("data");
+    context_data.append_attribute("xmlns") =
+        "urn:ietf:params:xml:ns:netconf:base:1.0";
+    for (const pugi::xml_node child : data.children())
+      if (child.type() == pugi::node_element)
+        context_data.append_copy(child);
+    std::ostringstream applied_xml;
+    wrapped_context.print(applied_xml, "", pugi::format_raw);
+    auto parsed_context = yang::config::ParseDatastoreXml(
+        *schema_, applied_xml.str(),
+        {.coverage = yang::config::Coverage::kComplete,
+         .allow_origin_metadata = true});
+    if (parsed_context.document) {
+      applied_context = std::move(*parsed_context.document);
+    } else if (parsed_context.findings.empty()) {
+      applied_context_error =
+          FragmentValidation{false, {}, "applied context cannot be parsed"};
+    } else {
+      applied_context_error =
+          FragmentValidation{false,
+                             parsed_context.findings.front().instance_path,
+                             parsed_context.findings.front().message};
+    }
+  }
   pugi::xml_document library;
   if (yang::ParseUntrustedXml(yang_library_xml_, &library).ok)
     data.append_copy(library.document_element());
@@ -540,8 +571,14 @@ std::string DangdOperationalData::AugmentDataXml(
           continue;
         }
       }
-      const FragmentValidation merged =
+      FragmentValidation merged =
           ValidateFragmentInstance(*schema_, candidate, true);
+      if (merged.valid && applied_context_error) {
+        merged = *applied_context_error;
+      } else if (merged.valid && applied_context) {
+        merged = ValidateFragmentInstance(*schema_, candidate, true,
+                                          &*applied_context);
+      }
       if (!merged.valid) {
         provider_failures.push_back({fragment.provider, "merge",
                                      merged.instance_path, merged.reason});

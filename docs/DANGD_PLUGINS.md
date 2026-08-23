@@ -95,9 +95,12 @@ operational data, in plugin load order. Built-in data is authoritative and
 earlier providers take precedence: if a provider
 introduces a duplicate singleton, list-key collision, choice conflict, or
 another deterministically invalid merge, its entire fragment is omitted.
-Constraints that remain
-indeterminate because providers supplied only selected data are not yet
-enforced. Accepted data is merged into the read-only operational snapshot
+The cumulative snapshot is then composed with the backend's complete applied
+configuration context; required leafrefs from provider state to config-true
+targets must resolve. If that trusted context cannot be reconstructed, provider
+publication fails closed rather than bypassing contextual checks. Constraints
+that remain indeterminate because providers
+supplied only selected state data are not yet enforced. Accepted data is merged into the read-only operational snapshot
 before origin handling, NACM, and RFC 8526 filters. The callback must be
 read-only, bounded, and safe to invoke for each retrieval. It must not return
 configuration that has not actually been applied.

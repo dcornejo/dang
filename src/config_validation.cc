@@ -1810,6 +1810,14 @@ std::string ConfigDocument::ToXml(bool netconf_wrapper) const {
     pugi::xml_node element = xml_parent.append_child(node.name.local_name.c_str());
     if (node.name.namespace_uri != inherited_namespace)
       element.append_attribute("xmlns") = node.name.namespace_uri.c_str();
+    for (const XmlNamespaceBinding& binding : node.value_namespaces) {
+      if (binding.prefix.empty() || binding.prefix == "xml" ||
+          binding.prefix == "xmlns" || !node.value ||
+          node.value->find(binding.prefix + ":") == std::string::npos)
+        continue;
+      const std::string attribute = "xmlns:" + binding.prefix;
+      element.append_attribute(attribute.c_str()) = binding.namespace_uri.c_str();
+    }
     if (node.value) element.text().set(node.value->c_str());
     for (ConfigNodeId child : node.children)
       append(child, element, node.name.namespace_uri);
@@ -2094,8 +2102,12 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
         overlay(*matched, request.document, fragment_root);
       }
     }
-    return Validate({request.schema, composed, ValidationScope::kComplete,
-                     nullptr, std::nullopt});
+    return Validate(
+        {request.schema, composed,
+         request.allow_state_data ? ValidationScope::kPartialStandalone
+                                  : ValidationScope::kComplete,
+         nullptr, std::nullopt, request.allow_state_data,
+         request.allow_state_data});
   }
   ValidationResult result;
   const bool complete = request.scope == ValidationScope::kComplete;
@@ -2208,6 +2220,7 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
         !ValueMatchesOrdinaryUnionMember(*schema.type, *config.value)) {
       bool accepted = false;
       bool missing_required_instance = false;
+      bool missing_required_config_instance = false;
       for (const RuntimeReferenceAlternative& alternative :
            schema.union_references) {
         if (alternative.kind == RuntimeReferenceKind::kIdentityRef) {
@@ -2251,6 +2264,8 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
               return request.document.Get(candidate).value == config.value;
             });
             missing_required_instance = missing_required_instance || !accepted;
+            missing_required_config_instance =
+                missing_required_config_instance || (!accepted && target.config);
           }
         }
         if (accepted) break;
@@ -2260,8 +2275,11 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
             missing_required_instance ? ValidationCode::kUnresolvedReference
                                       : ValidationCode::kInvalidValue,
             missing_required_instance
-                ? (complete ? FindingState::kInvalid
-                            : FindingState::kIndeterminate)
+                ? ((complete ||
+                    (request.complete_config_context &&
+                     missing_required_config_instance))
+                       ? FindingState::kInvalid
+                       : FindingState::kIndeterminate)
                 : FindingState::kInvalid,
             missing_required_instance
                 ? "union reference alternative has no required target instance"
@@ -2321,7 +2339,10 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
       if (!found) {
         ValidationFinding finding = Finding(
             ValidationCode::kUnresolvedReference,
-            complete ? FindingState::kInvalid : FindingState::kIndeterminate,
+            (complete ||
+             (request.complete_config_context && target.config))
+                ? FindingState::kInvalid
+                : FindingState::kIndeterminate,
             "leafref value has no matching target instance", paths.at(id),
             "data-missing");
         finding.netconf_error_app_tag = "instance-required";

@@ -17,7 +17,11 @@ constexpr char kModel[] = R"yang(module dangd-test-operational-collision {
   namespace "urn:dangd:test:operational-collision";
   prefix oc;
   revision 2026-08-23;
-  leaf counter { config false; type uint16; }
+  leaf configured-counter { type uint16; }
+  leaf counter {
+    config false;
+    type leafref { path "/configured-counter"; }
+  }
 })yang";
 #endif
 

@@ -321,6 +321,28 @@ TEST(ConfigValidationTest, ValidatesIdentityrefLeafrefAndInstanceIdentifier) {
       }));
 }
 
+TEST(ConfigValidationTest, PreservesQNameNamespacesAcrossXmlSerialization) {
+  VectorDiagnosticSink diagnostics;
+  auto schema = CompileSchema(&diagnostics);
+  ASSERT_TRUE(schema);
+  auto parsed = ParseDatastoreXml(*schema, R"xml(
+    <system xmlns="urn:device" xmlns:ids="urn:identities">
+      <endpoint-kind>ids:ethernet</endpoint-kind>
+    </system>)xml", {.coverage = Coverage::kSelected});
+  ASSERT_TRUE(parsed.document);
+  const std::string serialized = parsed.document->ToXml();
+  EXPECT_NE(serialized.find("xmlns:ids=\"urn:identities\""),
+            std::string::npos)
+      << serialized;
+  auto reparsed = ParseDatastoreXml(
+      *schema, serialized, {.coverage = Coverage::kSelected});
+  ASSERT_TRUE(reparsed.document);
+  EXPECT_TRUE(ConfigValidator()
+                  .Validate({*schema, *reparsed.document,
+                             ValidationScope::kPartialStandalone})
+                  .valid);
+}
+
 TEST(ConfigValidationTest, MakesMissingReferencesIndeterminateForPartialTrees) {
   VectorDiagnosticSink diagnostics;
   auto schema = CompileSchema(&diagnostics);
@@ -691,6 +713,11 @@ TEST(ConfigValidationTest, ValidatesPartialOperationalInstanceData) {
       yang-version 1.1; namespace "urn:operational"; prefix o;
       import ietf-origin { prefix or; }
       leaf selected-origin { type identityref { base or:origin; } }
+      leaf configured-name { type string; }
+      leaf observed-name {
+        config false;
+        type leafref { path "/configured-name"; }
+      }
       container state {
         config false;
         list entry {
@@ -747,6 +774,28 @@ TEST(ConfigValidationTest, ValidatesPartialOperationalInstanceData) {
   EXPECT_FALSE(validate(R"xml(
     <state xmlns="urn:operational"/>
     <state xmlns="urn:operational"/>
+  )xml"));
+
+  auto context = ParseDatastoreXml(schema, R"xml(
+    <configured-name xmlns="urn:operational">configured</configured-name>
+  )xml");
+  ASSERT_TRUE(context.document);
+  const auto validate_with_context = [&](std::string_view xml) {
+    auto parsed = ParseDatastoreXml(
+        schema, xml, {.coverage = Coverage::kSelected,
+                      .allow_origin_metadata = true});
+    if (!parsed.document) return false;
+    return ConfigValidator()
+        .Validate({schema, *parsed.document,
+                   ValidationScope::kPartialWithContext, &*context.document,
+                   std::nullopt, true})
+        .valid;
+  };
+  EXPECT_TRUE(validate_with_context(R"xml(
+    <observed-name xmlns="urn:operational">configured</observed-name>
+  )xml"));
+  EXPECT_FALSE(validate_with_context(R"xml(
+    <observed-name xmlns="urn:operational">other</observed-name>
   )xml"));
 }
 

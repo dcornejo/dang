@@ -7,6 +7,8 @@
 
 ### Changed
 
+- Added a second provider merge gate using the backend's applied configuration
+  as complete context, rejecting unresolved state-to-configuration leafrefs.
 - Seeded provider merge validation with built-in operational data, preventing
   plugins from shadowing daemon-owned state.
 - Added deterministic first-provider-wins arbitration for operational data:
@@ -39,6 +41,8 @@
 
 ### Fixed
 
+- Retained QName prefix bindings in common configuration serialization so
+  applied identityrefs remain valid when dangd reparses backend snapshots.
 - Validated duplicate config-false nodes when accepting operational instances.
 - Hardened daemon-facing hello, RPC, configuration, edit, NACM, and filter XML
   parsing against byte smuggling, malformed UTF-8, forbidden characters,

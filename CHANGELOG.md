@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Validated cumulative operational-provider state against the backend's
+  complete applied configuration, enforcing required leafrefs to config data.
 - Seeded operational-provider arbitration with daemon-owned state so built-in
   operational trees remain authoritative over plugins.
 - Arbitrated ABI-v3 operational publication in deterministic plugin load order
@@ -49,6 +51,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Preserved QName namespace declarations when serializing configuration trees,
+  allowing identityrefs and instance-identifiers to survive snapshot round trips.
 - Included config-false schema nodes in collection-cardinality validation when
   validating operational instance data, closing duplicate state-node gaps.
 - Added a shared resource-bounded UTF-8 XML parser at the NETCONF hello/RPC,

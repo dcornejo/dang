@@ -321,13 +321,15 @@ struct ValidationRequest {
                     ValidationScope request_scope = ValidationScope::kComplete,
                     const ConfigDocument* request_context = nullptr,
                     std::optional<ConfigNodeId> request_attachment = std::nullopt,
-                    bool request_allow_state_data = false)
+                    bool request_allow_state_data = false,
+                    bool request_complete_config_context = false)
       : schema(request_schema),
         document(request_document),
         scope(request_scope),
         context(request_context),
         context_attachment(request_attachment),
-        allow_state_data(request_allow_state_data) {}
+        allow_state_data(request_allow_state_data),
+        complete_config_context(request_complete_config_context) {}
   const RuntimeSchema& schema;
   const ConfigDocument& document;
   ValidationScope scope = ValidationScope::kComplete;
@@ -335,6 +337,8 @@ struct ValidationRequest {
   std::optional<ConfigNodeId> context_attachment;
   /** Allows config-false nodes while retaining all other instance checks. */
   bool allow_state_data = false;
+  /** Configuration nodes are complete context during partial state validation. */
+  bool complete_config_context = false;
 };
 
 struct ValidationResult {
