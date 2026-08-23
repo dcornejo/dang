@@ -851,6 +851,15 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
         "malformed-message");
     return {Reply("", error), false};
   }
+  const std::size_t root_elements = static_cast<std::size_t>(
+      std::ranges::count_if(document.children(), [](pugi::xml_node node) {
+        return node.type() == pugi::node_element;
+      }));
+  if (root_elements != 1) {
+    return {Reply("", ProtocolFailure(
+        "RPC XML requires exactly one document element", "malformed-message")),
+        false};
+  }
   std::string resource_error;
   if (!XmlWithinResourceLimits(document, rpc_xml, DefaultResourceLimits(),
                                &resource_error)) {

@@ -140,6 +140,14 @@ TEST(NetconfFramingTest, ClosesOnMalformedHelloAndFraming) {
   SessionOutput hello = bad_hello.Receive("<rpc/>]]>]]>");
   EXPECT_TRUE(hello.error);
   EXPECT_TRUE(hello.close_transport);
+  NetconfSession multiple_hello_roots(server, 82, "mallory");
+  SessionOutput smuggled = multiple_hello_roots.Receive(
+      ClientHello(false).substr(0, ClientHello(false).size() - 6) +
+      "<hello xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\"/>"
+      "]]>]]>");
+  EXPECT_TRUE(smuggled.error);
+  EXPECT_TRUE(smuggled.close_transport);
+  EXPECT_FALSE(multiple_hello_roots.negotiated());
   NetconfSession bad_chunk(server, 80, "dave");
   ASSERT_FALSE(bad_chunk.Receive(ClientHello(true)).error);
   SessionOutput chunk = bad_chunk.Receive("not-a-chunk");

@@ -35,7 +35,8 @@ stays in this file with its remaining work rewritten precisely.
   XPath predicate quoting and XML escaping for configurations, RPC errors,
   notifications, YANG Library, and model retrieval. Add focused regressions and
   coverage-guided fuzz seeds for every issue found, and document any parser
-  behavior that is intentionally accepted.
+  behavior that is intentionally accepted. NETCONF `<hello>` and `<rpc>`
+  transport boundaries now reject multiple top-level document elements.
 - Run interoperability and negative-security tests against at least one
   independent RFC 8341 implementation, run a sustained coverage-guided NACM
   fuzz campaign, and document any intentional deviations before claiming

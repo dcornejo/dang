@@ -15,6 +15,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Rejected multiple top-level XML elements at the NETCONF `<hello>` and RPC
+  boundaries instead of dispatching only the first root.
 - Accepted closing brackets inside quoted NACM node-instance predicate values
   instead of mistaking them for the end of the predicate.
 - Rejected managed NACM XML with multiple top-level elements instead of loading

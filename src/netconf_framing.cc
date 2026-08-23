@@ -57,7 +57,12 @@ bool ClientSupportsBase11(std::string_view xml, std::string* error) {
   pugi::xml_document document;
   const pugi::xml_parse_result parsed =
       document.load_buffer(xml.data(), xml.size(), pugi::parse_default);
-  if (!parsed || LocalName(document.document_element().name()) != "hello") {
+  std::size_t root_elements = 0;
+  for (const pugi::xml_node child : document.children()) {
+    if (child.type() == pugi::node_element) ++root_elements;
+  }
+  if (!parsed || root_elements != 1 ||
+      LocalName(document.document_element().name()) != "hello") {
     *error = "first NETCONF message must be a well-formed hello element";
     return false;
   }

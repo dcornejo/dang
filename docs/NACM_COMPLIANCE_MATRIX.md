@@ -275,6 +275,10 @@ Open evidence: an external RFC 5277/NACM interoperability run.
   instance paths, then exercises read/create/update/delete authorization and
   readable-data filtering. Its corpus includes keyed and leaf-list predicates,
   namespaces, apostrophes, and mixed quote forms.
+- NETCONF transport negotiation and RPC dispatch each require exactly one XML
+  document element, preventing a second top-level `<hello>` or `<rpc>` from
+  being silently ignored: `NetconfFramingTest.ClosesOnMalformedHelloAndFraming`
+  and `NetconfServerTest.RejectsMalformedRpcAndInvalidOptions`.
 
 Live managed-policy commits are transactionally coupled to snapshot
 persistence. Fault injection before and after atomic replacement verifies that

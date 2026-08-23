@@ -525,6 +525,15 @@ TEST(NetconfServerTest, RejectsMalformedRpcAndInvalidOptions) {
   NetconfServer server(stores);
   EXPECT_NE(server.Process("17", "<rpc>").xml.find("malformed-message"),
             std::string::npos);
+  const RpcResponse multiple_roots = server.Process("17", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="smuggle">
+      <close-session/>
+    </rpc>
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="hidden">
+      <get/>
+    </rpc>)xml");
+  EXPECT_NE(multiple_roots.xml.find("malformed-message"), std::string::npos);
+  EXPECT_FALSE(multiple_roots.close_session);
   const RpcResponse invalid = server.Process("17", R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="105">
       <edit-config><target><candidate/></target>

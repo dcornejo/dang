@@ -12,6 +12,8 @@
 
 ### Fixed
 
+- Closed multi-root XML message smuggling at NETCONF session negotiation and
+  RPC dispatch.
 - Matched valid NACM paths whose quoted key or leaf-list value contains `]`.
 - Rejected multi-root managed NACM input before compiling or publishing policy.
 - Failed closed when list keys or leaf-list values contain both XPath quote
