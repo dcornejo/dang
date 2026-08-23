@@ -10,6 +10,10 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Closed operational-publication validation by documenting selected versus
+  complete provider semantics as an explicit ABI contract, and made dynamic
+  configuration datastores an explicit non-advertised scope boundary with
+  release gates for any future implementation.
 - Scoped operational-provider completeness to canonical instance paths rather
   than top-level schema names, preventing one complete keyed list entry from
   making a different provider's partial entry falsely fail mandatory checks.

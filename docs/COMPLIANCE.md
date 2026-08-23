@@ -250,8 +250,9 @@ read-only `intended` view equal to `running`, builds an `operational` view from
 applied configuration plus core/plugin state, and implements RFC 8526
 `get-data` and `edit-data` with datastore selection, filters, `config-filter`,
 `max-depth`, NACM, and atomic editing. The origin feature, `with-origin`, and
-positive/negative origin selection are enabled for the currently known
-`ietf-origin:intended` configuration.
+positive/negative origin selection are enabled for intended, standard
+non-intended, and schema-derived origin identities supplied by applied-state
+sources.
 
 Both NMDA RPC inputs are validated against the enabled YANG operation schema
 before execution, so unknown data nodes, duplicate singleton parameters,
@@ -304,13 +305,16 @@ snapshot as context, including required state-to-configuration leafrefs.
 Explicit `unique` violations across provider-published list entries reject the
 later provider deterministically. Cross-provider `must` and `when` expressions
 also reject the later fragment when their visible operands decide the result.
-Constraints that remain indeterminate between selected state fragments are
-still incomplete. ABI v5 providers may assert complete child collections for
-their returned nodes; omitted mandatory children and unresolved sibling
-leafrefs then become deterministic validation failures. Mandatory enforcement
+Constraints that remain indeterminate between selected state fragments retain
+selected-data semantics: omission is not treated as absence. ABI v5 providers
+assert complete child collections when absence must be decisive, allowing
+omitted children of their returned nodes to be decisive; mandatory children
+and unresolved sibling leafrefs then become deterministic validation failures.
+Mandatory enforcement
 is also covered when one ABI-v1 plugin owns the model and an independent ABI-v5
 plugin publishes the complete instance, with failure attributed to the
-publisher. Older providers remain selected-data sources for compatibility.
+publisher. Older providers remain selected-data sources; this is an explicit
+plugin contract rather than a bypass of a deterministic validation failure.
 Completeness of an ABI-v5 top-level subtree is retained across subsequent
 provider merges by canonical instance path. A complete keyed list entry does
 not close another provider's partial entry of the same list. A later
@@ -333,9 +337,12 @@ fail atomically with `operation-failed`, the
 `operational-provider-failure` application tag, the best available error path,
 and a message naming the provider, stage, and reason. No otherwise accepted
 partial operational payload accompanies that error.
-Dynamic configuration datastores are not implemented. The complete operation,
-filter/default/origin/NACM interaction matrix and external interoperability
-remain. `TODO.md` is the normative work list.
+Dynamic configuration datastores are not implemented or advertised. If one is
+introduced, its schema, protocol operations, validation, persistence, YANG
+Library entry, applied mapping, and derived origin identity are release-gated
+requirements rather than behavior inferred from conventional datastores. The
+complete operation, filter/default/origin/NACM interaction matrix and external
+interoperability remain. `TODO.md` is the normative work list.
 
 ### RFC 8525 — YANG Library
 

@@ -130,6 +130,10 @@ assertion can cause valid state to be rejected and violates the plugin contract.
 Completeness follows each canonical data instance, including list keys and
 leaf-list values; it is never inferred for a separate instance merely because
 the instances share a schema node.
+Selected fragments may leave absence-sensitive constraints indeterminate;
+omission then means "not supplied", not "absent". A provider that owns the
+complete current child set must assert completeness so dangd can enforce
+mandatory nodes and required references decisively.
 
 ABI v6 extends ABI v5 with `reconcile_applied_configuration`. Dangd calls it
 after successful hardware application and before releasing the prepared

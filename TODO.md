@@ -35,37 +35,6 @@ stays in this file with its remaining work rewritten precisely.
 
 ### RFC 8342 / RFC 8526 NMDA compliance closure
 
-- Complete operational publication validation across provider and
-  datastore context. Individual fragments are now namespace/schema bound and
-  checked as typed partial instance data, including shapes, scalar types, list
-  keys, choices, references, and duplicates visible within the fragment.
-  Cumulative validation now rejects a provider whose fragment conflicts with
-  daemon-owned operational data or already accepted provider data; core data
-  is authoritative and earlier plugin load order has deterministic precedence.
-  Applied configuration is now supplied as complete context, so provider
-  leafrefs to config-true targets are enforced after the standalone collision
-  gate. Explicit cross-provider `when`, `must`, and `unique` violations are
-  enforced with deterministic later-provider rejection when their operands are
-  present. ABI v5 providers can declare every returned node's child collection
-  complete, making missing mandatory children and nested state-to-state
-  leafrefs decisive. Separate model-owner and complete-publisher coverage now
-  enforces mandatory children. Complete state-to-state leafref collections now
-  remain closed across later provider merges, resolving valid references and
-  rejecting missing targets. Instance-identifiers likewise resolve across
-  providers and reject missing paths into closed operational subtrees. XPath
-  path evaluation now distinguishes open missing collections from known-empty
-  collections retained from complete providers, making cross-provider `must`
-  and `when` absence checks decisive without closing selected data.
-  Completeness is retained by canonical instance path, so a complete keyed list
-  entry never closes a different partial entry of the same schema list.
-  Callback and validation failures now omit the unsafe fragment and appear with
-  provider, stage, path, and reason in operational reconciliation telemetry;
-  `<get>` and operational `<get-data>` also fail atomically with actionable
-  NETCONF errors instead of returning accepted partial data as a success.
-- Define explicit schemas and lifecycle rules for any dynamic configuration
-  datastores. Publish each datastore and its schema through RFC 8525, define
-  supported protocol operations, validation and persistence semantics, and map
-  its applied content and derived origin identity into `<operational>`.
 - Finish the RFC 8526 operation matrix: exercise all datastore identities,
   subtree and XPath choices, `config-filter`, `max-depth`, `with-defaults`,
   `with-origin`, URL-feature behavior if enabled, and protocol-accurate error

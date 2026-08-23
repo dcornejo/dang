@@ -7,6 +7,9 @@
 
 ### Changed
 
+- Closed the NMDA provider-validation work item after exact-instance
+  completeness coverage, and documented that dynamic configuration datastores
+  are neither implemented nor advertised.
 - Retained ABI-v5 completeness for exact operational instances instead of all
   nodes sharing a top-level QName; added complete-plus-partial keyed-list
   provider coverage.
