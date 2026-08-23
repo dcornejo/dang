@@ -353,6 +353,10 @@ Malformed or oversized provider output fails the retrieval atomically with
 provider/stage attribution. Safe timeout and crash recovery still require a
 supervised out-of-process callback boundary; abandoning an in-process worker
 thread would permit it to continue executing against torn-down plugin state.
+An end-to-end deterministic stress case issues 200 operational retrievals from
+eight sessions, verifies every response, and proves that all eight provider
+callbacks may execute concurrently. A sanitizer-backed long-duration soak and
+external interoperability run remain release evidence.
 
 ### RFC 8525 — YANG Library
 

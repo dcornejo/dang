@@ -124,6 +124,11 @@ Returned XML must be NUL-terminated within the configured XML byte ceiling
 normal XML node/depth and schema limits afterward; an oversized result fails
 the complete retrieval and is attributed to the provider.
 
+Operational callbacks may run concurrently for independent NETCONF sessions.
+The callback and every object reachable through its context must therefore be
+thread-safe; per-response storage must remain valid until the callback returns
+and must not be shared unsafely with another invocation.
+
 ABI v5 extends the complete ABI-v4 table with `get_operational_data_v2` and
 `DangOperationalDataV2`. A provider sets `complete` to nonzero only when every
 returned element contains its complete child collection at the instant of the

@@ -6,11 +6,14 @@
 #include "yang/xml_security.h"
 
 #include <algorithm>
+#include <atomic>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <tuple>
+#include <thread>
+#include <vector>
 
 #include <dlfcn.h>
 
@@ -952,6 +955,50 @@ TEST(DangdApplicationTest, RejectsOversizedOperationalProviderData) {
             std::string::npos) << response.xml;
   EXPECT_EQ(response.xml.find(std::string(1024, 'x')), std::string::npos)
       << response.xml;
+}
+
+TEST(DangdApplicationTest, SustainsConcurrentOperationalProviderRetrieval) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_CONCURRENT_OPERATIONAL_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+
+  constexpr unsigned int kThreads = 8;
+  constexpr unsigned int kRequestsPerThread = 25;
+  std::atomic<unsigned int> ready{0};
+  std::atomic<bool> start{false};
+  std::atomic<unsigned int> failures{0};
+  std::vector<std::thread> workers;
+  workers.reserve(kThreads);
+  for (unsigned int thread = 0; thread < kThreads; ++thread) {
+    workers.emplace_back([&, thread] {
+      ready.fetch_add(1);
+      while (!start.load()) std::this_thread::yield();
+      for (unsigned int request = 0; request < kRequestsPerThread; ++request) {
+        yang::netconf::RpcSessionContext session{
+            1000 + thread, "alice", "alice", {}};
+        const auto response = loaded.application->server().Process(session,
+            "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+            "message-id=\"concurrent\"><get/></rpc>");
+        if (response.xml.find("<rpc-reply") == std::string::npos ||
+            response.xml.find("<rpc-error>") != std::string::npos ||
+            response.xml.find("<maximum-concurrency>") == std::string::npos)
+          failures.fetch_add(1);
+      }
+    });
+  }
+  while (ready.load() != kThreads) std::this_thread::yield();
+  start.store(true);
+  for (std::thread& worker : workers) worker.join();
+
+  EXPECT_EQ(failures.load(), 0U);
+  const auto final = loaded.application->server().Process("alice", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="final">
+      <get/>
+    </rpc>)xml");
+  EXPECT_NE(final.xml.find("<maximum-concurrency>8</maximum-concurrency>"),
+            std::string::npos) << final.xml;
 }
 
 TEST(DangdApplicationTest, EnforcesCompleteProviderChildCollections) {
