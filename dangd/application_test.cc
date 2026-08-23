@@ -474,6 +474,74 @@ TEST(DangdApplicationTest, AppliesNmdaDefaultOperationsAndLocks) {
             std::string::npos) << readonly_lock.xml;
 }
 
+TEST(DangdApplicationTest, ComposesNmdaReadFiltersWithNacm) {
+  TemporaryInputs inputs;
+  constexpr std::string_view model = R"yang(
+    module appliance {
+      yang-version 1.1;
+      namespace "urn:example:appliance";
+      prefix a;
+      container system {
+        leaf hostname { type string; mandatory true; }
+        leaf secret { type string; }
+        container rack { leaf aisle { type string; } }
+      }
+    }
+  )yang";
+  constexpr std::string_view configuration = R"xml(
+    <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <system xmlns="urn:example:appliance">
+        <hostname>edge-1</hostname><secret>hidden</secret>
+        <rack><aisle>seven</aisle></rack>
+      </system>
+    </config>
+  )xml";
+  auto options = Options(inputs);
+  options.model = inputs.Write("filters.yang", model);
+  options.configuration = inputs.Write("filters.xml", configuration);
+  options.recovery_users.clear();
+  options.nacm_configuration = inputs.Write("filters-nacm.xml", R"xml(
+    <nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm"
+          xmlns:a="urn:example:appliance">
+      <read-default>permit</read-default><write-default>deny</write-default>
+      <exec-default>deny</exec-default>
+      <groups><group><name>readers</name><user-name>alice</user-name>
+      </group></groups>
+      <rule-list><name>read-policy</name><group>readers</group>
+        <rule><name>allow-nmda</name><module-name>ietf-netconf-nmda</module-name>
+          <rpc-name>get-data</rpc-name><access-operations>exec</access-operations>
+          <action>permit</action></rule>
+        <rule><name>hide-secret</name>
+          <path>/a:system/a:secret</path>
+          <access-operations>read</access-operations><action>deny</action>
+        </rule>
+      </rule-list>
+    </nacm>)xml");
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  yang::netconf::RpcSessionContext alice{1, "alice", "alice", {}};
+
+  const auto response = loaded.application->server().Process(alice, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="combined"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore>
+        <subtree-filter><system xmlns="urn:example:appliance"/></subtree-filter>
+        <config-filter>true</config-filter>
+        <max-depth>2</max-depth><with-origin/>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_EQ(response.xml.find("<rpc-error>"), std::string::npos) << response.xml;
+  EXPECT_NE(response.xml.find("<hostname or:origin=\"or:intended\">edge-1"),
+            std::string::npos) << response.xml;
+  EXPECT_NE(response.xml.find("<rack or:origin=\"or:intended\""),
+            std::string::npos) << response.xml;
+  EXPECT_EQ(response.xml.find("hidden"), std::string::npos) << response.xml;
+  EXPECT_EQ(response.xml.find("seven"), std::string::npos) << response.xml;
+  EXPECT_EQ(response.xml.find("yang-library"), std::string::npos)
+      << response.xml;
+}
+
 TEST(DangdApplicationTest, UsesSecureNacmDefaultsWhenSubtreeIsAbsent) {
   TemporaryInputs inputs;
   auto options = Options(inputs);

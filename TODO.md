@@ -95,8 +95,10 @@ stays in this file with its remaining work rewritten precisely.
   types, and mandatory elements; unsupported NMDA `with-defaults` is rejected
   with the RFC-required `invalid-value`. Basic NACM effective
   create, update, delete, wrong-bit denial, and atomic preservation are covered;
-  add cases where filtering, defaults, origin selection, depth limiting, and
-  NACM interact.
+  operational subtree selection combined with `config-filter`, `with-origin`,
+  `max-depth`, and NACM read denial is covered without denied-data leakage.
+  Add the remaining XPath, origin selection, defaults, and non-operational
+  cross-product cases.
 - Verify that every advertised RFC 8525 datastore schema is accurate and that
   `<operational>` is a permitted superset of every configuration-datastore
   schema. Add reload tests for module, feature, deviation, plugin, datastore,

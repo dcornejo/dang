@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Added combined RFC 8526 retrieval coverage for NACM read denial,
+  configuration filtering, origin annotation, subtree selection, and maximum
+  depth, verifying denied and out-of-scope data remain absent.
 - Accepted RFC 8526 datastore identity leaves for `<lock>` and `<unlock>`, and
   returned `invalid-value` for read-only NMDA targets as required; added full
   `<edit-data>` default-operation, rollback, and lock interaction coverage.

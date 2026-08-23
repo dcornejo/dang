@@ -7,6 +7,8 @@
 
 ### Changed
 
+- Added an end-to-end operational retrieval interaction test combining NACM,
+  `config-filter`, `with-origin`, subtree selection, and `max-depth`.
 - Completed `<edit-data>` default-operation and rollback coverage and enabled
   RFC 8526 datastore identity targets for `<lock>` and `<unlock>`.
 - Added schema-bound RFC 8526 RPC input validation, including atomic rejection

@@ -265,6 +265,12 @@ restores the complete pre-edit datastore on error. RFC 8526 datastore identity
 leaves are accepted as `<lock>` and `<unlock>` targets for supported writable
 datastores; competing sessions receive `lock-denied`, while `intended` and
 `operational` targets receive `invalid-value`.
+Combined retrieval coverage applies NACM read filtering, configuration-only
+selection, intended-origin annotation, subtree selection, and maximum depth in
+one operational request. It verifies that denied leaves and unrelated state do
+not leak, permitted ancestors and leaves retain origin metadata, and children
+beyond the requested depth are removed. The remaining XPath/origin/default and
+non-operational interaction cross-product is not yet complete.
 
 Applied configuration now comes from dangd's backend working snapshot after
 successful hardware application, rather than being copied from the committed
