@@ -293,6 +293,61 @@ TEST(DangdApplicationTest, RetrievesAndEditsConventionalNmdaDatastores) {
             std::string::npos) << rejected.xml;
 }
 
+TEST(DangdApplicationTest, ValidatesCompleteNmdaOperationInput) {
+  TemporaryInputs inputs;
+  auto loaded = Application::Load(Options(inputs));
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+
+  const auto duplicate = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="duplicate"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:running</datastore>
+        <datastore>ds:candidate</datastore>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_NE(duplicate.xml.find("invalid element count"), std::string::npos)
+      << duplicate.xml;
+  EXPECT_NE(duplicate.xml.find("<error-tag>invalid-value</error-tag>"),
+            std::string::npos) << duplicate.xml;
+
+  const auto unknown = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="unknown"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <edit-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:candidate</datastore>
+        <unsupported/>
+        <config><system xmlns="urn:example:appliance">
+          <hostname>must-not-apply</hostname>
+        </system></config>
+      </edit-data>
+    </rpc>)xml");
+  EXPECT_NE(unknown.xml.find("<error-tag>unknown-element</error-tag>"),
+            std::string::npos) << unknown.xml;
+  EXPECT_EQ(loaded.application->datastores()
+                .Read(yang::netconf::Datastore::kCandidate)
+                .ToXml()
+                .find("must-not-apply"),
+            std::string::npos);
+
+  const auto unsupported_defaults = loaded.application->server().Process(
+      session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="defaults"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores"
+         xmlns:wd="urn:ietf:params:xml:ns:yang:ietf-netconf-with-defaults">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:running</datastore>
+        <wd:with-defaults>report-all</wd:with-defaults>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_NE(unsupported_defaults.xml.find(
+                "<error-tag>invalid-value</error-tag>"),
+            std::string::npos) << unsupported_defaults.xml;
+  EXPECT_NE(unsupported_defaults.xml.find("with-defaults is not supported"),
+            std::string::npos) << unsupported_defaults.xml;
+}
+
 TEST(DangdApplicationTest, UsesSecureNacmDefaultsWhenSubtreeIsAbsent) {
   TemporaryInputs inputs;
   auto options = Options(inputs);

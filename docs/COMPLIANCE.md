@@ -253,6 +253,14 @@ applied configuration plus core/plugin state, and implements RFC 8526
 positive/negative origin selection are enabled for the currently known
 `ietf-origin:intended` configuration.
 
+Both NMDA RPC inputs are validated against the enabled YANG operation schema
+before execution, so unknown data nodes, duplicate singleton parameters,
+invalid scalar values, and missing mandatory inputs fail without changing a
+datastore. The NMDA `with-defaults` feature and the separate
+`:with-operational-defaults` capability are not advertised; a `with-defaults`
+parameter on `<get-data>` is therefore rejected with `invalid-value` as RFC
+8526 requires.
+
 Applied configuration now comes from dangd's backend working snapshot after
 successful hardware application, rather than being copied from the committed
 running tree. Each schema-known configuration node is explicitly annotated as

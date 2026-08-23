@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Validated RFC 8526 `<get-data>` and `<edit-data>` inputs against their enabled
+  YANG operation schema, rejecting unknown and duplicate parameters before any
+  mutation and returning `invalid-value` for unsupported `with-defaults`.
 - Made `<get>` and operational `<get-data>` fail atomically when an operational
   provider callback, validation, or merge fails, returning structured NETCONF
   errors with provider, stage, path, and reason instead of partial data.

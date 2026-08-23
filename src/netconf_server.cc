@@ -538,7 +538,9 @@ TransactionResult ValidateOperationData(
           finding.netconf_error_tag = "invalid-value";
           findings.push_back(std::move(finding));
         }
-      } else if (!scalar) {
+      } else if (!scalar &&
+                 metadata.kind != semantic::SchemaNodeKind::kAnydata &&
+                 metadata.kind != semantic::SchemaNodeKind::kAnyxml) {
         validate_children(child, schema.DataChildren(*schema_id), path);
       }
     }
@@ -936,6 +938,12 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
                         operation_namespace == kNmdaNamespace;
   const bool edit_data = LocalName(operation.name()) == "edit-data" &&
                          operation_namespace == kNmdaNamespace;
+  const auto nmda_rpc = (get_data || edit_data)
+      ? datastores_.schema().FindTopLevelOperation(
+            {std::string(kNmdaNamespace),
+             std::string(LocalName(operation.name()))},
+            semantic::SchemaNodeKind::kRpc)
+      : std::optional<config::RuntimeSchemaNodeId>{};
   const auto custom_rpc = (create_subscription || get_schema || get_data ||
                            edit_data || operation_namespace == kNetconfNamespace)
       ? std::optional<config::RuntimeSchemaNodeId>{}
@@ -1015,6 +1023,17 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
         "execution of the requested RPC is denied", "access-denied",
         error_path, base_operation ? "" : std::string(operation_namespace))),
         false};
+  }
+  if (get_data && Child(operation, "with-defaults")) {
+    return {Reply(message_id, ProtocolFailure(
+        "with-defaults is not supported by this get-data implementation",
+        "invalid-value")), false};
+  }
+  if ((get_data || edit_data) && nmda_rpc) {
+    result = ValidateOperationData(datastores_.schema(), *nmda_rpc,
+                                   semantic::SchemaNodeKind::kInput,
+                                   operation);
+    if (!result.ok) return {Reply(message_id, result), false};
   }
   if (action) {
     if (!action->has_all_keys) {

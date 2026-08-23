@@ -7,6 +7,8 @@
 
 ### Changed
 
+- Added schema-bound RFC 8526 RPC input validation, including atomic rejection
+  of unknown or duplicate parameters and unsupported NMDA `with-defaults`.
 - Returned operational-provider callback, validation, and merge failures from
   `<get>` and operational `<get-data>` as structured, actionable NETCONF errors
   while suppressing otherwise accepted partial operational payloads.

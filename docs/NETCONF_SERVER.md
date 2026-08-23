@@ -37,6 +37,14 @@ startup, validate 1.1, rollback-on-error, and confirmed-commit 1.1. It dispatche
   `delete-config`;
 - `close-session` and `kill-session`.
 
+When the RFC 8526 modules are present, `<get-data>` and `<edit-data>` inputs are
+validated against their enabled YANG schema before execution. This prevents
+unknown or duplicate parameters from being silently ignored and treats opaque
+`anydata` configuration/filter payloads as content to be interpreted by the
+operation rather than as children of the operation schema. If the NMDA
+`with-defaults` feature is not enabled, `<get-data>` rejects that parameter with
+`invalid-value`.
+
 Replies preserve and XML-escape `message-id`, return one or more `rpc-error`
 elements, and carry existing validator instance paths where available.
 
