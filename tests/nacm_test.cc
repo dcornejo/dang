@@ -268,6 +268,22 @@ TEST(NacmTest, HonorsExternalGroupsSwitch) {
                                     transport_groups));
 }
 
+TEST(NacmTest, RejectsByteSmugglingAndEntityDeclarations) {
+  std::string embedded_nul =
+      "<nacm xmlns=\"urn:ietf:params:xml:ns:yang:ietf-netconf-acm\">";
+  embedded_nul.push_back('\0');
+  embedded_nul += "<enable-nacm>false</enable-nacm></nacm>";
+  EXPECT_FALSE(LoadNacmPolicy(embedded_nul).policy);
+  const auto entity = LoadNacmPolicy(R"xml(
+    <!DOCTYPE nacm [<!ENTITY permissive "false">]>
+    <nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+      <enable-nacm>&permissive;</enable-nacm>
+    </nacm>)xml");
+  EXPECT_FALSE(entity.policy);
+  ASSERT_FALSE(entity.errors.empty());
+  EXPECT_NE(entity.errors.front().find("forbidden"), std::string::npos);
+}
+
 TEST(NacmTest, RejectsMalformedModelConfiguration) {
   NacmLoadResult loaded = LoadNacmPolicy(R"xml(
     <nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">

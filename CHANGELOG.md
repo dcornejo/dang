@@ -25,6 +25,10 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Added a shared resource-bounded UTF-8 XML parser at the NETCONF hello/RPC,
+  configuration/edit, NACM, and filter boundaries. It rejects embedded NULs,
+  malformed encodings, forbidden XML characters, DTD/entity declarations, and
+  unexpected multiple roots while keeping edit fragments explicitly supported.
 - Rejected multiple top-level configuration elements before datastore schema
   binding instead of validating only the first root and ignoring siblings.
 - Rejected multiple top-level XML elements at the NETCONF `<hello>` and RPC

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "yang/config_validation.h"
+#include "yang/xml_security.h"
 
 #include "yang/resource_limits.h"
 #include "yang/schema_registry.h"
@@ -1884,49 +1885,18 @@ EffectiveDataView EffectiveDataView::Build(const RuntimeSchema& schema,
 
 ConfigParseResult ParseDatastoreXml(const RuntimeSchema& schema, std::string_view xml,
                                     const ConfigParseOptions& options) {
-  if (xml.size() > DefaultResourceLimits().maximum_xml_bytes) {
+  pugi::xml_document document;
+  const UntrustedXmlResult parsed = ParseUntrustedXml(xml, &document);
+  if (!parsed.ok) {
     ConfigParseResult result;
     result.findings.push_back(Finding(
-        ValidationCode::kResourceLimitExceeded, FindingState::kInvalid,
-        "configuration XML exceeds the byte limit", "", "too-big"));
-    return result;
-  }
-  pugi::xml_document document;
-  const pugi::xml_parse_result parsed = document.load_buffer(xml.data(), xml.size(), pugi::parse_default);
-  if (!parsed) {
-    ConfigParseResult result;
-    result.findings.push_back(Finding(ValidationCode::kMalformedXml, FindingState::kInvalid,
-        std::string("malformed XML: ") + parsed.description(), "", "malformed-message"));
+        parsed.resource_limit ? ValidationCode::kResourceLimitExceeded
+                              : ValidationCode::kMalformedXml,
+        FindingState::kInvalid, parsed.message, "",
+        parsed.resource_limit ? "too-big" : "malformed-message"));
     return result;
   }
   const pugi::xml_node root = document.document_element();
-  if (!root) {
-    ConfigParseResult result;
-    result.findings.push_back(Finding(ValidationCode::kMalformedXml, FindingState::kInvalid,
-        "XML document has no document element", "", "malformed-message"));
-    return result;
-  }
-  const std::size_t root_elements = static_cast<std::size_t>(
-      std::ranges::count_if(document.children(), [](pugi::xml_node node) {
-        return node.type() == pugi::node_element;
-      }));
-  if (root_elements != 1) {
-    ConfigParseResult result;
-    result.findings.push_back(Finding(
-        ValidationCode::kMalformedXml, FindingState::kInvalid,
-        "configuration XML requires exactly one document element", "",
-        "malformed-message"));
-    return result;
-  }
-  std::string resource_error;
-  if (!XmlWithinResourceLimits(document, xml, DefaultResourceLimits(),
-                               &resource_error)) {
-    ConfigParseResult result;
-    result.findings.push_back(Finding(
-        ValidationCode::kResourceLimitExceeded, FindingState::kInvalid,
-        resource_error, "", "too-big"));
-    return result;
-  }
   return XmlBinder(schema, xml, options).Bind(root);
 }
 

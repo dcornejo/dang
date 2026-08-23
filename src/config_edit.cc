@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "yang/config_edit.h"
+#include "yang/xml_security.h"
 
 #include "yang/resource_limits.h"
 
@@ -302,25 +303,16 @@ std::optional<InsertDirective> EditDocument::insertion(ConfigNodeId id) const {
 
 EditParseResult ParseEditXml(const RuntimeSchema& schema, std::string_view xml) {
   EditParseResult result;
-  if (xml.size() > DefaultResourceLimits().maximum_xml_bytes) {
-    result.findings.push_back(Error(ValidationCode::kResourceLimitExceeded,
-        "edit XML exceeds the byte limit", "", "too-big"));
-    return result;
-  }
   pugi::xml_document document;
-  const pugi::xml_parse_result parsed =
-      document.load_buffer(xml.data(), xml.size(), pugi::parse_default);
-  if (!parsed) {
-    result.findings.push_back(Error(ValidationCode::kMalformedXml,
-        std::string("malformed XML: ") + parsed.description(), "",
-        "malformed-message"));
-    return result;
-  }
-  std::string resource_error;
-  if (!XmlWithinResourceLimits(document, xml, DefaultResourceLimits(),
-                               &resource_error)) {
-    result.findings.push_back(Error(ValidationCode::kResourceLimitExceeded,
-        resource_error, "", "too-big"));
+  UntrustedXmlPolicy policy;
+  policy.require_single_document_element = false;
+  const UntrustedXmlResult parsed = ParseUntrustedXml(xml, &document, policy);
+  if (!parsed.ok) {
+    result.findings.push_back(Error(
+        parsed.resource_limit ? ValidationCode::kResourceLimitExceeded
+                              : ValidationCode::kMalformedXml,
+        parsed.message, "",
+        parsed.resource_limit ? "too-big" : "malformed-message"));
     return result;
   }
   std::vector<std::optional<EditOperation>> operations;

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "yang/nacm.h"
+#include "yang/xml_security.h"
 
 #include "yang/resource_limits.h"
 #include "yang/utf8.h"
@@ -705,30 +706,10 @@ void NacmPolicy::PreserveRuntimeStateFrom(const NacmPolicy& previous) {
 
 NacmLoadResult LoadNacmPolicy(std::string_view xml) {
   NacmLoadResult loaded;
-  if (xml.size() > DefaultResourceLimits().maximum_xml_bytes) {
-    loaded.errors.push_back("NACM XML exceeds the byte limit");
-    return loaded;
-  }
   pugi::xml_document document;
-  const pugi::xml_parse_result parsed =
-      document.load_buffer(xml.data(), xml.size(), pugi::parse_default);
-  if (!parsed) {
-    loaded.errors.push_back(std::string("malformed NACM XML: ") +
-                            parsed.description());
-    return loaded;
-  }
-  const std::size_t root_elements = static_cast<std::size_t>(
-      std::ranges::count_if(document.children(), [](pugi::xml_node node) {
-        return node.type() == pugi::node_element;
-      }));
-  if (root_elements != 1) {
-    loaded.errors.push_back("NACM XML requires exactly one document element");
-    return loaded;
-  }
-  std::string resource_error;
-  if (!XmlWithinResourceLimits(document, xml, DefaultResourceLimits(),
-                               &resource_error)) {
-    loaded.errors.push_back(resource_error);
+  const UntrustedXmlResult parsed = ParseUntrustedXml(xml, &document);
+  if (!parsed.ok) {
+    loaded.errors.push_back("invalid NACM XML: " + parsed.message);
     return loaded;
   }
   const pugi::xml_node root = document.document_element();

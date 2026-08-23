@@ -534,6 +534,20 @@ TEST(NetconfServerTest, RejectsMalformedRpcAndInvalidOptions) {
     </rpc>)xml");
   EXPECT_NE(multiple_roots.xml.find("malformed-message"), std::string::npos);
   EXPECT_FALSE(multiple_roots.close_session);
+  std::string embedded_nul =
+      "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+      "message-id=\"nul\"><get/>";
+  embedded_nul.push_back('\0');
+  embedded_nul += "<close-session/></rpc>";
+  EXPECT_NE(server.Process("17", embedded_nul).xml.find("malformed-message"),
+            std::string::npos);
+  const RpcResponse entity = server.Process("17", R"xml(
+    <!DOCTYPE rpc [<!ENTITY hidden "<close-session/>">]>
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="entity">
+      &hidden;
+    </rpc>)xml");
+  EXPECT_NE(entity.xml.find("malformed-message"), std::string::npos);
+  EXPECT_FALSE(entity.close_session);
   const RpcResponse invalid = server.Process("17", R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="105">
       <edit-config><target><candidate/></target>

@@ -26,7 +26,14 @@ stays in this file with its remaining work rewritten precisely.
   behavior that is intentionally accepted. NETCONF `<hello>` and `<rpc>`
   transport boundaries and complete datastore parsing now reject multiple
   top-level document elements; intentional edit fragments remain a separately
-  defined input shape.
+  defined input shape. A shared strict parser now protects hello, RPC, complete
+  configuration, edit fragments, NACM, and subtree/XPath filters; it validates
+  UTF-8/XML characters, rejects embedded NULs and DTD/entity declarations,
+  bounds resources, and treats comments, CDATA, processing instructions, and
+  XInclude as inert syntax. Finish migration and boundary tests for notification
+  filters/events, URL sources, plugin operation output, plugin operational data,
+  persistence snapshots, and internal reparsing of generated XML; complete the
+  output-escaping inventory and add the resulting fuzz seeds.
 - Run interoperability and negative-security tests against at least one
   independent RFC 8341 implementation, run a sustained coverage-guided NACM
   fuzz campaign, and document any intentional deviations before claiming

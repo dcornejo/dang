@@ -51,7 +51,8 @@ add_library(yang
   src/source_file.cc
   src/string_decoder.cc
   src/syntax_tree.cc
-  src/utf8.cc)
+  src/utf8.cc
+  src/xml_security.cc)
 target_sources(yang PRIVATE src/xml_schema_regex.cc)
 target_sources(yang PRIVATE src/identity_feature.cc src/leafref.cc src/module_resolver.cc src/schema_path.cc src/schema_tree.cc src/semantic_model.cc src/type_system.cc src/validator.cc src/xpath.cc src/yin_document.cc)
 add_library(yang::yang ALIAS yang)
@@ -96,7 +97,7 @@ install(FILES LICENSE NOTICE README.md TODO.md CHANGELOG.md docs/STANDARDS.md
   docs/NETCONF_NOTIFICATIONS.md
   docs/NETCONF_TRANSPORT.md
   docs/NETCONF_WITH_DEFAULTS.md
-  docs/NETCONF_FILTER_NACM_PERSISTENCE.md
+  docs/NETCONF_FILTER_NACM_PERSISTENCE.md docs/XML_SECURITY.md
   docs/DANGD_PLUGINS.md
   DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/yang)
 install(FILES examples/example.yang examples/library_example.cc
@@ -278,7 +279,8 @@ if(YANG_BUILD_TESTS)
     tests/source_file_test.cc
     tests/string_decoder_test.cc
     tests/syntax_tree_test.cc
-    tests/utf8_test.cc)
+    tests/utf8_test.cc
+    tests/xml_security_test.cc)
   target_sources(yang_tests PRIVATE tests/concurrency_stress_test.cc tests/config_edit_test.cc tests/config_validation_test.cc tests/conformance_test.cc tests/deviation_test.cc tests/extension_test.cc tests/feature_schema_test.cc tests/identity_feature_test.cc tests/leafref_test.cc tests/module_resolver_test.cc tests/nacm_test.cc tests/netconf_datastore_test.cc tests/netconf_filter_test.cc tests/netconf_framing_test.cc tests/netconf_notifications_test.cc tests/netconf_persistence_test.cc tests/netconf_server_test.cc tests/netconf_session_registry_test.cc tests/netconf_transport_test.cc tests/netconf_with_defaults_test.cc tests/schema_path_test.cc tests/schema_tree_test.cc tests/schema_value_test.cc tests/semantic_model_test.cc tests/type_system_test.cc tests/validator_test.cc tests/xpath_test.cc tests/yin_document_test.cc)
   target_compile_definitions(yang_tests PRIVATE
     YANG_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests")

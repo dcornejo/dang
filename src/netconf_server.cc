@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "yang/netconf_server.h"
+#include "yang/xml_security.h"
 
 #include "yang/netconf_filter.h"
 #include "yang/resource_limits.h"
@@ -837,33 +838,12 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
               false};
     }
   }
-  if (rpc_xml.size() > DefaultResourceLimits().maximum_xml_bytes) {
-    return {Reply("", ProtocolFailure("RPC XML exceeds the byte limit",
-                                      "too-big")),
-            false};
-  }
   pugi::xml_document document;
-  const pugi::xml_parse_result parsed =
-      document.load_buffer(rpc_xml.data(), rpc_xml.size(), pugi::parse_default);
-  if (!parsed) {
-    TransactionResult error = ProtocolFailure(
-        std::string("malformed RPC XML: ") + parsed.description(),
-        "malformed-message");
+  const UntrustedXmlResult parsed = ParseUntrustedXml(rpc_xml, &document);
+  if (!parsed.ok) {
+    TransactionResult error = ProtocolFailure(parsed.message,
+        parsed.resource_limit ? "too-big" : "malformed-message");
     return {Reply("", error), false};
-  }
-  const std::size_t root_elements = static_cast<std::size_t>(
-      std::ranges::count_if(document.children(), [](pugi::xml_node node) {
-        return node.type() == pugi::node_element;
-      }));
-  if (root_elements != 1) {
-    return {Reply("", ProtocolFailure(
-        "RPC XML requires exactly one document element", "malformed-message")),
-        false};
-  }
-  std::string resource_error;
-  if (!XmlWithinResourceLimits(document, rpc_xml, DefaultResourceLimits(),
-                               &resource_error)) {
-    return {Reply("", ProtocolFailure(resource_error, "too-big")), false};
   }
   const pugi::xml_node rpc = document.document_element();
   const std::string message_id = rpc.attribute("message-id").value();

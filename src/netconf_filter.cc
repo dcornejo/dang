@@ -4,6 +4,7 @@
 #include "yang/netconf_filter.h"
 
 #include "yang/resource_limits.h"
+#include "yang/xml_security.h"
 
 #include <cctype>
 #include <optional>
@@ -206,29 +207,18 @@ bool ApplyNode(const pugi::xml_node& data, const pugi::xml_node& filter,
 FilterResult ApplySubtreeFilter(std::string_view data_xml,
                                 std::string_view filter_xml) {
   const ResourceLimits& limits = DefaultResourceLimits();
-  if (data_xml.size() > limits.maximum_xml_bytes ||
-      filter_xml.size() > limits.maximum_xml_bytes) {
-    return {std::nullopt, "subtree filter input exceeds the byte limit",
-            "too-big"};
-  }
   pugi::xml_document data_document;
   pugi::xml_document filter_document;
-  if (!data_document.load_buffer(data_xml.data(), data_xml.size(),
-                                 pugi::parse_default)) {
-    return {std::nullopt, "malformed data XML supplied to subtree filter",
-            "operation-failed"};
-  }
-  if (!filter_document.load_buffer(filter_xml.data(), filter_xml.size(),
-                                   pugi::parse_default)) {
-    return {std::nullopt, "malformed subtree filter XML", "invalid-value"};
-  }
-  std::string resource_error;
-  if (!XmlWithinResourceLimits(data_document, data_xml, limits,
-                               &resource_error) ||
-      !XmlWithinResourceLimits(filter_document, filter_xml, limits,
-                               &resource_error)) {
-    return {std::nullopt, resource_error, "too-big"};
-  }
+  const UntrustedXmlResult data_parsed =
+      ParseUntrustedXml(data_xml, &data_document, {}, limits);
+  if (!data_parsed.ok)
+    return {std::nullopt, data_parsed.message,
+            data_parsed.resource_limit ? "too-big" : "operation-failed"};
+  const UntrustedXmlResult filter_parsed =
+      ParseUntrustedXml(filter_xml, &filter_document, {}, limits);
+  if (!filter_parsed.ok)
+    return {std::nullopt, filter_parsed.message,
+            filter_parsed.resource_limit ? "too-big" : "invalid-value"};
   const pugi::xml_node data = data_document.document_element();
   const pugi::xml_node filter = filter_document.document_element();
   if (std::string_view(SplitName(filter.name()).second) != "filter")
@@ -256,29 +246,18 @@ FilterResult ApplySubtreeFilter(std::string_view data_xml,
 FilterResult ApplyXPathFilter(std::string_view data_xml,
                               std::string_view filter_xml) {
   const ResourceLimits& limits = DefaultResourceLimits();
-  if (data_xml.size() > limits.maximum_xml_bytes ||
-      filter_xml.size() > limits.maximum_xml_bytes) {
-    return {std::nullopt, "XPath filter input exceeds the byte limit",
-            "too-big"};
-  }
   pugi::xml_document data_document;
   pugi::xml_document filter_document;
-  if (!data_document.load_buffer(data_xml.data(), data_xml.size(),
-                                 pugi::parse_default)) {
-    return {std::nullopt, "malformed data XML supplied to XPath filter",
-            "operation-failed"};
-  }
-  if (!filter_document.load_buffer(filter_xml.data(), filter_xml.size(),
-                                   pugi::parse_default)) {
-    return {std::nullopt, "malformed XPath filter XML", "invalid-value"};
-  }
-  std::string resource_error;
-  if (!XmlWithinResourceLimits(data_document, data_xml, limits,
-                               &resource_error) ||
-      !XmlWithinResourceLimits(filter_document, filter_xml, limits,
-                               &resource_error)) {
-    return {std::nullopt, resource_error, "too-big"};
-  }
+  const UntrustedXmlResult data_parsed =
+      ParseUntrustedXml(data_xml, &data_document, {}, limits);
+  if (!data_parsed.ok)
+    return {std::nullopt, data_parsed.message,
+            data_parsed.resource_limit ? "too-big" : "operation-failed"};
+  const UntrustedXmlResult filter_parsed =
+      ParseUntrustedXml(filter_xml, &filter_document, {}, limits);
+  if (!filter_parsed.ok)
+    return {std::nullopt, filter_parsed.message,
+            filter_parsed.resource_limit ? "too-big" : "invalid-value"};
   const pugi::xml_node filter = filter_document.document_element();
   if (LocalName(filter.name()) != "filter" ||
       std::string_view(filter.attribute("type").value()) != "xpath") {
@@ -290,6 +269,7 @@ FilterResult ApplyXPathFilter(std::string_view data_xml,
     return {std::nullopt, "XPath filter requires a select attribute",
             "missing-attribute"};
   }
+  std::string resource_error;
   if (!XPathWithinResourceLimits(select_attribute.value(), limits,
                                  &resource_error)) {
     return {std::nullopt, resource_error, "too-big"};
