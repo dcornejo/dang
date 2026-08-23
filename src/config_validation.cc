@@ -2016,7 +2016,8 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
       ConfigNode clone = source.Get(source_id);
       clone.id = static_cast<ConfigNodeId>(composed.nodes_.size());
       clone.parent = parent;
-      clone.child_coverage = Coverage::kComplete;
+      if (!request.allow_state_data)
+        clone.child_coverage = Coverage::kComplete;
       clone.children.clear();
       const ConfigNodeId clone_id = clone.id;
       composed.nodes_.push_back(std::move(clone));
@@ -2052,7 +2053,9 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
           overlay(*matched, fragment, update_child);
         }
       }
-      composed.nodes_.at(target_id).child_coverage = Coverage::kComplete;
+      composed.nodes_.at(target_id).child_coverage =
+          request.allow_state_data ? update.child_coverage
+                                   : Coverage::kComplete;
     };
     for (ConfigNodeId fragment_root : request.document.roots()) {
       const RuntimeSchemaNode& fragment_schema =
@@ -2105,6 +2108,21 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
         overlay(*matched, request.document, fragment_root);
       }
     }
+    if (request.allow_state_data) {
+      for (RuntimeSchemaNodeId root : request.schema.roots()) {
+        if (!request.schema.Get(root).config)
+          composed = composed.WithCollectionCoverage(
+              std::nullopt, root, Coverage::kSelected);
+      }
+      for (ConfigNodeId parent = 0; parent < composed.size(); ++parent) {
+        for (RuntimeSchemaNodeId child :
+             request.schema.DataChildren(composed.Get(parent).schema)) {
+          if (!request.schema.Get(child).config)
+            composed = composed.WithCollectionCoverage(
+                parent, child, Coverage::kSelected);
+        }
+      }
+    }
     return Validate(
         {request.schema, composed,
          request.allow_state_data ? ValidationScope::kPartialStandalone
@@ -2128,9 +2146,9 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
     result.findings.push_back(Finding(ValidationCode::kContextRequired, FindingState::kInvalid,
         "context-assisted partial validation requires a context tree", "", "missing-element"));
   }
-  const auto omission_state = [&](Coverage coverage) {
-    return complete && coverage == Coverage::kComplete ? FindingState::kInvalid
-                                                       : FindingState::kIndeterminate;
+  const auto omission_state = [](Coverage coverage) {
+    return coverage == Coverage::kComplete ? FindingState::kInvalid
+                                           : FindingState::kIndeterminate;
   };
   std::vector<std::string> paths(request.document.size());
   std::function<void(const std::vector<RuntimeSchemaNodeId>&, const std::vector<ConfigNodeId>&,
@@ -2268,8 +2286,17 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
               return request.document.Get(candidate).value == config.value;
             });
             missing_required_instance = missing_required_instance || !accepted;
+            const bool target_collection_complete =
+                config.parent && schema.parent == target.parent &&
+                request.document
+                        .CollectionCoverage(*config.parent,
+                                            *alternative.leafref_target)
+                        .value_or(request.document.Get(*config.parent)
+                                      .child_coverage) == Coverage::kComplete;
             missing_required_config_instance =
-                missing_required_config_instance || (!accepted && target.config);
+                missing_required_config_instance ||
+                (!accepted &&
+                 (target.config || target_collection_complete));
           }
         }
         if (accepted) break;
@@ -2341,10 +2368,18 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
         return true;
       });
       if (!found) {
+        const bool target_collection_complete =
+            config.parent && schema.parent == target.parent &&
+            request.document
+                    .CollectionCoverage(*config.parent,
+                                        *schema.leafref_target)
+                    .value_or(request.document.Get(*config.parent)
+                                  .child_coverage) == Coverage::kComplete;
         ValidationFinding finding = Finding(
             ValidationCode::kUnresolvedReference,
             (complete ||
-             (request.complete_config_context && target.config))
+             (request.complete_config_context && target.config) ||
+             target_collection_complete)
                 ? FindingState::kInvalid
                 : FindingState::kIndeterminate,
             "leafref value has no matching target instance", paths.at(id),

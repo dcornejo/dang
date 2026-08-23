@@ -46,7 +46,7 @@ stays in this file with its remaining work rewritten precisely.
   added. Runtime identity derivation, namespace validation, repeated positive
   and negated values, conflicting-choice rejection, and preservation of state
   nodes and required configuration structure are implemented.
-- Complete ABI-v3 operational publication validation across provider and
+- Complete operational publication validation across provider and
   datastore context. Individual fragments are now namespace/schema bound and
   checked as typed partial instance data, including shapes, scalar types, list
   keys, choices, references, and duplicates visible within the fragment.
@@ -57,9 +57,11 @@ stays in this file with its remaining work rewritten precisely.
   leafrefs to config-true targets are enforced after the standalone collision
   gate. Explicit cross-provider `when`, `must`, and `unique` violations are
   enforced with deterministic later-provider rejection when their operands are
-  present. Complete cross-fragment `mandatory`, state-to-state `leafref`,
-  `instance-identifier`, and XPath checks whose operands remain absent and
-  therefore indeterminate under selected-data coverage.
+  present. ABI v5 providers can declare every returned node's child collection
+  complete, making missing mandatory children and nested state-to-state
+  leafrefs decisive. Complete cross-fragment `mandatory`, state-to-state
+  `leafref`, `instance-identifier`, and XPath checks for collections that
+  remain selected or whose operands can be published by later providers.
   Callback and validation failures now omit the unsafe fragment and appear with
   provider, stage, path, and reason in operational reconciliation telemetry;
   additionally surface them as actionable NETCONF errors where RFC operation

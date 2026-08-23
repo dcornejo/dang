@@ -109,6 +109,15 @@ before origin handling, NACM, and RFC 8526 filters. The callback must be
 read-only, bounded, and safe to invoke for each retrieval. It must not return
 configuration that has not actually been applied.
 
+ABI v5 extends the complete ABI-v4 table with `get_operational_data_v2` and
+`DangOperationalDataV2`. A provider sets `complete` to nonzero only when every
+returned element contains its complete child collection at the instant of the
+callback. Omitted children are then known to be absent, so mandatory children
+and required leafrefs between siblings are enforced. Leave `complete` zero for
+filtered, paged, cached-partial, or collaboratively published subtrees. ABI v3
+and v4 callbacks always retain selected-data semantics. A false completeness
+assertion can cause valid state to be rejected and violates the plugin contract.
+
 A failed callback or rejected fragment is omitted and reported under
 `dangd-reconciliation:hardware-reconciliation/operational-provider-failure`.
 The record identifies the plugin, callback, validation, or merge stage, best

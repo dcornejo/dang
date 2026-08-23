@@ -145,6 +145,24 @@ typedef struct DangPluginV4 {
 /** Type of the optional exported `dang_plugin_init_v4` entry point. */
 typedef const DangPluginV4* (*DangPluginInitV4)(void);
 
+#define DANG_PLUGIN_ABI_V5 5u
+
+/** Operational XML with an explicit completeness assertion for returned nodes. */
+typedef struct DangOperationalDataV2 {
+  const char* data_xml;
+  uint32_t complete;
+} DangOperationalDataV2;
+
+/** ABI v5 lets providers make omitted children decisively absent. */
+typedef struct DangPluginV5 {
+  DangPluginV4 v4;
+  int (*get_operational_data_v2)(void* context, DangOperationalDataV2* result,
+                                 DangPluginErrorV1* error);
+} DangPluginV5;
+
+/** Type of the optional exported `dang_plugin_init_v5` entry point. */
+typedef const DangPluginV5* (*DangPluginInitV5)(void);
+
 #ifdef __cplusplus
 }
 #endif

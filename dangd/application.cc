@@ -153,7 +153,7 @@ struct FragmentValidation {
 
 FragmentValidation ValidateFragmentInstance(
     const yang::config::RuntimeSchema& schema, pugi::xml_node root,
-    bool data_wrapper,
+    bool data_wrapper, bool complete = false,
     const yang::config::ConfigDocument* context = nullptr) {
   pugi::xml_document wrapped;
   pugi::xml_node data = wrapped.append_child("data");
@@ -175,8 +175,14 @@ FragmentValidation ValidateFragmentInstance(
     return {false, parsed.findings.front().instance_path,
             parsed.findings.front().message};
   }
+  yang::config::ConfigDocument instance = std::move(*parsed.document);
+  if (complete) {
+    for (yang::config::ConfigNodeId id = 0; id < instance.size(); ++id)
+      instance = instance.WithChildCoverage(
+          id, yang::config::Coverage::kComplete);
+  }
   const auto validation = yang::config::ConfigValidator().Validate(
-      {schema, *parsed.document,
+      {schema, instance,
        context ? yang::config::ValidationScope::kPartialWithContext
                : yang::config::ValidationScope::kPartialStandalone,
        context,
@@ -550,7 +556,7 @@ std::string DangdOperationalData::AugmentDataXml(
         if (child.type() == pugi::node_element) candidate.append_copy(child);
       if (std::string_view(LocalName(root.name())) == "data") {
         const FragmentValidation validation =
-            ValidateFragmentInstance(*schema_, root, true);
+            ValidateFragmentInstance(*schema_, root, true, fragment.complete);
         if (!validation.valid) {
           provider_failures.push_back({fragment.provider, "validation",
                                        validation.instance_path,
@@ -561,7 +567,7 @@ std::string DangdOperationalData::AugmentDataXml(
           if (child.type() == pugi::node_element) candidate.append_copy(child);
       } else {
         const FragmentValidation validation =
-            ValidateFragmentInstance(*schema_, root, false);
+            ValidateFragmentInstance(*schema_, root, false, fragment.complete);
         if (validation.valid) {
           candidate.append_copy(root);
         } else {
@@ -576,7 +582,7 @@ std::string DangdOperationalData::AugmentDataXml(
       if (merged.valid && applied_context_error) {
         merged = *applied_context_error;
       } else if (merged.valid && applied_context) {
-        merged = ValidateFragmentInstance(*schema_, candidate, true,
+        merged = ValidateFragmentInstance(*schema_, candidate, true, false,
                                           &*applied_context);
       }
       if (!merged.valid) {

@@ -276,7 +276,10 @@ Explicit `unique` violations across provider-published list entries reject the
 later provider deterministically. Cross-provider `must` and `when` expressions
 also reject the later fragment when their visible operands decide the result.
 Constraints that remain indeterminate between selected state fragments are
-still incomplete.
+still incomplete. ABI v5 providers may assert complete child collections for
+their returned nodes; omitted mandatory children and unresolved sibling
+leafrefs then become deterministic validation failures. Older providers remain
+selected-data sources for compatibility.
 Callback, validation, and merge failures omit the provider fragment and are
 attributed by provider, stage, instance path, and reason in modeled operational
 reconciliation telemetry, but

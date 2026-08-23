@@ -718,6 +718,10 @@ TEST(ConfigValidationTest, ValidatesPartialOperationalInstanceData) {
         config false;
         type leafref { path "/configured-name"; }
       }
+      container complete-state {
+        config false;
+        leaf required { type string; mandatory true; }
+      }
       container state {
         config false;
         list entry {
@@ -797,6 +801,19 @@ TEST(ConfigValidationTest, ValidatesPartialOperationalInstanceData) {
   EXPECT_FALSE(validate_with_context(R"xml(
     <observed-name xmlns="urn:operational">other</observed-name>
   )xml"));
+
+  auto selected_complete = ParseDatastoreXml(
+      schema, R"xml(<complete-state xmlns="urn:operational"/>)xml",
+      {.coverage = Coverage::kSelected});
+  ASSERT_TRUE(selected_complete.document);
+  ConfigDocument declared_complete =
+      selected_complete.document->WithChildCoverage(0, Coverage::kComplete);
+  const ValidationResult complete_result = ConfigValidator().Validate(
+      {schema, declared_complete, ValidationScope::kPartialStandalone,
+       nullptr, std::nullopt, true});
+  EXPECT_FALSE(complete_result.valid);
+  EXPECT_TRUE(HasCode(complete_result.findings,
+                      ValidationCode::kMissingMandatoryNode));
 }
 
 }  // namespace

@@ -46,6 +46,8 @@ struct PluginManager::State {
                   DangPluginErrorV1*) = nullptr;
     int (*operational)(void*, DangOperationalDataV1*, DangPluginErrorV1*) =
         nullptr;
+    int (*operational_v2)(void*, DangOperationalDataV2*, DangPluginErrorV1*) =
+        nullptr;
     size_t (*hardware_action_count)(void*, void*) = nullptr;
     int (*hardware_action_at)(void*, void*, size_t, DangHardwareActionV1*,
                               DangPluginErrorV1*) = nullptr;
@@ -105,6 +107,12 @@ bool PluginManager::Load(const std::filesystem::path& path,
     return false;
   }
   dlerror();
+  auto initialize_v5 = reinterpret_cast<DangPluginInitV5>(
+      dlsym(library, "dang_plugin_init_v5"));
+  const char* v5_error = dlerror();
+  const DangPluginV5* api_v5 =
+      v5_error == nullptr && initialize_v5 ? initialize_v5() : nullptr;
+  dlerror();
   auto initialize_v4 = reinterpret_cast<DangPluginInitV4>(
       dlsym(library, "dang_plugin_init_v4"));
   const char* v4_error = dlerror();
@@ -126,18 +134,22 @@ bool PluginManager::Load(const std::filesystem::path& path,
   auto initialize = reinterpret_cast<DangPluginInitV1>(
       dlsym(library, "dang_plugin_init_v1"));
   const char* v1_error = dlerror();
-  if (api_v4 == nullptr && api_v3 == nullptr && api_v2 == nullptr &&
-      v1_error != nullptr) {
+  if (api_v5 == nullptr && api_v4 == nullptr && api_v3 == nullptr &&
+      api_v2 == nullptr && v1_error != nullptr) {
     errors->push_back("plugin " + path.string() +
                       " has no supported dang_plugin_init entry point");
     dlclose(library);
     return false;
   }
-  const DangPluginV1* api = api_v4 ? &api_v4->v3.v2.v1
+  const DangPluginV1* api =
+      api_v5   ? &api_v5->v4.v3.v2.v1
+      : api_v4 ? &api_v4->v3.v2.v1
       : api_v3 ? &api_v3->v2.v1
-      : (api_v2 ? &api_v2->v1 : (initialize ? initialize() : nullptr));
+      : api_v2 ? &api_v2->v1
+               : (initialize ? initialize() : nullptr);
   if (!api || api->abi_version !=
-                  (api_v4 ? DANG_PLUGIN_ABI_V4
+                  (api_v5 ? DANG_PLUGIN_ABI_V5
+                          : api_v4 ? DANG_PLUGIN_ABI_V4
                           : api_v3 ? DANG_PLUGIN_ABI_V3
                           : (api_v2 ? DANG_PLUGIN_ABI_V2
                                     : DANG_PLUGIN_ABI_V1)) ||
@@ -149,12 +161,20 @@ bool PluginManager::Load(const std::filesystem::path& path,
     dlclose(library);
     return false;
   }
-  if (api_v4 &&
-      (!api_v4->hardware_action_count || !api_v4->hardware_action_at ||
-       !api_v4->apply_hardware_action ||
-       !api_v4->rollback_hardware_action)) {
+  const DangPluginV4* action_api = api_v5 ? &api_v5->v4 : api_v4;
+  if (action_api &&
+      (!action_api->hardware_action_count || !action_api->hardware_action_at ||
+       !action_api->apply_hardware_action ||
+       !action_api->rollback_hardware_action)) {
     errors->push_back("plugin " + std::string(api->plugin_name) +
                       " does not implement the complete ABI v4 action plan");
+    if (api->destroy) api->destroy(api->context);
+    dlclose(library);
+    return false;
+  }
+  if (api_v5 && !api_v5->get_operational_data_v2) {
+    errors->push_back("plugin " + std::string(api->plugin_name) +
+                      " does not implement ABI v5 operational publication");
     if (api->destroy) api->destroy(api->context);
     dlclose(library);
     return false;
@@ -178,17 +198,22 @@ bool PluginManager::Load(const std::filesystem::path& path,
   State::Plugin plugin;
   plugin.library = library;
   plugin.api = api;
-  plugin.invoke = api_v4 ? api_v4->v3.v2.invoke
-      : api_v3 ? api_v3->v2.invoke
-                         : (api_v2 ? api_v2->invoke : nullptr);
-  plugin.operational = api_v4 ? api_v4->v3.get_operational_data
-                              : (api_v3 ? api_v3->get_operational_data
-                                        : nullptr);
-  if (api_v4) {
-    plugin.hardware_action_count = api_v4->hardware_action_count;
-    plugin.hardware_action_at = api_v4->hardware_action_at;
-    plugin.apply_hardware_action = api_v4->apply_hardware_action;
-    plugin.rollback_hardware_action = api_v4->rollback_hardware_action;
+  plugin.invoke = api_v5   ? api_v5->v4.v3.v2.invoke
+                  : api_v4 ? api_v4->v3.v2.invoke
+                  : api_v3 ? api_v3->v2.invoke
+                  : api_v2 ? api_v2->invoke
+                           : nullptr;
+  plugin.operational =
+      api_v5   ? api_v5->v4.v3.get_operational_data
+      : api_v4 ? api_v4->v3.get_operational_data
+      : api_v3 ? api_v3->get_operational_data
+               : nullptr;
+  plugin.operational_v2 = api_v5 ? api_v5->get_operational_data_v2 : nullptr;
+  if (action_api) {
+    plugin.hardware_action_count = action_api->hardware_action_count;
+    plugin.hardware_action_at = action_api->hardware_action_at;
+    plugin.apply_hardware_action = action_api->apply_hardware_action;
+    plugin.rollback_hardware_action = action_api->rollback_hardware_action;
   }
   plugin.name = api->plugin_name;
   std::vector<PluginYangSource> discovered_sources;
@@ -292,6 +317,23 @@ const std::vector<PluginYangSource>& PluginManager::yang_sources() const {
 std::vector<PluginOperationalFragment> PluginManager::OperationalData() const {
   std::vector<PluginOperationalFragment> result;
   for (const State::Plugin& plugin : state_->plugins) {
+    if (plugin.operational_v2) {
+      DangOperationalDataV2 data{};
+      DangPluginErrorV1 error{};
+      if (!plugin.operational_v2(plugin.api->context, &data, &error)) {
+        result.push_back({plugin.name, {}, error.message
+            ? std::optional<std::string>(error.message)
+            : std::optional<std::string>("operational callback failed"),
+            error.instance_path ? error.instance_path : "", false});
+      } else if (!data.data_xml) {
+        result.push_back(
+            {plugin.name, {}, "callback returned no XML data", {}, false});
+      } else {
+        result.push_back({plugin.name, data.data_xml, std::nullopt, {},
+                          data.complete != 0});
+      }
+      continue;
+    }
     if (!plugin.operational) continue;
     DangOperationalDataV1 data{};
     DangPluginErrorV1 error{};

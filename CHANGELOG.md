@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Added plugin ABI v5 operational completeness assertions, allowing providers
+  to make omitted children decisive for mandatory and nested leafref checks.
 - Enforced cross-provider `must` and `when` constraints once cumulative
   operational state contains the expressions' operands, blaming the later provider.
 - Verified cumulative `unique` constraints across independently valid ABI-v3
@@ -55,6 +57,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Used complete child-collection coverage when deciding whether a missing
+  operational leafref target is invalid rather than merely indeterminate.
 - Included config-false nodes in the common effective data view during
   operational validation so XPath constraints can inspect published state.
 - Preserved QName namespace declarations when serializing configuration trees,

@@ -7,6 +7,8 @@
 
 ### Changed
 
+- Added ABI v5 `get_operational_data_v2`, whose explicit completeness assertion
+  enables absence-sensitive validation without changing ABI v3/v4 behavior.
 - Added paired ABI-v3 provider coverage for cumulative `must` and `when`
   violations with deterministic merge-stage attribution.
 - Added paired real-plugin coverage for cross-provider `unique` violations and
@@ -45,6 +47,8 @@
 
 ### Fixed
 
+- Rejected unresolved nested state leafrefs when an ABI-v5 provider declares
+  the returned parent collection complete.
 - Made the common XPath effective view retain operational state during
   config-false instance validation.
 - Retained QName prefix bindings in common configuration serialization so

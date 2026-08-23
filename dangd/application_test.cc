@@ -578,6 +578,33 @@ TEST(DangdApplicationTest, ReportsAndOmitsInvalidOperationalPluginData) {
       << response.xml;
 }
 
+TEST(DangdApplicationTest, EnforcesCompleteProviderChildCollections) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_COMPLETE_OPERATIONAL_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+  const auto response = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="complete"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore><config-filter>false</config-filter>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_EQ(response.xml.find("<target-ref>missing</target-ref>"),
+            std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find("<provider>test-complete-operational</provider>"),
+            std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find("<stage>validation</stage>"), std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find("leafref value has no matching target instance"),
+            std::string::npos)
+      << response.xml;
+}
+
 TEST(DangdApplicationTest, RejectsLaterOperationalProviderCollision) {
   TemporaryInputs inputs;
   auto options = Options(inputs);

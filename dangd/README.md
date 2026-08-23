@@ -90,6 +90,11 @@ Removal reverses the safety boundary:
 disable or block interface -> detach ACL -> remove ACL
 ```
 
+ABI v5 independently extends operational publication with an explicit
+completeness assertion. It lets a provider state that omitted children of each
+returned node are truly absent, enabling mandatory and required-reference
+validation without imposing that assumption on older or partial providers.
+
 On hardware with staging support, replacement can program a new ACL in an
 inactive slot, atomically switch the interface binding, and then remove the old
 ACL.

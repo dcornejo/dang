@@ -35,6 +35,7 @@ struct PluginOperationalFragment {
   std::string data_xml;
   std::optional<std::string> error;
   std::string error_path;
+  bool complete = false;
 };
 
 /** Failure exposed in the current operational reconciliation snapshot. */

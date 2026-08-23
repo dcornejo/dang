@@ -31,6 +31,8 @@ location served by `get-schema`.
 RFC 8526 `ietf-netconf-nmda` and its exact dependency sources are compiled and
 retrievable. `<get-data>` and `<edit-data>` operate on the supported
 conventional datastores, and ABI-v3 plugins may add schema-bound system state.
+ABI-v5 plugins may additionally declare returned child collections complete so
+absence-sensitive instance constraints can be enforced.
 Every schema-known applied configuration node is explicitly tagged with
 `ietf-origin:intended` metadata when requested, so the RFC 8526 `origin` feature,
 `with-origin`, and origin filters are enabled. Additional origin identities
