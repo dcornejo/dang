@@ -78,6 +78,11 @@ struct ChangeEvent {
   RuntimeSchemaNodeId schema = kInvalidRuntimeSchemaNodeId;
 };
 
+/** Returns the canonical path of one node in a bound configuration tree. */
+[[nodiscard]] std::string ConfigNodeInstancePath(
+    const RuntimeSchema& schema, const ConfigDocument& document,
+    ConfigNodeId node);
+
 /** Computes deterministic per-instance changes between complete trees. */
 [[nodiscard]] std::vector<ChangeEvent> DiffConfigDocuments(
     const RuntimeSchema& schema, const ConfigDocument& before,

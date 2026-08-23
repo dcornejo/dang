@@ -293,6 +293,19 @@ std::string InstancePath(const RuntimeSchema& runtime, const MutableNode& node,
 }
 }  // namespace
 
+std::string ConfigNodeInstancePath(const RuntimeSchema& schema,
+                                   const ConfigDocument& document,
+                                   ConfigNodeId node) {
+  std::vector<ConfigNodeId> lineage;
+  for (std::optional<ConfigNodeId> current = node; current;
+       current = document.Get(*current).parent)
+    lineage.push_back(*current);
+  std::string path;
+  for (auto current = lineage.rbegin(); current != lineage.rend(); ++current)
+    path = InstancePath(schema, document, *current, path);
+  return path;
+}
+
 std::optional<EditOperation> EditDocument::operation(ConfigNodeId id) const {
   return operations_.at(id);
 }

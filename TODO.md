@@ -56,6 +56,8 @@ stays in this file with its remaining work rewritten precisely.
   path evaluation now distinguishes open missing collections from known-empty
   collections retained from complete providers, making cross-provider `must`
   and `when` absence checks decisive without closing selected data.
+  Completeness is retained by canonical instance path, so a complete keyed list
+  entry never closes a different partial entry of the same schema list.
   Callback and validation failures now omit the unsafe fragment and appear with
   provider, stage, path, and reason in operational reconciliation telemetry;
   `<get>` and operational `<get-data>` also fail atomically with actionable

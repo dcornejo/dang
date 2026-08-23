@@ -234,7 +234,7 @@ if(YANG_BUILD_DANGD)
       set_target_properties(
         dangd_test_unique_${unique_provider}_plugin PROPERTIES PREFIX "")
     endforeach()
-    foreach(mandatory_provider IN ITEMS owner publisher)
+    foreach(mandatory_provider IN ITEMS owner publisher complete partial)
       add_library(dangd_test_mandatory_${mandatory_provider}_plugin MODULE
         dangd/test_plugins/operational_mandatory_plugin.cc)
       target_include_directories(
@@ -251,6 +251,15 @@ if(YANG_BUILD_DANGD)
         target_compile_definitions(
           dangd_test_mandatory_${mandatory_provider}_plugin PRIVATE
           DANG_MANDATORY_DATA_PROVIDER=1)
+        if(mandatory_provider STREQUAL "complete")
+          target_compile_definitions(
+            dangd_test_mandatory_${mandatory_provider}_plugin PRIVATE
+            DANG_MANDATORY_COMPLETE_VALID=1)
+        elseif(mandatory_provider STREQUAL "partial")
+          target_compile_definitions(
+            dangd_test_mandatory_${mandatory_provider}_plugin PRIVATE
+            DANG_MANDATORY_PARTIAL=1)
+        endif()
       endif()
       target_compile_options(
         dangd_test_mandatory_${mandatory_provider}_plugin PRIVATE
@@ -533,7 +542,9 @@ if(YANG_BUILD_TESTS)
       DANG_TEST_XPATH_WHEN_PLUGIN_PATH="$<TARGET_FILE:dangd_test_xpath_when_plugin>")
     target_compile_definitions(dangd_tests PRIVATE
       DANG_TEST_MANDATORY_OWNER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_mandatory_owner_plugin>"
-      DANG_TEST_MANDATORY_PUBLISHER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_mandatory_publisher_plugin>")
+      DANG_TEST_MANDATORY_PUBLISHER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_mandatory_publisher_plugin>"
+      DANG_TEST_MANDATORY_COMPLETE_PLUGIN_PATH="$<TARGET_FILE:dangd_test_mandatory_complete_plugin>"
+      DANG_TEST_MANDATORY_PARTIAL_PLUGIN_PATH="$<TARGET_FILE:dangd_test_mandatory_partial_plugin>")
     target_compile_definitions(dangd_tests PRIVATE
       DANG_TEST_LEAFREF_OWNER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_leafref_owner_plugin>"
       DANG_TEST_LEAFREF_TARGET_PLUGIN_PATH="$<TARGET_FILE:dangd_test_leafref_target_plugin>"

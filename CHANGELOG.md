@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Scoped operational-provider completeness to canonical instance paths rather
+  than top-level schema names, preventing one complete keyed list entry from
+  making a different provider's partial entry falsely fail mandatory checks.
 - Preserved schema-validated RFC 8342 origin metadata from ABI-v6 applied-state
   sources and generalized origin selection to inherited `default`, `system`,
   `learned`, `dynamic`, `unknown`, and derived identities. Ordinary `<get>` and

@@ -127,6 +127,9 @@ and required leafrefs between siblings are enforced. Leave `complete` zero for
 filtered, paged, cached-partial, or collaboratively published subtrees. ABI v3
 and v4 callbacks always retain selected-data semantics. A false completeness
 assertion can cause valid state to be rejected and violates the plugin contract.
+Completeness follows each canonical data instance, including list keys and
+leaf-list values; it is never inferred for a separate instance merely because
+the instances share a schema node.
 
 ABI v6 extends ABI v5 with `reconcile_applied_configuration`. Dangd calls it
 after successful hardware application and before releasing the prepared

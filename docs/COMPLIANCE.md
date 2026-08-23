@@ -312,7 +312,9 @@ is also covered when one ABI-v1 plugin owns the model and an independent ABI-v5
 plugin publishes the complete instance, with failure attributed to the
 publisher. Older providers remain selected-data sources for compatibility.
 Completeness of an ABI-v5 top-level subtree is retained across subsequent
-provider merges. A later state-to-state leafref therefore resolves against an
+provider merges by canonical instance path. A complete keyed list entry does
+not close another provider's partial entry of the same list. A later
+state-to-state leafref therefore resolves against an
 earlier target provider, or is rejected and attributed to the later provider
 when the closed target list proves that the requested instance is absent.
 Required instance-identifiers use the same cumulative semantics: paths can

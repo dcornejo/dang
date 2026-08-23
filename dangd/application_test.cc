@@ -935,6 +935,26 @@ TEST(DangdApplicationTest, RejectsMissingMandatoryNodeFromSeparateProvider) {
             std::string::npos) << response.xml;
 }
 
+TEST(DangdApplicationTest, KeepsCompletenessScopedToExactListInstance) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_MANDATORY_OWNER_PLUGIN_PATH,
+                     DANG_TEST_MANDATORY_COMPLETE_PLUGIN_PATH,
+                     DANG_TEST_MANDATORY_PARTIAL_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  const auto response = loaded.application->server().Process("alice", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="scoped">
+      <get/>
+    </rpc>)xml");
+  EXPECT_NE(response.xml.find("<name>uplink</name>"), std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find("<name>wan</name>"), std::string::npos)
+      << response.xml;
+  EXPECT_EQ(response.xml.find("operational-provider-failure"),
+            std::string::npos) << response.xml;
+}
+
 TEST(DangdApplicationTest, ResolvesStateLeafrefAcrossOperationalProviders) {
   TemporaryInputs inputs;
   auto options = Options(inputs);

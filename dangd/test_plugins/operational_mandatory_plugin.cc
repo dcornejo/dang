@@ -17,13 +17,11 @@ constexpr char kModel[] = R"yang(module dangd-test-operational-mandatory {
   namespace "urn:dangd:test:operational-mandatory";
   prefix mandatory;
   revision 2026-08-23;
-  container state {
+  list endpoint {
     config false;
-    list endpoint {
-      key "name";
-      leaf name { type string; }
-      leaf status { type string; mandatory true; }
-    }
+    key "name";
+    leaf name { type string; }
+    leaf status { type string; mandatory true; }
   }
 })yang";
 #endif
@@ -70,12 +68,24 @@ int ApplyAction(void*, void*, const char*, DangPluginErrorV1*) { return 0; }
 
 int OperationalV2(void*, DangOperationalDataV2* result, DangPluginErrorV1*) {
   if (!result) return 0;
+#ifdef DANG_MANDATORY_COMPLETE_VALID
   result->data_xml =
-      "<state xmlns=\"urn:dangd:test:operational-mandatory\">"
-      "<endpoint><name>uplink</name></endpoint></state>";
+      "<endpoint xmlns=\"urn:dangd:test:operational-mandatory\">"
+      "<name>uplink</name><status>up</status></endpoint>";
+  result->complete = 1;
+#elif defined(DANG_MANDATORY_PARTIAL)
+  result->data_xml =
+      "<endpoint xmlns=\"urn:dangd:test:operational-mandatory\">"
+      "<name>wan</name></endpoint>";
+  result->complete = 0;
+#else
+  result->data_xml =
+      "<endpoint xmlns=\"urn:dangd:test:operational-mandatory\">"
+      "<name>uplink</name></endpoint>";
   // Completeness makes the absent mandatory status leaf an error. An ABI-v3
   // provider would leave this collection selected and the absence unknown.
   result->complete = 1;
+#endif
   return 1;
 }
 #endif
