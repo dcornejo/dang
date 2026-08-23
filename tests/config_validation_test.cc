@@ -498,6 +498,11 @@ TEST(ConfigValidationTest, ReportsMalformedXmlAndMissingContext) {
   ASSERT_TRUE(schema);
   EXPECT_TRUE(HasCode(ParseDatastoreXml(*schema, "<system>").findings,
                       ValidationCode::kMalformedXml));
+  const ConfigParseResult multiple_roots = ParseDatastoreXml(*schema, R"xml(
+    <system xmlns="urn:device"><hostname>visible</hostname></system>
+    <system xmlns="urn:device"><hostname>ignored</hostname></system>)xml");
+  EXPECT_FALSE(multiple_roots.document);
+  EXPECT_TRUE(HasCode(multiple_roots.findings, ValidationCode::kMalformedXml));
   auto parsed = ParseDatastoreXml(*schema,
       R"xml(<system xmlns="urn:device"><hostname>x</hostname></system>)xml",
       {.coverage = Coverage::kSelected});

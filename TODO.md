@@ -36,7 +36,9 @@ stays in this file with its remaining work rewritten precisely.
   notifications, YANG Library, and model retrieval. Add focused regressions and
   coverage-guided fuzz seeds for every issue found, and document any parser
   behavior that is intentionally accepted. NETCONF `<hello>` and `<rpc>`
-  transport boundaries now reject multiple top-level document elements.
+  transport boundaries and complete datastore parsing now reject multiple
+  top-level document elements; intentional edit fragments remain a separately
+  defined input shape.
 - Run interoperability and negative-security tests against at least one
   independent RFC 8341 implementation, run a sustained coverage-guided NACM
   fuzz campaign, and document any intentional deviations before claiming

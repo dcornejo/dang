@@ -15,6 +15,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Rejected multiple top-level configuration elements before datastore schema
+  binding instead of validating only the first root and ignoring siblings.
 - Rejected multiple top-level XML elements at the NETCONF `<hello>` and RPC
   boundaries instead of dispatching only the first root.
 - Accepted closing brackets inside quoted NACM node-instance predicate values

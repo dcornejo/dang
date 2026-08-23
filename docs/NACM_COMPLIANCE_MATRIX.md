@@ -279,6 +279,10 @@ Open evidence: an external RFC 5277/NACM interoperability run.
   document element, preventing a second top-level `<hello>` or `<rpc>` from
   being silently ignored: `NetconfFramingTest.ClosesOnMalformedHelloAndFraming`
   and `NetconfServerTest.RejectsMalformedRpcAndInvalidOptions`.
+- Complete datastore XML parsing likewise rejects sibling document roots before
+  schema binding, so persisted, URL-sourced, or inline configuration cannot
+  differ from the tree that is validated and authorized:
+  `ConfigValidationTest.ReportsMalformedXmlAndMissingContext`.
 
 Live managed-policy commits are transactionally coupled to snapshot
 persistence. Fault injection before and after atomic replacement verifies that

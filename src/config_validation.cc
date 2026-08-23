@@ -1906,6 +1906,18 @@ ConfigParseResult ParseDatastoreXml(const RuntimeSchema& schema, std::string_vie
         "XML document has no document element", "", "malformed-message"));
     return result;
   }
+  const std::size_t root_elements = static_cast<std::size_t>(
+      std::ranges::count_if(document.children(), [](pugi::xml_node node) {
+        return node.type() == pugi::node_element;
+      }));
+  if (root_elements != 1) {
+    ConfigParseResult result;
+    result.findings.push_back(Finding(
+        ValidationCode::kMalformedXml, FindingState::kInvalid,
+        "configuration XML requires exactly one document element", "",
+        "malformed-message"));
+    return result;
+  }
   std::string resource_error;
   if (!XmlWithinResourceLimits(document, xml, DefaultResourceLimits(),
                                &resource_error)) {

@@ -12,6 +12,7 @@
 
 ### Fixed
 
+- Closed multi-root XML configuration smuggling before datastore validation.
 - Closed multi-root XML message smuggling at NETCONF session negotiation and
   RPC dispatch.
 - Matched valid NACM paths whose quoted key or leaf-list value contains `]`.
