@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Completed the internal RFC 8526 retrieval matrix across running, candidate,
+  startup, intended, and operational: added conventional-datastore subtree,
+  XPath, configuration/state, depth, origin-error, and unknown-identity cases.
 - Closed operational-publication validation by documenting selected versus
   complete provider semantics as an explicit ABI contract, and made dynamic
   configuration datastores an explicit non-advertised scope boundary with

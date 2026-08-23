@@ -35,25 +35,6 @@ stays in this file with its remaining work rewritten precisely.
 
 ### RFC 8342 / RFC 8526 NMDA compliance closure
 
-- Finish the RFC 8526 operation matrix: exercise all datastore identities,
-  subtree and XPath choices, `config-filter`, `max-depth`, `with-defaults`,
-  `with-origin`, URL-feature behavior if enabled, and protocol-accurate error
-  tags. All three `<edit-data>` `default-operation` values, mandatory rollback
-  on validation failure, and RFC 8526 datastore-identity lock/unlock targets
-  are covered; read-only lock targets return `invalid-value`. (`test-option`
-  and `error-option` belong to `<edit-config>`, not RFC 8526 `<edit-data>`.)
-  `<get-data>` and
-  `<edit-data>` inputs are now checked against their enabled YANG schema before
-  execution, including unknown nodes, duplicate singleton parameters, scalar
-  types, and mandatory elements; unsupported NMDA `with-defaults` is rejected
-  with the RFC-required `invalid-value`. Basic NACM effective
-  create, update, delete, wrong-bit denial, and atomic preservation are covered;
-  operational subtree selection combined with `config-filter`, `with-origin`,
-  `max-depth`, and NACM read denial is covered without denied-data leakage.
-  XPath selections now apply `max-depth` relative to every selected node while
-  retaining otherwise uncounted ancestor paths; nested subtree selections use
-  the same selection-relative rule. Add the remaining origin selection,
-  defaults, and non-operational cross-product cases.
 - Verify that every advertised RFC 8525 datastore schema is accurate and that
   `<operational>` is a permitted superset of every configuration-datastore
   schema. Add reload tests for module, feature, deviation, plugin, datastore,

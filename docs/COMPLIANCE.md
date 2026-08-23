@@ -275,8 +275,11 @@ applied from every selected node rather than from the reply wrapper, and keeps
 the selected nodes' ancestor paths without counting those ancestors against
 the limit. Nested subtree selections follow the same rule: containment and
 content-match ancestors identify the terminal selection without consuming its
-depth allowance. The remaining origin/default and non-operational interaction
-cross-product is not yet complete.
+depth allowance. Conventional running, candidate, startup, and intended reads
+exercise subtree and XPath selection, configuration/state filtering, and depth
+limiting. Origin options on those non-operational datastores and unknown
+datastore identities return `invalid-value`; unsupported operational-defaults
+input has the same RFC-required error behavior.
 
 Applied configuration now comes from dangd's backend working snapshot after
 successful hardware application, rather than being copied from the committed
@@ -341,8 +344,8 @@ Dynamic configuration datastores are not implemented or advertised. If one is
 introduced, its schema, protocol operations, validation, persistence, YANG
 Library entry, applied mapping, and derived origin identity are release-gated
 requirements rather than behavior inferred from conventional datastores. The
-complete operation, filter/default/origin/NACM interaction matrix and external
-interoperability remain. `TODO.md` is the normative work list.
+internal operation, filter/default/origin/NACM interaction matrix is covered;
+external interoperability remains. `TODO.md` is the normative work list.
 
 ### RFC 8525 — YANG Library
 

@@ -349,6 +349,58 @@ TEST(DangdApplicationTest, ValidatesCompleteNmdaOperationInput) {
             std::string::npos) << unsupported_defaults.xml;
 }
 
+TEST(DangdApplicationTest, CoversConventionalNmdaRetrievalCrossProduct) {
+  TemporaryInputs inputs;
+  auto loaded = Application::Load(Options(inputs));
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+  for (const std::string_view datastore :
+       {"running", "candidate", "startup", "intended"}) {
+    const std::string prefix =
+        "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+        "message-id=\"matrix\" "
+        "xmlns:ds=\"urn:ietf:params:xml:ns:yang:ietf-datastores\">"
+        "<get-data xmlns=\"urn:ietf:params:xml:ns:yang:ietf-netconf-nmda\">"
+        "<datastore>ds:" + std::string(datastore) + "</datastore>";
+    const auto subtree = loaded.application->server().Process(
+        session, prefix +
+            "<subtree-filter><system xmlns=\"urn:example:appliance\"/>"
+            "</subtree-filter><config-filter>true</config-filter>"
+            "<max-depth>2</max-depth></get-data></rpc>");
+    EXPECT_NE(subtree.xml.find("edge-1"), std::string::npos)
+        << datastore << ": " << subtree.xml;
+
+    const auto xpath = loaded.application->server().Process(
+        session, prefix +
+            "<xpath-filter xmlns:a=\"urn:example:appliance\">"
+            "/a:system/a:hostname</xpath-filter><config-filter>true</config-filter>"
+            "<max-depth>1</max-depth></get-data></rpc>");
+    EXPECT_NE(xpath.xml.find("edge-1"), std::string::npos)
+        << datastore << ": " << xpath.xml;
+
+    const auto state_only = loaded.application->server().Process(
+        session, prefix +
+            "<config-filter>false</config-filter></get-data></rpc>");
+    EXPECT_EQ(state_only.xml.find("edge-1"), std::string::npos)
+        << datastore << ": " << state_only.xml;
+
+    const auto origin = loaded.application->server().Process(
+        session, prefix + "<with-origin/></get-data></rpc>");
+    EXPECT_NE(origin.xml.find("<error-tag>invalid-value</error-tag>"),
+              std::string::npos) << datastore << ": " << origin.xml;
+  }
+
+  const auto unknown = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="unknown"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:factory-default</datastore>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_NE(unknown.xml.find("<error-tag>invalid-value</error-tag>"),
+            std::string::npos) << unknown.xml;
+}
+
 TEST(DangdApplicationTest, AppliesNmdaDefaultOperationsAndLocks) {
   TemporaryInputs inputs;
   constexpr std::string_view model = R"yang(

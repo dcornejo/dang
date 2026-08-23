@@ -7,6 +7,9 @@
 
 ### Changed
 
+- Added cross-product retrieval coverage for every conventional NMDA datastore,
+  both selection forms, `config-filter`, `max-depth`, invalid non-operational
+  origin requests, and an unsupported datastore identity.
 - Closed the NMDA provider-validation work item after exact-instance
   completeness coverage, and documented that dynamic configuration datastores
   are neither implemented nor advertised.
