@@ -934,6 +934,26 @@ TEST(DangdApplicationTest, ReportsAndOmitsInvalidOperationalPluginData) {
       << legacy_response.xml;
 }
 
+TEST(DangdApplicationTest, RejectsOversizedOperationalProviderData) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_OVERSIZED_OPERATIONAL_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  const auto response = loaded.application->server().Process("alice", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="oversized">
+      <get/>
+    </rpc>)xml");
+  EXPECT_NE(response.xml.find("<error-tag>operation-failed</error-tag>"),
+            std::string::npos) << response.xml;
+  EXPECT_NE(response.xml.find("test-broken-operational failed during callback"),
+            std::string::npos) << response.xml;
+  EXPECT_NE(response.xml.find("operational XML exceeds the resource limit"),
+            std::string::npos) << response.xml;
+  EXPECT_EQ(response.xml.find(std::string(1024, 'x')), std::string::npos)
+      << response.xml;
+}
+
 TEST(DangdApplicationTest, EnforcesCompleteProviderChildCollections) {
   TemporaryInputs inputs;
   auto options = Options(inputs);

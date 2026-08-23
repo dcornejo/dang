@@ -7,6 +7,8 @@
 
 ### Changed
 
+- Enforced the 16 MiB XML ceiling at the operational plugin callback boundary
+  before unbounded string construction, with fail-closed end-to-end coverage.
 - Added atomic reload coverage across deviation and plugin inventory changes,
   including content identifiers, current/legacy notifications, five datastore
   schema references, compiled plugin data, and post-reload `get-schema`.

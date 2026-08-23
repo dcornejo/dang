@@ -119,6 +119,11 @@ before origin handling, NACM, and RFC 8526 filters. The callback must be
 read-only, bounded, and safe to invoke for each retrieval. It must not return
 configuration that has not actually been applied.
 
+Returned XML must be NUL-terminated within the configured XML byte ceiling
+(16 MiB by default). `dangd` checks that boundary before copying and applies the
+normal XML node/depth and schema limits afterward; an oversized result fails
+the complete retrieval and is attributed to the provider.
+
 ABI v5 extends the complete ABI-v4 table with `get_operational_data_v2` and
 `DangOperationalDataV2`. A provider sets `complete` to nonzero only when every
 returned element contains its complete child collection at the instant of the

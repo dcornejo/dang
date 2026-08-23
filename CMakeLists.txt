@@ -373,6 +373,16 @@ if(YANG_BUILD_DANGD)
       -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
     set_target_properties(dangd_test_broken_operational_plugin PROPERTIES
       PREFIX "")
+    add_library(dangd_test_oversized_operational_plugin MODULE
+      dangd/test_plugins/broken_operational_plugin.cc)
+    target_include_directories(dangd_test_oversized_operational_plugin PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_definitions(dangd_test_oversized_operational_plugin PRIVATE
+      DANG_OVERSIZED_OPERATIONAL=1)
+    target_compile_options(dangd_test_oversized_operational_plugin PRIVATE
+      -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+    set_target_properties(dangd_test_oversized_operational_plugin PROPERTIES
+      PREFIX "")
     add_library(dangd_test_complete_operational_plugin MODULE
       dangd/test_plugins/complete_operational_plugin.cc)
     target_include_directories(dangd_test_complete_operational_plugin PRIVATE
@@ -531,6 +541,7 @@ if(YANG_BUILD_TESTS)
     target_compile_definitions(dangd_tests PRIVATE
       DANG_TEST_DEVIATION_PLUGIN_PATH="$<TARGET_FILE:dangd_test_deviation_plugin>"
       DANG_TEST_BROKEN_OPERATIONAL_PLUGIN_PATH="$<TARGET_FILE:dangd_test_broken_operational_plugin>"
+      DANG_TEST_OVERSIZED_OPERATIONAL_PLUGIN_PATH="$<TARGET_FILE:dangd_test_oversized_operational_plugin>"
       DANG_TEST_COMPLETE_OPERATIONAL_PLUGIN_PATH="$<TARGET_FILE:dangd_test_complete_operational_plugin>"
       DANG_TEST_COLLISION_FIRST_PLUGIN_PATH="$<TARGET_FILE:dangd_test_collision_first_plugin>"
       DANG_TEST_COLLISION_SECOND_PLUGIN_PATH="$<TARGET_FILE:dangd_test_collision_second_plugin>"

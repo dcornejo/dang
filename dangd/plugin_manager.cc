@@ -4,6 +4,7 @@
 #include "dangd/plugin_manager.h"
 
 #include "dangd/hardware_transaction.h"
+#include "yang/resource_limits.h"
 #include "yang/xml_security.h"
 
 #include <algorithm>
@@ -20,6 +21,14 @@
 
 namespace dangd {
 namespace {
+
+std::optional<std::string> CopyBoundedCString(const char* value,
+                                              std::size_t maximum) {
+  if (!value) return std::nullopt;
+  const std::size_t length = strnlen(value, maximum + 1);
+  if (length > maximum) return std::nullopt;
+  return std::string(value, length);
+}
 
 yang::config::ValidationFinding PluginFinding(
     std::string_view plugin, const DangPluginErrorV1& error,
@@ -334,6 +343,8 @@ const std::vector<PluginYangSource>& PluginManager::yang_sources() const {
 
 std::vector<PluginOperationalFragment> PluginManager::OperationalData() const {
   std::vector<PluginOperationalFragment> result;
+  const std::size_t maximum =
+      yang::DefaultResourceLimits().maximum_xml_bytes;
   for (const State::Plugin& plugin : state_->plugins) {
     if (plugin.operational_v2) {
       DangOperationalDataV2 data{};
@@ -347,8 +358,14 @@ std::vector<PluginOperationalFragment> PluginManager::OperationalData() const {
         result.push_back(
             {plugin.name, {}, "callback returned no XML data", {}, false});
       } else {
-        result.push_back({plugin.name, data.data_xml, std::nullopt, {},
-                          data.complete != 0});
+        auto copied = CopyBoundedCString(data.data_xml, maximum);
+        if (!copied)
+          result.push_back({plugin.name, {},
+                            "operational XML exceeds the resource limit", {},
+                            false});
+        else
+          result.push_back({plugin.name, std::move(*copied), std::nullopt, {},
+                            data.complete != 0});
       }
       continue;
     }
@@ -364,7 +381,13 @@ std::vector<PluginOperationalFragment> PluginManager::OperationalData() const {
       result.push_back(
           {plugin.name, {}, "callback returned no XML data", {}});
     } else {
-      result.push_back({plugin.name, data.data_xml, std::nullopt, {}});
+      auto copied = CopyBoundedCString(data.data_xml, maximum);
+      if (!copied)
+        result.push_back({plugin.name, {},
+                          "operational XML exceeds the resource limit", {}});
+      else
+        result.push_back(
+            {plugin.name, std::move(*copied), std::nullopt, {}});
     }
   }
   return result;

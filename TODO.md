@@ -35,7 +35,10 @@ stays in this file with its remaining work rewritten precisely.
 
 ### RFC 8342 / RFC 8526 NMDA compliance closure
 
-- Run an external NMDA interoperability suite and long-running concurrency,
-  malformed-provider, provider-timeout, and resource-limit tests. Document
-  unsupported optional features and deviations before making an RFC 8342 or
-  RFC 8526 compliance claim.
+- Run an external NMDA interoperability suite and sustained concurrency test.
+  Isolate operational callbacks in a supervised worker boundary so a hung or
+  crashed plugin can be timed out without leaving an in-process thread running
+  against unloaded plugin state; add timeout/crash recovery tests. Malformed
+  typed data and oversized callback XML are rejected atomically with provider
+  attribution and bounded copying. Document unsupported optional features and
+  deviations before making an RFC 8342 or RFC 8526 compliance claim.

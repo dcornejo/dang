@@ -347,6 +347,13 @@ requirements rather than behavior inferred from conventional datastores. The
 internal operation, filter/default/origin/NACM interaction matrix is covered;
 external interoperability remains. `TODO.md` is the normative work list.
 
+Operational callback XML is length-bounded before host string construction and
+then passes the common XML byte/node/depth parser limits and schema validation.
+Malformed or oversized provider output fails the retrieval atomically with
+provider/stage attribution. Safe timeout and crash recovery still require a
+supervised out-of-process callback boundary; abandoning an in-process worker
+thread would permit it to continue executing against torn-down plugin state.
+
 ### RFC 8525 — YANG Library
 
 Status: **substantial, external interoperability pending**.

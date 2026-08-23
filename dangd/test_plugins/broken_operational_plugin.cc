@@ -4,6 +4,7 @@
 #include "dangd/plugin_api.h"
 
 #include <cstring>
+#include <string>
 
 namespace {
 
@@ -36,8 +37,13 @@ int Success(void*, void*, DangPluginErrorV1*) { return 1; }
 void Release(void*, void* prepared) { delete static_cast<int*>(prepared); }
 int Operational(void*, DangOperationalDataV1* result, DangPluginErrorV1*) {
   if (!result) return 0;
+#ifdef DANG_OVERSIZED_OPERATIONAL
+  static const std::string oversized(16 * 1024 * 1024 + 1, 'x');
+  result->data_xml = oversized.c_str();
+#else
   result->data_xml =
       "<counter xmlns=\"urn:dangd:test:broken-operational\">invalid</counter>";
+#endif
   return 1;
 }
 

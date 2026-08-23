@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Bounded operational callback XML before copying it into host memory, rejecting
+  payloads above the common XML limit with an attributed atomic NETCONF error;
+  added a real oversized-provider regression fixture.
 - Completed the RFC 8525 datastore-schema and reload audit: verified all five
   advertised datastores reference the rebuilt compiled schema, and covered
   deviation/plugin inventory changes, content IDs, both update notifications,
