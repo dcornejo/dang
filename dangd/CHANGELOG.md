@@ -7,6 +7,8 @@
 
 ### Changed
 
+- Added paired real-plugin coverage for cross-provider `unique` violations and
+  deterministic later-provider merge failure telemetry.
 - Added a second provider merge gate using the backend's applied configuration
   as complete context, rejecting unresolved state-to-configuration leafrefs.
 - Seeded provider merge validation with built-in operational data, preventing

@@ -56,8 +56,9 @@ stays in this file with its remaining work rewritten precisely.
   Applied configuration is now supplied as complete context, so provider
   leafrefs to config-true targets are enforced after the standalone collision
   gate. Complete cross-fragment `mandatory`, `when`, `must`, state-to-state
-  `leafref`, `instance-identifier`, and `unique` checks whose outcome remains
-  indeterminate under selected-data coverage.
+  `leafref`, and `instance-identifier` checks whose outcome remains
+  indeterminate under selected-data coverage. Explicit cross-provider `unique`
+  violations are enforced with deterministic later-provider rejection.
   Callback and validation failures now omit the unsafe fragment and appear with
   provider, stage, path, and reason in operational reconciliation telemetry;
   additionally surface them as actionable NETCONF errors where RFC operation

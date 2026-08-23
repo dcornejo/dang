@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Verified cumulative `unique` constraints across independently valid ABI-v3
+  provider list entries, rejecting and attributing the conflicting later provider.
 - Validated cumulative operational-provider state against the backend's
   complete applied configuration, enforcing required leafrefs to config data.
 - Seeded operational-provider arbitration with daemon-owned state so built-in

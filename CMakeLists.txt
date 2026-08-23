@@ -180,6 +180,26 @@ if(YANG_BUILD_DANGD)
       set_target_properties(dangd_test_${test_plugin}_plugin PROPERTIES
         PREFIX "")
     endforeach()
+    foreach(unique_provider IN ITEMS first second)
+      add_library(dangd_test_unique_${unique_provider}_plugin MODULE
+        dangd/test_plugins/operational_unique_plugin.cc)
+      target_include_directories(
+        dangd_test_unique_${unique_provider}_plugin PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+      target_compile_definitions(
+        dangd_test_unique_${unique_provider}_plugin PRIVATE
+        DANG_UNIQUE_PROVIDER_NAME="test-unique-${unique_provider}")
+      if(unique_provider STREQUAL "first")
+        target_compile_definitions(
+          dangd_test_unique_${unique_provider}_plugin PRIVATE
+          DANG_UNIQUE_MODEL_OWNER=1)
+      endif()
+      target_compile_options(
+        dangd_test_unique_${unique_provider}_plugin PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+      set_target_properties(
+        dangd_test_unique_${unique_provider}_plugin PROPERTIES PREFIX "")
+    endforeach()
     add_library(dangd_test_broken_discovery_plugin MODULE
       dangd/test_plugins/broken_discovery_plugin.cc)
     target_include_directories(dangd_test_broken_discovery_plugin PRIVATE
@@ -346,12 +366,15 @@ if(YANG_BUILD_TESTS)
       DANG_TEST_BROKEN_OPERATIONAL_PLUGIN_PATH="$<TARGET_FILE:dangd_test_broken_operational_plugin>"
       DANG_TEST_COLLISION_FIRST_PLUGIN_PATH="$<TARGET_FILE:dangd_test_collision_first_plugin>"
       DANG_TEST_COLLISION_SECOND_PLUGIN_PATH="$<TARGET_FILE:dangd_test_collision_second_plugin>"
-      DANG_TEST_COLLISION_CORE_PLUGIN_PATH="$<TARGET_FILE:dangd_test_collision_core_plugin>")
+      DANG_TEST_COLLISION_CORE_PLUGIN_PATH="$<TARGET_FILE:dangd_test_collision_core_plugin>"
+      DANG_TEST_UNIQUE_FIRST_PLUGIN_PATH="$<TARGET_FILE:dangd_test_unique_first_plugin>"
+      DANG_TEST_UNIQUE_SECOND_PLUGIN_PATH="$<TARGET_FILE:dangd_test_unique_second_plugin>")
     add_dependencies(dangd_tests dangd_example_plugin dangd_ip_management_plugin
       dangd_test_provider_plugin dangd_test_consumer_plugin
       dangd_test_broken_discovery_plugin dangd_test_broken_operational_plugin
       dangd_test_collision_first_plugin dangd_test_collision_second_plugin
       dangd_test_collision_core_plugin
+      dangd_test_unique_first_plugin dangd_test_unique_second_plugin
       dangd_test_deviation_plugin)
     target_compile_options(dangd_tests PRIVATE
       -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
