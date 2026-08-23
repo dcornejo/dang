@@ -24,6 +24,12 @@ namespace yang::netconf {
 /** Supplies config-false XML children for NETCONF get responses. */
 class OperationalDataProvider {
  public:
+  struct DataResult {
+    /** Complete augmented data payload, safe for internal snapshot consumers. */
+    std::string xml;
+    /** Failures that make a client retrieval incomplete and unsuccessful. */
+    std::vector<config::ValidationFinding> findings;
+  };
   /** Result of looking up one source for RFC 6022 get-schema. */
   struct SchemaLookup {
     enum class Status { kFound, kNotFound, kNotUnique, kUnsupportedFormat };
@@ -31,8 +37,8 @@ class OperationalDataProvider {
     std::string content;
   };
   virtual ~OperationalDataProvider() = default;
-  /** Returns a complete data element augmented with operational state. */
-  [[nodiscard]] virtual std::string AugmentDataXml(
+  /** Returns augmented data and any failures encountered while assembling it. */
+  [[nodiscard]] virtual DataResult AugmentDataXml(
       std::string_view configuration_data_xml) const = 0;
   /** Returns NETCONF capabilities associated with the supplied state. */
   [[nodiscard]] virtual std::vector<std::string> Capabilities() const {

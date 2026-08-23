@@ -76,8 +76,8 @@ stays in this file with its remaining work rewritten precisely.
   and `when` absence checks decisive without closing selected data.
   Callback and validation failures now omit the unsafe fragment and appear with
   provider, stage, path, and reason in operational reconciliation telemetry;
-  additionally surface them as actionable NETCONF errors where RFC operation
-  semantics permit rather than returning partial data without an error.
+  `<get>` and operational `<get-data>` also fail atomically with actionable
+  NETCONF errors instead of returning accepted partial data as a success.
 - Define explicit schemas and lifecycle rules for any dynamic configuration
   datastores. Publish each datastore and its schema through RFC 8525, define
   supported protocol operations, validation and persistence semantics, and map

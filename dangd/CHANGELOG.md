@@ -7,6 +7,9 @@
 
 ### Changed
 
+- Returned operational-provider callback, validation, and merge failures from
+  `<get>` and operational `<get-data>` as structured, actionable NETCONF errors
+  while suppressing otherwise accepted partial operational payloads.
 - Added ABI-v5-only cross-provider `must` and `when` coverage for operands
   absent from an earlier complete subtree while preserving open-data results.
 - Added ABI-v5-only cross-provider instance-identifier resolution and rejection

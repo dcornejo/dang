@@ -1030,7 +1030,7 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
           "<data>" + datastores_.Read(Datastore::kRunning).ToXml(false) +
           "</data>";
       if (operational_ != nullptr)
-        action_data = operational_->AugmentDataXml(action_data);
+        action_data = operational_->AugmentDataXml(action_data).xml;
       if (!ActionParentExists(action_data, *action)) {
         result = ProtocolFailure(
             "the parent data instance for the requested action does not exist",
@@ -1141,8 +1141,16 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
       result.ok = true;
       payload = "<data xmlns=\"" + std::string(kNmdaNamespace) + "\">" +
                 datastores_.Read(*source).ToXml(false) + "</data>";
-      if (*source == Datastore::kOperational)
-        payload = operational_->AugmentDataXml(payload);
+      if (*source == Datastore::kOperational) {
+        auto augmented = operational_->AugmentDataXml(payload);
+        payload = std::move(augmented.xml);
+        if (!augmented.findings.empty()) {
+          result.ok = false;
+          result.errors.insert(result.errors.end(),
+                               std::make_move_iterator(augmented.findings.begin()),
+                               std::make_move_iterator(augmented.findings.end()));
+        }
+      }
       if (*source == Datastore::kOperational &&
           ((!origin_filters.empty() && !origin_includes_intended) ||
            origin_excludes_intended))
@@ -1338,7 +1346,14 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
                     : "<data>" + datastores_.Read(source).ToXml(false) +
                           "</data>";
       if (name == "get" && operational_ != nullptr) {
-        payload = operational_->AugmentDataXml(payload);
+        auto augmented = operational_->AugmentDataXml(payload);
+        payload = std::move(augmented.xml);
+        if (!augmented.findings.empty()) {
+          result.ok = false;
+          result.errors.insert(result.errors.end(),
+                               std::make_move_iterator(augmented.findings.begin()),
+                               std::make_move_iterator(augmented.findings.end()));
+        }
       }
       if (nacm != nullptr)
         payload = nacm->FilterReadableData(

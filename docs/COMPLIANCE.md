@@ -297,8 +297,11 @@ constraints evaluate normally and reject false results; absent nodes in open
 collections remain indeterminate.
 Callback, validation, and merge failures omit the provider fragment and are
 attributed by provider, stage, instance path, and reason in modeled operational
-reconciliation telemetry, but
-are not yet also returned as NETCONF errors where operation semantics permit.
+reconciliation telemetry. `<get>` and operational `<get-data>` additionally
+fail atomically with `operation-failed`, the
+`operational-provider-failure` application tag, the best available error path,
+and a message naming the provider, stage, and reason. No otherwise accepted
+partial operational payload accompanies that error.
 Dynamic configuration datastores are not implemented. The complete operation,
 filter/default/origin/NACM interaction matrix and external interoperability
 remain. `TODO.md` is the normative work list.

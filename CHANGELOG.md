@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Made `<get>` and operational `<get-data>` fail atomically when an operational
+  provider callback, validation, or merge fails, returning structured NETCONF
+  errors with provider, stage, path, and reason instead of partial data.
 - Made XPath empty-node selections honor explicit collection coverage, allowing
   cross-provider `must` and `when` checks to decide absence in closed state.
 - Made required instance-identifiers decisive when they select an absent node

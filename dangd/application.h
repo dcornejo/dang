@@ -41,7 +41,7 @@ class DangdOperationalData final
                        const yang::netconf::NacmPolicy* nacm,
                        const PluginManager* plugins,
                        const yang::config::RuntimeSchema* schema);
-  [[nodiscard]] std::string AugmentDataXml(
+  [[nodiscard]] DataResult AugmentDataXml(
       std::string_view configuration_data_xml) const override;
   /** Supplies the configuration actually accepted by the device backend. */
   void SetAppliedConfigurationProvider(

@@ -123,9 +123,9 @@ class StatelessOperationProvider final : public OperationProvider {
 
 class MinimalOperationalProvider final : public OperationalDataProvider {
  public:
-  std::string AugmentDataXml(
+  DataResult AugmentDataXml(
       std::string_view configuration_data_xml) const override {
-    return std::string(configuration_data_xml);
+    return {std::string(configuration_data_xml), {}};
   }
 };
 

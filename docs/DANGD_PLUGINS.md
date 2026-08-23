@@ -133,7 +133,11 @@ A failed callback or rejected fragment is omitted and reported under
 The record identifies the plugin, callback, validation, or merge stage, best
 available instance path, and reason. Providers should still log platform
 failures locally; the telemetry describes the current retrieval and is not a
-durable event log.
+durable event log. A NETCONF `<get>` or operational `<get-data>` that encounters
+one of these failures returns an `operation-failed` RPC error with application
+tag `operational-provider-failure`; its error path and message identify the
+best available path, provider, stage, and reason. The RPC does not return a
+partially assembled operational data payload alongside that error.
 
 The IP-management example uses ABI v3 to publish RFC 8343
 `/interfaces-state`, deriving `oper-status` from its last successfully applied

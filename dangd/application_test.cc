@@ -26,8 +26,9 @@ TEST(DangdOperationalDataTest, UsesBackendAppliedConfigurationAsOperational) {
   operational.SetAppliedConfigurationProvider([] {
     return "<data><applied xmlns='urn:test'>device</applied></data>";
   });
-  const std::string result = operational.AugmentDataXml(
+  const auto augmented = operational.AugmentDataXml(
       "<data><intended xmlns='urn:test'>server</intended></data>");
+  const std::string& result = augmented.xml;
   EXPECT_NE(result.find("<applied"), std::string::npos) << result;
   EXPECT_EQ(result.find("<intended"), std::string::npos) << result;
 }
@@ -565,17 +566,31 @@ TEST(DangdApplicationTest, ReportsAndOmitsInvalidOperationalPluginData) {
     </rpc>)xml");
   EXPECT_EQ(response.xml.find(">invalid</counter>"), std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("<provider>test-broken-operational</provider>"),
+  EXPECT_NE(response.xml.find("operational provider test-broken-operational failed during validation"),
             std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("<stage>validation</stage>"), std::string::npos)
+  EXPECT_NE(response.xml.find("<error-tag>operation-failed</error-tag>"), std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("outside the YANG type's value space"),
+  EXPECT_NE(response.xml.find("outside the YANG type&apos;s value space"),
             std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find("urn:dangd:test:broken-operational}counter"),
             std::string::npos)
       << response.xml;
+
+  const auto legacy_response = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="bad-state-get">
+      <get/>
+    </rpc>)xml");
+  EXPECT_EQ(legacy_response.xml.find(">invalid</counter>"), std::string::npos)
+      << legacy_response.xml;
+  EXPECT_NE(legacy_response.xml.find(
+                "operational provider test-broken-operational failed during validation"),
+            std::string::npos)
+      << legacy_response.xml;
+  EXPECT_NE(legacy_response.xml.find("operational-provider-failure"),
+            std::string::npos)
+      << legacy_response.xml;
 }
 
 TEST(DangdApplicationTest, EnforcesCompleteProviderChildCollections) {
@@ -595,10 +610,10 @@ TEST(DangdApplicationTest, EnforcesCompleteProviderChildCollections) {
   EXPECT_EQ(response.xml.find("<target-ref>missing</target-ref>"),
             std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("<provider>test-complete-operational</provider>"),
+  EXPECT_NE(response.xml.find("operational provider test-complete-operational failed during validation"),
             std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("<stage>validation</stage>"), std::string::npos)
+  EXPECT_NE(response.xml.find("operational-provider-failure"), std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find("leafref value has no matching target instance"),
             std::string::npos)
@@ -622,9 +637,9 @@ TEST(DangdApplicationTest, RejectsMissingMandatoryNodeFromSeparateProvider) {
     </rpc>)xml");
   EXPECT_EQ(response.xml.find("<name>uplink</name>"), std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("<provider>test-mandatory-publisher</provider>"),
+  EXPECT_NE(response.xml.find("operational provider test-mandatory-publisher failed during validation"),
             std::string::npos) << response.xml;
-  EXPECT_NE(response.xml.find("<stage>validation</stage>"), std::string::npos)
+  EXPECT_NE(response.xml.find("operational-provider-failure"), std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find("mandatory data node is absent"),
             std::string::npos) << response.xml;
@@ -672,13 +687,13 @@ TEST(DangdApplicationTest, RejectsUnresolvedStateLeafrefFromLaterProvider) {
         <datastore>ds:operational</datastore><config-filter>false</config-filter>
       </get-data>
     </rpc>)xml");
-  EXPECT_NE(response.xml.find("<name>present</name>"), std::string::npos)
+  EXPECT_EQ(response.xml.find("<name>present</name>"), std::string::npos)
       << response.xml;
   EXPECT_EQ(response.xml.find("<selected>missing</selected>"), std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("<provider>test-leafref-invalid</provider>"),
+  EXPECT_NE(response.xml.find("operational provider test-leafref-invalid failed during merge"),
             std::string::npos) << response.xml;
-  EXPECT_NE(response.xml.find("<stage>merge</stage>"), std::string::npos)
+  EXPECT_NE(response.xml.find("operational-provider-failure"), std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find("leafref value has no matching target instance"),
             std::string::npos) << response.xml;
@@ -724,9 +739,9 @@ TEST(DangdApplicationTest, RejectsInstanceIdentifierIntoClosedStateSubtree) {
     </rpc>)xml");
   EXPECT_EQ(response.xml.find("oi:name='missing'"), std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("<provider>test-instance-invalid</provider>"),
+  EXPECT_NE(response.xml.find("operational provider test-instance-invalid failed during merge"),
             std::string::npos) << response.xml;
-  EXPECT_NE(response.xml.find("<stage>merge</stage>"), std::string::npos)
+  EXPECT_NE(response.xml.find("operational-provider-failure"), std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find(
                 "instance-identifier does not select an existing data node"),
@@ -754,7 +769,7 @@ TEST(DangdApplicationTest, RejectsLaterOperationalProviderCollision) {
         <datastore>ds:operational</datastore><config-filter>false</config-filter>
       </get-data>
     </rpc>)xml");
-  EXPECT_NE(response.xml.find(
+  EXPECT_EQ(response.xml.find(
                 "<counter xmlns=\"urn:dangd:test:operational-collision\">1"
                 "</counter>"),
             std::string::npos)
@@ -764,10 +779,11 @@ TEST(DangdApplicationTest, RejectsLaterOperationalProviderCollision) {
                 "</counter>"),
             std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("<provider>test-collision-second</provider>"),
+  EXPECT_NE(response.xml.find(
+                "operational provider test-collision-second failed during merge"),
             std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("<stage>merge</stage>"), std::string::npos)
+  EXPECT_NE(response.xml.find("operational-provider-failure"), std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find("occurs more than once"), std::string::npos)
       << response.xml;
@@ -797,10 +813,11 @@ TEST(DangdApplicationTest, RejectsOperationalReferenceMissingFromAppliedData) {
                 "<counter xmlns=\"urn:dangd:test:operational-collision\">"),
             std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("<provider>test-collision-first</provider>"),
+  EXPECT_NE(response.xml.find(
+                "operational provider test-collision-first failed during merge"),
             std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("<stage>merge</stage>"), std::string::npos)
+  EXPECT_NE(response.xml.find("operational-provider-failure"), std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find("leafref value has no matching target instance"),
             std::string::npos)
@@ -821,15 +838,13 @@ TEST(DangdApplicationTest, RejectsOperationalProviderCollisionWithCoreData) {
         <datastore>ds:operational</datastore><config-filter>false</config-filter>
       </get-data>
     </rpc>)xml");
-  const std::size_t netconf_state = response.xml.find("<netconf-state");
-  ASSERT_NE(netconf_state, std::string::npos) << response.xml;
-  EXPECT_EQ(response.xml.find("<netconf-state", netconf_state + 1),
+  EXPECT_EQ(response.xml.find("<netconf-state"), std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find(
+                "operational provider test-collision-core failed during merge"),
             std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("<provider>test-collision-core</provider>"),
-            std::string::npos)
-      << response.xml;
-  EXPECT_NE(response.xml.find("<stage>merge</stage>"), std::string::npos)
+  EXPECT_NE(response.xml.find("operational-provider-failure"), std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find("occurs more than once"), std::string::npos)
       << response.xml;
@@ -850,14 +865,15 @@ TEST(DangdApplicationTest, RejectsCrossProviderUniqueConstraintViolation) {
         <datastore>ds:operational</datastore><config-filter>false</config-filter>
       </get-data>
     </rpc>)xml");
-  EXPECT_NE(response.xml.find("<name>first</name>"), std::string::npos)
+  EXPECT_EQ(response.xml.find("<name>first</name>"), std::string::npos)
       << response.xml;
   EXPECT_EQ(response.xml.find("<name>second</name>"), std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("<provider>test-unique-second</provider>"),
+  EXPECT_NE(response.xml.find(
+                "operational provider test-unique-second failed during merge"),
             std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("<stage>merge</stage>"), std::string::npos)
+  EXPECT_NE(response.xml.find("operational-provider-failure"), std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find(
                 "list entries have identical values for a unique constraint"),
@@ -885,7 +901,7 @@ TEST_P(OperationalXPathConstraintTest,
         <datastore>ds:operational</datastore><config-filter>false</config-filter>
       </get-data>
     </rpc>)xml");
-  EXPECT_NE(response.xml.find(
+  EXPECT_EQ(response.xml.find(
                 "<mode xmlns=\"urn:dangd:test:operational-xpath\">blocked"),
             std::string::npos)
       << response.xml;
@@ -893,7 +909,7 @@ TEST_P(OperationalXPathConstraintTest,
       << response.xml;
   EXPECT_NE(response.xml.find(std::get<2>(GetParam())), std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("<stage>merge</stage>"), std::string::npos)
+  EXPECT_NE(response.xml.find("operational-provider-failure"), std::string::npos)
       << response.xml;
 }
 
@@ -927,14 +943,14 @@ TEST_P(OperationalXPathAbsenceTest, UsesEarlierCompleteSubtreeToDecideAbsence) {
         <datastore>ds:operational</datastore><config-filter>false</config-filter>
       </get-data>
     </rpc>)xml");
-  EXPECT_NE(response.xml.find(
+  EXPECT_EQ(response.xml.find(
                 "<inputs xmlns=\"urn:dangd:test:operational-xpath-absence\""),
             std::string::npos) << response.xml;
   EXPECT_EQ(response.xml.find(std::get<1>(GetParam())), std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find(std::get<2>(GetParam())), std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("<stage>merge</stage>"), std::string::npos)
+  EXPECT_NE(response.xml.find("operational-provider-failure"), std::string::npos)
       << response.xml;
 }
 

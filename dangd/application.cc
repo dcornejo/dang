@@ -493,7 +493,7 @@ DangdOperationalData::DangdOperationalData(
   monitoring_xml_ = monitoring_output.str();
 }
 
-std::string DangdOperationalData::AugmentDataXml(
+DangdOperationalData::DataResult DangdOperationalData::AugmentDataXml(
     std::string_view configuration_data_xml) const {
   pugi::xml_document document;
   if (!yang::ParseUntrustedXml(configuration_data_xml, &document).ok)
@@ -510,6 +510,7 @@ std::string DangdOperationalData::AugmentDataXml(
     document.append_copy(applied.document_element());
   }
   pugi::xml_node data = document.document_element();
+  std::vector<yang::config::ValidationFinding> operational_findings;
   std::optional<yang::config::ConfigDocument> applied_context;
   std::optional<FragmentValidation> applied_context_error;
   if (plugins_ && schema_) {
@@ -654,6 +655,19 @@ std::string DangdOperationalData::AugmentDataXml(
     if (yang::ParseUntrustedXml(plugins_->ReconciliationData(provider_failures),
                                 &reconciliation).ok)
       data.append_copy(reconciliation.document_element());
+    for (const OperationalProviderFailure& failure : provider_failures) {
+      yang::config::ValidationFinding finding;
+      finding.code = yang::config::ValidationCode::kInvalidValue;
+      finding.state = yang::config::FindingState::kInvalid;
+      finding.message = "operational provider " + failure.provider +
+                        " failed during " + failure.stage + ": " +
+                        failure.reason;
+      finding.instance_path = failure.instance_path;
+      finding.netconf_error_path = failure.instance_path;
+      finding.netconf_error_tag = "operation-failed";
+      finding.netconf_error_app_tag = "operational-provider-failure";
+      operational_findings.push_back(std::move(finding));
+    }
   }
   pugi::xml_node nacm;
   for (const pugi::xml_node child : data.children()) {
@@ -685,7 +699,7 @@ std::string DangdOperationalData::AugmentDataXml(
       counters.denied_notifications;
   std::ostringstream output;
   data.print(output, "  ", pugi::format_raw);
-  return output.str();
+  return {output.str(), std::move(operational_findings)};
 }
 
 void DangdOperationalData::SetAppliedConfigurationProvider(
@@ -786,7 +800,7 @@ Application::Application(yang::config::RuntimeSchema schema,
         "<data>" +
         datastores_.Read(yang::netconf::Datastore::kRunning).ToXml(false) +
         "</data>";
-    return operational_.AugmentDataXml(data);
+    return operational_.AugmentDataXml(data).xml;
   });
   (void)notifications_.AddStream({});
 }
