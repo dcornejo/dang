@@ -487,6 +487,14 @@ std::string DangdOperationalData::AugmentDataXml(
     std::vector<OperationalProviderFailure> provider_failures;
     pugi::xml_document accepted_provider_data;
     pugi::xml_node accepted = accepted_provider_data.append_child("data");
+    if (library.document_element())
+      accepted.append_copy(library.document_element());
+    if (modules_state.document_element())
+      accepted.append_copy(modules_state.document_element());
+    if (monitoring.document_element())
+      accepted.append_copy(monitoring.document_element());
+    const std::size_t core_children =
+        static_cast<std::size_t>(std::distance(accepted.begin(), accepted.end()));
     for (const PluginOperationalFragment& fragment :
          plugins_->OperationalData()) {
       if (fragment.error) {
@@ -543,8 +551,10 @@ std::string DangdOperationalData::AugmentDataXml(
       for (const pugi::xml_node child : candidate.children())
         if (child.type() == pugi::node_element) accepted.append_copy(child);
     }
+    std::size_t child_index = 0;
     for (const pugi::xml_node child : accepted.children())
-      if (child.type() == pugi::node_element) data.append_copy(child);
+      if (child.type() == pugi::node_element && child_index++ >= core_children)
+        data.append_copy(child);
     pugi::xml_document reconciliation;
     if (yang::ParseUntrustedXml(plugins_->ReconciliationData(provider_failures),
                                 &reconciliation).ok)

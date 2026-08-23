@@ -11,6 +11,7 @@
 
 namespace {
 
+#ifdef DANG_COLLISION_MODEL_OWNER
 constexpr char kModel[] = R"yang(module dangd-test-operational-collision {
   yang-version 1.1;
   namespace "urn:dangd:test:operational-collision";
@@ -18,6 +19,7 @@ constexpr char kModel[] = R"yang(module dangd-test-operational-collision {
   revision 2026-08-23;
   leaf counter { config false; type uint16; }
 })yang";
+#endif
 
 size_t SourceCount(void*) {
 #ifdef DANG_COLLISION_MODEL_OWNER
@@ -52,7 +54,11 @@ int Success(void*, void*, DangPluginErrorV1*) { return 1; }
 void Release(void*, void* prepared) { delete static_cast<int*>(prepared); }
 int Operational(void*, DangOperationalDataV1* result, DangPluginErrorV1*) {
   if (!result) return 0;
-#ifdef DANG_COLLISION_MODEL_OWNER
+#ifdef DANG_COLLISION_CORE_STATE
+  result->data_xml =
+      "<netconf-state xmlns=\"urn:ietf:params:xml:ns:yang:ietf-netconf-"
+      "monitoring\"/>";
+#elif defined(DANG_COLLISION_MODEL_OWNER)
   result->data_xml =
       "<counter xmlns=\"urn:dangd:test:operational-collision\">1</counter>";
 #else

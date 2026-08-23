@@ -267,9 +267,11 @@ and negated selections, while preserving config-false state and required
 structure. Operational plugin fragments now receive typed partial-instance
 validation, including schema binding, scalar shapes and types, list keys,
 choices, references, and intra-fragment duplicates. Cross-provider validation
-cumulatively rejects a later fragment when it introduces a deterministic
-conflict, with earlier plugin load order taking precedence. Constraints that
-remain indeterminate under selected-data coverage are still incomplete.
+cumulatively rejects a fragment when it introduces a deterministic conflict
+with daemon-owned operational data or an earlier provider. Core data is
+authoritative and earlier plugin load order takes precedence. Constraints that
+remain indeterminate under selected-data coverage, including those needing
+applied configuration as context, are still incomplete.
 Callback, validation, and merge failures omit the provider fragment and are
 attributed by provider, stage, instance path, and reason in modeled operational
 reconciliation telemetry, but

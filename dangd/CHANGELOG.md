@@ -7,6 +7,8 @@
 
 ### Changed
 
+- Seeded provider merge validation with built-in operational data, preventing
+  plugins from shadowing daemon-owned state.
 - Added deterministic first-provider-wins arbitration for operational data:
   cumulative snapshots are validated in plugin load order and later conflicts
   are omitted with merge-stage reconciliation telemetry.

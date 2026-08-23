@@ -50,11 +50,13 @@ stays in this file with its remaining work rewritten precisely.
   datastore context. Individual fragments are now namespace/schema bound and
   checked as typed partial instance data, including shapes, scalar types, list
   keys, choices, references, and duplicates visible within the fragment.
-  Cumulative validation now rejects a later provider whose fragment conflicts
-  with already accepted data, giving earlier plugin load order deterministic
-  precedence. Complete cross-fragment `mandatory`, `when`, `must`, `leafref`,
+  Cumulative validation now rejects a provider whose fragment conflicts with
+  daemon-owned operational data or already accepted provider data; core data
+  is authoritative and earlier plugin load order has deterministic precedence.
+  Complete cross-fragment `mandatory`, `when`, `must`, `leafref`,
   `instance-identifier`, and `unique` checks whose outcome remains
-  indeterminate under selected-data coverage.
+  indeterminate under selected-data coverage, including constraints that need
+  applied configuration as context.
   Callback and validation failures now omit the unsafe fragment and appear with
   provider, stage, path, and reason in operational reconciliation telemetry;
   additionally surface them as actionable NETCONF errors where RFC operation

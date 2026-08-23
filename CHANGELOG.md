@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Seeded operational-provider arbitration with daemon-owned state so built-in
+  operational trees remain authoritative over plugins.
 - Arbitrated ABI-v3 operational publication in deterministic plugin load order
   by validating each cumulative provider snapshot, retaining earlier accepted
   data and reporting a conflicting later fragment as a merge-stage failure.

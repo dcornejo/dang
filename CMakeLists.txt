@@ -196,7 +196,7 @@ if(YANG_BUILD_DANGD)
       -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
     set_target_properties(dangd_test_broken_operational_plugin PROPERTIES
       PREFIX "")
-    foreach(collision_provider IN ITEMS first second)
+    foreach(collision_provider IN ITEMS first second core)
       add_library(dangd_test_collision_${collision_provider}_plugin MODULE
         dangd/test_plugins/operational_collision_plugin.cc)
       target_include_directories(
@@ -209,6 +209,10 @@ if(YANG_BUILD_DANGD)
         target_compile_definitions(
           dangd_test_collision_${collision_provider}_plugin PRIVATE
           DANG_COLLISION_MODEL_OWNER=1)
+      elseif(collision_provider STREQUAL "core")
+        target_compile_definitions(
+          dangd_test_collision_${collision_provider}_plugin PRIVATE
+          DANG_COLLISION_CORE_STATE=1)
       endif()
       target_compile_options(
         dangd_test_collision_${collision_provider}_plugin PRIVATE
@@ -341,11 +345,13 @@ if(YANG_BUILD_TESTS)
       DANG_TEST_DEVIATION_PLUGIN_PATH="$<TARGET_FILE:dangd_test_deviation_plugin>"
       DANG_TEST_BROKEN_OPERATIONAL_PLUGIN_PATH="$<TARGET_FILE:dangd_test_broken_operational_plugin>"
       DANG_TEST_COLLISION_FIRST_PLUGIN_PATH="$<TARGET_FILE:dangd_test_collision_first_plugin>"
-      DANG_TEST_COLLISION_SECOND_PLUGIN_PATH="$<TARGET_FILE:dangd_test_collision_second_plugin>")
+      DANG_TEST_COLLISION_SECOND_PLUGIN_PATH="$<TARGET_FILE:dangd_test_collision_second_plugin>"
+      DANG_TEST_COLLISION_CORE_PLUGIN_PATH="$<TARGET_FILE:dangd_test_collision_core_plugin>")
     add_dependencies(dangd_tests dangd_example_plugin dangd_ip_management_plugin
       dangd_test_provider_plugin dangd_test_consumer_plugin
       dangd_test_broken_discovery_plugin dangd_test_broken_operational_plugin
       dangd_test_collision_first_plugin dangd_test_collision_second_plugin
+      dangd_test_collision_core_plugin
       dangd_test_deviation_plugin)
     target_compile_options(dangd_tests PRIVATE
       -Wall -Wextra -Wpedantic -Wconversion -Wshadow)

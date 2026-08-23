@@ -90,10 +90,12 @@ copied before the callback returns. `dangd` parses each expanded data node as
 partial instance data and rejects fragments with unknown schema nodes, invalid
 shapes or scalar values, missing list keys, choice conflicts, invalid visible
 references, or duplicate instances. After validating each fragment alone,
-`dangd` validates the cumulative provider snapshot in plugin load order.
-Earlier providers take precedence: if a later provider introduces a duplicate
-singleton, list-key collision, choice conflict, or another deterministically
-invalid merge, its entire fragment is omitted. Constraints that remain
+`dangd` validates each cumulative provider snapshot, seeded with daemon-owned
+operational data, in plugin load order. Built-in data is authoritative and
+earlier providers take precedence: if a provider
+introduces a duplicate singleton, list-key collision, choice conflict, or
+another deterministically invalid merge, its entire fragment is omitted.
+Constraints that remain
 indeterminate because providers supplied only selected data are not yet
 enforced. Accepted data is merged into the read-only operational snapshot
 before origin handling, NACM, and RFC 8526 filters. The callback must be
