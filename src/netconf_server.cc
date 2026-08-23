@@ -1197,8 +1197,10 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
         }
         for (const pugi::xml_node child : subtree.children())
           if (child.type() == pugi::node_element) filter.append_copy(child);
-        FilterResult filtered = ApplySubtreeFilter(payload,
-                                                   Serialize(filter_document));
+        FilterResult filtered = ApplySubtreeFilter(
+            payload, Serialize(filter_document),
+            depth == 0 ? std::nullopt
+                       : std::optional<std::uint16_t>(depth));
         if (!filtered.xml) {
           result = ProtocolFailure(*filtered.error,
               filtered.error_tag.value_or("invalid-value"));
@@ -1232,7 +1234,7 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
           payload = std::move(*filtered.xml);
         }
       }
-      if (result.ok && depth != 0 && !xpath)
+      if (result.ok && depth != 0 && !subtree && !xpath)
         payload = ApplyMaximumDepth(payload, depth);
     }
   } else if (edit_data) {

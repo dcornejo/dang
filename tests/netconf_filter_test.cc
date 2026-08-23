@@ -51,6 +51,27 @@ TEST(NetconfFilterTest, SupportsNamespaceWildcard) {
   EXPECT_NE(wildcard.xml->find("<uptime>10</uptime>"), std::string::npos);
 }
 
+TEST(NetconfFilterTest, AppliesMaximumDepthFromSubtreeSelectionNodes) {
+  FilterResult result = ApplySubtreeFilter(kData, R"xml(
+    <filter xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <system xmlns="urn:example"><interface/></system>
+    </filter>)xml", 1);
+  ASSERT_TRUE(result.xml) << result.error.value_or("");
+  EXPECT_NE(result.xml->find("<system"), std::string::npos);
+  EXPECT_NE(result.xml->find("<interface"), std::string::npos);
+  EXPECT_EQ(result.xml->find("eth0"), std::string::npos) << *result.xml;
+  EXPECT_EQ(result.xml->find("eth1"), std::string::npos) << *result.xml;
+
+  result = ApplySubtreeFilter(kData, R"xml(
+    <filter xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <system xmlns="urn:example"><interface/></system>
+    </filter>)xml", 2);
+  ASSERT_TRUE(result.xml) << result.error.value_or("");
+  EXPECT_NE(result.xml->find("eth0"), std::string::npos) << *result.xml;
+  EXPECT_NE(result.xml->find("eth1"), std::string::npos) << *result.xml;
+  EXPECT_EQ(result.xml->find("hostname"), std::string::npos) << *result.xml;
+}
+
 TEST(NetconfFilterTest, AppliesXPathAndIncludesAncestorPath) {
   FilterResult result = ApplyXPathFilter(kData, R"xml(
     <filter xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"

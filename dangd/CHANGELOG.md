@@ -7,6 +7,8 @@
 
 ### Changed
 
+- Corrected nested subtree-filter depth limiting so containment ancestors do
+  not prune or consume the allowance of deeply selected nodes.
 - Corrected XPath plus `max-depth` retrieval so depth begins at each selected
   node and does not prune deep selections merely because of their ancestors.
 - Added an end-to-end operational retrieval interaction test combining NACM,

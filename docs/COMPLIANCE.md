@@ -272,7 +272,9 @@ not leak, permitted ancestors and leaves retain origin metadata, and children
 beyond the requested depth are removed. XPath depth limiting is independently
 applied from every selected node rather than from the reply wrapper, and keeps
 the selected nodes' ancestor paths without counting those ancestors against
-the limit. The remaining origin/default and non-operational interaction
+the limit. Nested subtree selections follow the same rule: containment and
+content-match ancestors identify the terminal selection without consuming its
+depth allowance. The remaining origin/default and non-operational interaction
 cross-product is not yet complete.
 
 Applied configuration now comes from dangd's backend working snapshot after

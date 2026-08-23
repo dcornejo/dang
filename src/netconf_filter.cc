@@ -168,8 +168,23 @@ void CopyXPathSelectionAtDepth(
   }
 }
 
+void CopyAtDepth(const pugi::xml_node& source, pugi::xml_node output_parent,
+                 std::uint16_t remaining_levels) {
+  pugi::xml_node output = output_parent.append_child(source.name());
+  CopyShell(source, output);
+  for (const pugi::xml_node child : source.children()) {
+    if (child.type() == pugi::node_element) {
+      if (remaining_levels > 1)
+        CopyAtDepth(child, output, remaining_levels - 1);
+    } else {
+      output.append_copy(child);
+    }
+  }
+}
+
 bool ApplyNode(const pugi::xml_node& data, const pugi::xml_node& filter,
-               pugi::xml_node output_parent) {
+               pugi::xml_node output_parent,
+               std::optional<std::uint16_t> maximum_depth) {
   if (!NameMatches(data, filter) || !AttributesMatch(data, filter)) return false;
   bool has_content = false;
   bool has_non_content = false;
@@ -194,7 +209,10 @@ bool ApplyNode(const pugi::xml_node& data, const pugi::xml_node& filter,
     }
   }
   if (!HasElementChildren(filter) || (has_content && !has_non_content)) {
-    output_parent.append_copy(data);
+    if (maximum_depth)
+      CopyAtDepth(data, output_parent, *maximum_depth);
+    else
+      output_parent.append_copy(data);
     return true;
   }
   pugi::xml_node output = output_parent.append_child(data.name());
@@ -217,7 +235,8 @@ bool ApplyNode(const pugi::xml_node& data, const pugi::xml_node& filter,
     }
     for (const pugi::xml_node data_child : data.children()) {
       if (data_child.type() == pugi::node_element &&
-          ApplyNode(data_child, filter_child, output)) selected = true;
+          ApplyNode(data_child, filter_child, output, maximum_depth))
+        selected = true;
     }
   }
   if (!selected) {
@@ -230,7 +249,8 @@ bool ApplyNode(const pugi::xml_node& data, const pugi::xml_node& filter,
 }  // namespace
 
 FilterResult ApplySubtreeFilter(std::string_view data_xml,
-                                std::string_view filter_xml) {
+                                std::string_view filter_xml,
+                                std::optional<std::uint16_t> maximum_depth) {
   const ResourceLimits& limits = DefaultResourceLimits();
   pugi::xml_document data_document;
   pugi::xml_document filter_document;
@@ -260,7 +280,7 @@ FilterResult ApplySubtreeFilter(std::string_view data_xml,
     if (filter_child.type() != pugi::node_element) continue;
     for (const pugi::xml_node data_child : data.children()) {
       if (data_child.type() == pugi::node_element)
-        ApplyNode(data_child, filter_child, output);
+        ApplyNode(data_child, filter_child, output, maximum_depth);
     }
   }
   std::ostringstream serialized;

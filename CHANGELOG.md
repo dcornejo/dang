@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Applied `max-depth` from each terminal nested subtree-filter selection,
+  retaining containment ancestors without incorrectly consuming the selected
+  subtree's depth allowance.
 - Applied RFC 8526 `max-depth` relative to each XPath-selected node instead of
   the reply wrapper, retaining required ancestors without charging them against
   the selected subtree's depth allowance.

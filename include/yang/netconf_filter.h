@@ -17,9 +17,11 @@ struct FilterResult {
   std::optional<std::string> error_tag;
 };
 
-/** Applies an RFC 6241 subtree filter to an XML data wrapper. */
+/** Applies a subtree filter and optional selection-relative maximum depth. */
 [[nodiscard]] FilterResult ApplySubtreeFilter(std::string_view data_xml,
-                                              std::string_view filter_xml);
+                                              std::string_view filter_xml,
+                                              std::optional<std::uint16_t>
+                                                  maximum_depth = std::nullopt);
 /** Applies an XPath filter and optional selection-relative maximum depth. */
 [[nodiscard]] FilterResult ApplyXPathFilter(std::string_view data_xml,
                                             std::string_view filter_xml,

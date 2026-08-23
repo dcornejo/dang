@@ -541,6 +541,28 @@ TEST(DangdApplicationTest, ComposesNmdaReadFiltersWithNacm) {
   EXPECT_EQ(response.xml.find("yang-library"), std::string::npos)
       << response.xml;
 
+  const auto nested_subtree = loaded.application->server().Process(alice, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="subtree-depth"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore>
+        <subtree-filter><system xmlns="urn:example:appliance">
+          <rack/>
+        </system></subtree-filter>
+        <config-filter>true</config-filter><max-depth>1</max-depth>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_EQ(nested_subtree.xml.find("<rpc-error>"), std::string::npos)
+      << nested_subtree.xml;
+  EXPECT_NE(nested_subtree.xml.find("<system"), std::string::npos)
+      << nested_subtree.xml;
+  EXPECT_NE(nested_subtree.xml.find("<rack"), std::string::npos)
+      << nested_subtree.xml;
+  EXPECT_EQ(nested_subtree.xml.find("seven"), std::string::npos)
+      << nested_subtree.xml;
+  EXPECT_EQ(nested_subtree.xml.find("edge-1"), std::string::npos)
+      << nested_subtree.xml;
+
   const auto xpath = loaded.application->server().Process(alice, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="xpath-depth"
          xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores"

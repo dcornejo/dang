@@ -49,6 +49,9 @@ For `<get-data>` XPath selections, `max-depth` starts at each selected node.
 Ancestors included only to identify a selected node do not consume the depth
 allowance. Multiple selections are combined, and each selection can therefore
 retain its own permitted descendants.
+Nested subtree filters likewise begin the allowance at each terminal selection
+node. Structural and content-match ancestors needed to reach that selection do
+not consume its allowance.
 
 RFC 8526 `<edit-data>` supports `merge`, `replace`, and `none` as its
 `default-operation` and always rolls the target back to its complete pre-edit
