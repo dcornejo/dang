@@ -1305,12 +1305,39 @@ TEST(DangdApplicationTest, PublishesBackendAppliedStateAndNodeOutcomes) {
       << response.xml;
   EXPECT_EQ(response.xml.find("backend-transform"), std::string::npos)
       << response.xml;
+  EXPECT_EQ(response.xml.find("or:origin="), std::string::npos) << response.xml;
   EXPECT_NE(response.xml.find("<disposition>transformed</disposition>"),
             std::string::npos) << response.xml;
   EXPECT_NE(response.xml.find("<disposition>rejected</disposition>"),
             std::string::npos) << response.xml;
   EXPECT_NE(response.xml.find("<disposition>delayed</disposition>"),
             std::string::npos) << response.xml;
+
+  const auto system = loaded.application->server().Process("alice", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="system"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores"
+         xmlns:or="urn:ietf:params:xml:ns:yang:ietf-origin">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore>
+        <origin-filter>or:system</origin-filter><with-origin/>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_NE(system.xml.find("device-normalized"), std::string::npos)
+      << system.xml;
+  EXPECT_NE(system.xml.find("or:origin=\"or:system\""), std::string::npos)
+      << system.xml;
+
+  const auto learned = loaded.application->server().Process("alice", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="learned"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores"
+         xmlns:or="urn:ietf:params:xml:ns:yang:ietf-origin">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore>
+        <origin-filter>or:learned</origin-filter>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_EQ(learned.xml.find("device-normalized"), std::string::npos)
+      << learned.xml;
 }
 
 TEST(DangdApplicationTest, RejectsAndCompensatesInvalidAppliedStateReport) {

@@ -35,17 +35,6 @@ stays in this file with its remaining work rewritten precisely.
 
 ### RFC 8342 / RFC 8526 NMDA compliance closure
 
-- Derive non-intended per-node origin metadata from actual data sources. Applied
-  configuration nodes are now explicitly marked `ietf-origin:intended`,
-  provider-supplied origins are preserved, and config-false nodes are not
-  annotated. Add sources for `default`, `system`, `learned`, `dynamic`,
-  `unknown`, and derived identities; validate those identities and optionally
-  compact redundant annotations using the RFC 8342 inheritance rules.
-- Extend origin filtering from the current identity-aware applied-`intended`
-  selection to the non-intended per-node origins as those data sources are
-  added. Runtime identity derivation, namespace validation, repeated positive
-  and negated values, conflicting-choice rejection, and preservation of state
-  nodes and required configuration structure are implemented.
 - Complete operational publication validation across provider and
   datastore context. Individual fragments are now namespace/schema bound and
   checked as typed partial instance data, including shapes, scalar types, list

@@ -784,7 +784,13 @@ Application::Application(yang::config::RuntimeSchema schema,
       state_file_(std::move(state_file)),
       snapshot_save_checkpoint_(std::move(snapshot_save_checkpoint)) {
   operational_.SetAppliedConfigurationProvider([this] {
-    return "<data>" + backend_.Working().ToXml(false) + "</data>";
+    pugi::xml_document document;
+    if (!yang::ParseUntrustedXml(backend_.WorkingXml(), &document).ok)
+      return std::string("<data/>");
+    std::ostringstream output;
+    for (const pugi::xml_node child : document.document_element().children())
+      child.print(output, "", pugi::format_raw);
+    return "<data>" + output.str() + "</data>";
   });
   server_.SetRecoveryAuditSink(
       [this](const yang::netconf::RecoveryAuditRecord& record) {

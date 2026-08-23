@@ -7,6 +7,9 @@
 
 ### Changed
 
+- Retained validated per-node origin metadata in the applied XML snapshot and
+  added inheritance- and identity-aware positive/negated filtering for every
+  RFC 8342 origin while keeping metadata out of replies that did not request it.
 - Added ABI-v6 post-apply configuration reconciliation and modeled per-node
   applied/transformed/rejected/delayed results, with deterministic plugin
   ordering, duplicate-path rejection, schema validation, and compensation on

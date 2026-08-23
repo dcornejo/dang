@@ -109,7 +109,10 @@ int ReconcileApplied(void*, void* opaque, const char* current_xml,
     *result = {applied.c_str(), nullptr, 0};
     return 1;
   }
-  applied.replace(position, requested.size(), "<mode>device-normalized</mode>");
+  applied.replace(
+      position, requested.size(),
+      "<mode xmlns:or=\"urn:ietf:params:xml:ns:yang:ietf-origin\" "
+      "or:origin=\"or:system\">device-normalized</mode>");
   constexpr const char* kPath =
       "/{urn:dangd:test:provider}provider-settings/mode";
   outcomes[0] = {kPath, DANG_CONFIGURATION_TRANSFORMED_V1,

@@ -141,6 +141,14 @@ unique canonical instance paths and one of `APPLIED`, `TRANSFORMED`,
 unknown dispositions, and duplicate path claims fail the commit and invoke
 rollback callbacks in reverse dependency order.
 
+The returned XML may attach `ietf-origin:origin` metadata to configuration
+nodes when the backend knows their real source. Values may be any identity
+derived from `ietf-origin:origin`, including `default`, `system`, `learned`,
+`dynamic`, and `unknown`; dangd rejects an undeclared prefix, unrelated
+identity, or origin annotation on invalid instance data. Descendants inherit a
+parent annotation according to RFC 8342, and dangd supplies `intended` only
+where the applied source did not provide a more specific origin.
+
 A failed callback or rejected fragment is omitted and reported under
 `dangd-reconciliation:hardware-reconciliation/operational-provider-failure`.
 The record identifies the plugin, callback, validation, or merge stage, best

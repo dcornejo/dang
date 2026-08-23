@@ -617,7 +617,7 @@ PluginApplyResult PluginManager::Apply(
         auto finding = PluginFinding(plugin.name, error,
                                      "invalid hardware action descriptor");
         Abort();
-        return {finding, std::nullopt};
+        return {finding, std::nullopt, {}};
       }
       const std::string local_id = descriptor.action_id;
       const std::string id = plugin.name + ":" + local_id;
@@ -629,7 +629,7 @@ PluginApplyResult PluginManager::Apply(
           auto finding = PluginFinding(
               plugin.name, {}, "invalid hardware action dependency");
           Abort();
-          return {finding, std::nullopt};
+          return {finding, std::nullopt, {}};
         }
         std::string copied = descriptor.dependencies[dependency];
         if (copied.find(':') == std::string::npos)
@@ -645,7 +645,7 @@ PluginApplyResult PluginManager::Apply(
         auto finding = PluginFinding(plugin.name, {},
                                      "invalid hardware action class");
         Abort();
-        return {finding, std::nullopt};
+        return {finding, std::nullopt, {}};
       }
       const std::string path =
           descriptor.instance_path ? descriptor.instance_path : "";
@@ -702,7 +702,7 @@ PluginApplyResult PluginManager::Apply(
     auto finding = PluginFinding("hardware planner", error, "planning failed");
     finding.netconf_error_app_tag = "hardware-plan-invalid";
     Abort();
-    return {finding, std::nullopt};
+    return {finding, std::nullopt, {}};
   }
   HardwareTransactionResult applied = planner.Apply();
   if (!applied.ok) {
@@ -726,23 +726,23 @@ PluginApplyResult PluginManager::Apply(
       }
     }
     Abort();
-    return {finding, std::nullopt};
+    return {finding, std::nullopt, {}};
   }
   {
     std::lock_guard lock(state_->reconciliation_mutex);
     state_->remnants.clear();
   }
   yang::config::ConfigDocument accepted = proposed;
+  std::string accepted_xml = proposed.ToXml();
   std::vector<ConfigurationOutcome> outcomes;
   std::set<std::string> claimed_paths;
   for (const std::size_t index : state_->order) {
     State::Plugin& plugin = state_->plugins[index];
     if (!plugin.reconcile_applied) continue;
-    const std::string current_xml = accepted.ToXml();
     DangAppliedConfigurationV1 report{};
     DangPluginErrorV1 error{};
     if (!plugin.reconcile_applied(plugin.api->context, plugin.prepared,
-                                  current_xml.c_str(), &report, &error) ||
+                                  accepted_xml.c_str(), &report, &error) ||
         !report.applied_xml ||
         (report.outcome_count != 0 && !report.outcomes)) {
       auto finding = PluginFinding(plugin.name, error,
@@ -755,9 +755,10 @@ PluginApplyResult PluginManager::Apply(
                                      applied_plugin.prepared, &ignored);
       }
       Abort();
-      return {finding, std::nullopt};
+      return {finding, std::nullopt, {}};
     }
-    auto parsed = yang::config::ParseDatastoreXml(schema, report.applied_xml);
+    auto parsed = yang::config::ParseDatastoreXml(
+        schema, report.applied_xml, {.allow_origin_metadata = true});
     if (!parsed.document) {
       auto finding = parsed.findings.empty()
           ? PluginFinding(plugin.name, {}, "applied-state XML is invalid")
@@ -772,7 +773,7 @@ PluginApplyResult PluginManager::Apply(
                                      applied_plugin.prepared, &ignored);
       }
       Abort();
-      return {finding, std::nullopt};
+      return {finding, std::nullopt, {}};
     }
     for (const auto& change : yang::config::DiffConfigDocuments(
              schema, accepted, *parsed.document)) {
@@ -792,7 +793,7 @@ PluginApplyResult PluginManager::Apply(
                                      applied_plugin.prepared, &ignored);
       }
       Abort();
-      return {finding, std::nullopt};
+      return {finding, std::nullopt, {}};
     }
     for (std::size_t outcome_index = 0;
          outcome_index < report.outcome_count; ++outcome_index) {
@@ -816,20 +817,21 @@ PluginApplyResult PluginManager::Apply(
                                        applied_plugin.prepared, &ignored);
         }
         Abort();
-        return {finding, std::nullopt};
+        return {finding, std::nullopt, {}};
       }
       outcomes.push_back({plugin.name, outcome.instance_path,
                           outcome.disposition,
                           outcome.reason ? outcome.reason : ""});
     }
     accepted = std::move(*parsed.document);
+    accepted_xml = report.applied_xml;
   }
   {
     std::lock_guard lock(state_->reconciliation_mutex);
     state_->outcomes = std::move(outcomes);
   }
   state_->ReleasePrepared();
-  return {std::nullopt, std::move(accepted)};
+  return {std::nullopt, std::move(accepted), std::move(accepted_xml)};
 }
 
 void PluginManager::Abort() noexcept { state_->ReleasePrepared(); }

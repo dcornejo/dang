@@ -35,9 +35,10 @@ ABI-v5 plugins may additionally declare returned child collections complete so
 absence-sensitive instance constraints can be enforced.
 Every schema-known applied configuration node is explicitly tagged with
 `ietf-origin:intended` metadata when requested, so the RFC 8526 `origin` feature,
-`with-origin`, and origin filters are enabled. Additional origin identities
-remain future work when dynamic, learned, system, or default configuration is
-published.
+`with-origin`, and origin filters are enabled. ABI-v6 applied-state sources may
+publish validated `default`, `system`, `learned`, `dynamic`, `unknown`, or
+derived origin identities; filters honor metadata inheritance and transitive
+identity derivation.
 
 ### YANG version is semantic, not merely syntactic
 

@@ -10,6 +10,10 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Preserved schema-validated RFC 8342 origin metadata from ABI-v6 applied-state
+  sources and generalized origin selection to inherited `default`, `system`,
+  `learned`, `dynamic`, `unknown`, and derived identities. Ordinary `<get>` and
+  unannotated `<get-data>` replies suppress the internal metadata.
 - Added plugin ABI v6 applied-state reconciliation: dependency-ordered plugins
   may return a schema-validated actual configuration plus unique per-path
   applied, transformed, rejected, or delayed outcomes. Operational reads now

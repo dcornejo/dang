@@ -26,7 +26,7 @@ class EnglishConfigurationBackend final
                               yang::netconf::NacmPolicy* nacm,
                               bool managed_nacm)
       : plugins_(plugins), nacm_(nacm), managed_nacm_(managed_nacm),
-        working_(std::move(initial)) {}
+        working_xml_(initial.ToXml()), working_(std::move(initial)) {}
 
   [[nodiscard]] std::optional<yang::config::ValidationFinding>
   PrepareReplacement(
@@ -45,6 +45,8 @@ class EnglishConfigurationBackend final
 
   /** Returns an immutable snapshot of the backend working configuration. */
   [[nodiscard]] yang::config::ConfigDocument Working() const;
+  /** Returns applied XML while retaining validated instance metadata. */
+  [[nodiscard]] std::string WorkingXml() const;
   /** Returns and clears all descriptions accumulated since the preceding call. */
   [[nodiscard]] std::vector<std::string> DrainDeltas();
 
@@ -54,6 +56,7 @@ class EnglishConfigurationBackend final
   yang::netconf::NacmPolicy* nacm_ = nullptr;
   bool managed_nacm_ = false;
   std::optional<yang::netconf::NacmPolicy> prepared_nacm_;
+  std::string working_xml_;
   yang::config::ConfigDocument working_;
   std::vector<std::string> deltas_;
 };

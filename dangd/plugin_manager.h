@@ -58,6 +58,7 @@ struct ConfigurationOutcome {
 struct PluginApplyResult {
   std::optional<yang::config::ValidationFinding> error;
   std::optional<yang::config::ConfigDocument> applied;
+  std::string applied_xml;
 };
 
 /** Loads ABI-v1 plugins and coordinates their configuration transactions. */

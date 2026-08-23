@@ -130,6 +130,7 @@ EnglishConfigurationBackend::Replace(
       std::lock_guard lock(mutex_);
       for (const auto& change : changes) deltas_.push_back(Describe(change));
       working_ = std::move(*applied.applied);
+      working_xml_ = std::move(applied.applied_xml);
       if (prepared_nacm_ && nacm_) *nacm_ = std::move(*prepared_nacm_);
       prepared_nacm_.reset();
       return std::nullopt;
@@ -138,6 +139,7 @@ EnglishConfigurationBackend::Replace(
   std::lock_guard lock(mutex_);
   for (const auto& change : changes) deltas_.push_back(Describe(change));
   working_ = after;
+  working_xml_ = after.ToXml();
   if (prepared_nacm_ && nacm_) *nacm_ = std::move(*prepared_nacm_);
   prepared_nacm_.reset();
   return std::nullopt;
@@ -151,6 +153,11 @@ void EnglishConfigurationBackend::AbortPreparedReplacement() noexcept {
 yang::config::ConfigDocument EnglishConfigurationBackend::Working() const {
   std::lock_guard lock(mutex_);
   return working_;
+}
+
+std::string EnglishConfigurationBackend::WorkingXml() const {
+  std::lock_guard lock(mutex_);
+  return working_xml_;
 }
 
 std::vector<std::string> EnglishConfigurationBackend::DrainDeltas() {

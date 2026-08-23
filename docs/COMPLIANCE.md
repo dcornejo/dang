@@ -288,11 +288,12 @@ per-node applied, transformed, rejected, and delayed outcomes. Reports are
 composed in dependency order and schema-validated after every plugin; invalid
 or ambiguous reports fail closed and are compensated. The accepted snapshot,
 rather than unapplied intent, is published with modeled reconciliation
-telemetry. Origins other than `intended` are not derived from data sources,
-so filtering cannot yet select such per-node data. Filtering of applied
-`intended` data is namespace- and identity-derivation-aware, including repeated
-and negated selections, while preserving config-false state and required
-structure. Operational plugin fragments now receive typed partial-instance
+telemetry. ABI-v6 applied XML retains validated origin metadata supplied by
+actual backend sources, including standard and derived identities. Positive
+and negated filters apply inheritance and identity derivation to both intended
+and non-intended configuration while preserving config-false state and
+required structure. Metadata is stripped unless `with-origin` is requested.
+Operational plugin fragments now receive typed partial-instance
 validation, including schema binding, scalar shapes and types, list keys,
 choices, references, and intra-fragment duplicates. Cross-provider validation
 cumulatively rejects a fragment when it introduces a deterministic conflict

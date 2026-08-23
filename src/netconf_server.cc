@@ -54,6 +54,18 @@ std::optional<std::string> NamespaceFor(const pugi::xml_node& node) {
   return std::nullopt;
 }
 
+std::optional<std::string> NamespaceForPrefix(const pugi::xml_node& node,
+                                              std::string_view prefix) {
+  const std::string attribute_name = prefix.empty()
+      ? "xmlns" : "xmlns:" + std::string(prefix);
+  for (pugi::xml_node current = node; current; current = current.parent()) {
+    if (const pugi::xml_attribute attribute =
+            current.attribute(attribute_name.c_str()))
+      return std::string(attribute.value());
+  }
+  return std::nullopt;
+}
+
 std::string Escape(std::string_view value) {
   return EscapeXmlText(value);
 }
@@ -234,6 +246,103 @@ std::string AnnotateIntendedOrigin(std::string_view xml,
          std::string(LocalName(child.name()))});
     if (schema_id) annotate(child, *schema_id);
   }
+  std::ostringstream output;
+  document.print(output, "", pugi::format_raw);
+  return output.str();
+}
+
+std::optional<config::QualifiedXmlName> NodeOrigin(
+    pugi::xml_node node,
+    const config::QualifiedXmlName& inherited) {
+  for (const pugi::xml_attribute attribute : node.attributes()) {
+    if (LocalName(attribute.name()) != "origin") continue;
+    const std::string_view name = attribute.name();
+    const std::size_t colon = name.find(':');
+    if (colon == std::string_view::npos) continue;
+    if (NamespaceForPrefix(node, name.substr(0, colon)) != kOriginNamespace)
+      continue;
+    std::string_view value = attribute.value();
+    const std::size_t value_colon = value.find(':');
+    const std::string_view prefix = value_colon == std::string_view::npos
+        ? std::string_view() : value.substr(0, value_colon);
+    const auto value_namespace = NamespaceForPrefix(node, prefix);
+    if (!value_namespace) return std::nullopt;
+    return config::QualifiedXmlName{
+        *value_namespace,
+        std::string(value_colon == std::string_view::npos
+                        ? value : value.substr(value_colon + 1))};
+  }
+  return inherited;
+}
+
+std::string FilterOrigins(
+    std::string_view xml, const config::RuntimeSchema& schema,
+    std::span<const config::QualifiedXmlName> selected, bool negated) {
+  pugi::xml_document document;
+  if (!ParseUntrustedXml(xml, &document).ok) return {};
+  const config::QualifiedXmlName unknown{std::string(kOriginNamespace),
+                                         "unknown"};
+  std::function<bool(pugi::xml_node, config::RuntimeSchemaNodeId,
+                     const config::QualifiedXmlName&)> visit;
+  visit = [&](pugi::xml_node node, config::RuntimeSchemaNodeId schema_id,
+              const config::QualifiedXmlName& inherited) {
+    const auto origin = NodeOrigin(node, inherited);
+    if (!origin) return false;
+    bool has_selected_descendant = false;
+    for (pugi::xml_node child = node.first_child(); child;) {
+      pugi::xml_node next = child.next_sibling();
+      if (child.type() == pugi::node_element) {
+        const auto child_schema = schema.FindChild(
+            schema_id, {NamespaceFor(child).value_or(""),
+                        std::string(LocalName(child.name()))});
+        if (child_schema && !visit(child, *child_schema, *origin))
+          node.remove_child(child);
+        else if (child_schema)
+          has_selected_descendant = true;
+      }
+      child = next;
+    }
+    const auto& metadata = schema.Get(schema_id);
+    if (!metadata.config) return true;
+    const bool matches = std::ranges::any_of(selected, [&](const auto& base) {
+      return schema.IdentityIsDerivedFrom(*origin, base);
+    });
+    return (negated ? !matches : matches) || has_selected_descendant;
+  };
+  pugi::xml_node root = document.document_element();
+  for (pugi::xml_node child = root.first_child(); child;) {
+    pugi::xml_node next = child.next_sibling();
+    if (child.type() == pugi::node_element) {
+      const auto schema_id = schema.FindRoot(
+          {NamespaceFor(child).value_or(""),
+           std::string(LocalName(child.name()))});
+      if (schema_id && !visit(child, *schema_id, unknown))
+        root.remove_child(child);
+    }
+    child = next;
+  }
+  std::ostringstream output;
+  document.print(output, "", pugi::format_raw);
+  return output.str();
+}
+
+std::string StripOriginAnnotations(std::string_view xml) {
+  pugi::xml_document document;
+  if (!ParseUntrustedXml(xml, &document).ok) return {};
+  std::function<void(pugi::xml_node)> strip = [&](pugi::xml_node node) {
+    for (pugi::xml_attribute attribute = node.first_attribute(); attribute;) {
+      pugi::xml_attribute next = attribute.next_attribute();
+      const std::string_view name = attribute.name();
+      const std::size_t colon = name.find(':');
+      if (colon != std::string_view::npos && LocalName(name) == "origin" &&
+          NamespaceForPrefix(node, name.substr(0, colon)) == kOriginNamespace)
+        node.remove_attribute(attribute);
+      attribute = next;
+    }
+    for (pugi::xml_node child : node.children())
+      if (child.type() == pugi::node_element) strip(child);
+  };
+  strip(document.document_element());
   std::ostringstream output;
   document.print(output, "", pugi::format_raw);
   return output.str();
@@ -1105,8 +1214,6 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
     }
     const config::QualifiedXmlName origin_identity{
         std::string(kOriginNamespace), "origin"};
-    const config::QualifiedXmlName intended_identity{
-        std::string(kOriginNamespace), "intended"};
     const auto valid_origin = [&](const config::QualifiedXmlName& identity) {
       return datastores_.schema().IdentityIsDerivedFrom(identity,
                                                         origin_identity);
@@ -1115,14 +1222,6 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
         invalid_origin_filter ||
         !std::ranges::all_of(origin_filters, valid_origin) ||
         !std::ranges::all_of(negated_origin_filters, valid_origin);
-    const auto matches_intended = [&](const config::QualifiedXmlName& base) {
-      return datastores_.schema().IdentityIsDerivedFrom(intended_identity,
-                                                        base);
-    };
-    const bool origin_includes_intended =
-        std::ranges::any_of(origin_filters, matches_intended);
-    const bool origin_excludes_intended =
-        std::ranges::any_of(negated_origin_filters, matches_intended);
     unsigned int depth = 0;
     if (maximum_depth &&
         std::string_view(maximum_depth.text().as_string()) != "unbounded") {
@@ -1170,10 +1269,6 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
                                std::make_move_iterator(augmented.findings.end()));
         }
       }
-      if (*source == Datastore::kOperational &&
-          ((!origin_filters.empty() && !origin_includes_intended) ||
-           origin_excludes_intended))
-        payload = FilterConfigKind(payload, datastores_.schema(), false);
       if (nacm != nullptr)
         payload = nacm->FilterReadableData(
             session.username, payload, session.external_groups,
@@ -1183,8 +1278,18 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
             payload, datastores_.schema(),
             std::string_view(config_filter.text().as_string()) == "true");
       }
-      if (*source == Datastore::kOperational && with_origin)
+      if (*source == Datastore::kOperational &&
+          (with_origin || !origin_filters.empty() ||
+           !negated_origin_filters.empty())) {
         payload = AnnotateIntendedOrigin(payload, datastores_.schema(), true);
+        if (!origin_filters.empty())
+          payload = FilterOrigins(payload, datastores_.schema(),
+                                  origin_filters, false);
+        else if (!negated_origin_filters.empty())
+          payload = FilterOrigins(payload, datastores_.schema(),
+                                  negated_origin_filters, true);
+        if (!with_origin) payload = StripOriginAnnotations(payload);
+      }
       if (subtree) {
         pugi::xml_document filter_document;
         pugi::xml_node filter = filter_document.append_child("filter");
@@ -1378,6 +1483,7 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
                                std::make_move_iterator(augmented.findings.begin()),
                                std::make_move_iterator(augmented.findings.end()));
         }
+        payload = StripOriginAnnotations(payload);
       }
       if (nacm != nullptr)
         payload = nacm->FilterReadableData(

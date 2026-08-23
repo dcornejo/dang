@@ -87,6 +87,11 @@ transformed, rejected, or delayed results. These appear under
 `dangd-reconciliation`; unapplied requested values do not appear as device
 state.
 
+An ABI-v6 backend may also attach `ietf-origin:origin` to nodes in its returned
+applied XML. Dangd validates the identity, preserves inheritance, and supports
+positive and negated origin filters for standard and vendor-derived origins.
+Metadata is emitted only when `<get-data>` requests `with-origin`.
+
 ### Serve NETCONF
 
 `NetconfServer` accepts one complete, unframed `<rpc>` document and returns an

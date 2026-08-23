@@ -27,14 +27,18 @@ configuration with core YANG Library, NETCONF monitoring, and NACM state.
 Schema-aware `config-filter` processing can select its configuration or state
 portion while retaining required ancestor shells and list keys.
 Every applied configuration node carries explicit `ietf-origin:intended`
-metadata when requested. More specific origin metadata already supplied by an
-operational provider is preserved, while config-false state is never assigned
-a fabricated configuration origin. The RFC 8526 `origin` feature is advertised;
+metadata when requested. More specific origin metadata supplied by an ABI-v6
+applied-state source is schema-validated and preserved, while config-false
+state is never assigned a fabricated configuration origin. The RFC 8526
+`origin` feature is advertised;
 `with-origin`, positive origin filters, and negated origin filters expose or
 select that metadata without affecting config-false system state. Filter
 identityrefs are resolved by namespace and use transitive identity derivation;
 repeated values have union semantics, and invalid or conflicting selections
-return `invalid-value`.
+return `invalid-value`. Standard and vendor-derived non-intended origins use
+the same filtering path, including inherited parent annotations. Origin
+metadata is removed from ordinary `<get>` and from `<get-data>` unless
+`with-origin` is present.
 
 ```cpp
 #include <chrono>
