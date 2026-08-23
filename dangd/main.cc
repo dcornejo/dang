@@ -4,9 +4,13 @@
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
+#include <ranges>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "dangd/application.h"
+#include "dangd/ssh_transport.h"
 #include "dangd/tls_transport.h"
 
 namespace {
@@ -14,7 +18,10 @@ namespace {
 void Usage() {
   std::cerr
       << "usage: dangd --model FILE --config FILE [--search DIR] [--state FILE]"
-         " [--nacm FILE] [--recovery-user USER]... [--plugin FILE]... [--check | --stdio --username USER [--session-id ID]"
+         " [--nacm FILE] [--recovery-user USER]... [--plugin FILE]..."
+         " [--check | --stdio --username USER [--session-id ID]"
+         " | --ssh-listen ADDRESS --ssh-port PORT --ssh-host-key FILE"
+         " --ssh-authorized-key USER=FILE [--ssh-group USER=GROUP]..."
          " | --tls-listen ADDRESS --tls-port PORT --tls-cert FILE --tls-key "
          "FILE --tls-ca FILE [--tls-username-source cn|san-dns|san-uri]"
          " [--username-map AUTHENTICATED=LOCAL]... [--require-username-map]]\n";
@@ -34,10 +41,13 @@ int main(int argc, char* argv[]) {
         executable.parent_path().parent_path() / "share/doc/yang/dangd/models");
   }
   bool stream_mode = false;
+  bool ssh_mode = false;
   bool tls_mode = false;
   std::string username;
   std::uint32_t session_id = 1;
   dangd::TlsServerOptions tls;
+  dangd::SshServerOptions ssh;
+  std::vector<std::pair<std::string, std::string>> ssh_groups;
   for (int index = 1; index < argc; ++index) {
     const std::string argument = argv[index];
     if (argument == "--model" && index + 1 < argc) {
@@ -70,10 +80,49 @@ int main(int argc, char* argv[]) {
       }
     } else if (argument == "--stdio") {
       stream_mode = true;
+      ssh_mode = false;
       tls_mode = false;
+    } else if (argument == "--ssh-listen" && index + 1 < argc) {
+      ssh.address = argv[++index];
+      ssh_mode = true;
+      stream_mode = false;
+      tls_mode = false;
+    } else if (argument == "--ssh-port" && index + 1 < argc) {
+      try {
+        const unsigned long port = std::stoul(argv[++index]);
+        if (port == 0 || port > UINT16_MAX) throw std::out_of_range("port");
+        ssh.port = static_cast<std::uint16_t>(port);
+      } catch (const std::exception&) {
+        Usage();
+        return 2;
+      }
+    } else if (argument == "--ssh-host-key" && index + 1 < argc) {
+      ssh.host_key = argv[++index];
+    } else if (argument == "--ssh-authorized-key" && index + 1 < argc) {
+      const std::string authorization = argv[++index];
+      const std::size_t separator = authorization.find('=');
+      if (separator == std::string::npos || separator == 0 ||
+          separator + 1 == authorization.size()) {
+        Usage();
+        return 2;
+      }
+      ssh.authorized_users.push_back(
+          {authorization.substr(0, separator),
+           authorization.substr(separator + 1), {}});
+    } else if (argument == "--ssh-group" && index + 1 < argc) {
+      const std::string membership = argv[++index];
+      const std::size_t separator = membership.find('=');
+      if (separator == std::string::npos || separator == 0 ||
+          separator + 1 == membership.size()) {
+        Usage();
+        return 2;
+      }
+      ssh_groups.emplace_back(membership.substr(0, separator),
+                              membership.substr(separator + 1));
     } else if (argument == "--tls-listen" && index + 1 < argc) {
       tls.address = argv[++index];
       tls_mode = true;
+      ssh_mode = false;
       stream_mode = false;
     } else if (argument == "--tls-port" && index + 1 < argc) {
       try {
@@ -111,10 +160,14 @@ int main(int argc, char* argv[]) {
       }
       tls.username_mappings.push_back(
           {mapping.substr(0, separator), mapping.substr(separator + 1)});
+      ssh.username_mappings.push_back(
+          {mapping.substr(0, separator), mapping.substr(separator + 1)});
     } else if (argument == "--require-username-map") {
       tls.require_username_mapping = true;
+      ssh.require_username_mapping = true;
     } else if (argument == "--check") {
       stream_mode = false;
+      ssh_mode = false;
       tls_mode = false;
     } else {
       Usage();
@@ -123,10 +176,21 @@ int main(int argc, char* argv[]) {
   }
   if (options.model.empty() || options.configuration.empty() ||
       (stream_mode && username.empty()) ||
+      (ssh_mode &&
+       (ssh.host_key.empty() || ssh.authorized_users.empty())) ||
       (tls_mode && (tls.certificate.empty() || tls.private_key.empty() ||
                     tls.trust_anchor.empty()))) {
     Usage();
     return 2;
+  }
+  for (const auto& [user, group] : ssh_groups) {
+    const auto found = std::ranges::find(
+        ssh.authorized_users, user, &dangd::SshAuthorizedUser::username);
+    if (found == ssh.authorized_users.end()) {
+      Usage();
+      return 2;
+    }
+    found->external_groups.push_back(group);
   }
 
   auto loaded = dangd::Application::Load(options);
@@ -137,6 +201,9 @@ int main(int argc, char* argv[]) {
   }
   if (tls_mode)
     return dangd::RunReloadableTlsServer(loaded.application, options, tls,
+                                         std::cerr);
+  if (ssh_mode)
+    return dangd::RunReloadableSshServer(loaded.application, options, ssh,
                                          std::cerr);
   if (!stream_mode) {
     std::cout << "dangd: configuration is valid\n";

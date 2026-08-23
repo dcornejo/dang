@@ -53,6 +53,20 @@ mutual certificate validation and RFC 7589 certificate-to-name mapping before
 setting `peer_authenticated`; the library intentionally does not parse or
 trust certificates itself.
 
+`dangd` selects the embedded-host architecture. Libssh exclusively owns the
+SSH listener, key exchange, host key, public-key authentication, session
+channel, and subsystem exchange; `NetconfTransportAdapter` exclusively owns
+NETCONF framing and lifecycle. There is no sidecar with overlapping framing or
+identity responsibility. Password, keyboard-interactive, shell, exec, PTY,
+forwarding, and non-session channels are not accepted.
+
+Each repeatable `--ssh-authorized-key USER=PUBLIC_KEY` entry is an explicit
+local authorization record. `--ssh-group USER=GROUP` attaches a trusted NACM
+external group to that record. The SSH username is passed through the same
+repeatable `--username-map AUTHENTICATED=LOCAL` table as TLS; with
+`--require-username-map`, unmapped authenticated users are rejected. The host
+private key is supplied separately with `--ssh-host-key`.
+
 `dangd --tls-username-source cn|san-dns|san-uri` selects the certificate field
 used verbatim as the NETCONF/NACM username. The default is `cn`. The chosen
 field must contain exactly one safe value; ambiguity or absence fails closed.

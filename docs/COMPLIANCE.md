@@ -88,7 +88,7 @@ exposed protocol paths.
 
 ### RFC 6241 — NETCONF 1.1
 
-Status: **substantial core, transport integration required**.
+Status: **substantial with working SSH and TLS hosts**.
 
 Implemented behavior includes hello capabilities, XML RPC dispatch, running,
 candidate and startup datastores, locks, edit operations and options,
@@ -98,8 +98,8 @@ schema-aware errors, and host-supplied URL access.
 
 Known boundaries and optional omissions:
 
-- SSH authentication and socket/event-loop ownership are outside the core and
-  must be supplied by the host through the authenticated transport boundary.
+- The reusable core remains transport-neutral. `dangd` embeds libssh for an
+  explicit public-key-only SSH host and has a mutual-TLS host.
 - The `:url` capability is advertised only for explicitly configured schemes;
   `dangd` does not currently enable it for RFC 8526 `edit-data`.
 - Complete live interoperability matrices over SSH and TLS remain release work.
@@ -108,14 +108,18 @@ Known boundaries and optional omissions:
 
 ### RFC 6242 — NETCONF over SSH and message framing
 
-Status: **framing substantial; SSH is an integration boundary**.
+Status: **substantial with an embedded `dangd` SSH host**.
 
 The incremental base 1.0 end-marker and base 1.1 chunked framers, hello
 negotiation, bounds, malformed-frame shutdown, exact `netconf` subsystem check,
-and session-loss cleanup are implemented. The host must provide the SSH stack,
-host-key policy, authentication, channel/subsystem establishment, decrypted
-byte stream, and event loop. End-to-end testing against independent SSH
-implementations remains.
+and session-loss cleanup are implemented. `dangd` uses libssh to own its listen
+socket, host private key, public-key-only user authentication, session channel,
+and subsystem establishment. Authenticated usernames use the common exact
+mapper, while NACM external groups come only from the matching local authorized
+key record. An OpenSSH client smoke interaction covers public-key
+authentication, subsystem negotiation, RPC framing, and clean close. A broader
+independent matrix and sustained concurrent-session testing remain release
+evidence.
 
 ### RFC 6243 — with-defaults
 
@@ -203,9 +207,10 @@ body as one authorization unit. Action
 requests are authorized before their parent is resolved, so denied users cannot
 use the existence error to probe datastore contents.
 
-Remaining gaps are tracked in `TODO.md`: production SSH hosting, sustained
-fuzzing, and independent interoperability testing. TLS supports CN, DNS SAN,
-and URI SAN selection plus exact local-account mapping. Transport external
+Remaining gaps are tracked in `TODO.md`: sustained fuzzing and independent
+interoperability testing. SSH uses explicit public-key authorization; TLS
+supports CN, DNS SAN, and URI SAN selection plus exact local-account mapping.
+Transport external
 groups require explicit trusted provenance and bounded, unique values. Every
 recovery-user RPC attempt emits a privacy-minimal host audit record, and only
 unique canonical UTF-8 identities can receive recovery privilege. Recovery and

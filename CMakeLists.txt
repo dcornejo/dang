@@ -105,10 +105,13 @@ install(FILES examples/example.yang examples/library_example.cc
 
 if(YANG_BUILD_DANGD)
   find_package(OpenSSL REQUIRED)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(LIBSSH REQUIRED IMPORTED_TARGET libssh)
   add_library(dangd_core
     dangd/application.cc
     dangd/configuration_backend.cc
     dangd/plugin_manager.cc
+    dangd/ssh_transport.cc
     dangd/tls_transport.cc)
   target_compile_features(dangd_core PUBLIC cxx_std_20)
   target_include_directories(dangd_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -116,7 +119,7 @@ if(YANG_BUILD_DANGD)
     DANGD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     DANGD_INSTALL_MODEL_DIR="${CMAKE_INSTALL_FULL_DATADIR}/doc/yang/dangd/models")
   target_link_libraries(dangd_core PUBLIC yang::yang OpenSSL::SSL OpenSSL::Crypto
-    ${CMAKE_DL_LIBS})
+    PkgConfig::LIBSSH ${CMAKE_DL_LIBS})
   target_compile_options(dangd_core PRIVATE
     -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 
@@ -290,7 +293,8 @@ if(YANG_BUILD_TESTS)
 
   if(YANG_BUILD_DANGD)
     add_executable(dangd_tests dangd/application_test.cc
-      dangd/plugin_manager_test.cc dangd/tls_transport_test.cc)
+      dangd/plugin_manager_test.cc dangd/ssh_transport_test.cc
+      dangd/tls_transport_test.cc)
     target_compile_features(dangd_tests PRIVATE cxx_std_20)
     target_link_libraries(dangd_tests PRIVATE dangd_core
       dangd_test_plugin_support GTest::gtest_main Threads::Threads)

@@ -87,16 +87,16 @@ providers.
 
 `NetconfSession` adds the server hello, NETCONF base 1.0 or 1.1 negotiation,
 incremental RFC 6242 framing, session registration, and close/kill handling. It
-still does not open sockets, authenticate peers, or provide SSH or TLS. Those
-are deliberately host responsibilities so an embedding application can use
-its platform's security and event-loop facilities.
+does not itself open sockets or authenticate peers; those remain embedding-host
+responsibilities. The included `dangd` host supplies an embedded libssh server
+with explicit public-key authorization and an OpenSSL mutual-TLS server.
 
 ## Building the project
 
 On macOS with Homebrew dependencies installed:
 
 ```sh
-brew install cmake fmt libxml2 pugixml nlohmann-json googletest
+brew install cmake fmt libxml2 libssh pugixml nlohmann-json googletest
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build
 ctest --test-dir build --output-on-failure

@@ -10,6 +10,10 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Added an embedded public-key-only libssh host to `dangd`, with exact subsystem
+  enforcement, authenticated identity mapping, trusted local group provenance,
+  lifecycle cleanup, reload support, test keys, live negative coverage, and an
+  independent OpenSSH smoke interaction.
 - Reconciled the NACM TODO with its compliance matrix and added an explicit
   end-to-end XML injection audit and regression-testing gate.
 

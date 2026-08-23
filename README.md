@@ -141,7 +141,8 @@ transport framing and authenticated sessions. See the
 
 `NetconfSession` adds RFC 6242 hello negotiation and incremental base 1.0/1.1
 message framing, unique active-session registration, and asynchronous
-`kill-session` shutdown signaling while leaving SSH, TLS, and socket I/O to the host. See the
+`kill-session` shutdown signaling. The reusable library leaves secure I/O to
+the host, while `dangd` supplies embedded libssh and OpenSSL hosts. See the
 [NETCONF framing guide](docs/NETCONF_FRAMING.md) and
 [notification guide](docs/NETCONF_NOTIFICATIONS.md). Secure-stream adapters
 and Call Home hooks are covered by the

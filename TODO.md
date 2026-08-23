@@ -15,18 +15,6 @@ stays in this file with its remaining work rewritten precisely.
 
 ### RFC 8341 NACM compliance closure
 
-- Resolve SSH server integration with `dangd`. Select and document whether SSH
-  is embedded in `dangd`, supplied by a supervised sidecar, or connected through
-  a stable host adapter; do not leave two components responsible for session
-  authentication or NETCONF framing. Require host-key and user authentication
-  before constructing `TransportIdentity`, accept only the exact `netconf`
-  subsystem, pass the authenticated username through the shared exact mapper,
-  mark external groups trusted only when supplied by the authenticated SSH
-  authorization source, and propagate disconnect, cancellation, timeout,
-  lock-release, notification, and confirmed-commit lifecycle events. Add
-  negative tests for unauthenticated peers, wrong subsystems, mapping failures,
-  spoofed groups, duplicate session IDs, abrupt disconnects, and backpressure,
-  plus multi-session NACM and independent RFC 6242 interoperability coverage.
 - Perform an end-to-end XML injection audit across every untrusted XML input and
   generated XML/XPath output. Inventory parser entry points and parse flags;
   verify fail-closed, resource-bounded handling of DTD and external entities,
@@ -42,7 +30,10 @@ stays in this file with its remaining work rewritten precisely.
 - Run interoperability and negative-security tests against at least one
   independent RFC 8341 implementation, run a sustained coverage-guided NACM
   fuzz campaign, and document any intentional deviations before claiming
-  compliance. The deterministic sanitizer smoke target mutates NACM XML and
+  compliance. Include a broader independent OpenSSH RFC 6242 matrix and
+  sustained concurrent SSH-session/backpressure coverage; a single OpenSSH
+  public-key/subsystem/RPC/close smoke interaction has passed. The deterministic
+  sanitizer smoke target mutates NACM XML and
   attacker-controlled keyed/leaf-list instance paths through policy loading,
   CRUD authorization, and read filtering. Schema-aware read filtering rejects
   unmodeled elements instead of applying annotation-free default access.

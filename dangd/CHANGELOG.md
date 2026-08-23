@@ -7,6 +7,10 @@
 
 ### Changed
 
+- Added an embedded libssh NETCONF server with explicit host and authorized
+  keys, exact `netconf` subsystem handling, username mapping, trusted NACM group
+  records, SIGHUP reload, end-to-end authentication/RPC tests, and an OpenSSH
+  interoperability smoke run.
 - Added XML injection auditing to the remaining NACM security work and removed
   completed core and TLS evidence from the active TODO narrative.
 

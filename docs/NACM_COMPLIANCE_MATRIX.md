@@ -110,9 +110,16 @@ No open core-server evidence item remains for initial operation.
   count but no payload or policy details; ordinary identities do not emit them:
   `NetconfServerTest.AuditsEveryRecoveryUserRpcAttempt` and
   `DangdApplicationTest.EmitsSafeRecoveryAuditRecords`.
+- `dangd` embeds libssh, loads an explicit username/public-key authorization
+  table, maps only the authenticated username through the shared exact mapper,
+  and derives trusted external groups only from that same local authorization
+  record. It rejects unauthorized keys and every subsystem other than exact
+  `netconf`: `DangdSshTransportTest.AuthenticatesPublicKeyRequiresNetconfAndExchangesRpc`.
 
-Open evidence: a production SSH host integration using the shared authenticated
-username mapper. This remains host/deployment work in `TODO.md`.
+No open core-server or `dangd` SSH integration item remains for session
+establishment. A manual OpenSSH public-key authentication, `netconf` subsystem,
+RPC, and clean-close smoke interaction passed on 2026-08-23 using the documented
+command. A broader independent interoperability matrix remains release evidence.
 
 ## Section 3.4.3: access-denied errors
 
@@ -289,8 +296,8 @@ persistence. Fault injection before and after atomic replacement verifies that
 the prior durable snapshot, running tree, backend, and NACM policy are restored
 before an `operation-failed` reply is returned.
 
-Open evidence: production SSH authentication and group integration, the
-end-to-end XML injection and broader security reviews, sustained
-coverage-guided fuzzing release results, and independent interoperability. No
-full RFC 8341 compliance claim is made until those TODO items and every open
-entry above are closed.
+Open evidence: broader independent SSH interoperability and sustained concurrent
+transport testing, the end-to-end XML injection and broader security reviews,
+sustained coverage-guided fuzzing release results, and independent
+interoperability. No full RFC 8341 compliance claim is made until those TODO
+items and every open entry above are closed.

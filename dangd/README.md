@@ -116,6 +116,41 @@ backend rolls back completed actions; if rollback is incomplete, the NETCONF
 error must explicitly report possible divergence between hardware and the
 intended configuration.
 
+## Embedded SSH server example
+
+`dangd` embeds libssh and supports public-key-only NETCONF over SSH. The SSH
+host authenticates the key before constructing a NETCONF identity, accepts only
+the exact `netconf` subsystem, and obtains NACM external groups only from the
+local authorized-key record.
+
+The keys under `testdata/ssh` are public test fixtures. Never deploy them.
+
+Start the server:
+
+```sh
+./build/dangd \
+  --model dangd/examples/appliance.yang \
+  --config dangd/examples/config.xml \
+  --search dangd/models \
+  --nacm dangd/examples/nacm.xml \
+  --ssh-listen 127.0.0.1 --ssh-port 830 \
+  --ssh-host-key dangd/testdata/ssh/host-key \
+  --ssh-authorized-key alice=dangd/testdata/ssh/alice-key.pub \
+  --ssh-group alice=administrators
+```
+
+Connect with OpenSSH and request the required subsystem:
+
+```sh
+ssh -p 830 -i dangd/testdata/ssh/alice-key \
+  -o IdentitiesOnly=yes -s alice@127.0.0.1 netconf
+```
+
+The server hello appears on standard output. Paste base 1.0 framed XML ending
+in `]]>]]>`. Use production host/user keys, file permissions, algorithm policy,
+logging, and supervision outside demonstrations. Send `SIGHUP` to request an
+atomic application/model reload; a failed reload preserves the active service.
+
 ## Mutual-TLS console example
 
 `dangd` can expose its NETCONF session over a blocking mutual-TLS listener.
@@ -210,7 +245,7 @@ compiles them into the common effective schema and advertises the resulting
 inventory through the RFC 8525 `/yang-library` operational tree returned by
 `<get>`.
 
-Send `SIGHUP` to a TLS-mode `dangd` process after replacing a configured
+Send `SIGHUP` to an SSH- or TLS-mode `dangd` process after replacing a configured
 plugin or model file. The daemon stages and validates the entire replacement
 against the current running configuration. On success it publishes an RFC
 8525 `yang-library-update`; on failure it logs the diagnostics and continues

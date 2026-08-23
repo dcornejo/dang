@@ -295,6 +295,12 @@ limits close and clean up sessions on exhaustion, timeout, cancellation, EOF,
 or write failure. The abstract write contract uses whole-buffer acceptance to
 resolve partial-write ownership consistently across secure-transport stacks.
 
+`dangd` implements the SSH host side with libssh. It permits only explicitly
+configured username/public-key records, sources trusted NACM groups from those
+records, applies the shared exact username mapper, and accepts only a session
+channel requesting the exact `netconf` subsystem. Password and shell access are
+outside this service.
+
 RFC 8071 Call Home is represented by a host connector with default ports 4334
 for SSH and 4335 for TLS. The connector reverses TCP initiation only; the
 device remains the SSH/TLS and NETCONF server. Trust policy, cryptographic
