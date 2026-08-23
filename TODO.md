@@ -67,8 +67,9 @@ stays in this file with its remaining work rewritten precisely.
   present. ABI v5 providers can declare every returned node's child collection
   complete, making missing mandatory children and nested state-to-state
   leafrefs decisive. Separate model-owner and complete-publisher coverage now
-  enforces mandatory children. Complete cross-fragment state-to-state
-  `leafref`, `instance-identifier`, and XPath checks for collections that
+  enforces mandatory children. Complete state-to-state leafref collections now
+  remain closed across later provider merges, resolving valid references and
+  rejecting missing targets. Complete cross-fragment `instance-identifier` and XPath checks for collections that
   remain selected or whose operands can be published by later providers.
   Callback and validation failures now omit the unsafe fragment and appear with
   provider, stage, path, and reason in operational reconciliation telemetry;

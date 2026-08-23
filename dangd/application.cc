@@ -151,10 +151,16 @@ struct FragmentValidation {
   std::string reason;
 };
 
+struct CompleteOperationalRoot {
+  std::string namespace_uri;
+  std::string local_name;
+};
+
 FragmentValidation ValidateFragmentInstance(
     const yang::config::RuntimeSchema& schema, pugi::xml_node root,
     bool data_wrapper, bool complete = false,
-    const yang::config::ConfigDocument* context = nullptr) {
+    const yang::config::ConfigDocument* context = nullptr,
+    std::span<const CompleteOperationalRoot> complete_roots = {}) {
   pugi::xml_document wrapped;
   pugi::xml_node data = wrapped.append_child("data");
   data.append_attribute("xmlns") =
@@ -180,6 +186,21 @@ FragmentValidation ValidateFragmentInstance(
     for (yang::config::ConfigNodeId id = 0; id < instance.size(); ++id)
       instance = instance.WithChildCoverage(
           id, yang::config::Coverage::kComplete);
+  } else if (!complete_roots.empty()) {
+    for (yang::config::ConfigNodeId id = 0; id < instance.size(); ++id) {
+      yang::config::ConfigNodeId root_id = id;
+      while (instance.Get(root_id).parent)
+        root_id = *instance.Get(root_id).parent;
+      const auto& root_node = instance.Get(root_id);
+      const bool closed = std::ranges::any_of(
+          complete_roots, [&](const CompleteOperationalRoot& candidate) {
+            return root_node.name.namespace_uri == candidate.namespace_uri &&
+                   root_node.name.local_name == candidate.local_name;
+          });
+      if (closed)
+        instance = instance.WithChildCoverage(
+            id, yang::config::Coverage::kComplete);
+    }
   }
   const auto validation = yang::config::ConfigValidator().Validate(
       {schema, instance,
@@ -532,6 +553,7 @@ std::string DangdOperationalData::AugmentDataXml(
       accepted.append_copy(monitoring.document_element());
     const std::size_t core_children =
         static_cast<std::size_t>(std::distance(accepted.begin(), accepted.end()));
+    std::vector<CompleteOperationalRoot> complete_provider_roots;
     for (const PluginOperationalFragment& fragment :
          plugins_->OperationalData()) {
       if (fragment.error) {
@@ -550,6 +572,23 @@ std::string DangdOperationalData::AugmentDataXml(
       }
       if (!schema_) continue;
       const pugi::xml_node root = plugin_data.document_element();
+      std::vector<CompleteOperationalRoot> fragment_complete_roots;
+      if (fragment.complete) {
+        const auto retain_root = [&](pugi::xml_node child) {
+          const std::string_view name = child.name();
+          const std::size_t colon = name.find(':');
+          const std::string_view prefix = colon == std::string_view::npos
+              ? std::string_view() : name.substr(0, colon);
+          fragment_complete_roots.push_back(
+              {NamespaceFor(child, prefix), std::string(LocalName(child.name()))});
+        };
+        if (std::string_view(LocalName(root.name())) == "data") {
+          for (const pugi::xml_node child : root.children())
+            if (child.type() == pugi::node_element) retain_root(child);
+        } else {
+          retain_root(root);
+        }
+      }
       pugi::xml_document candidate_data;
       pugi::xml_node candidate = candidate_data.append_child("data");
       for (const pugi::xml_node child : accepted.children())
@@ -577,13 +616,19 @@ std::string DangdOperationalData::AugmentDataXml(
           continue;
         }
       }
-      FragmentValidation merged =
-          ValidateFragmentInstance(*schema_, candidate, true);
+      std::vector<CompleteOperationalRoot> candidate_complete_roots =
+          complete_provider_roots;
+      candidate_complete_roots.insert(candidate_complete_roots.end(),
+                                      fragment_complete_roots.begin(),
+                                      fragment_complete_roots.end());
+      FragmentValidation merged = ValidateFragmentInstance(
+          *schema_, candidate, true, false, nullptr, candidate_complete_roots);
       if (merged.valid && applied_context_error) {
         merged = *applied_context_error;
       } else if (merged.valid && applied_context) {
         merged = ValidateFragmentInstance(*schema_, candidate, true, false,
-                                          &*applied_context);
+                                          &*applied_context,
+                                          candidate_complete_roots);
       }
       if (!merged.valid) {
         provider_failures.push_back({fragment.provider, "merge",
@@ -593,6 +638,7 @@ std::string DangdOperationalData::AugmentDataXml(
       accepted.remove_children();
       for (const pugi::xml_node child : candidate.children())
         if (child.type() == pugi::node_element) accepted.append_copy(child);
+      complete_provider_roots = std::move(candidate_complete_roots);
     }
     std::size_t child_index = 0;
     for (const pugi::xml_node child : accepted.children())

@@ -7,6 +7,8 @@
 
 ### Changed
 
+- Preserved complete operational subtrees across later provider merges and
+  added positive and negative multi-plugin state-to-state leafref coverage.
 - Added multi-plugin coverage proving that an ABI-v5 publisher's complete child
   collection enforces mandatory operational nodes when a separate ABI-v1
   plugin owns the YANG model, with failure attributed to the publisher.

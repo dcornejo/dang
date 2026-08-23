@@ -282,6 +282,10 @@ leafrefs then become deterministic validation failures. Mandatory enforcement
 is also covered when one ABI-v1 plugin owns the model and an independent ABI-v5
 plugin publishes the complete instance, with failure attributed to the
 publisher. Older providers remain selected-data sources for compatibility.
+Completeness of an ABI-v5 top-level subtree is retained across subsequent
+provider merges. A later state-to-state leafref therefore resolves against an
+earlier target provider, or is rejected and attributed to the later provider
+when the closed target list proves that the requested instance is absent.
 Callback, validation, and merge failures omit the provider fragment and are
 attributed by provider, stage, instance path, and reason in modeled operational
 reconciliation telemetry, but

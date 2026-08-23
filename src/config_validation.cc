@@ -2368,13 +2368,46 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
         return true;
       });
       if (!found) {
-        const bool target_collection_complete =
+        bool target_collection_complete =
             config.parent && schema.parent == target.parent &&
             request.document
                     .CollectionCoverage(*config.parent,
                                         *schema.leafref_target)
                     .value_or(request.document.Get(*config.parent)
                                   .child_coverage) == Coverage::kComplete;
+        // For a leafref into a list elsewhere in the tree, absence of a
+        // matching value is decisive when every published parent declares the
+        // target list collection complete. This preserves selected-data
+        // semantics for open providers while carrying ABI-v5 completeness
+        // across cumulative operational fragments.
+        if (!target_collection_complete) {
+          RuntimeSchemaNodeId collection = *schema.leafref_target;
+          while (request.schema.Get(collection).parent &&
+                 request.schema.Get(collection).kind != SchemaNodeKind::kList &&
+                 request.schema.Get(collection).kind != SchemaNodeKind::kLeafList)
+            collection = *request.schema.Get(collection).parent;
+          const RuntimeSchemaNode& collection_schema =
+              request.schema.Get(collection);
+          if ((collection_schema.kind == SchemaNodeKind::kList ||
+               collection_schema.kind == SchemaNodeKind::kLeafList) &&
+              collection_schema.parent) {
+            bool saw_parent = false;
+            bool every_parent_complete = true;
+            for (ConfigNodeId candidate = 0; candidate < request.document.size();
+                 ++candidate) {
+              if (request.document.Get(candidate).schema !=
+                  *collection_schema.parent) continue;
+              saw_parent = true;
+              if (request.document.CollectionCoverage(candidate, collection)
+                      .value_or(request.document.Get(candidate).child_coverage) !=
+                  Coverage::kComplete) {
+                every_parent_complete = false;
+                break;
+              }
+            }
+            target_collection_complete = saw_parent && every_parent_complete;
+          }
+        }
         ValidationFinding finding = Finding(
             ValidationCode::kUnresolvedReference,
             (complete ||
