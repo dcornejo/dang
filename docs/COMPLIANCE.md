@@ -253,8 +253,10 @@ applied configuration plus core/plugin state, and implements RFC 8526
 positive/negative origin selection are enabled for the currently known
 `ietf-origin:intended` configuration.
 
-Known gaps: applied state is still approximated by the committed running tree;
-there is no per-node accepted/transformed/rejected/remnant state. Origins other
+Applied configuration now comes from dangd's backend working snapshot after
+successful hardware application, rather than being copied from the committed
+running tree. Per-node transformed, rejected, delayed, and remnant states are
+not yet represented. Origins other
 than inherited `intended` are not populated, identity derivation is not used by
 origin filtering, and operational plugin fragments receive structural name
 binding rather than complete instance validation and collision arbitration.

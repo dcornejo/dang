@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <iosfwd>
 #include <memory>
 #include <mutex>
@@ -42,6 +43,9 @@ class DangdOperationalData final
                        const yang::config::RuntimeSchema* schema);
   [[nodiscard]] std::string AugmentDataXml(
       std::string_view configuration_data_xml) const override;
+  /** Supplies the configuration actually accepted by the device backend. */
+  void SetAppliedConfigurationProvider(
+      std::function<std::string()> provider);
   [[nodiscard]] std::vector<std::string> Capabilities() const override;
   [[nodiscard]] SchemaLookup GetSchema(
       std::string_view identifier, std::optional<std::string_view> version,
@@ -59,6 +63,7 @@ class DangdOperationalData final
   const yang::netconf::NacmPolicy* nacm_ = nullptr;
   const PluginManager* plugins_ = nullptr;
   const yang::config::RuntimeSchema* schema_ = nullptr;
+  std::function<std::string()> applied_configuration_provider_;
 };
 
 /**

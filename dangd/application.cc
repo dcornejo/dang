@@ -441,6 +441,17 @@ std::string DangdOperationalData::AugmentDataXml(
   pugi::xml_document document;
   if (!yang::ParseUntrustedXml(configuration_data_xml, &document).ok)
     return {};
+  if (applied_configuration_provider_) {
+    const std::string applied_xml = applied_configuration_provider_();
+    pugi::xml_document applied;
+    if (!yang::ParseUntrustedXml(applied_xml, &applied).ok ||
+        std::string_view(LocalName(applied.document_element().name())) !=
+            "data") {
+      return {};
+    }
+    document.reset();
+    document.append_copy(applied.document_element());
+  }
   pugi::xml_node data = document.document_element();
   pugi::xml_document library;
   if (yang::ParseUntrustedXml(yang_library_xml_, &library).ok)
@@ -496,6 +507,11 @@ std::string DangdOperationalData::AugmentDataXml(
   std::ostringstream output;
   data.print(output, "  ", pugi::format_raw);
   return output.str();
+}
+
+void DangdOperationalData::SetAppliedConfigurationProvider(
+    std::function<std::string()> provider) {
+  applied_configuration_provider_ = std::move(provider);
 }
 
 std::vector<std::string> DangdOperationalData::Capabilities() const {
@@ -574,6 +590,9 @@ Application::Application(yang::config::RuntimeSchema schema,
               &operational_, plugins_.get()),
       state_file_(std::move(state_file)),
       snapshot_save_checkpoint_(std::move(snapshot_save_checkpoint)) {
+  operational_.SetAppliedConfigurationProvider([this] {
+    return "<data>" + backend_.Working().ToXml(false) + "</data>";
+  });
   server_.SetRecoveryAuditSink(
       [this](const yang::netconf::RecoveryAuditRecord& record) {
         std::lock_guard lock(recovery_audit_mutex_);

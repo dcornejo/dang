@@ -78,6 +78,13 @@ planning. Its path order is not a safe hardware execution order. A real device
 backend must preflight platform limits and derive dependency-ordered actions;
 see [Safe hardware application ordering](../dangd/README.md#safe-hardware-application-ordering).
 
+Dangd retains the backend's accepted working configuration separately from the
+protocol datastore objects. NMDA `<operational>` configuration is built from
+that applied snapshot and then augmented with observed plugin and core state;
+it does not blindly echo the server's running-tree input. The current backend
+accepts or rejects complete transactions. Per-node transformations, delayed
+application, and remnant reconciliation remain future plugin/backend reports.
+
 ### Serve NETCONF
 
 `NetconfServer` accepts one complete, unframed `<rpc>` document and returns an

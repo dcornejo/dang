@@ -7,6 +7,8 @@
 
 ### Changed
 
+- Made operational configuration originate from the hardware backend's accepted
+  working snapshot rather than an approximation copied from running.
 - Added plugin ABI v4 and the common transactional hardware planner, including
   dynamic preflight, generic and plugin-declared ordering, reverse compensation,
   explicit state-divergence errors, legacy ABI compatibility, and a fine-grained

@@ -28,11 +28,12 @@ stays in this file with its remaining work rewritten precisely.
 
 ### RFC 8342 / RFC 8526 NMDA compliance closure
 
-- Replace the current whole-running-tree approximation with an applied-state
-  model. Track, per configuration node, whether intended configuration was
-  accepted, transformed, rejected, delayed, or remains as remnant
-  configuration. Build `<operational>` from what the device is actually using,
-  not merely from the latest committed `<running>` tree.
+- Extend the backend-applied configuration foundation into a per-node state
+  model. `<operational>` now takes configuration from the backend's accepted
+  working snapshot rather than echoing `<running>`. Add plugin/backend reports
+  for transformed, rejected, delayed, and remnant nodes; merge those reports
+  deterministically and expose actionable reconciliation state without
+  publishing unapplied intent as device state.
 - Generalize origin metadata from the current inherited
   `ietf-origin:intended` value to per-node origins. Support `intended`,
   `default`, `system`, `learned`, `dynamic`, `unknown`, and derived identities;

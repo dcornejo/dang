@@ -16,6 +16,21 @@
 namespace dangd {
 namespace {
 
+TEST(DangdOperationalDataTest, UsesBackendAppliedConfigurationAsOperational) {
+  yang::netconf::NacmPolicy nacm;
+  DangdOperationalData operational(
+      "<yang-library><module-set/><content-id>test</content-id>"
+      "</yang-library>",
+      {}, &nacm, nullptr, nullptr);
+  operational.SetAppliedConfigurationProvider([] {
+    return "<data><applied xmlns='urn:test'>device</applied></data>";
+  });
+  const std::string result = operational.AugmentDataXml(
+      "<data><intended xmlns='urn:test'>server</intended></data>");
+  EXPECT_NE(result.find("<applied"), std::string::npos) << result;
+  EXPECT_EQ(result.find("<intended"), std::string::npos) << result;
+}
+
 class TemporaryInputs {
  public:
   TemporaryInputs() {

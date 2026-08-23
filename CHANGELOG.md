@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Based NMDA `<operational>` configuration content on the backend's accepted
+  working snapshot instead of the server's running-tree input, establishing the
+  applied-state boundary needed for later transformation and remnant reporting.
 - Added a transactional hardware action planner and plugin ABI v4. Plugins can
   publish reversible actions with paths, safety classes, and dependencies;
   dangd preflights all affected plugins, applies a deterministic dependency
