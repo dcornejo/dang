@@ -180,6 +180,30 @@ if(YANG_BUILD_DANGD)
       set_target_properties(dangd_test_${test_plugin}_plugin PROPERTIES
         PREFIX "")
     endforeach()
+    foreach(xpath_provider IN ITEMS context must when)
+      add_library(dangd_test_xpath_${xpath_provider}_plugin MODULE
+        dangd/test_plugins/operational_xpath_plugin.cc)
+      target_include_directories(
+        dangd_test_xpath_${xpath_provider}_plugin PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+      target_compile_definitions(
+        dangd_test_xpath_${xpath_provider}_plugin PRIVATE
+        DANG_XPATH_PROVIDER_NAME="test-xpath-${xpath_provider}")
+      if(xpath_provider STREQUAL "context")
+        target_compile_definitions(
+          dangd_test_xpath_${xpath_provider}_plugin PRIVATE
+          DANG_XPATH_MODEL_OWNER=1)
+      elseif(xpath_provider STREQUAL "must")
+        target_compile_definitions(
+          dangd_test_xpath_${xpath_provider}_plugin PRIVATE
+          DANG_XPATH_MUST_PROVIDER=1)
+      endif()
+      target_compile_options(
+        dangd_test_xpath_${xpath_provider}_plugin PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+      set_target_properties(
+        dangd_test_xpath_${xpath_provider}_plugin PROPERTIES PREFIX "")
+    endforeach()
     foreach(unique_provider IN ITEMS first second)
       add_library(dangd_test_unique_${unique_provider}_plugin MODULE
         dangd/test_plugins/operational_unique_plugin.cc)
@@ -368,13 +392,18 @@ if(YANG_BUILD_TESTS)
       DANG_TEST_COLLISION_SECOND_PLUGIN_PATH="$<TARGET_FILE:dangd_test_collision_second_plugin>"
       DANG_TEST_COLLISION_CORE_PLUGIN_PATH="$<TARGET_FILE:dangd_test_collision_core_plugin>"
       DANG_TEST_UNIQUE_FIRST_PLUGIN_PATH="$<TARGET_FILE:dangd_test_unique_first_plugin>"
-      DANG_TEST_UNIQUE_SECOND_PLUGIN_PATH="$<TARGET_FILE:dangd_test_unique_second_plugin>")
+      DANG_TEST_UNIQUE_SECOND_PLUGIN_PATH="$<TARGET_FILE:dangd_test_unique_second_plugin>"
+      DANG_TEST_XPATH_CONTEXT_PLUGIN_PATH="$<TARGET_FILE:dangd_test_xpath_context_plugin>"
+      DANG_TEST_XPATH_MUST_PLUGIN_PATH="$<TARGET_FILE:dangd_test_xpath_must_plugin>"
+      DANG_TEST_XPATH_WHEN_PLUGIN_PATH="$<TARGET_FILE:dangd_test_xpath_when_plugin>")
     add_dependencies(dangd_tests dangd_example_plugin dangd_ip_management_plugin
       dangd_test_provider_plugin dangd_test_consumer_plugin
       dangd_test_broken_discovery_plugin dangd_test_broken_operational_plugin
       dangd_test_collision_first_plugin dangd_test_collision_second_plugin
       dangd_test_collision_core_plugin
       dangd_test_unique_first_plugin dangd_test_unique_second_plugin
+      dangd_test_xpath_context_plugin dangd_test_xpath_must_plugin
+      dangd_test_xpath_when_plugin
       dangd_test_deviation_plugin)
     target_compile_options(dangd_tests PRIVATE
       -Wall -Wextra -Wpedantic -Wconversion -Wshadow)

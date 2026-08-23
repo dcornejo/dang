@@ -97,7 +97,8 @@ introduces a duplicate singleton, list-key collision, choice conflict, or
 another deterministically invalid merge, its entire fragment is omitted.
 This includes `unique` constraints across list entries published by different
 providers: the later provider is rejected when its explicit values duplicate
-an earlier accepted entry.
+an earlier accepted entry. `must` and `when` constraints are also evaluated
+across providers once all operands referenced by the expression are visible.
 The cumulative snapshot is then composed with the backend's complete applied
 configuration context; required leafrefs from provider state to config-true
 targets must resolve. If that trusted context cannot be reconstructed, provider

@@ -1867,7 +1867,8 @@ const EffectiveNode& EffectiveDataView::Get(EffectiveNodeId id) const {
 }
 
 EffectiveDataView EffectiveDataView::Build(const RuntimeSchema& schema,
-                                           const ConfigDocument& document) {
+                                           const ConfigDocument& document,
+                                           bool allow_state_data) {
   EffectiveDataView result;
   const auto schema_contains = [&](RuntimeSchemaNodeId ancestor,
                                    RuntimeSchemaNodeId target) {
@@ -1898,7 +1899,9 @@ EffectiveDataView EffectiveDataView::Build(const RuntimeSchema& schema,
                  std::optional<EffectiveNodeId> parent) {
     for (RuntimeSchemaNodeId schema_id : schema_children) {
       const RuntimeSchemaNode& schema_node = schema.Get(schema_id);
-      if (!schema_node.supported || !schema_node.config) continue;
+      if (!schema_node.supported ||
+          (!schema_node.config && !allow_state_data))
+        continue;
       if (schema_node.kind == SchemaNodeKind::kChoice) {
         std::optional<RuntimeSchemaNodeId> selected_case;
         for (RuntimeSchemaNodeId candidate : schema_node.children) {
@@ -2112,7 +2115,8 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
   ValidationResult result;
   const bool complete = request.scope == ValidationScope::kComplete;
   const EffectiveDataView effective =
-      EffectiveDataView::Build(request.schema, request.document);
+      EffectiveDataView::Build(request.schema, request.document,
+                               request.allow_state_data);
   std::vector<std::optional<EffectiveNodeId>> effective_for_explicit(
       request.document.size());
   for (EffectiveNodeId id = 0; id < effective.size(); ++id) {

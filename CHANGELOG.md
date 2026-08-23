@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Enforced cross-provider `must` and `when` constraints once cumulative
+  operational state contains the expressions' operands, blaming the later provider.
 - Verified cumulative `unique` constraints across independently valid ABI-v3
   provider list entries, rejecting and attributing the conflicting later provider.
 - Validated cumulative operational-provider state against the backend's
@@ -53,6 +55,8 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Included config-false nodes in the common effective data view during
+  operational validation so XPath constraints can inspect published state.
 - Preserved QName namespace declarations when serializing configuration trees,
   allowing identityrefs and instance-identifiers to survive snapshot round trips.
 - Included config-false schema nodes in collection-cardinality validation when

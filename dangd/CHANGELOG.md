@@ -7,6 +7,8 @@
 
 ### Changed
 
+- Added paired ABI-v3 provider coverage for cumulative `must` and `when`
+  violations with deterministic merge-stage attribution.
 - Added paired real-plugin coverage for cross-provider `unique` violations and
   deterministic later-provider merge failure telemetry.
 - Added a second provider merge gate using the backend's applied configuration
@@ -43,6 +45,8 @@
 
 ### Fixed
 
+- Made the common XPath effective view retain operational state during
+  config-false instance validation.
 - Retained QName prefix bindings in common configuration serialization so
   applied identityrefs remain valid when dangd reparses backend snapshots.
 - Validated duplicate config-false nodes when accepting operational instances.

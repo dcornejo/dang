@@ -273,7 +273,8 @@ authoritative and earlier plugin load order takes precedence. Constraints that
 refer to complete applied configuration are evaluated with that backend
 snapshot as context, including required state-to-configuration leafrefs.
 Explicit `unique` violations across provider-published list entries reject the
-later provider deterministically.
+later provider deterministically. Cross-provider `must` and `when` expressions
+also reject the later fragment when their visible operands decide the result.
 Constraints that remain indeterminate between selected state fragments are
 still incomplete.
 Callback, validation, and merge failures omit the provider fragment and are

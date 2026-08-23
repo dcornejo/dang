@@ -240,7 +240,8 @@ struct EffectiveNode {
 class EffectiveDataView {
  public:
   [[nodiscard]] static EffectiveDataView Build(const RuntimeSchema& schema,
-                                               const ConfigDocument& document);
+                                               const ConfigDocument& document,
+                                               bool allow_state_data = false);
   [[nodiscard]] const EffectiveNode& Get(EffectiveNodeId id) const;
   [[nodiscard]] const std::vector<EffectiveNodeId>& roots() const noexcept {
     return roots_;

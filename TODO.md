@@ -55,10 +55,11 @@ stays in this file with its remaining work rewritten precisely.
   is authoritative and earlier plugin load order has deterministic precedence.
   Applied configuration is now supplied as complete context, so provider
   leafrefs to config-true targets are enforced after the standalone collision
-  gate. Complete cross-fragment `mandatory`, `when`, `must`, state-to-state
-  `leafref`, and `instance-identifier` checks whose outcome remains
-  indeterminate under selected-data coverage. Explicit cross-provider `unique`
-  violations are enforced with deterministic later-provider rejection.
+  gate. Explicit cross-provider `when`, `must`, and `unique` violations are
+  enforced with deterministic later-provider rejection when their operands are
+  present. Complete cross-fragment `mandatory`, state-to-state `leafref`,
+  `instance-identifier`, and XPath checks whose operands remain absent and
+  therefore indeterminate under selected-data coverage.
   Callback and validation failures now omit the unsafe fragment and appear with
   provider, stage, path, and reason in operational reconciliation telemetry;
   additionally surface them as actionable NETCONF errors where RFC operation
