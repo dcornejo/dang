@@ -291,6 +291,10 @@ resolve into an earlier provider's state, while a path into an ABI-v5-complete
 top-level subtree is rejected when its selected instance is absent. New
 instance-identifier fixtures use ABI v5 exclusively; compatibility with older
 plugin ABIs is not a release constraint.
+XPath paths now consult explicit collection coverage. Empty selections beneath
+an earlier ABI-v5-complete subtree are known empty, so later `must` and `when`
+constraints evaluate normally and reject false results; absent nodes in open
+collections remain indeterminate.
 Callback, validation, and merge failures omit the provider fragment and are
 attributed by provider, stage, instance path, and reason in modeled operational
 reconciliation telemetry, but

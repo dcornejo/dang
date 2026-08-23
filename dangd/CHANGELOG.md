@@ -7,6 +7,8 @@
 
 ### Changed
 
+- Added ABI-v5-only cross-provider `must` and `when` coverage for operands
+  absent from an earlier complete subtree while preserving open-data results.
 - Added ABI-v5-only cross-provider instance-identifier resolution and rejection
   for paths whose target is proven absent from a complete operational subtree.
 - Preserved complete operational subtrees across later provider merges and

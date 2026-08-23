@@ -316,6 +316,38 @@ if(YANG_BUILD_DANGD)
       set_target_properties(dangd_test_instance_${instance_provider}_plugin
         PROPERTIES PREFIX "")
     endforeach()
+    foreach(xpath_absence_provider IN ITEMS owner input must when)
+      add_library(dangd_test_xpath_absence_${xpath_absence_provider}_plugin MODULE
+        dangd/test_plugins/operational_xpath_absence_plugin.cc)
+      target_include_directories(
+        dangd_test_xpath_absence_${xpath_absence_provider}_plugin PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+      target_compile_definitions(
+        dangd_test_xpath_absence_${xpath_absence_provider}_plugin PRIVATE
+        DANG_XPATH_ABSENCE_PROVIDER_NAME="test-xpath-absence-${xpath_absence_provider}")
+      if(xpath_absence_provider STREQUAL "owner")
+        target_compile_definitions(
+          dangd_test_xpath_absence_${xpath_absence_provider}_plugin PRIVATE
+          DANG_XPATH_ABSENCE_MODEL_OWNER=1)
+      elseif(xpath_absence_provider STREQUAL "input")
+        target_compile_definitions(
+          dangd_test_xpath_absence_${xpath_absence_provider}_plugin PRIVATE
+          DANG_XPATH_ABSENCE_INPUT_PROVIDER=1)
+      elseif(xpath_absence_provider STREQUAL "must")
+        target_compile_definitions(
+          dangd_test_xpath_absence_${xpath_absence_provider}_plugin PRIVATE
+          DANG_XPATH_ABSENCE_MUST_PROVIDER=1)
+      else()
+        target_compile_definitions(
+          dangd_test_xpath_absence_${xpath_absence_provider}_plugin PRIVATE
+          DANG_XPATH_ABSENCE_WHEN_PROVIDER=1)
+      endif()
+      target_compile_options(
+        dangd_test_xpath_absence_${xpath_absence_provider}_plugin PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+      set_target_properties(
+        dangd_test_xpath_absence_${xpath_absence_provider}_plugin PROPERTIES PREFIX "")
+    endforeach()
     add_library(dangd_test_broken_discovery_plugin MODULE
       dangd/test_plugins/broken_discovery_plugin.cc)
     target_include_directories(dangd_test_broken_discovery_plugin PRIVATE
@@ -512,6 +544,11 @@ if(YANG_BUILD_TESTS)
       DANG_TEST_INSTANCE_TARGET_PLUGIN_PATH="$<TARGET_FILE:dangd_test_instance_target_plugin>"
       DANG_TEST_INSTANCE_VALID_PLUGIN_PATH="$<TARGET_FILE:dangd_test_instance_valid_plugin>"
       DANG_TEST_INSTANCE_INVALID_PLUGIN_PATH="$<TARGET_FILE:dangd_test_instance_invalid_plugin>")
+    target_compile_definitions(dangd_tests PRIVATE
+      DANG_TEST_XPATH_ABSENCE_OWNER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_xpath_absence_owner_plugin>"
+      DANG_TEST_XPATH_ABSENCE_INPUT_PLUGIN_PATH="$<TARGET_FILE:dangd_test_xpath_absence_input_plugin>"
+      DANG_TEST_XPATH_ABSENCE_MUST_PLUGIN_PATH="$<TARGET_FILE:dangd_test_xpath_absence_must_plugin>"
+      DANG_TEST_XPATH_ABSENCE_WHEN_PLUGIN_PATH="$<TARGET_FILE:dangd_test_xpath_absence_when_plugin>")
     add_dependencies(dangd_tests dangd_example_plugin dangd_ip_management_plugin
       dangd_test_provider_plugin dangd_test_consumer_plugin
       dangd_test_broken_discovery_plugin dangd_test_broken_operational_plugin
@@ -527,6 +564,10 @@ if(YANG_BUILD_TESTS)
       dangd_test_leafref_valid_plugin dangd_test_leafref_invalid_plugin
       dangd_test_instance_owner_plugin dangd_test_instance_target_plugin
       dangd_test_instance_valid_plugin dangd_test_instance_invalid_plugin
+      dangd_test_xpath_absence_owner_plugin
+      dangd_test_xpath_absence_input_plugin
+      dangd_test_xpath_absence_must_plugin
+      dangd_test_xpath_absence_when_plugin
       dangd_test_deviation_plugin)
     target_compile_options(dangd_tests PRIVATE
       -Wall -Wextra -Wpedantic -Wconversion -Wshadow)

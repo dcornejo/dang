@@ -200,6 +200,12 @@ FragmentValidation ValidateFragmentInstance(
       if (closed)
         instance = instance.WithChildCoverage(
             id, yang::config::Coverage::kComplete);
+      if (closed) {
+        for (yang::config::RuntimeSchemaNodeId child :
+             schema.DataChildren(instance.Get(id).schema))
+          instance = instance.WithCollectionCoverage(
+              id, child, yang::config::Coverage::kComplete);
+      }
     }
   }
   const auto validation = yang::config::ConfigValidator().Validate(

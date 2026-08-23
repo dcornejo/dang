@@ -875,6 +875,25 @@ class RuntimeXPathEvaluator {
   std::vector<EffectiveNodeId> Children(EffectiveNodeId id) const {
     return view_.Get(id).children;
   }
+  bool ChildCollectionComplete(
+      const std::vector<EffectiveNodeId>& parents,
+      const QualifiedXmlName& child_name) const {
+    if (parents.empty()) return false;
+    for (EffectiveNodeId parent : parents) {
+      const EffectiveNode& effective_parent = view_.Get(parent);
+      if (!effective_parent.explicit_node) return false;
+      const auto children = schema_.DataChildren(effective_parent.schema);
+      const auto found = std::ranges::find_if(
+          children, [&](RuntimeSchemaNodeId candidate) {
+            return schema_.Get(candidate).name == child_name;
+          });
+      if (found == children.end()) return false;
+      const ConfigNodeId explicit_parent = *effective_parent.explicit_node;
+      if (document_.CollectionCoverage(explicit_parent, *found) !=
+          Coverage::kComplete) return false;
+    }
+    return true;
+  }
   XPathRuntimeValue EvaluatePath(std::string_view expression,
                                  EffectiveNodeId context) const {
     bool from_current = expression.starts_with("current()");
@@ -896,6 +915,7 @@ class RuntimeXPathEvaluator {
       std::string_view text;
       bool descendants = false;
     };
+    bool known_empty = complete_;
     std::vector<RuntimePathStep> steps;
     for (std::size_t index = 0; index <= expression.size(); ++index) {
       const char character = index == expression.size() ? '/' : expression[index];
@@ -936,6 +956,7 @@ class RuntimeXPathEvaluator {
                                  : ConstraintName(name_text);
       if (!wildcard && !name) return {};
       std::vector<EffectiveNodeId> selected;
+      const std::vector<EffectiveNodeId> selection_parents = nodes;
       const auto select = [&](EffectiveNodeId candidate) {
         if (wildcard || schema_.Get(view_.Get(candidate).schema).name == *name)
           selected.push_back(candidate);
@@ -956,6 +977,9 @@ class RuntimeXPathEvaluator {
           for (EffectiveNodeId child : Children(node)) select(child);
       }
       first_absolute_step = false;
+      if (selected.empty() && !wildcard && !runtime_step.descendants &&
+          ChildCollectionComplete(selection_parents, *name))
+        known_empty = true;
       std::size_t offset = predicate_open;
       while (offset != std::string_view::npos) {
         int depth = 1;
@@ -990,7 +1014,7 @@ class RuntimeXPathEvaluator {
       }
       nodes = std::move(selected);
     }
-    const bool indeterminate = !complete_ && nodes.empty();
+    const bool indeterminate = !known_empty && nodes.empty();
     return NodesValue(std::move(nodes), indeterminate);
   }
   std::string String(const XPathRuntimeValue& value) const {

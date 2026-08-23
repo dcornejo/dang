@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Made XPath empty-node selections honor explicit collection coverage, allowing
+  cross-provider `must` and `when` checks to decide absence in closed state.
 - Made required instance-identifiers decisive when they select an absent node
   inside an operational subtree previously declared complete.
 - Preserved ABI-v5 operational subtree completeness across cumulative provider

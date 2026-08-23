@@ -907,6 +907,47 @@ INSTANTIATE_TEST_SUITE_P(
     [](const testing::TestParamInfo<OperationalXPathConstraintTest::ParamType>&
            info) { return info.index == 0 ? "Must" : "When"; });
 
+class OperationalXPathAbsenceTest
+    : public testing::TestWithParam<std::tuple<const char*, const char*,
+                                               const char*>> {};
+
+TEST_P(OperationalXPathAbsenceTest, UsesEarlierCompleteSubtreeToDecideAbsence) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_XPATH_ABSENCE_OWNER_PLUGIN_PATH,
+                     DANG_TEST_XPATH_ABSENCE_INPUT_PLUGIN_PATH,
+                     std::get<0>(GetParam())};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+  const auto response = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="xpath-absence"
+         xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
+      <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
+        <datastore>ds:operational</datastore><config-filter>false</config-filter>
+      </get-data>
+    </rpc>)xml");
+  EXPECT_NE(response.xml.find(
+                "<inputs xmlns=\"urn:dangd:test:operational-xpath-absence\""),
+            std::string::npos) << response.xml;
+  EXPECT_EQ(response.xml.find(std::get<1>(GetParam())), std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find(std::get<2>(GetParam())), std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find("<stage>merge</stage>"), std::string::npos)
+      << response.xml;
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    MustAndWhen, OperationalXPathAbsenceTest,
+    testing::Values(
+        std::tuple{DANG_TEST_XPATH_ABSENCE_MUST_PLUGIN_PATH, "<must-state",
+                   "must constraint evaluates to false"},
+        std::tuple{DANG_TEST_XPATH_ABSENCE_WHEN_PLUGIN_PATH, "<when-state",
+                   "when constraint evaluates to false"}),
+    [](const testing::TestParamInfo<OperationalXPathAbsenceTest::ParamType>&
+           info) { return info.index == 0 ? "Must" : "When"; });
+
 TEST(DangdApplicationTest, AppliesDependentPluginsInDependencyOrder) {
   TemporaryInputs inputs;
   auto options = Options(inputs);
