@@ -37,6 +37,8 @@ struct SshServerOptions {
   bool require_username_mapping = false;
   /** Zero serves until interrupted; nonzero supports deterministic tests. */
   std::size_t maximum_connections = 0;
+  /** Maximum authenticated or handshaking clients processed simultaneously. */
+  std::size_t maximum_concurrent_sessions = 64;
 };
 
 /** Runs the embedded public-key-only NETCONF-over-SSH server. */

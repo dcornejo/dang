@@ -163,7 +163,8 @@ Start the server:
   --ssh-listen 127.0.0.1 --ssh-port 830 \
   --ssh-host-key dangd/testdata/ssh/host-key \
   --ssh-authorized-key alice=dangd/testdata/ssh/alice-key.pub \
-  --ssh-group alice=administrators
+  --ssh-group alice=administrators \
+  --ssh-max-sessions 64
 ```
 
 Connect with OpenSSH and request the required subsystem:
@@ -177,6 +178,8 @@ The server hello appears on standard output. Paste base 1.0 framed XML ending
 in `]]>]]>`. Use production host/user keys, file permissions, algorithm policy,
 logging, and supervision outside demonstrations. Send `SIGHUP` to request an
 atomic application/model reload; a failed reload preserves the active service.
+SSH sessions execute independently, subject to the nonzero concurrent-session
+ceiling (64 by default), so a slow reader does not stall unrelated clients.
 
 ## Mutual-TLS console example
 

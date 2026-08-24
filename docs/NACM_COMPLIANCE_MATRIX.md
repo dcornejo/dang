@@ -296,8 +296,7 @@ persistence. Fault injection before and after atomic replacement verifies that
 the prior durable snapshot, running tree, backend, and NACM policy are restored
 before an `operation-failed` reply is returned.
 
-Open evidence: sustained simultaneous SSH-session/backpressure testing, the
-end-to-end XML injection and broader security reviews,
+Open evidence: the end-to-end XML injection and broader security reviews,
 sustained coverage-guided fuzzing release results, and independent
 interoperability. No full RFC 8341 compliance claim is made until those TODO
 items and every open entry above are closed.

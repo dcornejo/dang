@@ -18,11 +18,9 @@ stays in this file with its remaining work rewritten precisely.
 - Run interoperability and negative-security tests against at least one
   independent RFC 8341 implementation, run a sustained coverage-guided NACM
   fuzz campaign, and document any intentional deviations before claiming
-  compliance. Sustained simultaneous SSH-session/backpressure coverage remains;
-  an automated independent OpenSSH matrix now covers unauthorized-key and
-  wrong-subsystem rejection plus four concurrently initiated authenticated
-  NETCONF/RPC/close interactions. The deterministic
-  sanitizer smoke target mutates NACM XML and
+  compliance. The automated SSH matrix covers independent OpenSSH negative and
+  concurrent interactions plus slow-reader backpressure isolation. The
+  deterministic sanitizer smoke target mutates NACM XML and
   attacker-controlled keyed/leaf-list instance paths through policy loading,
   CRUD authorization, and read filtering. Schema-aware read filtering rejects
   unmodeled elements instead of applying annotation-free default access.

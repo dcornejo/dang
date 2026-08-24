@@ -196,6 +196,83 @@ ClientResult Connect(const std::filesystem::path& private_key,
   return result;
 }
 
+ClientResult HoldBackpressuredSession(
+    const std::filesystem::path& private_key, std::uint16_t port,
+    std::promise<void>& ready, std::shared_future<void> release) {
+  ClientResult result;
+  Handle<ssh_session, ssh_free> session(ssh_new(), ssh_free);
+  if (!session) return result;
+  const char* host = "127.0.0.1";
+  const char* user = "alice";
+  const unsigned int ssh_port = port;
+  if (ssh_options_set(session.get(), SSH_OPTIONS_HOST, host) != SSH_OK ||
+      ssh_options_set(session.get(), SSH_OPTIONS_PORT, &ssh_port) != SSH_OK ||
+      ssh_options_set(session.get(), SSH_OPTIONS_USER, user) != SSH_OK ||
+      ssh_connect(session.get()) != SSH_OK) {
+    return result;
+  }
+  ssh_key key = nullptr;
+  if (ssh_pki_import_privkey_file(private_key.c_str(), nullptr, nullptr,
+                                  nullptr, &key) != SSH_OK) {
+    return result;
+  }
+  Handle<ssh_key, ssh_key_free> client_key(key, ssh_key_free);
+  if (ssh_userauth_publickey(session.get(), nullptr, client_key.get()) !=
+      SSH_AUTH_SUCCESS) {
+    ssh_disconnect(session.get());
+    return result;
+  }
+  result.authenticated = true;
+  Handle<ssh_channel, ssh_channel_free> channel(ssh_channel_new(session.get()),
+                                                ssh_channel_free);
+  if (!channel || ssh_channel_open_session(channel.get()) != SSH_OK ||
+      ssh_channel_request_subsystem(channel.get(), "netconf") != SSH_OK) {
+    channel.reset();
+    ssh_disconnect(session.get());
+    return result;
+  }
+  result.subsystem = true;
+  ready.set_value();
+
+  std::string request =
+      "<hello xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
+      "<capabilities><capability>urn:ietf:params:netconf:base:1.0"
+      "</capability></capabilities></hello>]]>]]>";
+  // The request bytes fit comfortably in the inbound SSH window, while the
+  // complete <get> replies exceed the peer's unread outbound window. This
+  // predictably blocks only this server worker in channel output.
+  constexpr std::size_t kPipelinedGets = 512;
+  for (std::size_t index = 0; index < kPipelinedGets; ++index) {
+    request +=
+        "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+        "message-id=\"slow-" +
+        std::to_string(index) + "\"><get/></rpc>]]>]]>";
+  }
+  request +=
+      "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+      "message-id=\"slow-close\"><close-session/></rpc>]]>]]>";
+  std::size_t offset = 0;
+  while (offset < request.size()) {
+    const int count = ssh_channel_write(
+        channel.get(), request.data() + offset,
+        static_cast<std::uint32_t>(request.size() - offset));
+    if (count <= 0) break;
+    offset += static_cast<std::size_t>(count);
+  }
+  release.wait();
+  std::array<char, 16 * 1024> buffer{};
+  while (true) {
+    const int count = ssh_channel_read_timeout(
+        channel.get(), buffer.data(), buffer.size(), 0, 5000);
+    if (count <= 0) break;
+    result.received.append(buffer.data(), static_cast<std::size_t>(count));
+  }
+  ssh_channel_close(channel.get());
+  channel.reset();
+  ssh_disconnect(session.get());
+  return result;
+}
+
 TEST(DangdSshTransportTest,
      AuthenticatesPublicKeyRequiresNetconfAndExchangesRpc) {
   ASSERT_EQ(ssh_init(), SSH_OK);
@@ -324,6 +401,76 @@ TEST(DangdSshTransportTest, IndependentOpenSshNegativeAndConcurrentMatrix) {
   server.join();
   EXPECT_EQ(server_result, 0) << diagnostics.str();
 #endif
+}
+
+TEST(DangdSshTransportTest, SlowReaderDoesNotBlockIndependentSessions) {
+  ASSERT_EQ(ssh_init(), SSH_OK);
+  const std::filesystem::path source = DANG_TEST_SOURCE_DIR;
+  ApplicationOptions application_options{
+      .model = source / "dangd/examples/appliance.yang",
+      .search_paths = {source / "dangd/models"},
+      .configuration = source / "dangd/examples/config.xml",
+      .nacm_configuration = source / "dangd/examples/nacm.xml"};
+  auto loaded = Application::Load(application_options);
+  ASSERT_NE(loaded.application, nullptr);
+
+  const std::filesystem::path keys = source / "dangd/testdata/ssh";
+  const std::uint16_t port = AvailableLoopbackPort();
+  ASSERT_NE(port, 0);
+  constexpr std::size_t kIndependentClients = 4;
+  SshServerOptions options{
+      .address = "127.0.0.1",
+      .port = port,
+      .host_key = keys / "host-key",
+      .authorized_users = {
+          {"alice", keys / "alice-key.pub", {"administrators"}}},
+      .username_mappings = {{"alice", "administrator"}},
+      .require_username_mapping = true,
+      .maximum_connections = 1 + kIndependentClients,
+      .maximum_concurrent_sessions = 1 + kIndependentClients};
+  std::ostringstream diagnostics;
+  int server_result = -1;
+  std::thread server([&] {
+    server_result = RunReloadableSshServer(
+        loaded.application, application_options, options, diagnostics);
+  });
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  std::promise<void> slow_ready;
+  std::future<void> ready = slow_ready.get_future();
+  std::promise<void> release_slow;
+  const std::shared_future<void> release = release_slow.get_future().share();
+  auto slow = std::async(std::launch::async, [&] {
+    return HoldBackpressuredSession(keys / "alice-key", port, slow_ready,
+                                    release);
+  });
+  EXPECT_EQ(ready.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  std::vector<std::future<ClientResult>> independent;
+  for (std::size_t index = 0; index < kIndependentClients; ++index) {
+    independent.push_back(std::async(std::launch::async, [&] {
+      return Connect(keys / "alice-key", port, "netconf", true);
+    }));
+  }
+  for (auto& client : independent) {
+    EXPECT_EQ(client.wait_for(std::chrono::seconds(5)),
+              std::future_status::ready)
+        << "an unread SSH peer stalled an independent NETCONF session";
+  }
+  release_slow.set_value();
+  for (auto& client : independent) {
+    const ClientResult result = client.get();
+    EXPECT_NE(result.received.find("message-id=\"close\"><ok/>"),
+              std::string::npos);
+  }
+  const ClientResult slow_result = slow.get();
+  server.join();
+  EXPECT_TRUE(slow_result.authenticated);
+  EXPECT_TRUE(slow_result.subsystem);
+  EXPECT_NE(slow_result.received.find("message-id=\"slow-close\"><ok/>"),
+            std::string::npos);
+  EXPECT_EQ(server_result, 0) << diagnostics.str();
 }
 
 }  // namespace

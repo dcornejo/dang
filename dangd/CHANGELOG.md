@@ -7,6 +7,11 @@
 
 ### Changed
 
+- Isolated accepted SSH connections in concurrently reaped workers, bounded
+  simultaneous sessions with a configurable admission ceiling, and verified
+  that an unread 512-reply peer cannot stall four independent NETCONF clients.
+  A 20-iteration sustained run passed 10,240 unread replies and 80 independent
+  sessions without cross-session blocking.
 - Added an automated independent OpenSSH transport matrix covering rejected
   keys, rejected non-NETCONF subsystems, and four concurrently initiated
   authenticated NETCONF/RPC/close interactions.

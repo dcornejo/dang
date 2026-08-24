@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Added bounded concurrent SSH session execution and slow-reader backpressure
+  isolation, with safe application lifetime across SIGHUP reloads.
 - Added an automated independent OpenSSH transport matrix covering negative
   authentication/subsystem cases and concurrently initiated NETCONF sessions.
 - Refocused the top-level README on the `dangd` server, its primary use cases,

@@ -118,8 +118,11 @@ and subsystem establishment. Authenticated usernames use the common exact
 mapper, while NACM external groups come only from the matching local authorized
 key record. An automated independent OpenSSH matrix covers unauthorized-key and
 wrong-subsystem rejection plus four concurrently initiated public-key,
-subsystem, RPC-framing, and clean-close interactions. Sustained simultaneous
-session and backpressure testing remains release evidence.
+subsystem, RPC-framing, and clean-close interactions. Independent session
+workers are admission-bounded and a slow-reader interaction pipelines 512
+replies beyond its unread SSH window while four other sessions complete. A
+20-iteration sustained run passed 10,240 backpressured replies and 80
+independent sessions without cross-session blocking.
 
 ### RFC 6243 — with-defaults
 

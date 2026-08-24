@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <ranges>
 #include <string>
 #include <utility>
@@ -36,6 +37,7 @@ void Usage() {
          " [--check | --stdio --username USER [--session-id ID]"
          " | --ssh-listen ADDRESS --ssh-port PORT --ssh-host-key FILE"
          " --ssh-authorized-key USER=FILE [--ssh-group USER=GROUP]..."
+         " [--ssh-max-sessions COUNT]"
          " | --tls-listen ADDRESS --tls-port PORT --tls-cert FILE --tls-key "
          "FILE --tls-ca FILE [--tls-username-source cn|san-dns|san-uri]"
          " [--username-map AUTHENTICATED=LOCAL]... [--require-username-map]]\n";
@@ -120,6 +122,22 @@ int main(int argc, char* argv[]) {
       }
     } else if (argument == "--ssh-host-key" && index + 1 < argc) {
       ssh.host_key = argv[++index];
+    } else if (argument == "--ssh-max-sessions" && index + 1 < argc) {
+      try {
+        const std::string value = argv[++index];
+        std::size_t consumed = 0;
+        const unsigned long long parsed = std::stoull(value, &consumed);
+        if (value.empty() || value.find_first_not_of("0123456789") !=
+                                 std::string::npos ||
+            consumed != value.size() || parsed == 0 ||
+            parsed > std::numeric_limits<std::size_t>::max()) {
+          throw std::out_of_range("sessions");
+        }
+        ssh.maximum_concurrent_sessions = static_cast<std::size_t>(parsed);
+      } catch (const std::exception&) {
+        Usage();
+        return 2;
+      }
     } else if (argument == "--ssh-authorized-key" && index + 1 < argc) {
       const std::string authorization = argv[++index];
       const std::size_t separator = authorization.find('=');

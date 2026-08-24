@@ -60,6 +60,14 @@ NETCONF framing and lifecycle. There is no sidecar with overlapping framing or
 identity responsibility. Password, keyboard-interactive, shell, exec, PTY,
 forwarding, and non-session channels are not accepted.
 
+Each accepted SSH connection runs in an independent worker so a client blocked
+on authentication, input, or output cannot stop other NETCONF sessions. The
+listener admits at most 64 simultaneous workers by default; use
+`--ssh-max-sessions COUNT` to select a deployment-specific nonzero ceiling.
+Finished workers are reaped continuously. SIGHUP waits for current workers to
+finish before replacing the application, preventing a session from retaining
+references into the prior schema or plugin runtime.
+
 Each repeatable `--ssh-authorized-key USER=PUBLIC_KEY` entry is an explicit
 local authorization record. `--ssh-group USER=GROUP` attaches a trusted NACM
 external group to that record. The SSH username is passed through the same

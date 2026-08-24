@@ -8,15 +8,20 @@
 #include <array>
 #include <atomic>
 #include <cerrno>
+#include <chrono>
 #include <csignal>
 #include <cstring>
+#include <exception>
+#include <future>
 #include <limits>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 #include <libssh/libssh.h>
 #include <libssh/server.h>
@@ -190,10 +195,21 @@ ssh_channel AcceptNetconfSubsystem(ssh_session session) {
   return channel;
 }
 
-void DrainDiagnostics(Application& application, std::ostream& diagnostics) {
-  for (const std::string& delta : application.DrainBackendDeltas())
+void WriteDiagnostic(std::ostream& diagnostics, std::mutex& mutex,
+                     std::string_view message) {
+  std::lock_guard lock(mutex);
+  diagnostics << message;
+}
+
+void DrainDiagnostics(Application& application, std::ostream& diagnostics,
+                      std::mutex& mutex) {
+  const std::vector<std::string> deltas = application.DrainBackendDeltas();
+  const std::vector<std::string> audits =
+      application.DrainRecoveryAuditRecords();
+  std::lock_guard lock(mutex);
+  for (const std::string& delta : deltas)
     diagnostics << "dangd: configuration delta: " << delta << '\n';
-  for (const std::string& audit : application.DrainRecoveryAuditRecords())
+  for (const std::string& audit : audits)
     diagnostics << "dangd: audit: " << audit << '\n';
 }
 
@@ -205,6 +221,114 @@ bool BoundHandshakeIo(ssh_session session) {
                  sizeof(kHandshakeTimeout)) == 0 &&
       setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO, &kHandshakeTimeout,
                  sizeof(kHandshakeTimeout)) == 0;
+}
+
+void ServeSshSession(Handle<ssh_session, ssh_free> session,
+                     Application& application,
+                     const SshServerOptions& options,
+                     const std::map<std::string, AuthorizedIdentity>&
+                         authorization,
+                     std::uint32_t session_id, std::ostream& diagnostics,
+                     std::mutex& diagnostics_mutex) {
+  if (!BoundHandshakeIo(session.get())) {
+    WriteDiagnostic(diagnostics, diagnostics_mutex,
+                    "dangd: cannot apply SSH handshake I/O timeout\n");
+    ssh_disconnect(session.get());
+    return;
+  }
+  if (ssh_handle_key_exchange(session.get()) != SSH_OK) {
+    WriteDiagnostic(diagnostics, diagnostics_mutex,
+                    "dangd: SSH key exchange failed\n");
+    return;
+  }
+  const auto authenticated = Authenticate(session.get(), authorization);
+  if (!authenticated) {
+    WriteDiagnostic(diagnostics, diagnostics_mutex,
+                    "dangd: SSH public-key authentication failed\n");
+    ssh_disconnect(session.get());
+    return;
+  }
+  ssh_channel raw_channel = AcceptNetconfSubsystem(session.get());
+  if (!raw_channel) {
+    WriteDiagnostic(
+        diagnostics, diagnostics_mutex,
+        "dangd: SSH client did not request exact netconf subsystem\n");
+    ssh_disconnect(session.get());
+    return;
+  }
+  Handle<ssh_channel, ssh_channel_free> channel(raw_channel, ssh_channel_free);
+  const AuthorizedIdentity& authorized = authorization.at(*authenticated);
+  const auto local_username = yang::netconf::MapAuthenticatedUsername(
+      *authenticated, options.username_mappings,
+      options.require_username_mapping);
+  if (!local_username) {
+    WriteDiagnostic(
+        diagnostics, diagnostics_mutex,
+        "dangd: SSH username mapping rejected authenticated user\n");
+    channel.reset();
+    ssh_disconnect(session.get());
+    return;
+  }
+  LibsshStream stream(channel.get());
+  yang::netconf::TransportIdentity identity{
+      yang::netconf::SecureTransport::kSsh, *local_username,
+      authorized.external_groups, "netconf", true,
+      !authorized.external_groups.empty()};
+  yang::netconf::NetconfTransportAdapter adapter(
+      application.server(), stream, session_id, std::move(identity));
+  std::array<char, 16 * 1024> buffer{};
+  while (adapter.valid() && ssh_channel_is_open(channel.get()) &&
+         !ssh_channel_is_eof(channel.get())) {
+    const int count = ssh_channel_read_timeout(
+        channel.get(), buffer.data(), buffer.size(), 0, 1000);
+    if (count == SSH_AGAIN) {
+      adapter.Poll();
+      continue;
+    }
+    if (count <= 0) break;
+    adapter.Receive(
+        std::string_view(buffer.data(), static_cast<std::size_t>(count)));
+    adapter.Poll();
+    DrainDiagnostics(application, diagnostics, diagnostics_mutex);
+  }
+  adapter.TransportClosed();
+  channel.reset();
+  ssh_disconnect(session.get());
+}
+
+void JoinSessions(std::vector<std::future<void>>& sessions,
+                  std::ostream& diagnostics, std::mutex& diagnostics_mutex,
+                  bool only_ready) {
+  for (auto iterator = sessions.begin(); iterator != sessions.end();) {
+    if (only_ready &&
+        iterator->wait_for(std::chrono::seconds(0)) !=
+            std::future_status::ready) {
+      ++iterator;
+      continue;
+    }
+    try {
+      iterator->get();
+    } catch (const std::exception& error) {
+      WriteDiagnostic(diagnostics, diagnostics_mutex,
+                      std::string("dangd: SSH session worker failed: ") +
+                          error.what() + "\n");
+    } catch (...) {
+      WriteDiagnostic(diagnostics, diagnostics_mutex,
+                      "dangd: SSH session worker failed\n");
+    }
+    iterator = sessions.erase(iterator);
+  }
+}
+
+void WaitForSessionCapacity(std::vector<std::future<void>>& sessions,
+                            std::size_t maximum,
+                            std::ostream& diagnostics,
+                            std::mutex& diagnostics_mutex) {
+  while (sessions.size() >= maximum) {
+    JoinSessions(sessions, diagnostics, diagnostics_mutex, true);
+    if (sessions.size() >= maximum)
+      (void)sessions.front().wait_for(std::chrono::milliseconds(10));
+  }
 }
 
 }  // namespace
@@ -219,6 +343,10 @@ int RunReloadableSshServer(std::unique_ptr<Application>& application,
   }
   if (!yang::netconf::UsernameMappingsValid(options.username_mappings)) {
     diagnostics << "dangd: SSH username mapping table is invalid\n";
+    return 1;
+  }
+  if (options.maximum_concurrent_sessions == 0) {
+    diagnostics << "dangd: SSH maximum concurrent sessions must be nonzero\n";
     return 1;
   }
   std::map<std::string, AuthorizedIdentity> authorization;
@@ -255,10 +383,16 @@ int RunReloadableSshServer(std::unique_ptr<Application>& application,
   std::size_t accepted = 0;
   std::uint32_t session_id = 1;
   int result = 0;
+  std::mutex diagnostics_mutex;
+  std::vector<std::future<void>> sessions;
   while (options.maximum_connections == 0 ||
          accepted < options.maximum_connections) {
+    JoinSessions(sessions, diagnostics, diagnostics_mutex, true);
     if (reload_requested) {
       reload_requested = 0;
+      // A session worker borrows the active Application. Complete every
+      // borrower before atomically replacing that object on reload.
+      JoinSessions(sessions, diagnostics, diagnostics_mutex, false);
       auto loaded = Application::Reload(application_options, *application);
       if (loaded.application) {
         const std::string id = loaded.application->yang_library_content_id();
@@ -276,78 +410,36 @@ int RunReloadableSshServer(std::unique_ptr<Application>& application,
           diagnostics << "dangd: reload: " << message << '\n';
       }
     }
-    Handle<ssh_session, ssh_free> session(ssh_new(), ssh_free);
-    if (!session || ssh_bind_accept(listener.get(), session.get()) != SSH_OK) {
+    WaitForSessionCapacity(sessions, options.maximum_concurrent_sessions,
+                           diagnostics, diagnostics_mutex);
+    ssh_session session = ssh_new();
+    if (!session || ssh_bind_accept(listener.get(), session) != SSH_OK) {
+      if (session) ssh_free(session);
       if (reload_requested) continue;
-      diagnostics << "dangd: SSH accept failed: "
-                  << ssh_get_error(listener.get()) << '\n';
+      WriteDiagnostic(diagnostics, diagnostics_mutex,
+                      std::string("dangd: SSH accept failed: ") +
+                          ssh_get_error(listener.get()) + "\n");
       result = 1;
       break;
     }
     ++accepted;
-    if (!BoundHandshakeIo(session.get())) {
-      diagnostics << "dangd: cannot apply SSH handshake I/O timeout\n";
-      ssh_disconnect(session.get());
-      continue;
-    }
-    if (ssh_handle_key_exchange(session.get()) != SSH_OK) {
-      diagnostics << "dangd: SSH key exchange failed\n";
-      continue;
-    }
-    const auto authenticated = Authenticate(session.get(), authorization);
-    if (!authenticated) {
-      diagnostics << "dangd: SSH public-key authentication failed\n";
-      ssh_disconnect(session.get());
-      continue;
-    }
-    ssh_channel raw_channel = AcceptNetconfSubsystem(session.get());
-    if (!raw_channel) {
-      diagnostics << "dangd: SSH client did not request exact netconf subsystem\n";
-      ssh_disconnect(session.get());
-      continue;
-    }
-    Handle<ssh_channel, ssh_channel_free> channel(raw_channel, ssh_channel_free);
-    const AuthorizedIdentity& authorized = authorization.at(*authenticated);
-    const auto local_username = yang::netconf::MapAuthenticatedUsername(
-        *authenticated, options.username_mappings,
-        options.require_username_mapping);
-    if (!local_username) {
-      diagnostics << "dangd: SSH username mapping rejected authenticated user\n";
-      channel.reset();
-      ssh_disconnect(session.get());
-      continue;
-    }
-    LibsshStream stream(channel.get());
-    yang::netconf::TransportIdentity identity{
-        yang::netconf::SecureTransport::kSsh, *local_username,
-        authorized.external_groups, "netconf", true,
-        !authorized.external_groups.empty()};
     const std::uint32_t allocated_session_id = session_id;
     session_id = session_id == std::numeric_limits<std::uint32_t>::max()
         ? 1
         : session_id + 1;
-    yang::netconf::NetconfTransportAdapter adapter(
-        application->server(), stream, allocated_session_id,
-        std::move(identity));
-    std::array<char, 16 * 1024> buffer{};
-    while (adapter.valid() && ssh_channel_is_open(channel.get()) &&
-           !ssh_channel_is_eof(channel.get())) {
-      const int count = ssh_channel_read_timeout(
-          channel.get(), buffer.data(), buffer.size(), 0, 1000);
-      if (count == SSH_AGAIN) {
-        adapter.Poll();
-        continue;
-      }
-      if (count <= 0) break;
-      adapter.Receive(std::string_view(buffer.data(),
-                                       static_cast<std::size_t>(count)));
-      adapter.Poll();
-      DrainDiagnostics(*application, diagnostics);
-    }
-    adapter.TransportClosed();
-    channel.reset();
-    ssh_disconnect(session.get());
+    Application* active_application = application.get();
+    Handle<ssh_session, ssh_free> owned_session(session, ssh_free);
+    sessions.push_back(std::async(
+        std::launch::async,
+        [session = std::move(owned_session), active_application, &options,
+         &authorization, allocated_session_id, &diagnostics,
+         &diagnostics_mutex]() mutable {
+          ServeSshSession(std::move(session), *active_application, options,
+                          authorization, allocated_session_id, diagnostics,
+                          diagnostics_mutex);
+        }));
   }
+  JoinSessions(sessions, diagnostics, diagnostics_mutex, false);
   (void)sigaction(SIGHUP, &previous, nullptr);
   return result;
 }
