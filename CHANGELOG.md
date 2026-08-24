@@ -73,6 +73,9 @@ and releases follow Semantic Versioning.
 - Published every Linux kernel interface, including unconfigured system-owned
   devices, with inferred base interface types and native packet, octet, error,
   and drop counters using kernel boot time as counter discontinuity time.
+- Published every FreeBSD kernel interface with native IANA base-type inference
+  and packet, octet, multicast, error, drop, and unknown-protocol counters using
+  kernel boot plus interface epoch as the discontinuity timestamp.
 - Removed the now-unused external command runner from the IP plugin.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.

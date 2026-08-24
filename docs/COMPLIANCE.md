@@ -437,13 +437,13 @@ detection status remains absent.
 Linux repairs missing or altered configured addresses and neighbors while
 preserving unrelated kernel state. FreeBSD publishes live link status, MTU,
 assigned prefixes, and complete IPv4/IPv6 neighbor entries for configured
-interfaces, but not counters, duplicate-address detection, or unconfigured
-system-controlled interfaces. It repairs missing or
+and system-controlled interfaces, plus native packet, octet, error, drop,
+multicast, and unknown-protocol counters with interface-epoch discontinuity
+time. Duplicate-address detection status remains absent. It repairs missing or
 altered managed address and neighbor entries while preserving unrelated kernel
 state. Its epair smoke covers address/MTU/IPv4 and IPv6 neighbor apply,
-live-state publication,
-out-of-band removal repair, exact rollback, and forced partial-failure
-compensation. It therefore does not claim operational compliance with RFC 8343
+live-state publication, out-of-band removal repair, exact rollback, and forced
+partial-failure compensation. It therefore does not claim operational compliance with RFC 8343
 or RFC 8344.
 
 The transaction machinery is implementation safety behavior, not an RFC 8343

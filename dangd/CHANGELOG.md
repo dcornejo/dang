@@ -58,6 +58,8 @@
   repair, and rollback in the privileged disposable-epair interaction.
 - Expanded Linux operational state to all kernel interfaces and added native
   packet/octet/error/drop statistics with a boot-time discontinuity marker.
+- Expanded FreeBSD operational state to all kernel interfaces with native base
+  type inference and `SIOCGIFDATA` statistics/discontinuity publication.
 - Added opt-in privileged FreeBSD backend tests and removed the obsolete
   command-execution helper from the IP plugin.
 - Verified concurrent operational publication with a thread-safe test provider,

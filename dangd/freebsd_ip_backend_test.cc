@@ -145,6 +145,16 @@ TEST(FreeBsdIpBackendTest, AppliesPublishesRepairsAndRollsBackStaticNeighbor) {
       << state;
   EXPECT_NE(state.find("<oper-status>up</oper-status>"), std::string::npos)
       << state;
+  EXPECT_NE(state.find("<statistics>"), std::string::npos) << state;
+  EXPECT_NE(state.find("<discontinuity-time>"), std::string::npos) << state;
+  EXPECT_NE(state.find("<in-octets>"), std::string::npos) << state;
+  EXPECT_NE(state.find("<out-octets>"), std::string::npos) << state;
+  std::string peer = interface;
+  ASSERT_FALSE(peer.empty());
+  peer.back() = peer.back() == 'a' ? 'b' : 'a';
+  EXPECT_NE(state.find("<name>" + peer + "</name>"), std::string::npos) << state;
+  EXPECT_NE(state.find("<type>iana-if-type:ethernetCsmacd</type>"),
+            std::string::npos) << state;
   EXPECT_NE(state.find("<mtu>" + std::to_string(InterfaceMtu(interface)) +
                        "</mtu>"),
             std::string::npos) << state;

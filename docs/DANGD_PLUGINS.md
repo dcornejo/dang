@@ -127,7 +127,8 @@ MTU, assigned addresses, complete neighbor-cache entries, and native packet,
 octet, error, and drop counters for configured and unconfigured kernel
 interfaces. FreeBSD also
 publishes native live link status, MTU, assigned addresses, and complete
-neighbor-cache entries for configured interfaces. FreeBSD also repairs missing
+neighbor-cache entries plus packet/octet/error/drop statistics for every kernel
+interface. FreeBSD also repairs missing
 or altered configured addresses and neighbors without deleting unrelated kernel
 entries. Linux likewise repairs drift in configured address and neighbor entries
 without claiming ownership of unrelated kernel state.
@@ -248,9 +249,9 @@ best available path, provider, stage, and reason. The RPC does not return a
 partially assembled operational data payload alongside that error.
 
 The IP-management example uses ABI v3 to publish RFC 8343
-`/interfaces-state`. Linux inventories all kernel interfaces and publishes
-native counters; Linux and FreeBSD read flags, MTU, addresses, and ARP/IPv6
-neighbor caches from the kernel for each retrieval.
+`/interfaces-state`. Linux and FreeBSD inventory all kernel interfaces, publish
+native counters, and read flags, MTU, addresses, and ARP/IPv6 neighbor caches
+from the kernel for each retrieval.
 Unsupported development platforms derive `oper-status` from the last
 successfully applied configuration.
 

@@ -10,6 +10,7 @@
 #include <climits>
 #include <cstddef>
 #include <cstdio>
+#include <ctime>
 #include <cstring>
 #include <ifaddrs.h>
 #include <memory>
@@ -21,6 +22,7 @@
 
 #include <arpa/inet.h>
 #include <net/if.h>
+#include <net/if_types.h>
 #include <netlink/netlink.h>
 #include <netlink/route/common.h>
 #include <netlink/route/neigh.h>
@@ -28,6 +30,7 @@
 #include <netinet6/in6_var.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/sysctl.h>
 #include <unistd.h>
 
 #include <pugixml.hpp>
@@ -565,6 +568,66 @@ bool AppendNeighbors(const std::string& name, pugi::xml_node entry,
   return true;
 }
 
+std::optional<if_data> ReadInterfaceData(const std::string& name,
+                                         std::string* error) {
+  IoctlSocket socket(AF_INET);
+  if (!socket.valid(error)) return std::nullopt;
+  ifreq request{};
+  if_data data{};
+  if (!CopyName(name, request.ifr_name, error)) return std::nullopt;
+  request.ifr_data = reinterpret_cast<caddr_t>(&data);
+  if (!socket.Call(SIOCGIFDATA, &request,
+                   "read interface data on " + name, error))
+    return std::nullopt;
+  return data;
+}
+
+std::string InterfaceType(const if_data& data) {
+  if (data.ifi_type == IFT_LOOP) return "iana-if-type:softwareLoopback";
+  if (data.ifi_type == IFT_ETHER) return "iana-if-type:ethernetCsmacd";
+  return "iana-if-type:other";
+}
+
+std::string DiscontinuityTime(const if_data& data) {
+  timeval boot{};
+  std::size_t size = sizeof(boot);
+  if (sysctlbyname("kern.boottime", &boot, &size, nullptr, 0) != 0)
+    return "1970-01-01T00:00:00Z";
+  const std::time_t discontinuity = boot.tv_sec + data.ifi_epoch;
+  std::tm utc{};
+  if (!gmtime_r(&discontinuity, &utc)) return "1970-01-01T00:00:00Z";
+  char text[32]{};
+  if (!std::strftime(text, sizeof(text), "%Y-%m-%dT%H:%M:%SZ", &utc))
+    return "1970-01-01T00:00:00Z";
+  return text;
+}
+
+void AppendStatistics(const if_data& data, pugi::xml_node entry) {
+  pugi::xml_node statistics = entry.append_child("statistics");
+  statistics.append_child("discontinuity-time").text() =
+      DiscontinuityTime(data).c_str();
+  statistics.append_child("in-octets").text() = data.ifi_ibytes;
+  statistics.append_child("in-unicast-pkts").text() =
+      data.ifi_ipackets >= data.ifi_imcasts
+          ? data.ifi_ipackets - data.ifi_imcasts : 0;
+  statistics.append_child("in-multicast-pkts").text() = data.ifi_imcasts;
+  statistics.append_child("in-discards").text() =
+      static_cast<std::uint32_t>(data.ifi_iqdrops);
+  statistics.append_child("in-errors").text() =
+      static_cast<std::uint32_t>(data.ifi_ierrors);
+  statistics.append_child("in-unknown-protos").text() =
+      static_cast<std::uint32_t>(data.ifi_noproto);
+  statistics.append_child("out-octets").text() = data.ifi_obytes;
+  statistics.append_child("out-unicast-pkts").text() =
+      data.ifi_opackets >= data.ifi_omcasts
+          ? data.ifi_opackets - data.ifi_omcasts : 0;
+  statistics.append_child("out-multicast-pkts").text() = data.ifi_omcasts;
+  statistics.append_child("out-discards").text() =
+      static_cast<std::uint32_t>(data.ifi_oqdrops);
+  statistics.append_child("out-errors").text() =
+      static_cast<std::uint32_t>(data.ifi_oerrors);
+}
+
 struct KernelInterfaceState {
   std::vector<AddressConfig> addresses;
   std::vector<NeighborConfig> neighbors;
@@ -826,27 +889,54 @@ class FreeBsdBackend final : public PlatformBackend {
     pugi::xml_node root = state.append_child("interfaces-state");
     root.append_attribute("xmlns") =
         "urn:ietf:params:xml:ns:yang:ietf-interfaces";
+    root.append_attribute("xmlns:iana-if-type") =
+        "urn:ietf:params:xml:ns:yang:iana-if-type";
+    std::vector<std::pair<std::string, std::string>> configured_types;
     for (const pugi::xml_node top : configuration.document_element().children()) {
       if (LocalName(top.name()) != "interfaces") continue;
       for (const pugi::xml_node configured : top.children()) {
         if (LocalName(configured.name()) != "interface") continue;
         const pugi::xml_node name_node = Child(configured, "name");
         const pugi::xml_node type_node = Child(configured, "type");
-        if (!name_node || !type_node) continue;
-        const std::string name = name_node.text().as_string();
-        const auto link = ReadLink(name, error);
-        if (!link) return false;
-        pugi::xml_node entry = root.append_child("interface");
-        entry.append_child("name").text() = name.c_str();
-        entry.append_child("type").text() = type_node.text().as_string();
-        entry.append_child("admin-status").text() =
-            link->enabled ? "up" : "down";
-        entry.append_child("oper-status").text() =
-            link->running ? "up" : (link->enabled ? "dormant" : "down");
-        if (!AppendAddresses(name, entry, link->mtu, error)) return false;
-        if (!AppendNeighbors(name, entry, error)) return false;
+        if (name_node && type_node)
+          configured_types.push_back(
+              {name_node.text().as_string(), type_node.text().as_string()});
       }
     }
+    struct if_nameindex* interfaces = if_nameindex();
+    if (!interfaces) {
+      if (error) *error = "cannot enumerate FreeBSD interfaces: " +
+                          std::string(std::strerror(errno));
+      return false;
+    }
+    for (const struct if_nameindex* interface = interfaces;
+         interface->if_index != 0 && interface->if_name; ++interface) {
+      const std::string name = interface->if_name;
+      const auto link = ReadLink(name, error);
+      const auto data = ReadInterfaceData(name, error);
+      if (!link || !data) {
+        if_freenameindex(interfaces);
+        return false;
+      }
+      const auto configured = std::ranges::find(
+          configured_types, name, &decltype(configured_types)::value_type::first);
+      const std::string type = configured == configured_types.end()
+          ? InterfaceType(*data) : configured->second;
+      pugi::xml_node entry = root.append_child("interface");
+      entry.append_child("name").text() = name.c_str();
+      entry.append_child("type").text() = type.c_str();
+      entry.append_child("admin-status").text() =
+          link->enabled ? "up" : "down";
+      entry.append_child("oper-status").text() =
+          link->running ? "up" : (link->enabled ? "dormant" : "down");
+      if (!AppendAddresses(name, entry, link->mtu, error) ||
+          !AppendNeighbors(name, entry, error)) {
+        if_freenameindex(interfaces);
+        return false;
+      }
+      AppendStatistics(*data, entry);
+    }
+    if_freenameindex(interfaces);
     std::ostringstream serialized;
     state.print(serialized, "", pugi::format_raw);
     *output = serialized.str();
