@@ -25,6 +25,15 @@ class PlatformBackend {
   // until then Reconcile(desired, before) must restore observed pre-apply
   // values that cannot be reconstructed from configuration alone.
   virtual void Commit() {}
+
+  // Return a coherent RFC 8343/8344 legacy operational-state fragment for
+  // interfaces owned by configuration_xml. An empty successful result asks
+  // the teaching plugin to use its portable simulated fallback.
+  virtual bool OperationalXml(std::string_view,
+                              std::string* output, std::string*) {
+    output->clear();
+    return true;
+  }
 };
 
 // The build selects exactly one implementation. Linux and FreeBSD production

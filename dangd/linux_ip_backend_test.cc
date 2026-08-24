@@ -106,5 +106,25 @@ TEST(LinuxIpBackendTest, RollbackRestoresObservedMtu) {
   EXPECT_EQ(InterfaceMtu("lo"), original_mtu);
 }
 
+TEST(LinuxIpBackendTest, PublishesLiveLinkAndAddressState) {
+  constexpr const char* configured =
+      "<config><interfaces><interface><name>lo</name>"
+      "<type>iana-if-type:softwareLoopback</type>"
+      "</interface></interfaces></config>";
+  auto backend = MakePlatformBackend();
+  std::string state;
+  std::string error;
+  ASSERT_TRUE(backend->OperationalXml(configured, &state, &error)) << error;
+  EXPECT_NE(state.find("<name>lo</name>"), std::string::npos) << state;
+  EXPECT_NE(state.find("<admin-status>up</admin-status>"), std::string::npos)
+      << state;
+  EXPECT_NE(state.find("<oper-status>up</oper-status>"), std::string::npos)
+      << state;
+  EXPECT_NE(state.find("<ip>127.0.0.1</ip>"), std::string::npos) << state;
+  EXPECT_NE(state.find("<prefix-length>8</prefix-length>"), std::string::npos)
+      << state;
+  EXPECT_NE(state.find("<mtu>"), std::string::npos) << state;
+}
+
 }  // namespace
 }  // namespace dangd::ip_management

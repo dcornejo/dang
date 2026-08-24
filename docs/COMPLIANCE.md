@@ -428,12 +428,13 @@ incomplete modeled data. Linux snapshots live flags and MTU and retains the
 reverse plan until transaction commit, including reverse-order compensation
 after a partial rtnetlink failure.
 
-It does not create/delete interfaces or publish live addresses, neighbors,
-MTUs, counters, duplicate-address detection, or link state. Linux observes link
-flags/MTU while applying intent, but address and neighbor changes made by other
-agents are not reconciled. FreeBSD still lacks direct kernel application, MTU,
-neighbor, and equivalent compensation coverage. It therefore does not claim
-operational compliance with RFC 8343 or RFC 8344.
+It does not create/delete interfaces. Linux publishes live link status, MTU,
+and assigned prefixes for configured interfaces, but not neighbors, counters,
+duplicate-address detection, or unconfigured system-controlled interfaces.
+Address and neighbor changes made by other agents are not reconciled. FreeBSD
+still lacks direct kernel application, MTU, neighbor, live-state, and equivalent
+compensation coverage. It therefore does not claim operational compliance with
+RFC 8343 or RFC 8344.
 
 The transaction machinery is implementation safety behavior, not an RFC 8343
 or RFC 8344 compliance claim. Dynamic capacity rejection, dependency cycles,

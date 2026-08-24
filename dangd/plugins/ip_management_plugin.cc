@@ -287,7 +287,7 @@ int RollbackHardwareAction(void*, void* opaque, const char* id,
 }
 
 int OperationalData(void*, DangOperationalDataV1* result,
-                    DangPluginErrorV1*) {
+                    DangPluginErrorV1* error) {
   // Operational data should normally be observed from the platform at request
   // time (or from a coherently refreshed cache), for example with RTM_GETLINK,
   // RTM_GETADDR, RTM_GETNEIGH, and their IPv6 equivalents. Populate the NMDA
@@ -304,6 +304,19 @@ int OperationalData(void*, DangOperationalDataV1* result,
   // partial instance data. A real provider should still build one coherent
   // snapshot because constraints spanning providers cannot yet be checked.
   if (!result) return 0;
+  backend_error.clear();
+  if (!platform_backend->OperationalXml(active_configuration, &operational_xml,
+                                        &backend_error)) {
+    if (error) {
+      error->message = backend_error.c_str();
+      error->instance_path = "/ietf-interfaces:interfaces-state";
+    }
+    return 0;
+  }
+  if (!operational_xml.empty()) {
+    result->data_xml = operational_xml.c_str();
+    return 1;
+  }
   pugi::xml_document configuration;
   configuration.load_buffer(active_configuration.data(),
                             active_configuration.size());

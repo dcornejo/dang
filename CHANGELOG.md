@@ -43,6 +43,9 @@ and releases follow Semantic Versioning.
 - Retained observed Linux link state through the transaction decision, with
   reverse-order partial-failure compensation and exact rollback of live MTU
   and flags; added opt-in privileged network-namespace regression tests.
+- Published live Linux administrative/operational status, MTU, and assigned
+  IPv4/IPv6 prefixes for configured interfaces instead of echoing intended
+  values into the deprecated RFC 8343/8344 compatibility state tree.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.
 - Made the per-session NMDA stress duration safely configurable for

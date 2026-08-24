@@ -10,8 +10,10 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
+#include <ifaddrs.h>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -25,6 +27,8 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
+#include <pugixml.hpp>
 
 namespace dangd::ip_management {
 namespace {
@@ -264,6 +268,7 @@ bool LinkRequest(RouteSocket* socket, std::string_view interface,
 
 struct LinkSnapshot {
   bool enabled = false;
+  bool running = false;
   unsigned mtu = 0;
 };
 
@@ -290,6 +295,7 @@ std::optional<LinkSnapshot> ReadLink(std::string_view interface,
     return std::nullopt;
   }
   const bool enabled = (request.ifr_flags & IFF_UP) != 0;
+  const bool running = (request.ifr_flags & IFF_RUNNING) != 0;
   if (ioctl(descriptor, SIOCGIFMTU, &request) != 0) {
     if (error) *error = "cannot read interface MTU for " + copied + ": " +
                         std::strerror(errno);
@@ -298,7 +304,78 @@ std::optional<LinkSnapshot> ReadLink(std::string_view interface,
   }
   const unsigned mtu = static_cast<unsigned>(request.ifr_mtu);
   close(descriptor);
-  return LinkSnapshot{enabled, mtu};
+  return LinkSnapshot{enabled, running, mtu};
+}
+
+std::string_view LocalName(std::string_view name) {
+  const std::size_t colon = name.find(':');
+  return colon == std::string_view::npos ? name : name.substr(colon + 1);
+}
+
+pugi::xml_node Child(const pugi::xml_node& parent, std::string_view local) {
+  for (const pugi::xml_node child : parent.children())
+    if (LocalName(child.name()) == local) return child;
+  return {};
+}
+
+unsigned PrefixLength(const sockaddr* mask) {
+  if (!mask) return 0;
+  const std::byte* bytes = nullptr;
+  std::size_t size = 0;
+  if (mask->sa_family == AF_INET) {
+    bytes = reinterpret_cast<const std::byte*>(
+        &reinterpret_cast<const sockaddr_in*>(mask)->sin_addr);
+    size = sizeof(in_addr);
+  } else if (mask->sa_family == AF_INET6) {
+    bytes = reinterpret_cast<const std::byte*>(
+        &reinterpret_cast<const sockaddr_in6*>(mask)->sin6_addr);
+    size = sizeof(in6_addr);
+  }
+  unsigned bits = 0;
+  for (std::size_t index = 0; index < size; ++index)
+    bits += static_cast<unsigned>(__builtin_popcount(
+        std::to_integer<unsigned char>(bytes[index])));
+  return bits;
+}
+
+bool AppendAddresses(const std::string& name, pugi::xml_node entry,
+                     unsigned mtu, std::string* error) {
+  ifaddrs* values = nullptr;
+  if (getifaddrs(&values) != 0) {
+    if (error) *error = "cannot enumerate interface addresses: " +
+                        std::string(std::strerror(errno));
+    return false;
+  }
+  pugi::xml_node ipv4;
+  pugi::xml_node ipv6;
+  for (const ifaddrs* value = values; value; value = value->ifa_next) {
+    if (!value->ifa_addr || name != value->ifa_name) continue;
+    const int family = value->ifa_addr->sa_family;
+    if (family != AF_INET && family != AF_INET6) continue;
+    pugi::xml_node* family_node = family == AF_INET ? &ipv4 : &ipv6;
+    if (!*family_node) {
+      *family_node = entry.append_child(family == AF_INET ? "ipv4" : "ipv6");
+      // RFC 8344 deliberately gives IPv4 MTU a uint16 representation. Linux
+      // loopback commonly reports 65536, so omit that unrepresentable value
+      // instead of publishing invalid instance data.
+      if (family == AF_INET6 || mtu <= 65535)
+        family_node->append_child("mtu").text() = mtu;
+    }
+    char text[INET6_ADDRSTRLEN]{};
+    const void* binary = family == AF_INET
+        ? static_cast<const void*>(&reinterpret_cast<const sockaddr_in*>(
+              value->ifa_addr)->sin_addr)
+        : static_cast<const void*>(&reinterpret_cast<const sockaddr_in6*>(
+              value->ifa_addr)->sin6_addr);
+    if (!inet_ntop(family, binary, text, sizeof(text))) continue;
+    pugi::xml_node address = family_node->append_child("address");
+    address.append_child("ip").text() = text;
+    address.append_child("prefix-length").text() =
+        PrefixLength(value->ifa_netmask);
+    address.append_child("origin").text() = "other";
+  }
+  freeifaddrs(values);
+  return true;
 }
 
 std::optional<unsigned> Mtu(const InterfaceConfig& interface,
@@ -412,6 +489,45 @@ class LinuxBackend final : public PlatformBackend {
     rollback_before_.clear();
     rollback_desired_.clear();
     rollback_operations_.clear();
+  }
+
+  bool OperationalXml(std::string_view configuration_xml, std::string* output,
+                      std::string* error) override {
+    pugi::xml_document configuration;
+    const pugi::xml_parse_result parsed = configuration.load_buffer(
+        configuration_xml.data(), configuration_xml.size());
+    if (!parsed) {
+      if (error) *error = "cannot parse applied configuration for live state";
+      return false;
+    }
+    pugi::xml_document state;
+    pugi::xml_node root = state.append_child("interfaces-state");
+    root.append_attribute("xmlns") =
+        "urn:ietf:params:xml:ns:yang:ietf-interfaces";
+    for (const pugi::xml_node top : configuration.document_element().children()) {
+      if (LocalName(top.name()) != "interfaces") continue;
+      for (const pugi::xml_node configured : top.children()) {
+        if (LocalName(configured.name()) != "interface") continue;
+        const pugi::xml_node name_node = Child(configured, "name");
+        const pugi::xml_node type_node = Child(configured, "type");
+        if (!name_node || !type_node) continue;
+        const std::string name = name_node.text().as_string();
+        const auto link = ReadLink(name, error);
+        if (!link) return false;
+        pugi::xml_node entry = root.append_child("interface");
+        entry.append_child("name").text() = name.c_str();
+        entry.append_child("type").text() = type_node.text().as_string();
+        entry.append_child("admin-status").text() =
+            link->enabled ? "up" : "down";
+        entry.append_child("oper-status").text() =
+            link->running ? "up" : (link->enabled ? "dormant" : "down");
+        if (!AppendAddresses(name, entry, link->mtu, error)) return false;
+      }
+    }
+    std::ostringstream serialized;
+    state.print(serialized, "", pugi::format_raw);
+    *output = serialized.str();
+    return true;
   }
 
  private:

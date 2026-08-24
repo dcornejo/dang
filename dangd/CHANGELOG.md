@@ -38,6 +38,8 @@
 - Preserved observed Linux flags and MTU until commit so transaction rollback
   restores actual pre-apply state, with reverse partial-failure compensation
   and privileged isolated-network tests.
+- Added live Linux RFC 8343/8344 compatibility publication for managed link
+  status, MTU, and kernel-assigned IPv4/IPv6 address prefixes.
 - Verified concurrent operational publication with a thread-safe test provider,
   eight overlapping sessions, 200 complete retrievals, and response validation.
 - Added a bounded environment override for scaling that identical workload into
