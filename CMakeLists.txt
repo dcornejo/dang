@@ -131,6 +131,11 @@ if(YANG_BUILD_DANGD)
   target_link_libraries(dangd PRIVATE dangd_core)
   target_compile_options(dangd PRIVATE
     -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+  add_executable(dangd-plugin-worker dangd/plugin_worker_main.cc)
+  target_compile_features(dangd-plugin-worker PRIVATE cxx_std_20)
+  target_link_libraries(dangd-plugin-worker PRIVATE dangd_core)
+  target_compile_options(dangd-plugin-worker PRIVATE
+    -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
   add_executable(dangctl dangd/client_main.cc)
   target_compile_features(dangctl PRIVATE cxx_std_20)
   target_link_libraries(dangctl PRIVATE dangd_core)
@@ -433,6 +438,8 @@ if(YANG_BUILD_DANGD)
     set_target_properties(dangd_test_deviation_plugin PROPERTIES PREFIX "")
   endif()
   install(TARGETS dangd dangctl RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  install(TARGETS dangd-plugin-worker
+    RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/dangd)
   install(TARGETS dangd_example_plugin dangd_ip_management_plugin
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/dangd/plugins)
   install(FILES dangd/plugin_api.h
@@ -533,7 +540,7 @@ if(YANG_BUILD_TESTS)
   if(YANG_BUILD_DANGD)
     add_executable(dangd_tests dangd/application_test.cc
       dangd/hardware_transaction_test.cc dangd/plugin_manager_test.cc
-      dangd/plugin_worker_protocol_test.cc
+      dangd/plugin_worker_protocol_test.cc dangd/plugin_worker_test.cc
       dangd/ip_management_platform_test.cc
       dangd/plugins/ip_management/platform_config.cc
       dangd/ssh_transport_test.cc
@@ -543,6 +550,7 @@ if(YANG_BUILD_TESTS)
       dangd_test_plugin_support GTest::gtest_main Threads::Threads)
     target_compile_definitions(dangd_tests PRIVATE
       DANG_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+      DANG_TEST_PLUGIN_WORKER_PATH="$<TARGET_FILE:dangd-plugin-worker>"
       DANG_TEST_PLUGIN_PATH="$<TARGET_FILE:dangd_example_plugin>"
       DANG_TEST_IP_PLUGIN_PATH="$<TARGET_FILE:dangd_ip_management_plugin>"
       DANG_TEST_PROVIDER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_provider_plugin>"
@@ -582,7 +590,8 @@ if(YANG_BUILD_TESTS)
       DANG_TEST_XPATH_ABSENCE_INPUT_PLUGIN_PATH="$<TARGET_FILE:dangd_test_xpath_absence_input_plugin>"
       DANG_TEST_XPATH_ABSENCE_MUST_PLUGIN_PATH="$<TARGET_FILE:dangd_test_xpath_absence_must_plugin>"
       DANG_TEST_XPATH_ABSENCE_WHEN_PLUGIN_PATH="$<TARGET_FILE:dangd_test_xpath_absence_when_plugin>")
-    add_dependencies(dangd_tests dangd_example_plugin dangd_ip_management_plugin
+    add_dependencies(dangd_tests dangd-plugin-worker
+      dangd_example_plugin dangd_ip_management_plugin
       dangd_test_provider_plugin dangd_test_consumer_plugin
       dangd_test_broken_discovery_plugin dangd_test_broken_operational_plugin
       dangd_test_complete_operational_plugin

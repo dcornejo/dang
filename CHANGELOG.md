@@ -12,6 +12,8 @@ and releases follow Semantic Versioning.
 
 - Started supervised plugin isolation with a bounded, deadline-aware POSIX
   worker protocol that classifies timeout, exit, truncation, and I/O failures.
+- Added an installed standalone worker that exclusively loads one plugin and
+  exposes copied manifest and YANG source discovery over the bounded protocol.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.
 - Made the per-session NMDA stress duration safely configurable for

@@ -16,6 +16,10 @@ single monotonic deadline across each complete frame, and distinguishes a clean
 worker exit from timeout, protocol truncation, and host I/O failure. Callback
 routing and worker restart are still active work tracked in `TODO.md`; until
 that migration is complete the existing in-process ABI behavior remains in use.
+The installed `libexec/dangd/dangd-plugin-worker` executable already owns load,
+ABI validation, manifest copying, and YANG source copying for one plugin. Its
+ready handshake reports load failures before it accepts requests, and malformed
+or unknown operations fail closed without publishing partial discovery data.
 
 This guide defines the contract between `dangd` and a dynamically loaded
 configuration provider. It is both a how-to and the behavioral specification

@@ -356,7 +356,10 @@ thread would permit it to continue executing against torn-down plugin state.
 The first isolation layer is implemented: bounded length-prefixed IPC uses a
 monotonic deadline and classifies timeout, peer exit, truncation, oversized
 frames, and system errors. Plugin loading and callback ownership have not yet
-moved behind that channel, so timeout/crash recovery remains incomplete.
+moved behind that channel in the live server, so timeout/crash recovery remains
+incomplete. The standalone worker does exclusively own plugin loading and
+returns only copied manifest/YANG discovery values; live parent-side worker
+creation and callback routing are the next migration stage.
 An end-to-end deterministic stress case issues 200 operational retrievals from
 eight sessions, verifies every response, and proves that all eight provider
 callbacks may execute concurrently. The ASan/UBSan release soak completed at

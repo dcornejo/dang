@@ -76,6 +76,7 @@ struct PluginManager::State {
 
   std::vector<Plugin> plugins;
   std::vector<PluginYangSource> sources;
+  std::vector<PluginManifest> manifests;
   std::vector<std::size_t> order;
   std::string before_xml;
   std::string proposed_xml;
@@ -333,12 +334,25 @@ bool PluginManager::Load(const std::filesystem::path& path,
   state_->sources.insert(state_->sources.end(),
                          std::make_move_iterator(discovered_sources.begin()),
                          std::make_move_iterator(discovered_sources.end()));
+  state_->manifests.push_back(
+      {plugin.name,
+       api->abi_version,
+       plugin.modules,
+       plugin.dependencies,
+       plugin.invoke != nullptr,
+       plugin.operational_v2 != nullptr || plugin.operational != nullptr,
+       plugin.hardware_action_count != nullptr,
+       plugin.reconcile_applied != nullptr});
   state_->plugins.push_back(std::move(plugin));
   return true;
 }
 
 const std::vector<PluginYangSource>& PluginManager::yang_sources() const {
   return state_->sources;
+}
+
+const std::vector<PluginManifest>& PluginManager::manifests() const {
+  return state_->manifests;
 }
 
 std::vector<PluginOperationalFragment> PluginManager::OperationalData() const {

@@ -19,6 +19,7 @@ TEST(PluginManagerTest, FailedDiscoveryDoesNotPublishPartialManifest) {
   EXPECT_NE(errors.front().find("simulated discovery failure"),
             std::string::npos);
   EXPECT_TRUE(plugins.yang_sources().empty());
+  EXPECT_TRUE(plugins.manifests().empty());
 }
 
 TEST(PluginManagerTest, RejectsMissingRuntimeDependency) {

@@ -29,6 +29,18 @@ struct PluginYangSource {
   std::vector<std::string> enabled_features;
 };
 
+/** Host-owned plugin identity and callback capabilities discovered at load. */
+struct PluginManifest {
+  std::string plugin_name;
+  std::uint32_t abi_version = 0;
+  std::vector<std::string> modules;
+  std::vector<std::string> dependencies;
+  bool supports_operations = false;
+  bool supports_operational_data = false;
+  bool supports_hardware_actions = false;
+  bool supports_applied_reconciliation = false;
+};
+
 /** One ABI-v3 operational callback result, including provider attribution. */
 struct PluginOperationalFragment {
   std::string provider;
@@ -77,6 +89,8 @@ class PluginManager : public yang::netconf::OperationProvider {
   [[nodiscard]] bool ValidateDependencies(std::vector<std::string>* errors) const;
   /** Returns all copied sources in plugin discovery order. */
   [[nodiscard]] const std::vector<PluginYangSource>& yang_sources() const;
+  /** Returns copied plugin manifests in successful load order. */
+  [[nodiscard]] const std::vector<PluginManifest>& manifests() const;
   /** Collects attributed operational callback results from ABI-v3 plugins. */
   [[nodiscard]] std::vector<PluginOperationalFragment> OperationalData() const;
   /** Returns modeled state for hardware changes that could not be rolled back. */
