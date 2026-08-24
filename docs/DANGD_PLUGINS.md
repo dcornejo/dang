@@ -126,8 +126,9 @@ native backends do not create interfaces. Linux publishes live link status,
 MTU, assigned addresses, and complete neighbor-cache entries for configured
 interfaces, but not counters or unconfigured system interfaces. FreeBSD also
 publishes native live link status, MTU, assigned addresses, and complete
-neighbor-cache entries for configured interfaces. External address and neighbor
-drift is not yet reconciled.
+neighbor-cache entries for configured interfaces. FreeBSD also repairs missing
+or altered configured addresses and neighbors without deleting unrelated kernel
+entries. Linux does not yet reconcile external address and neighbor drift.
 
 For example, start `dangd` with the plugin using the module filename produced
 by CMake:

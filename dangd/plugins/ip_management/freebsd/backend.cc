@@ -565,6 +565,57 @@ bool AppendNeighbors(const std::string& name, pugi::xml_node entry,
   return true;
 }
 
+struct KernelInterfaceState {
+  std::vector<AddressConfig> addresses;
+  std::vector<NeighborConfig> neighbors;
+};
+
+bool ReadKernelState(const std::string& name, KernelInterfaceState* state,
+                     std::string* error) {
+  ifaddrs* values = nullptr;
+  if (getifaddrs(&values) != 0) {
+    if (error) *error = "cannot enumerate FreeBSD interface addresses: " +
+                        std::string(std::strerror(errno));
+    return false;
+  }
+  for (const ifaddrs* value = values; value; value = value->ifa_next) {
+    if (!value->ifa_addr || name != value->ifa_name) continue;
+    const int family = value->ifa_addr->sa_family;
+    if (family != AF_INET && family != AF_INET6) continue;
+    char text[INET6_ADDRSTRLEN]{};
+    const void* binary = family == AF_INET
+        ? static_cast<const void*>(&reinterpret_cast<const sockaddr_in*>(
+              value->ifa_addr)->sin_addr)
+        : static_cast<const void*>(&reinterpret_cast<const sockaddr_in6*>(
+              value->ifa_addr)->sin6_addr);
+    if (inet_ntop(family, binary, text, sizeof(text)))
+      state->addresses.push_back(
+          {text, PrefixLength(value->ifa_netmask), family == AF_INET6});
+  }
+  freeifaddrs(values);
+  const unsigned interface_index = if_nametoindex(name.c_str());
+  if (!interface_index) {
+    if (error) *error = "resolve interface " + name + ": " +
+                        std::strerror(errno);
+    return false;
+  }
+  std::vector<LiveNeighbor> live_neighbors;
+  if (!DumpNeighbors(interface_index, &live_neighbors, error)) return false;
+  for (const LiveNeighbor& value : live_neighbors)
+    state->neighbors.push_back(
+        {value.address, value.link_layer_address, value.ipv6});
+  return true;
+}
+
+template <typename Value>
+const Value* FindByAddress(const std::vector<Value>& values,
+                           const Value& target) {
+  const auto found = std::ranges::find_if(values, [&](const Value& value) {
+    return value.ipv6 == target.ipv6 && value.address == target.address;
+  });
+  return found == values.end() ? nullptr : &*found;
+}
+
 bool MtuRequest(std::string_view interface, unsigned mtu, std::string* error) {
   IoctlSocket socket(AF_INET);
   if (!socket.valid(error)) return false;
@@ -642,40 +693,83 @@ class FreeBsdBackend final : public PlatformBackend {
     if (!ParsePlatformConfig(before_xml, &before, error) ||
         !ParsePlatformConfig(desired_xml, &desired, error))
       return false;
+    std::vector<std::pair<std::string, KernelInterfaceState>> kernel_states;
+    for (const InterfaceConfig& interface : desired) {
+      KernelInterfaceState state;
+      if (!ReadKernelState(interface.name, &state, error)) return false;
+      kernel_states.push_back({interface.name, std::move(state)});
+    }
+    for (const InterfaceConfig& interface : before) {
+      if (std::ranges::find(kernel_states, interface.name,
+                            &decltype(kernel_states)::value_type::first) !=
+          kernel_states.end())
+        continue;
+      KernelInterfaceState state;
+      if (!ReadKernelState(interface.name, &state, error)) return false;
+      kernel_states.push_back({interface.name, std::move(state)});
+    }
+    const auto kernel = [&](const std::string& name)
+        -> const KernelInterfaceState& {
+      return std::ranges::find(kernel_states, name,
+                               &decltype(kernel_states)::value_type::first)
+          ->second;
+    };
     std::vector<std::pair<Operation, Operation>> operations;
     for (const InterfaceConfig& old_interface : before) {
       const InterfaceConfig* replacement = Find(desired, old_interface.name);
       for (const NeighborConfig& value : old_interface.neighbors)
         if (!replacement || std::ranges::find(replacement->neighbors, value) ==
-                                replacement->neighbors.end())
-          operations.push_back({{Operation::Kind::kNeighbor,
-                                 old_interface.name, {}, {}, {}, false, value},
-                                {Operation::Kind::kNeighbor,
-                                 old_interface.name, {}, {}, {}, true, value}});
+                                replacement->neighbors.end()) {
+          const NeighborConfig* observed =
+              FindByAddress(kernel(old_interface.name).neighbors, value);
+          if (observed)
+            operations.push_back(
+                {{Operation::Kind::kNeighbor, old_interface.name, {}, {}, {},
+                  false, *observed},
+                 {Operation::Kind::kNeighbor, old_interface.name, {}, {}, {},
+                  true, *observed}});
+        }
       for (const AddressConfig& value : old_interface.addresses)
         if (!replacement || std::ranges::find(replacement->addresses, value) ==
-                                replacement->addresses.end())
-          operations.push_back({{Operation::Kind::kAddress,
-                                 old_interface.name, value, {}, {}, false, {}},
-                                {Operation::Kind::kAddress,
-                                 old_interface.name, value, {}, {}, true, {}}});
+                                replacement->addresses.end()) {
+          const AddressConfig* observed =
+              FindByAddress(kernel(old_interface.name).addresses, value);
+          if (observed)
+            operations.push_back(
+                {{Operation::Kind::kAddress, old_interface.name, *observed, {},
+                  {}, false, {}},
+                 {Operation::Kind::kAddress, old_interface.name, *observed, {},
+                  {}, true, {}}});
+        }
     }
     for (const InterfaceConfig& interface : desired) {
       const InterfaceConfig* old = Find(before, interface.name);
-      for (const AddressConfig& value : interface.addresses)
-        if (!old || std::ranges::find(old->addresses, value) ==
-                        old->addresses.end())
+      for (const AddressConfig& value : interface.addresses) {
+        const AddressConfig* observed =
+            FindByAddress(kernel(interface.name).addresses, value);
+        const bool old_will_remove = old && FindByAddress(old->addresses, value) &&
+            std::ranges::find(old->addresses, value) == old->addresses.end();
+        if (observed && *observed != value && !old_will_remove)
+          operations.push_back({{Operation::Kind::kAddress, interface.name,
+                                 *observed, {}, {}, false, {}},
+                                {Operation::Kind::kAddress, interface.name,
+                                 *observed, {}, {}, true, {}}});
+        if (!observed || *observed != value)
           operations.push_back({{Operation::Kind::kAddress, interface.name,
                                  value, {}, {}, true, {}},
                                 {Operation::Kind::kAddress, interface.name,
                                  value, {}, {}, false, {}}});
-      for (const NeighborConfig& value : interface.neighbors)
-        if (!old || std::ranges::find(old->neighbors, value) ==
-                        old->neighbors.end())
+      }
+      for (const NeighborConfig& value : interface.neighbors) {
+        const NeighborConfig* observed =
+            FindByAddress(kernel(interface.name).neighbors, value);
+        if (!observed || *observed != value)
           operations.push_back({{Operation::Kind::kNeighbor, interface.name,
                                  {}, {}, {}, true, value},
                                 {Operation::Kind::kNeighbor, interface.name,
-                                 {}, {}, {}, false, value}});
+                                 {}, {}, {}, observed != nullptr,
+                                 observed ? *observed : value}});
+      }
       const auto desired_mtu = Mtu(interface, error);
       if ((interface.ipv4_mtu || interface.ipv6_mtu) && !desired_mtu)
         return false;

@@ -61,6 +61,9 @@ and releases follow Semantic Versioning.
 - Published live FreeBSD administrative/operational status, MTU, assigned
   IPv4/IPv6 prefixes, and complete neighbor tables for configured interfaces
   from native kernel APIs, including FreeBSD permanent-neighbor classification.
+- Reconciled FreeBSD managed address and neighbor intent against live kernel
+  state even when configuration XML is unchanged, repairing missing or altered
+  entries while preserving unrelated system-owned networking state.
 - Removed the now-unused external command runner from the IP plugin.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.
