@@ -3,6 +3,20 @@
 
 # Writing a dangd configuration plugin
 
+## Process ownership
+
+Plugin isolation is being migrated to one long-lived supervised worker per
+plugin. The worker owns the shared library, callback table, context, prepared
+transactions, and every other opaque plugin pointer for their complete
+lifetime. `dangd` exchanges only bounded copied values over a deadline-aware
+framed POSIX channel; it must never deserialize or retain a worker address.
+
+The framing foundation rejects oversized messages before allocation, applies a
+single monotonic deadline across each complete frame, and distinguishes a clean
+worker exit from timeout, protocol truncation, and host I/O failure. Callback
+routing and worker restart are still active work tracked in `TODO.md`; until
+that migration is complete the existing in-process ABI behavior remains in use.
+
 This guide defines the contract between `dangd` and a dynamically loaded
 configuration provider. It is both a how-to and the behavioral specification
 for plugin authors. The first ABI targets POSIX shared libraries only. Windows

@@ -40,7 +40,9 @@ stays in this file with its remaining work rewritten precisely.
   315.7 seconds under ASan/UBSan while all eight callbacks were simultaneously
   active. Isolate operational callbacks in a supervised worker boundary so a
   hung or crashed plugin can be timed out without leaving an in-process thread
-  running against unloaded plugin state; add timeout/crash recovery tests.
+  running against unloaded plugin state; add timeout/crash recovery tests. The
+  bounded deadline-aware framing layer now distinguishes timeout, clean worker
+  exit, truncated protocol data, oversized messages, and system failures.
   Malformed typed data and oversized callback XML are rejected atomically with
   provider attribution and bounded copying. Document unsupported optional
   features and deviations before making an RFC 8342 or RFC 8526 compliance claim.

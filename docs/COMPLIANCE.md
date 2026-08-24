@@ -353,6 +353,10 @@ Malformed or oversized provider output fails the retrieval atomically with
 provider/stage attribution. Safe timeout and crash recovery still require a
 supervised out-of-process callback boundary; abandoning an in-process worker
 thread would permit it to continue executing against torn-down plugin state.
+The first isolation layer is implemented: bounded length-prefixed IPC uses a
+monotonic deadline and classifies timeout, peer exit, truncation, oversized
+frames, and system errors. Plugin loading and callback ownership have not yet
+moved behind that channel, so timeout/crash recovery remains incomplete.
 An end-to-end deterministic stress case issues 200 operational retrievals from
 eight sessions, verifies every response, and proves that all eight provider
 callbacks may execute concurrently. The ASan/UBSan release soak completed at

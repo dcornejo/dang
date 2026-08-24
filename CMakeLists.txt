@@ -112,6 +112,7 @@ if(YANG_BUILD_DANGD)
     dangd/application.cc
     dangd/configuration_backend.cc
     dangd/hardware_transaction.cc
+    dangd/plugin_worker_protocol.cc
     dangd/plugin_manager.cc
     dangd/ssh_transport.cc
     dangd/tls_transport.cc)
@@ -532,6 +533,7 @@ if(YANG_BUILD_TESTS)
   if(YANG_BUILD_DANGD)
     add_executable(dangd_tests dangd/application_test.cc
       dangd/hardware_transaction_test.cc dangd/plugin_manager_test.cc
+      dangd/plugin_worker_protocol_test.cc
       dangd/ip_management_platform_test.cc
       dangd/plugins/ip_management/platform_config.cc
       dangd/ssh_transport_test.cc

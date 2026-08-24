@@ -7,6 +7,8 @@
 
 ### Changed
 
+- Added the tested framed IPC foundation for moving plugin ownership into
+  supervised worker processes without sharing library or opaque state pointers.
 - Verified concurrent operational publication with a thread-safe test provider,
   eight overlapping sessions, 200 complete retrievals, and response validation.
 - Added a bounded environment override for scaling that identical workload into
