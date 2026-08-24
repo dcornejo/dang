@@ -35,6 +35,15 @@ namespace {
 
 constexpr std::size_t kMessageBytes = 1024;
 
+struct LiveNeighbor {
+  std::string address;
+  std::string link_layer_address;
+  std::string origin;
+  std::string state;
+  bool ipv6 = false;
+  bool router = false;
+};
+
 const InterfaceConfig* Find(const std::vector<InterfaceConfig>& values,
                             const std::string& name) {
   const auto found = std::ranges::find(values, name, &InterfaceConfig::name);
@@ -118,6 +127,10 @@ class RouteSocket {
                                       : "netlink peer closed");
         return false;
       }
+      if (response_message.msg_flags & MSG_TRUNC) {
+        if (error) *error = "neighbor dump exceeded the receive buffer";
+        return false;
+      }
       if (sender.nl_pid != 0) continue;
       int remaining = static_cast<int>(received);
       for (auto* header = reinterpret_cast<nlmsghdr*>(response.data());
@@ -135,6 +148,132 @@ class RouteSocket {
         if (error) *error = std::string(description) + ": " +
                             std::strerror(-reply->error);
         return false;
+      }
+    }
+  }
+
+  bool Neighbors(unsigned interface_index, std::vector<LiveNeighbor>* result,
+                 std::string* error) {
+    struct {
+      nlmsghdr header;
+      ndmsg body;
+    } request{};
+    request.header.nlmsg_len = NLMSG_LENGTH(sizeof(ndmsg));
+    request.header.nlmsg_type = RTM_GETNEIGH;
+    request.header.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
+    request.header.nlmsg_seq = ++sequence_;
+    request.body.ndm_family = AF_UNSPEC;
+    sockaddr_nl kernel{};
+    kernel.nl_family = AF_NETLINK;
+    iovec part{&request, request.header.nlmsg_len};
+    msghdr message{};
+    message.msg_name = &kernel;
+    message.msg_namelen = sizeof(kernel);
+    message.msg_iov = &part;
+    message.msg_iovlen = 1;
+    if (sendmsg(descriptor_, &message, 0) < 0) {
+      if (error) *error = "dump neighbors: " +
+                          std::string(std::strerror(errno));
+      return false;
+    }
+    std::array<std::byte, 16384> response{};
+    while (true) {
+      sockaddr_nl sender{};
+      iovec response_part{response.data(), response.size()};
+      msghdr response_message{};
+      response_message.msg_name = &sender;
+      response_message.msg_namelen = sizeof(sender);
+      response_message.msg_iov = &response_part;
+      response_message.msg_iovlen = 1;
+      const ssize_t received = recvmsg(descriptor_, &response_message, 0);
+      if (received < 0 && errno == EINTR) continue;
+      if (received <= 0) {
+        if (error) *error = "dump neighbors: " + std::string(
+            received ? std::strerror(errno) : "netlink peer closed");
+        return false;
+      }
+      if (sender.nl_pid != 0) continue;
+      int remaining = static_cast<int>(received);
+      for (auto* header = reinterpret_cast<nlmsghdr*>(response.data());
+           NLMSG_OK(header, remaining); header = NLMSG_NEXT(header, remaining)) {
+        if (header->nlmsg_seq != sequence_) continue;
+        if (header->nlmsg_flags & NLM_F_DUMP_INTR) {
+          if (error) *error = "neighbor dump was interrupted by a kernel change";
+          return false;
+        }
+        if (header->nlmsg_type == NLMSG_DONE) return true;
+        if (header->nlmsg_type == NLMSG_ERROR) {
+          if (error) {
+            if (NLMSG_PAYLOAD(header, 0) < sizeof(nlmsgerr)) {
+              *error = "truncated neighbor dump error";
+            } else {
+              const auto* reply = reinterpret_cast<const nlmsgerr*>(
+                  NLMSG_DATA(header));
+              *error = reply->error
+                  ? "kernel rejected neighbor dump: " +
+                        std::string(std::strerror(-reply->error))
+                  : "unexpected neighbor dump acknowledgement";
+            }
+          }
+          return false;
+        }
+        if (header->nlmsg_type != RTM_NEWNEIGH ||
+            NLMSG_PAYLOAD(header, 0) < sizeof(ndmsg))
+          continue;
+        const auto* neighbor = reinterpret_cast<const ndmsg*>(
+            NLMSG_DATA(header));
+        if (neighbor->ndm_ifindex != static_cast<int>(interface_index) ||
+            (neighbor->ndm_family != AF_INET &&
+             neighbor->ndm_family != AF_INET6))
+          continue;
+        const void* destination = nullptr;
+        std::size_t destination_size = 0;
+        const std::byte* link_layer = nullptr;
+        std::size_t link_layer_size = 0;
+        int attribute_bytes = static_cast<int>(
+            NLMSG_PAYLOAD(header, sizeof(ndmsg)));
+        for (auto* attribute = reinterpret_cast<rtattr*>(
+                 reinterpret_cast<std::byte*>(const_cast<ndmsg*>(neighbor)) +
+                 NLMSG_ALIGN(sizeof(ndmsg)));
+             RTA_OK(attribute, attribute_bytes);
+             attribute = RTA_NEXT(attribute, attribute_bytes)) {
+          if (attribute->rta_type == NDA_DST) {
+            destination = RTA_DATA(attribute);
+            destination_size = RTA_PAYLOAD(attribute);
+          } else if (attribute->rta_type == NDA_LLADDR) {
+            link_layer = reinterpret_cast<const std::byte*>(RTA_DATA(attribute));
+            link_layer_size = RTA_PAYLOAD(attribute);
+          }
+        }
+        const std::size_t expected = neighbor->ndm_family == AF_INET
+            ? sizeof(in_addr) : sizeof(in6_addr);
+        if (!destination || destination_size != expected || !link_layer ||
+            link_layer_size == 0)
+          continue;
+        char address[INET6_ADDRSTRLEN]{};
+        if (!inet_ntop(neighbor->ndm_family, destination, address,
+                       sizeof(address)))
+          continue;
+        std::ostringstream hardware;
+        hardware << std::hex;
+        for (std::size_t index = 0; index < link_layer_size; ++index) {
+          if (index) hardware << ':';
+          hardware.width(2);
+          hardware.fill('0');
+          hardware << static_cast<unsigned>(
+              std::to_integer<unsigned char>(link_layer[index]));
+        }
+        std::string state;
+        if (neighbor->ndm_state & NUD_REACHABLE) state = "reachable";
+        else if (neighbor->ndm_state & NUD_STALE) state = "stale";
+        else if (neighbor->ndm_state & NUD_DELAY) state = "delay";
+        else if (neighbor->ndm_state & NUD_PROBE) state = "probe";
+        else if (neighbor->ndm_state & NUD_INCOMPLETE) state = "incomplete";
+        result->push_back({address, hardware.str(),
+                           neighbor->ndm_state & NUD_PERMANENT
+                               ? "static" : "dynamic",
+                           state, neighbor->ndm_family == AF_INET6,
+                           (neighbor->ndm_flags & NTF_ROUTER) != 0});
       }
     }
   }
@@ -378,6 +517,33 @@ bool AppendAddresses(const std::string& name, pugi::xml_node entry,
   return true;
 }
 
+bool AppendNeighbors(const std::string& name, pugi::xml_node entry,
+                     std::string* error) {
+  unsigned interface_index = 0;
+  if (!InterfaceIndex(name, &interface_index, error)) return false;
+  RouteSocket socket;
+  if (!socket.valid(error)) return false;
+  std::vector<LiveNeighbor> neighbors;
+  if (!socket.Neighbors(interface_index, &neighbors, error)) return false;
+  pugi::xml_node ipv4 = Child(entry, "ipv4");
+  pugi::xml_node ipv6 = Child(entry, "ipv6");
+  for (const LiveNeighbor& value : neighbors) {
+    pugi::xml_node* family = value.ipv6 ? &ipv6 : &ipv4;
+    if (!*family) *family = entry.append_child(value.ipv6 ? "ipv6" : "ipv4");
+    pugi::xml_node neighbor = family->append_child("neighbor");
+    neighbor.append_child("ip").text() = value.address.c_str();
+    neighbor.append_child("link-layer-address").text() =
+        value.link_layer_address.c_str();
+    neighbor.append_child("origin").text() = value.origin.c_str();
+    if (value.ipv6) {
+      if (value.router) neighbor.append_child("is-router");
+      if (!value.state.empty())
+        neighbor.append_child("state").text() = value.state.c_str();
+    }
+  }
+  return true;
+}
+
 std::optional<unsigned> Mtu(const InterfaceConfig& interface,
                             std::string* error) {
   if (interface.ipv4_mtu && interface.ipv6_mtu &&
@@ -522,6 +688,7 @@ class LinuxBackend final : public PlatformBackend {
         entry.append_child("oper-status").text() =
             link->running ? "up" : (link->enabled ? "dormant" : "down");
         if (!AppendAddresses(name, entry, link->mtu, error)) return false;
+        if (!AppendNeighbors(name, entry, error)) return false;
       }
     }
     std::ostringstream serialized;

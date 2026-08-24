@@ -16,7 +16,7 @@ stays in this file with its remaining work rewritten precisely.
 ### RFC 8343/8344 native IP management closure
 
 - Replace the FreeBSD `/sbin/ifconfig` adapter with direct kernel APIs; publish
-  live Linux neighbor state and FreeBSD link/address/neighbor state; reconcile
+  live FreeBSD link/address/neighbor state; reconcile
   external address and neighbor drift; and test privileged apply plus partial-failure
   compensation on FreeBSD. Linux now applies enabled state, IPv4/IPv6
   addresses, equal per-family MTUs, and static neighbors with acknowledged
@@ -24,8 +24,8 @@ stays in this file with its remaining work rewritten precisely.
   failed request sequence, and retains the exact observed link snapshot until
   the enclosing transaction commits or rolls back. Privileged isolated Linux
   tests cover address apply/removal, partial failure, exact MTU rollback, and
-  live link/MTU/address publication for configured interfaces. Linux counters,
-  neighbor-cache state, and system-controlled unconfigured interfaces remain.
+  live link/MTU/address/neighbor publication for configured interfaces. Linux
+  counters and system-controlled unconfigured interfaces remain.
 
 ### RFC 8341 NACM compliance closure
 

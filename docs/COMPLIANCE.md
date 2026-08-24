@@ -429,8 +429,9 @@ reverse plan until transaction commit, including reverse-order compensation
 after a partial rtnetlink failure.
 
 It does not create/delete interfaces. Linux publishes live link status, MTU,
-and assigned prefixes for configured interfaces, but not neighbors, counters,
-duplicate-address detection, or unconfigured system-controlled interfaces.
+assigned prefixes, and complete ARP/IPv6 neighbor entries for configured
+interfaces, but not counters, duplicate-address detection, or unconfigured
+system-controlled interfaces.
 Address and neighbor changes made by other agents are not reconciled. FreeBSD
 still lacks direct kernel application, MTU, neighbor, live-state, and equivalent
 compensation coverage. It therefore does not claim operational compliance with

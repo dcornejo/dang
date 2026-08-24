@@ -126,5 +126,27 @@ TEST(LinuxIpBackendTest, PublishesLiveLinkAndAddressState) {
   EXPECT_NE(state.find("<mtu>"), std::string::npos) << state;
 }
 
+TEST(LinuxIpBackendTest, PublishesConfiguredKernelNeighbor) {
+  if (!PrivilegedTestsEnabled())
+    GTEST_SKIP() << "set DANG_RUN_PRIVILEGED_IP_TESTS=1 in an isolated netns";
+  constexpr const char* configured =
+      "<config><interfaces><interface><name>eth0</name>"
+      "<type>iana-if-type:ethernetCsmacd</type><ipv4><neighbor>"
+      "<ip>198.51.100.200</ip>"
+      "<link-layer-address>02:00:00:00:00:c8</link-layer-address>"
+      "</neighbor></ipv4></interface></interfaces></config>";
+  auto backend = MakePlatformBackend();
+  std::string error;
+  ASSERT_TRUE(backend->Reconcile("<config/>", configured, &error)) << error;
+  std::string state;
+  ASSERT_TRUE(backend->OperationalXml(configured, &state, &error)) << error;
+  EXPECT_NE(state.find("<ip>198.51.100.200</ip>"), std::string::npos) << state;
+  EXPECT_NE(state.find(
+                "<link-layer-address>02:00:00:00:00:c8</link-layer-address>"),
+            std::string::npos) << state;
+  EXPECT_NE(state.find("<origin>static</origin>"), std::string::npos) << state;
+  ASSERT_TRUE(backend->Reconcile(configured, "<config/>", &error)) << error;
+}
+
 }  // namespace
 }  // namespace dangd::ip_management

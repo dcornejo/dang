@@ -40,6 +40,8 @@
   and privileged isolated-network tests.
 - Added live Linux RFC 8343/8344 compatibility publication for managed link
   status, MTU, and kernel-assigned IPv4/IPv6 address prefixes.
+- Published the live Linux ARP and IPv6 neighbor cache from an authenticated
+  rtnetlink dump, including static/dynamic origin and IPv6 state metadata.
 - Verified concurrent operational publication with a thread-safe test provider,
   eight overlapping sessions, 200 complete retrievals, and response validation.
 - Added a bounded environment override for scaling that identical workload into

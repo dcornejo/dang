@@ -122,10 +122,10 @@ acknowledgement, compensates completed operations in reverse order after a
 partial failure, and retains observed flags and MTU until the enclosing
 transaction commits or rolls back. A failure is returned to NETCONF. The
 native backends do not create interfaces. Linux publishes live link status,
-MTU, and assigned addresses for configured interfaces, but not counters,
-neighbors, or unconfigured system interfaces. FreeBSD does not yet manage MTUs
-or neighbors and still publishes simulated state. External address and neighbor
-drift is not yet reconciled.
+MTU, assigned addresses, and complete neighbor-cache entries for configured
+interfaces, but not counters or unconfigured system interfaces. FreeBSD does
+not yet manage MTUs or neighbors and still publishes simulated state. External
+address and neighbor drift is not yet reconciled.
 
 For example, start `dangd` with the plugin using the module filename produced
 by CMake:
@@ -243,9 +243,9 @@ best available path, provider, stage, and reason. The RPC does not return a
 partially assembled operational data payload alongside that error.
 
 The IP-management example uses ABI v3 to publish RFC 8343
-`/interfaces-state`. Linux reads managed-interface flags, MTU, and addresses
-from the kernel for each retrieval. Other platforms currently derive
-`oper-status` from the last successfully applied configuration.
+`/interfaces-state`. Linux reads managed-interface flags, MTU, addresses, and
+the ARP/IPv6 neighbor cache from the kernel for each retrieval. Other platforms
+currently derive `oper-status` from the last successfully applied configuration.
 
 Load plugins explicitly:
 

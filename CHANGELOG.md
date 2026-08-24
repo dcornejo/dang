@@ -46,6 +46,9 @@ and releases follow Semantic Versioning.
 - Published live Linux administrative/operational status, MTU, and assigned
   IPv4/IPv6 prefixes for configured interfaces instead of echoing intended
   values into the deprecated RFC 8343/8344 compatibility state tree.
+- Added acknowledged Linux neighbor-table dumps and published complete IPv4
+  ARP and IPv6 ND entries with link-layer address, origin, router indication,
+  and representable reachability state.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.
 - Made the per-session NMDA stress duration safely configurable for
