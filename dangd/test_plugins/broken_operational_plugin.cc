@@ -4,7 +4,10 @@
 #include "dangd/plugin_api.h"
 
 #include <cstring>
+#include <csignal>
+#include <chrono>
 #include <string>
+#include <thread>
 
 namespace {
 
@@ -37,7 +40,13 @@ int Success(void*, void*, DangPluginErrorV1*) { return 1; }
 void Release(void*, void* prepared) { delete static_cast<int*>(prepared); }
 int Operational(void*, DangOperationalDataV1* result, DangPluginErrorV1*) {
   if (!result) return 0;
-#ifdef DANG_OVERSIZED_OPERATIONAL
+#ifdef DANG_HANG_OPERATIONAL
+  std::this_thread::sleep_for(std::chrono::hours(1));
+  return 0;
+#elif defined(DANG_CRASH_OPERATIONAL)
+  std::raise(SIGABRT);
+  return 0;
+#elif defined(DANG_OVERSIZED_OPERATIONAL)
   static const std::string oversized(16 * 1024 * 1024 + 1, 'x');
   result->data_xml = oversized.c_str();
 #else

@@ -359,7 +359,10 @@ frames, and system errors. Plugin loading and callback ownership have not yet
 moved behind that channel in the live server, so timeout/crash recovery remains
 incomplete. The standalone worker does exclusively own plugin loading and
 returns only copied manifest/YANG discovery values; live parent-side worker
-creation and callback routing are the next migration stage.
+creation now contains and reaps tested operational callback hangs and crashes
+under an independent request deadline. Worker responses are re-bounded by the
+parent. Live cutover remains gated on moving transaction and operation callbacks
+with the same stateful plugin context.
 An end-to-end deterministic stress case issues 200 operational retrievals from
 eight sessions, verifies every response, and proves that all eight provider
 callbacks may execute concurrently. The ASan/UBSan release soak completed at

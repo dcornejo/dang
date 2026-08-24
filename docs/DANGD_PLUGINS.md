@@ -20,6 +20,12 @@ The installed `libexec/dangd/dangd-plugin-worker` executable already owns load,
 ABI validation, manifest copying, and YANG source copying for one plugin. Its
 ready handshake reports load failures before it accepts requests, and malformed
 or unknown operations fail closed without publishing partial discovery data.
+The parent supervisor applies separate startup and callback deadlines. Its
+operational command copies and revalidates every returned field against host
+resource limits, and a timeout, crash, truncation, or invalid response makes the
+worker permanently unhealthy before it is killed and reaped. Requests to one
+stateful plugin worker are serialized. The live server does not use this path
+until transaction and operation callbacks can move with the same context.
 
 This guide defines the contract between `dangd` and a dynamically loaded
 configuration provider. It is both a how-to and the behavioral specification

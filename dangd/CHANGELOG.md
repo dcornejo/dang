@@ -11,6 +11,8 @@
   supervised worker processes without sharing library or opaque state pointers.
 - Added worker startup/load handshakes, manifest/source discovery, malformed
   request rejection, clean shutdown, and attributed load-failure reporting.
+- Added a stateful worker client that serializes requests, independently bounds
+  worker output, and kills/reaps a worker after callback timeout or crash.
 - Verified concurrent operational publication with a thread-safe test provider,
   eight overlapping sessions, 200 complete retrievals, and response validation.
 - Added a bounded environment override for scaling that identical workload into

@@ -45,7 +45,9 @@ stays in this file with its remaining work rewritten precisely.
   exit, truncated protocol data, oversized messages, and system failures. The
   installed standalone worker now exclusively loads one plugin and returns a
   ready handshake plus copied manifest/YANG discovery data; parent-side worker
-  ownership, callback routing, supervision, and restart remain.
+  ownership now enforces separate startup/request deadlines, bounds copied data,
+  and contains/reaps operational callback hangs and crashes. Live application
+  cutover, transaction/operation routing, and restart policy remain.
   Malformed typed data and oversized callback XML are rejected atomically with
   provider attribution and bounded copying. Document unsupported optional
   features and deviations before making an RFC 8342 or RFC 8526 compliance claim.

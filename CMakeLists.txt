@@ -112,6 +112,7 @@ if(YANG_BUILD_DANGD)
     dangd/application.cc
     dangd/configuration_backend.cc
     dangd/hardware_transaction.cc
+    dangd/plugin_worker_client.cc
     dangd/plugin_worker_protocol.cc
     dangd/plugin_manager.cc
     dangd/ssh_transport.cc
@@ -389,6 +390,26 @@ if(YANG_BUILD_DANGD)
       -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
     set_target_properties(dangd_test_oversized_operational_plugin PROPERTIES
       PREFIX "")
+    add_library(dangd_test_hanging_operational_plugin MODULE
+      dangd/test_plugins/broken_operational_plugin.cc)
+    target_include_directories(dangd_test_hanging_operational_plugin PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_definitions(dangd_test_hanging_operational_plugin PRIVATE
+      DANG_HANG_OPERATIONAL=1)
+    target_compile_options(dangd_test_hanging_operational_plugin PRIVATE
+      -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+    set_target_properties(dangd_test_hanging_operational_plugin PROPERTIES
+      PREFIX "")
+    add_library(dangd_test_crashing_operational_plugin MODULE
+      dangd/test_plugins/broken_operational_plugin.cc)
+    target_include_directories(dangd_test_crashing_operational_plugin PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_definitions(dangd_test_crashing_operational_plugin PRIVATE
+      DANG_CRASH_OPERATIONAL=1)
+    target_compile_options(dangd_test_crashing_operational_plugin PRIVATE
+      -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+    set_target_properties(dangd_test_crashing_operational_plugin PROPERTIES
+      PREFIX "")
     add_library(dangd_test_concurrent_operational_plugin MODULE
       dangd/test_plugins/concurrent_operational_plugin.cc)
     target_include_directories(dangd_test_concurrent_operational_plugin PRIVATE
@@ -560,6 +581,8 @@ if(YANG_BUILD_TESTS)
       DANG_TEST_DEVIATION_PLUGIN_PATH="$<TARGET_FILE:dangd_test_deviation_plugin>"
       DANG_TEST_BROKEN_OPERATIONAL_PLUGIN_PATH="$<TARGET_FILE:dangd_test_broken_operational_plugin>"
       DANG_TEST_OVERSIZED_OPERATIONAL_PLUGIN_PATH="$<TARGET_FILE:dangd_test_oversized_operational_plugin>"
+      DANG_TEST_HANGING_OPERATIONAL_PLUGIN_PATH="$<TARGET_FILE:dangd_test_hanging_operational_plugin>"
+      DANG_TEST_CRASHING_OPERATIONAL_PLUGIN_PATH="$<TARGET_FILE:dangd_test_crashing_operational_plugin>"
       DANG_TEST_CONCURRENT_OPERATIONAL_PLUGIN_PATH="$<TARGET_FILE:dangd_test_concurrent_operational_plugin>"
       DANG_TEST_COMPLETE_OPERATIONAL_PLUGIN_PATH="$<TARGET_FILE:dangd_test_complete_operational_plugin>"
       DANG_TEST_COLLISION_FIRST_PLUGIN_PATH="$<TARGET_FILE:dangd_test_collision_first_plugin>"
@@ -594,6 +617,8 @@ if(YANG_BUILD_TESTS)
       dangd_example_plugin dangd_ip_management_plugin
       dangd_test_provider_plugin dangd_test_consumer_plugin
       dangd_test_broken_discovery_plugin dangd_test_broken_operational_plugin
+      dangd_test_hanging_operational_plugin
+      dangd_test_crashing_operational_plugin
       dangd_test_complete_operational_plugin
       dangd_test_collision_first_plugin dangd_test_collision_second_plugin
       dangd_test_collision_core_plugin

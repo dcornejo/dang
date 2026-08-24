@@ -67,6 +67,22 @@ Json Discovery(const dangd::PluginManager& manager) {
           {"sources", std::move(sources)}};
 }
 
+Json Operational(const dangd::PluginManager& manager) {
+  Json fragments = Json::array();
+  for (const dangd::PluginOperationalFragment& fragment :
+       manager.OperationalData()) {
+    fragments.push_back(
+        {{"provider", fragment.provider},
+         {"data_xml", fragment.data_xml},
+         {"error", fragment.error ? Json(*fragment.error) : Json(nullptr)},
+         {"error_path", fragment.error_path},
+         {"complete", fragment.complete}});
+  }
+  return {{"ok", true},
+          {"stage", "operational"},
+          {"fragments", std::move(fragments)}};
+}
+
 int Run(int descriptor, const std::filesystem::path& plugin_path) {
   dangd::PluginManager manager;
   std::vector<std::string> errors;
@@ -95,6 +111,8 @@ int Run(int descriptor, const std::filesystem::path& plugin_path) {
     const std::string operation = parsed["operation"].get<std::string>();
     if (operation == "discover") {
       if (!Send(descriptor, Discovery(manager))) return 1;
+    } else if (operation == "operational") {
+      if (!Send(descriptor, Operational(manager))) return 1;
     } else if (operation == "shutdown") {
       (void)Send(descriptor, {{"ok", true}, {"stage", "shutdown"}});
       return 0;

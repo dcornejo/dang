@@ -14,6 +14,9 @@ and releases follow Semantic Versioning.
   worker protocol that classifies timeout, exit, truncation, and I/O failures.
 - Added an installed standalone worker that exclusively loads one plugin and
   exposes copied manifest and YANG source discovery over the bounded protocol.
+- Added a parent supervisor and isolated operational command with independent
+  startup/callback deadlines, crash/timeout containment, reaping, and
+  untrusted-response revalidation.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.
 - Made the per-session NMDA stress duration safely configurable for

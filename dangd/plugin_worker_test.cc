@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "dangd/plugin_api.h"
+#include "dangd/plugin_worker_client.h"
 #include "dangd/plugin_worker_protocol.h"
 #include "yang/resource_limits.h"
 
@@ -137,6 +138,64 @@ TEST(PluginWorkerTest, ReportsLoadFailureBeforeExiting) {
   worker.process = -1;
   EXPECT_TRUE(WIFEXITED(status));
   EXPECT_EQ(WEXITSTATUS(status), 1);
+}
+
+std::unique_ptr<PluginWorkerClient> StartClient(
+    const char* plugin, std::chrono::milliseconds timeout,
+    std::vector<std::string>* errors) {
+  return PluginWorkerClient::Start(
+      {.worker_executable = DANG_TEST_PLUGIN_WORKER_PATH,
+       .plugin = plugin,
+       .request_timeout = timeout},
+      errors);
+}
+
+TEST(PluginWorkerClientTest, CopiesDiscoveryAndOperationalResults) {
+  std::vector<std::string> errors;
+  auto client = StartClient(DANG_TEST_BROKEN_OPERATIONAL_PLUGIN_PATH, 5s,
+                            &errors);
+  ASSERT_NE(client, nullptr) << testing::PrintToString(errors);
+  std::string error;
+  const auto discovery = client->Discover(&error);
+  ASSERT_TRUE(discovery.has_value()) << error;
+  EXPECT_EQ(discovery->manifest.plugin_name, "test-broken-operational");
+  ASSERT_EQ(discovery->sources.size(), 1U);
+  EXPECT_EQ(discovery->sources[0].module_name,
+            "dangd-test-broken-operational");
+  const PluginWorkerOperationalResult operational = client->OperationalData();
+  ASSERT_FALSE(operational.worker_error.has_value())
+      << *operational.worker_error;
+  ASSERT_EQ(operational.fragments.size(), 1U);
+  EXPECT_EQ(operational.fragments[0].provider,
+            "test-broken-operational");
+  EXPECT_NE(operational.fragments[0].data_xml.find("invalid"),
+            std::string::npos);
+  EXPECT_TRUE(client->healthy());
+}
+
+TEST(PluginWorkerClientTest, TerminatesAndReapsTimedOutWorker) {
+  std::vector<std::string> errors;
+  auto client = StartClient(DANG_TEST_HANGING_OPERATIONAL_PLUGIN_PATH, 50ms,
+                            &errors);
+  ASSERT_NE(client, nullptr) << testing::PrintToString(errors);
+  const PluginWorkerOperationalResult result = client->OperationalData();
+  ASSERT_TRUE(result.worker_error.has_value());
+  EXPECT_NE(result.worker_error->find("timed out"), std::string::npos);
+  EXPECT_TRUE(result.fragments.empty());
+  EXPECT_FALSE(client->healthy());
+}
+
+TEST(PluginWorkerClientTest, ContainsAndReapsCrashedWorker) {
+  std::vector<std::string> errors;
+  auto client = StartClient(DANG_TEST_CRASHING_OPERATIONAL_PLUGIN_PATH, 5s,
+                            &errors);
+  ASSERT_NE(client, nullptr) << testing::PrintToString(errors);
+  const PluginWorkerOperationalResult result = client->OperationalData();
+  ASSERT_TRUE(result.worker_error.has_value());
+  EXPECT_NE(result.worker_error->find("worker exited"), std::string::npos)
+      << *result.worker_error;
+  EXPECT_TRUE(result.fragments.empty());
+  EXPECT_FALSE(client->healthy());
 }
 
 }  // namespace
