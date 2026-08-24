@@ -251,7 +251,10 @@ partially assembled operational data payload alongside that error.
 The IP-management example uses ABI v3 to publish RFC 8343
 `/interfaces-state`. Linux and FreeBSD inventory all kernel interfaces, publish
 native counters, and read flags, MTU, addresses, and ARP/IPv6 neighbor caches
-from the kernel for each retrieval.
+from the kernel for each retrieval. Linux rtnetlink and FreeBSD IPv6 address
+flags supply RFC 8344 preferred, deprecated, tentative, and duplicate status;
+Linux additionally reports optimistic status and FreeBSD detached addresses as
+inaccessible.
 Unsupported development platforms derive `oper-status` from the last
 successfully applied configuration.
 

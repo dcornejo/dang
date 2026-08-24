@@ -3,6 +3,7 @@
 
 #include "dangd/plugins/ip_management/platform_backend.h"
 #include "dangd/plugins/ip_management/platform_config.h"
+#include "dangd/plugins/ip_management/freebsd/address_status.h"
 
 #include <algorithm>
 #include <array>
@@ -502,6 +503,19 @@ unsigned PrefixLength(const sockaddr* mask) {
   return bits;
 }
 
+std::string AddressStatus(std::string_view interface,
+                          const sockaddr_in6& address) {
+  IoctlSocket socket(AF_INET6);
+  if (!socket.valid(nullptr)) return "unknown";
+  in6_ifreq request{};
+  if (!CopyName(interface, request.ifr_name, nullptr)) return "unknown";
+  request.ifr_addr = address;
+  if (!socket.Call(SIOCGIFAFLAG_IN6, &request, "read IPv6 address flags",
+                   nullptr))
+    return "unknown";
+  return std::string(FreeBsdAddressStatus(request.ifr_ifru.ifru_flags6));
+}
+
 bool AppendAddresses(const std::string& name, pugi::xml_node entry,
                      unsigned mtu, std::string* error) {
   ifaddrs* values = nullptr;
@@ -534,6 +548,10 @@ bool AppendAddresses(const std::string& name, pugi::xml_node entry,
     address.append_child("prefix-length").text() =
         PrefixLength(value->ifa_netmask);
     address.append_child("origin").text() = "other";
+    address.append_child("status").text() = family == AF_INET6
+        ? AddressStatus(name, *reinterpret_cast<const sockaddr_in6*>(
+                                  value->ifa_addr)).c_str()
+        : "preferred";
   }
   freeifaddrs(values);
   return true;

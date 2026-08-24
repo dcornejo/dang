@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "dangd/plugins/ip_management/platform_backend.h"
+#include "dangd/plugins/ip_management/freebsd/address_status.h"
 
 #include <arpa/inet.h>
 #include <ifaddrs.h>
@@ -168,6 +169,8 @@ TEST(FreeBsdIpBackendTest, AppliesPublishesRepairsAndRollsBackStaticNeighbor) {
   EXPECT_NE(state.find("<origin>static</origin>"), std::string::npos) << state;
   EXPECT_NE(state.find("<ip>2001:db8:1::123</ip>"), std::string::npos) << state;
   EXPECT_NE(state.find("<ip>2001:db8:1::200</ip>"), std::string::npos) << state;
+  EXPECT_NE(state.find("<status>preferred</status>"), std::string::npos)
+      << state;
   EXPECT_NE(state.find(
                 "<link-layer-address>02:00:00:00:00:c9</link-layer-address>"),
             std::string::npos) << state;
@@ -186,6 +189,16 @@ TEST(FreeBsdIpBackendTest, AppliesPublishesRepairsAndRollsBackStaticNeighbor) {
   EXPECT_NE(state.find("<ip>2001:db8:1::200</ip>"), std::string::npos) << state;
   backend->Commit();
   ASSERT_TRUE(backend->Reconcile(configured, "<config/>", &error)) << error;
+}
+
+TEST(FreeBsdIpBackendTest, MapsIpv6AddressStatusFlags) {
+  EXPECT_EQ(FreeBsdAddressStatus(0), "preferred");
+  EXPECT_EQ(FreeBsdAddressStatus(IN6_IFF_TENTATIVE), "tentative");
+  EXPECT_EQ(FreeBsdAddressStatus(IN6_IFF_DUPLICATED), "duplicate");
+  EXPECT_EQ(FreeBsdAddressStatus(IN6_IFF_DEPRECATED), "deprecated");
+  EXPECT_EQ(FreeBsdAddressStatus(IN6_IFF_DETACHED), "inaccessible");
+  EXPECT_EQ(FreeBsdAddressStatus(IN6_IFF_DUPLICATED | IN6_IFF_TENTATIVE),
+            "duplicate");
 }
 
 }  // namespace

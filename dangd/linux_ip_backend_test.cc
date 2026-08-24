@@ -11,9 +11,11 @@
 #include <unistd.h>
 
 #include <cstdlib>
+#include <chrono>
 #include <cstring>
 #include <string>
 #include <string_view>
+#include <thread>
 
 #include <gtest/gtest.h>
 
@@ -51,6 +53,14 @@ int InterfaceMtu(const char* name) {
   const int result = ioctl(descriptor, SIOCGIFMTU, &request);
   close(descriptor);
   return result == 0 ? request.ifr_mtu : -1;
+}
+
+std::string Ipv6Configuration(std::string_view interface) {
+  return "<config><interfaces><interface><name>" + std::string(interface) +
+      "</name><type>iana-if-type:ethernetCsmacd</type>"
+      "<ipv6><address><ip>2001:db8:2::1</ip>"
+      "<prefix-length>64</prefix-length></address>"
+      "</ipv6></interface></interfaces></config>";
 }
 
 TEST(LinuxIpBackendTest, AppliesRepairsAndRemovesAddressThroughRtnetlink) {
@@ -131,6 +141,8 @@ TEST(LinuxIpBackendTest, PublishesLiveLinkAndAddressState) {
   EXPECT_NE(state.find("<ip>127.0.0.1</ip>"), std::string::npos) << state;
   EXPECT_NE(state.find("<prefix-length>8</prefix-length>"), std::string::npos)
       << state;
+  EXPECT_NE(state.find("<status>preferred</status>"), std::string::npos)
+      << state;
   EXPECT_NE(state.find("<mtu>"), std::string::npos) << state;
   EXPECT_NE(state.find("<statistics>"), std::string::npos) << state;
   EXPECT_NE(state.find("<discontinuity-time>"), std::string::npos) << state;
@@ -172,6 +184,30 @@ TEST(LinuxIpBackendTest, PublishesAndRepairsConfiguredKernelNeighbor) {
   EXPECT_NE(state.find("<ip>198.51.100.200</ip>"), std::string::npos) << state;
   backend->Commit();
   ASSERT_TRUE(backend->Reconcile(configured, "<config/>", &error)) << error;
+}
+
+TEST(LinuxIpBackendTest, PublishesDuplicateIpv6AddressStatus) {
+  if (!PrivilegedTestsEnabled())
+    GTEST_SKIP() << "set DANG_RUN_PRIVILEGED_IP_TESTS=1 in an isolated netns";
+  const std::string first = Ipv6Configuration("eth0");
+  const std::string second = Ipv6Configuration("eth1");
+  auto first_backend = MakePlatformBackend();
+  auto second_backend = MakePlatformBackend();
+  std::string error;
+  ASSERT_TRUE(first_backend->Reconcile("<config/>", first, &error)) << error;
+  first_backend->Commit();
+  ASSERT_TRUE(second_backend->Reconcile("<config/>", second, &error)) << error;
+  second_backend->Commit();
+  std::string state;
+  for (int attempt = 0; attempt < 100; ++attempt) {
+    ASSERT_TRUE(first_backend->OperationalXml(first, &state, &error)) << error;
+    if (state.find("<status>duplicate</status>") != std::string::npos) break;
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  }
+  EXPECT_NE(state.find("<status>duplicate</status>"), std::string::npos)
+      << state;
+  ASSERT_TRUE(second_backend->Reconcile(second, "<config/>", &error)) << error;
+  ASSERT_TRUE(first_backend->Reconcile(first, "<config/>", &error)) << error;
 }
 
 }  // namespace

@@ -76,6 +76,9 @@ and releases follow Semantic Versioning.
 - Published every FreeBSD kernel interface with native IANA base-type inference
   and packet, octet, multicast, error, drop, and unknown-protocol counters using
   kernel boot plus interface epoch as the discontinuity timestamp.
+- Published RFC 8344 address status from Linux rtnetlink DAD/lifetime flags and
+  FreeBSD `SIOCGIFAFLAG_IN6`, with a real duplicate-address veth interaction and
+  deterministic FreeBSD flag-precedence coverage.
 - Removed the now-unused external command runner from the IP plugin.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.

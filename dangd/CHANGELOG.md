@@ -60,6 +60,9 @@
   packet/octet/error/drop statistics with a boot-time discontinuity marker.
 - Expanded FreeBSD operational state to all kernel interfaces with native base
   type inference and `SIOCGIFDATA` statistics/discontinuity publication.
+- Added native RFC 8344 preferred/deprecated/tentative/duplicate address status
+  publication on Linux and FreeBSD, including Linux optimistic and FreeBSD
+  inaccessible mappings.
 - Added opt-in privileged FreeBSD backend tests and removed the obsolete
   command-execution helper from the IP plugin.
 - Verified concurrent operational publication with a thread-safe test provider,

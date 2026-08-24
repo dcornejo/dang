@@ -39,6 +39,13 @@ namespace {
 
 constexpr std::size_t kMessageBytes = 1024;
 
+struct LiveAddress {
+  std::string address;
+  std::string status;
+  unsigned prefix_length = 0;
+  bool ipv6 = false;
+};
+
 struct LiveNeighbor {
   std::string address;
   std::string link_layer_address;
@@ -282,6 +289,106 @@ class RouteSocket {
     }
   }
 
+  bool Addresses(unsigned interface_index, std::vector<LiveAddress>* result,
+                 std::string* error) {
+    struct {
+      nlmsghdr header;
+      ifaddrmsg body;
+    } request{};
+    request.header.nlmsg_len = NLMSG_LENGTH(sizeof(ifaddrmsg));
+    request.header.nlmsg_type = RTM_GETADDR;
+    request.header.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
+    request.header.nlmsg_seq = ++sequence_;
+    request.body.ifa_family = AF_UNSPEC;
+    sockaddr_nl kernel{};
+    kernel.nl_family = AF_NETLINK;
+    iovec part{&request, request.header.nlmsg_len};
+    msghdr message{};
+    message.msg_name = &kernel;
+    message.msg_namelen = sizeof(kernel);
+    message.msg_iov = &part;
+    message.msg_iovlen = 1;
+    if (sendmsg(descriptor_, &message, 0) < 0) {
+      if (error) *error = "dump addresses: " +
+                          std::string(std::strerror(errno));
+      return false;
+    }
+    std::array<std::byte, 16384> response{};
+    while (true) {
+      const ssize_t received = recv(descriptor_, response.data(),
+                                    response.size(), 0);
+      if (received < 0 && errno == EINTR) continue;
+      if (received <= 0) {
+        if (error) *error = "dump addresses: " + std::string(
+            received ? std::strerror(errno) : "netlink peer closed");
+        return false;
+      }
+      int remaining = static_cast<int>(received);
+      for (auto* header = reinterpret_cast<nlmsghdr*>(response.data());
+           NLMSG_OK(header, remaining); header = NLMSG_NEXT(header, remaining)) {
+        if (header->nlmsg_seq != sequence_) continue;
+        if (header->nlmsg_flags & NLM_F_DUMP_INTR) {
+          if (error) *error = "address dump was interrupted by a kernel change";
+          return false;
+        }
+        if (header->nlmsg_type == NLMSG_DONE) return true;
+        if (header->nlmsg_type == NLMSG_ERROR) {
+          if (error) *error = "kernel rejected address dump";
+          return false;
+        }
+        if (header->nlmsg_type != RTM_NEWADDR ||
+            NLMSG_PAYLOAD(header, 0) < sizeof(ifaddrmsg))
+          continue;
+        const auto* address = reinterpret_cast<const ifaddrmsg*>(
+            NLMSG_DATA(header));
+        if (address->ifa_index != interface_index ||
+            (address->ifa_family != AF_INET &&
+             address->ifa_family != AF_INET6))
+          continue;
+        const void* binary = nullptr;
+        const void* local = nullptr;
+        std::size_t binary_size = 0;
+        std::size_t local_size = 0;
+        std::uint32_t flags = address->ifa_flags;
+        int attribute_bytes = static_cast<int>(
+            NLMSG_PAYLOAD(header, sizeof(ifaddrmsg)));
+        for (auto* attribute = reinterpret_cast<rtattr*>(
+                 reinterpret_cast<std::byte*>(const_cast<ifaddrmsg*>(address)) +
+                 NLMSG_ALIGN(sizeof(ifaddrmsg)));
+             RTA_OK(attribute, attribute_bytes);
+             attribute = RTA_NEXT(attribute, attribute_bytes)) {
+          if (attribute->rta_type == IFA_ADDRESS) {
+            binary = RTA_DATA(attribute);
+            binary_size = RTA_PAYLOAD(attribute);
+          } else if (attribute->rta_type == IFA_LOCAL) {
+            local = RTA_DATA(attribute);
+            local_size = RTA_PAYLOAD(attribute);
+          } else if (attribute->rta_type == IFA_FLAGS &&
+                     RTA_PAYLOAD(attribute) == sizeof(flags)) {
+            std::memcpy(&flags, RTA_DATA(attribute), sizeof(flags));
+          }
+        }
+        const std::size_t expected = address->ifa_family == AF_INET
+            ? sizeof(in_addr) : sizeof(in6_addr);
+        if (local && local_size == expected) {
+          binary = local;
+          binary_size = local_size;
+        }
+        if (!binary || binary_size != expected) continue;
+        char text[INET6_ADDRSTRLEN]{};
+        if (!inet_ntop(address->ifa_family, binary, text, sizeof(text)))
+          continue;
+        std::string status = "preferred";
+        if (flags & IFA_F_DADFAILED) status = "duplicate";
+        else if (flags & IFA_F_OPTIMISTIC) status = "optimistic";
+        else if (flags & IFA_F_TENTATIVE) status = "tentative";
+        else if (flags & IFA_F_DEPRECATED) status = "deprecated";
+        result->push_back({text, status, address->ifa_prefixlen,
+                           address->ifa_family == AF_INET6});
+      }
+    }
+  }
+
  private:
   int descriptor_ = -1;
   int error_ = 0;
@@ -483,41 +590,30 @@ unsigned PrefixLength(const sockaddr* mask) {
 
 bool AppendAddresses(const std::string& name, pugi::xml_node entry,
                      unsigned mtu, std::string* error) {
-  ifaddrs* values = nullptr;
-  if (getifaddrs(&values) != 0) {
-    if (error) *error = "cannot enumerate interface addresses: " +
-                        std::string(std::strerror(errno));
-    return false;
-  }
+  unsigned interface_index = 0;
+  if (!InterfaceIndex(name, &interface_index, error)) return false;
+  RouteSocket socket;
+  if (!socket.valid(error)) return false;
+  std::vector<LiveAddress> addresses;
+  if (!socket.Addresses(interface_index, &addresses, error)) return false;
   pugi::xml_node ipv4;
   pugi::xml_node ipv6;
-  for (const ifaddrs* value = values; value; value = value->ifa_next) {
-    if (!value->ifa_addr || name != value->ifa_name) continue;
-    const int family = value->ifa_addr->sa_family;
-    if (family != AF_INET && family != AF_INET6) continue;
-    pugi::xml_node* family_node = family == AF_INET ? &ipv4 : &ipv6;
+  for (const LiveAddress& value : addresses) {
+    pugi::xml_node* family_node = value.ipv6 ? &ipv6 : &ipv4;
     if (!*family_node) {
-      *family_node = entry.append_child(family == AF_INET ? "ipv4" : "ipv6");
+      *family_node = entry.append_child(value.ipv6 ? "ipv6" : "ipv4");
       // RFC 8344 deliberately gives IPv4 MTU a uint16 representation. Linux
       // loopback commonly reports 65536, so omit that unrepresentable value
       // instead of publishing invalid instance data.
-      if (family == AF_INET6 || mtu <= 65535)
+      if (value.ipv6 || mtu <= 65535)
         family_node->append_child("mtu").text() = mtu;
     }
-    char text[INET6_ADDRSTRLEN]{};
-    const void* binary = family == AF_INET
-        ? static_cast<const void*>(&reinterpret_cast<const sockaddr_in*>(
-              value->ifa_addr)->sin_addr)
-        : static_cast<const void*>(&reinterpret_cast<const sockaddr_in6*>(
-              value->ifa_addr)->sin6_addr);
-    if (!inet_ntop(family, binary, text, sizeof(text))) continue;
     pugi::xml_node address = family_node->append_child("address");
-    address.append_child("ip").text() = text;
-    address.append_child("prefix-length").text() =
-        PrefixLength(value->ifa_netmask);
+    address.append_child("ip").text() = value.address.c_str();
+    address.append_child("prefix-length").text() = value.prefix_length;
     address.append_child("origin").text() = "other";
+    address.append_child("status").text() = value.status.c_str();
   }
-  freeifaddrs(values);
   return true;
 }
 
