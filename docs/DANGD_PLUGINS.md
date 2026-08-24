@@ -111,9 +111,10 @@ retained forward and reverse action plan. Its demonstration `apply` and
 Common parsing and execution live under `dangd/plugins/ip_management`; native
 implementations are isolated in its `linux` and `freebsd` directories. Linux
 uses direct acknowledged rtnetlink requests for enabled state, link MTU,
-IPv4/IPv6 addresses, and static neighbors. FreeBSD still uses `/sbin/ifconfig`
-with arguments executed directly, never through a shell. A logging-only backend
-is selected on unsupported development hosts.
+IPv4/IPv6 addresses, and static neighbors. FreeBSD uses native interface ioctls
+for enabled state, link MTU, and IPv4/IPv6 addresses; routing-socket neighbor
+work remains. A logging-only backend is selected on unsupported development
+hosts.
 
 The daemon needs host networking privileges (normally root, Linux
 `CAP_NET_ADMIN`, or an equivalent service grant). Reconciliation occurs only
@@ -124,8 +125,8 @@ transaction commits or rolls back. A failure is returned to NETCONF. The
 native backends do not create interfaces. Linux publishes live link status,
 MTU, assigned addresses, and complete neighbor-cache entries for configured
 interfaces, but not counters or unconfigured system interfaces. FreeBSD does
-not yet manage MTUs or neighbors and still publishes simulated state. External
-address and neighbor drift is not yet reconciled.
+not yet manage neighbors and still publishes simulated state. External address
+and neighbor drift is not yet reconciled.
 
 For example, start `dangd` with the plugin using the module filename produced
 by CMake:

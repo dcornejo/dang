@@ -44,6 +44,10 @@
   status, MTU, and kernel-assigned IPv4/IPv6 address prefixes.
 - Published the live Linux ARP and IPv6 neighbor cache from an authenticated
   rtnetlink dump, including static/dynamic origin and IPv6 state metadata.
+- Added native FreeBSD `SIOC*` application for link flags, MTU, and IPv4/IPv6
+  addresses with exact transaction rollback and partial-failure compensation.
+- Added opt-in privileged FreeBSD backend tests and removed the obsolete
+  command-execution helper from the IP plugin.
 - Verified concurrent operational publication with a thread-safe test provider,
   eight overlapping sessions, 200 complete retrievals, and response validation.
 - Added a bounded environment override for scaling that identical workload into

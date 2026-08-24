@@ -52,6 +52,10 @@ and releases follow Semantic Versioning.
 - Added acknowledged Linux neighbor-table dumps and published complete IPv4
   ARP and IPv6 ND entries with link-layer address, origin, router indication,
   and representable reachability state.
+- Replaced the FreeBSD `/sbin/ifconfig` adapter with native interface ioctls
+  for flags, MTU, and IPv4/IPv6 addresses, including retained observed state,
+  reverse partial-failure compensation, and disposable-epair validation.
+- Removed the now-unused external command runner from the IP plugin.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.
 - Made the per-session NMDA stress duration safely configurable for

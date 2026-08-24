@@ -48,10 +48,11 @@ both normative models through the plugin ABI and turns committed interface,
 IPv4, and IPv6 changes into human-readable apply actions. Linux uses direct
 rtnetlink operations for link state, MTU, addresses, and static neighbors and
 publishes live state for configured interfaces. FreeBSD has a separately
-isolated native backend that still uses its administration utility while its
-direct-kernel implementation remains TODO work. Unsupported development hosts
-use a logging-only backend. See the concrete request, privilege, and build
-instructions in [the plugin guide](../docs/DANGD_PLUGINS.md).
+isolated native backend using interface ioctls for link state, MTU, and
+addresses; routing-socket neighbors and live publication remain TODO work.
+Unsupported development hosts use a logging-only backend. See the concrete
+request, privilege, and build instructions in
+[the plugin guide](../docs/DANGD_PLUGINS.md).
 
 ## Safe hardware application ordering
 
