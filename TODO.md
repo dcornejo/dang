@@ -15,7 +15,8 @@ stays in this file with its remaining work rewritten precisely.
 
 ### RFC 8343/8344 native IP management closure
 
-- Broaden privileged IPv6 neighbor coverage on FreeBSD. FreeBSD now applies
+- Publish interface counters, duplicate-address status, and system-controlled
+  unconfigured interfaces on Linux and FreeBSD. FreeBSD now applies
   enabled state, equal per-family MTUs, and IPv4/IPv6 addresses through native
   `SIOC*` ioctls and static neighbors through acknowledged route-netlink
   requests, with retained live link snapshots and reverse partial-failure
@@ -23,10 +24,10 @@ stays in this file with its remaining work rewritten precisely.
   IPv4/IPv6 addresses, and the complete neighbor table for configured
   interfaces. It restores missing or altered configured address and neighbor
   entries without deleting unrelated kernel-owned state. Automated privileged
-  tests target a disposable interface; a
-  FreeBSD 16 epair smoke passed address/MTU/IPv4-neighbor apply, live-state
-  publication, out-of-band removal repair, exact rollback, and forced
-  partial-failure compensation. Linux applies enabled state, IPv4/IPv6
+  tests target a disposable interface; a FreeBSD 16 epair smoke passed
+  address/MTU/IPv4 and IPv6 neighbor apply,
+  live-state publication, out-of-band removal repair, exact rollback, and
+  forced partial-failure compensation. Linux applies enabled state, IPv4/IPv6
   addresses, equal per-family MTUs, and static neighbors with acknowledged
   rtnetlink requests. It observes live link flags/MTU, compensates a partially
   failed request sequence, and retains the exact observed link snapshot until
@@ -34,8 +35,7 @@ stays in this file with its remaining work rewritten precisely.
   altered configured addresses and neighbors without deleting unrelated kernel
   state. Privileged isolated Linux tests cover address/neighbor apply, removal,
   out-of-band removal repair, partial failure, exact MTU rollback, and live
-  link/MTU/address/neighbor publication for configured interfaces. Linux counters
-  and system-controlled unconfigured interfaces remain.
+  link/MTU/address/neighbor publication for configured interfaces.
 
 ### RFC 8341 NACM compliance closure
 

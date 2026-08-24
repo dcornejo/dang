@@ -247,9 +247,10 @@ best available path, provider, stage, and reason. The RPC does not return a
 partially assembled operational data payload alongside that error.
 
 The IP-management example uses ABI v3 to publish RFC 8343
-`/interfaces-state`. Linux reads managed-interface flags, MTU, addresses, and
-the ARP/IPv6 neighbor cache from the kernel for each retrieval. Other platforms
-currently derive `oper-status` from the last successfully applied configuration.
+`/interfaces-state`. Linux and FreeBSD read managed-interface flags, MTU,
+addresses, and ARP/IPv6 neighbor caches from the kernel for each retrieval.
+Unsupported development platforms derive `oper-status` from the last
+successfully applied configuration.
 
 Load plugins explicitly:
 

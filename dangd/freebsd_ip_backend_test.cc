@@ -82,7 +82,12 @@ std::string NeighborConfiguration(const char* interface) {
       "<prefix-length>24</prefix-length></address>"
       "<neighbor><ip>198.51.100.200</ip>"
       "<link-layer-address>02:00:00:00:00:c8</link-layer-address>"
-      "</neighbor></ipv4></interface></interfaces></config>";
+      "</neighbor></ipv4>"
+      "<ipv6><address><ip>2001:db8:1::123</ip>"
+      "<prefix-length>64</prefix-length></address>"
+      "<neighbor><ip>2001:db8:1::200</ip>"
+      "<link-layer-address>02:00:00:00:00:c9</link-layer-address>"
+      "</neighbor></ipv6></interface></interfaces></config>";
 }
 
 TEST(FreeBsdIpBackendTest, AppliesAndRollsBackAddressAndObservedMtu) {
@@ -151,16 +156,24 @@ TEST(FreeBsdIpBackendTest, AppliesPublishesRepairsAndRollsBackStaticNeighbor) {
                 "<link-layer-address>02:00:00:00:00:c8</link-layer-address>"),
             std::string::npos) << state;
   EXPECT_NE(state.find("<origin>static</origin>"), std::string::npos) << state;
+  EXPECT_NE(state.find("<ip>2001:db8:1::123</ip>"), std::string::npos) << state;
+  EXPECT_NE(state.find("<ip>2001:db8:1::200</ip>"), std::string::npos) << state;
+  EXPECT_NE(state.find(
+                "<link-layer-address>02:00:00:00:00:c9</link-layer-address>"),
+            std::string::npos) << state;
   backend->Commit();
   auto external = MakePlatformBackend();
   ASSERT_TRUE(external->Reconcile(configured, "<config/>", &error)) << error;
   external->Commit();
   EXPECT_FALSE(AddressExists(interface, "198.51.100.123"));
+  EXPECT_FALSE(AddressExists(interface, "2001:db8:1::123"));
   ASSERT_TRUE(backend->Reconcile(configured, configured, &error)) << error;
   state.clear();
   ASSERT_TRUE(backend->OperationalXml(configured, &state, &error)) << error;
   EXPECT_NE(state.find("<ip>198.51.100.123</ip>"), std::string::npos) << state;
   EXPECT_NE(state.find("<ip>198.51.100.200</ip>"), std::string::npos) << state;
+  EXPECT_NE(state.find("<ip>2001:db8:1::123</ip>"), std::string::npos) << state;
+  EXPECT_NE(state.find("<ip>2001:db8:1::200</ip>"), std::string::npos) << state;
   backend->Commit();
   ASSERT_TRUE(backend->Reconcile(configured, "<config/>", &error)) << error;
 }

@@ -67,6 +67,9 @@ and releases follow Semantic Versioning.
 - Reconciled Linux managed address and neighbor intent against live kernel
   state with observed-value rollback, including identical-configuration repair
   and preservation of unrelated namespace networking state.
+- Extended privileged FreeBSD epair coverage through permanent IPv6 ND apply,
+  live publication, out-of-band removal repair, and exact rollback alongside
+  the existing IPv4 ARP interaction.
 - Removed the now-unused external command runner from the IP plugin.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.
