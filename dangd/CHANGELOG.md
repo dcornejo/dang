@@ -31,6 +31,8 @@
   implements the complete server-facing runtime contract using copied IPC data.
 - Added live application selection through `plugin_worker_executable`; the CLI
   resolves its worker automatically and supports `--plugin-worker FILE`.
+- Added typed IPv4/IPv6 MTU and neighbor intent to the IP platform boundary and
+  rejected invalid, incomplete, or duplicate modeled kernel input.
 - Verified concurrent operational publication with a thread-safe test provider,
   eight overlapping sessions, 200 complete retrievals, and response validation.
 - Added a bounded environment override for scaling that identical workload into

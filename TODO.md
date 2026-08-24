@@ -19,6 +19,9 @@ stays in this file with its remaining work rewritten precisely.
   with direct kernel APIs, publish live link/address/neighbor state, reconcile
   external drift, cover MTU and neighbor configuration, and test privileged
   apply plus partial-failure compensation on both operating systems.
+  The common parser now retains and validates per-family MTU, addresses, and
+  static neighbors without silently dropping malformed modeled data. Native
+  application and operational-state publication for those fields remain.
 
 ### RFC 8341 NACM compliance closure
 

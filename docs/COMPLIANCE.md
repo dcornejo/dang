@@ -420,6 +420,9 @@ succeed. It prints English apply/rollback actions and, on Linux or FreeBSD,
 reconciles enabled state and IPv4/IPv6 addresses using the host administration
 utility without invoking a shell. It derives a limited legacy
 `/interfaces-state` tree from the last applied configuration.
+The shared platform parser now retains RFC 8344 IPv4/IPv6 MTUs and static
+neighbors, enforces family ranges and keyed uniqueness, and fails closed on
+incomplete modeled data. The native adapters do not yet apply those fields.
 
 It does not create/delete interfaces or inspect live addresses, neighbors, MTUs,
 counters, duplicate-address detection, or link state. Kernel drift and changes
