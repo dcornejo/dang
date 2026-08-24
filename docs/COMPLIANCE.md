@@ -416,19 +416,24 @@ The pinned normative modules compile, validate configuration, appear in YANG
 Library, and are owned by the ABI-v4 IP-management example. The example emits
 fine-grained reversible actions to the common hardware planner, which applies
 address work before activation and publishes running only after all actions
-succeed. It prints English apply/rollback actions and, on Linux or FreeBSD,
-reconciles enabled state and IPv4/IPv6 addresses using the host administration
-utility without invoking a shell. It derives a limited legacy
+succeed. It prints English apply/rollback actions. Linux uses direct,
+acknowledged rtnetlink operations for enabled state, IPv4/IPv6 addresses,
+equal per-family link MTUs, and static neighbors; FreeBSD reconciles enabled
+state and addresses through its host utility without invoking a shell. It
+derives a limited legacy
 `/interfaces-state` tree from the last applied configuration.
 The shared platform parser now retains RFC 8344 IPv4/IPv6 MTUs and static
 neighbors, enforces family ranges and keyed uniqueness, and fails closed on
-incomplete modeled data. The native adapters do not yet apply those fields.
+incomplete modeled data. Linux snapshots live flags and MTU and retains the
+reverse plan until transaction commit, including reverse-order compensation
+after a partial rtnetlink failure.
 
-It does not create/delete interfaces or inspect live addresses, neighbors, MTUs,
-counters, duplicate-address detection, or link state. Kernel drift and changes
-made by other agents are not reconciled, and command-level compensation is best
-effort. It therefore does not claim operational compliance with RFC 8343 or RFC
-8344.
+It does not create/delete interfaces or publish live addresses, neighbors,
+MTUs, counters, duplicate-address detection, or link state. Linux observes link
+flags/MTU while applying intent, but address and neighbor changes made by other
+agents are not reconciled. FreeBSD still lacks direct kernel application, MTU,
+neighbor, and equivalent compensation coverage. It therefore does not claim
+operational compliance with RFC 8343 or RFC 8344.
 
 The transaction machinery is implementation safety behavior, not an RFC 8343
 or RFC 8344 compliance claim. Dynamic capacity rejection, dependency cycles,

@@ -19,6 +19,12 @@ class PlatformBackend {
   virtual bool Reconcile(std::string_view before_xml,
                          std::string_view desired_xml,
                          std::string* error) = 0;
+
+  // Forget any live platform snapshot retained for transaction rollback. The
+  // plugin calls this only after dangd has accepted the complete transaction;
+  // until then Reconcile(desired, before) must restore observed pre-apply
+  // values that cannot be reconstructed from configuration alone.
+  virtual void Commit() {}
 };
 
 // The build selects exactly one implementation. Linux and FreeBSD production

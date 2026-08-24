@@ -15,13 +15,15 @@ stays in this file with its remaining work rewritten precisely.
 
 ### RFC 8343/8344 native IP management closure
 
-- Replace the initial Linux `/sbin/ip` and FreeBSD `/sbin/ifconfig` adapters
-  with direct kernel APIs, publish live link/address/neighbor state, reconcile
-  external drift, cover MTU and neighbor configuration, and test privileged
-  apply plus partial-failure compensation on both operating systems.
-  The common parser now retains and validates per-family MTU, addresses, and
-  static neighbors without silently dropping malformed modeled data. Native
-  application and operational-state publication for those fields remain.
+- Replace the FreeBSD `/sbin/ifconfig` adapter with direct kernel APIs; publish
+  live Linux and FreeBSD link/address/neighbor state; reconcile external
+  address and neighbor drift; and test privileged apply plus partial-failure
+  compensation on FreeBSD. Linux now applies enabled state, IPv4/IPv6
+  addresses, equal per-family MTUs, and static neighbors with acknowledged
+  rtnetlink requests. It observes live link flags/MTU, compensates a partially
+  failed request sequence, and retains the exact observed link snapshot until
+  the enclosing transaction commits or rolls back. Privileged isolated Linux
+  tests cover address apply/removal, partial failure, and exact MTU rollback.
 
 ### RFC 8341 NACM compliance closure
 

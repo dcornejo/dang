@@ -33,6 +33,11 @@
   resolves its worker automatically and supports `--plugin-worker FILE`.
 - Added typed IPv4/IPv6 MTU and neighbor intent to the IP platform boundary and
   rejected invalid, incomplete, or duplicate modeled kernel input.
+- Implemented the Linux IP backend with direct, acknowledged rtnetlink link,
+  address, and neighbor operations instead of invoking `/sbin/ip`.
+- Preserved observed Linux flags and MTU until commit so transaction rollback
+  restores actual pre-apply state, with reverse partial-failure compensation
+  and privileged isolated-network tests.
 - Verified concurrent operational publication with a thread-safe test provider,
   eight overlapping sessions, 200 complete retrievals, and response validation.
 - Added a bounded environment override for scaling that identical workload into

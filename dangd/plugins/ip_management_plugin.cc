@@ -43,6 +43,7 @@ struct Prepared {
   std::vector<Action> actions;
   std::string before;
   std::string proposed;
+  bool platform_applied = false;
 };
 
 constexpr std::string_view kInterfacesModule = "ietf-interfaces";
@@ -200,6 +201,7 @@ int Apply(void*, void* opaque, DangPluginErrorV1* error) {
   for (const Action& action : prepared->actions)
     std::clog << "ip-management: " << action.forward << '\n';
   if (!Reconcile(prepared->before, prepared->proposed, error)) return 0;
+  prepared->platform_applied = true;
   active_configuration = prepared->proposed;
   return 1;
 }
@@ -216,6 +218,7 @@ int Rollback(void*, void* opaque, DangPluginErrorV1* error) {
     std::clog << "ip-management rollback: " << action->reverse << '\n';
   auto* prepared = static_cast<Prepared*>(opaque);
   if (!Reconcile(prepared->proposed, prepared->before, error)) return 0;
+  prepared->platform_applied = false;
   active_configuration = prepared->before;
   return 1;
 }
@@ -254,15 +257,10 @@ int ApplyHardwareAction(void*, void* opaque, const char* id,
   auto* prepared = static_cast<Prepared*>(opaque);
   if (std::ranges::all_of(prepared->actions, &Action::applied)) {
     if (!Reconcile(prepared->before, prepared->proposed, error)) {
-      const std::string apply_error = backend_error;
-      std::string ignored;
-      platform_backend->Reconcile(prepared->proposed, prepared->before,
-                                  &ignored);
-      backend_error = apply_error;
-      if (error) error->message = backend_error.c_str();
       action->applied = false;
       return 0;
     }
+    prepared->platform_applied = true;
     active_configuration = prepared->proposed;
   }
   return 1;
@@ -282,6 +280,7 @@ int RollbackHardwareAction(void*, void* opaque, const char* id,
   if (std::ranges::all_of(prepared->actions, [](const Action& candidate) {
         return candidate.applied;
       }) && !Reconcile(prepared->proposed, prepared->before, error)) return 0;
+  prepared->platform_applied = false;
   action->applied = false;
   active_configuration = prepared->before;
   return 1;
@@ -345,7 +344,11 @@ int OperationalData(void*, DangOperationalDataV1* result,
   return 1;
 }
 
-void Release(void*, void* opaque) { delete static_cast<Prepared*>(opaque); }
+void Release(void*, void* opaque) {
+  auto* prepared = static_cast<Prepared*>(opaque);
+  if (prepared && prepared->platform_applied) platform_backend->Commit();
+  delete prepared;
+}
 
 // ABI v4 retains the v1-v3 prefix and adds fine-grained hardware operations.
 const DangPluginV4 kPlugin{{{{

@@ -645,6 +645,20 @@ if(YANG_BUILD_TESTS)
     else()
       gtest_discover_tests(dangd_tests)
     endif()
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+      add_executable(dangd_linux_ip_backend_tests
+        dangd/linux_ip_backend_test.cc
+        dangd/plugins/ip_management/linux/backend.cc
+        dangd/plugins/ip_management/platform_config.cc)
+      target_compile_features(dangd_linux_ip_backend_tests PRIVATE cxx_std_20)
+      target_include_directories(dangd_linux_ip_backend_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+      target_link_libraries(dangd_linux_ip_backend_tests PRIVATE
+        GTest::gtest_main pugixml::pugixml)
+      target_compile_options(dangd_linux_ip_backend_tests PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+      gtest_discover_tests(dangd_linux_ip_backend_tests)
+    endif()
   endif()
 endif()
 

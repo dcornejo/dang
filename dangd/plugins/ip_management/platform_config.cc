@@ -81,7 +81,8 @@ void ReadInterfaces(const pugi::xml_node parent,
         *valid = false;
         continue;
       }
-      InterfaceConfig interface{.name = name.text().as_string()};
+      InterfaceConfig interface;
+      interface.name = name.text().as_string();
       if (const pugi::xml_node enabled = Child(node, "enabled"))
         interface.enabled = std::string_view(enabled.text().as_string()) == "true";
       ReadFamily(Child(node, "ipv4"), false, &interface, valid);

@@ -38,6 +38,11 @@ and releases follow Semantic Versioning.
   path resolution, an explicit override, and no silent in-process fallback.
 - Extended common RFC 8344 platform intent extraction with per-family MTUs and
   static neighbors, duplicate-key checks, and fail-closed malformed data.
+- Replaced the Linux IP-management command adapter with acknowledged direct
+  rtnetlink operations for link state, MTU, addresses, and static neighbors.
+- Retained observed Linux link state through the transaction decision, with
+  reverse-order partial-failure compensation and exact rollback of live MTU
+  and flags; added opt-in privileged network-namespace regression tests.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.
 - Made the per-session NMDA stress duration safely configurable for

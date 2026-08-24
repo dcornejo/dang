@@ -110,16 +110,20 @@ retained forward and reverse action plan. Its demonstration `apply` and
 `rollback` callbacks print those actions to the daemon's diagnostic stream.
 Common parsing and execution live under `dangd/plugins/ip_management`; native
 implementations are isolated in its `linux` and `freebsd` directories. Linux
-applies enabled state and IPv4/IPv6 addresses through `/sbin/ip`; FreeBSD uses
-`/sbin/ifconfig`. Arguments are executed directly, never through a shell. A
-logging-only backend is selected on unsupported development hosts.
+uses direct acknowledged rtnetlink requests for enabled state, link MTU,
+IPv4/IPv6 addresses, and static neighbors. FreeBSD still uses `/sbin/ifconfig`
+with arguments executed directly, never through a shell. A logging-only backend
+is selected on unsupported development hosts.
 
 The daemon needs host networking privileges (normally root, Linux
 `CAP_NET_ADMIN`, or an equivalent service grant). Reconciliation occurs only
-after the common planner reaches its final action. A failed command is returned
-to NETCONF and triggers a best-effort transition to the captured before state.
-The initial native backends do not create interfaces, manage MTUs or neighbors,
-discover external drift, or publish live kernel state.
+after the common planner reaches its final action. Linux waits for every kernel
+acknowledgement, compensates completed operations in reverse order after a
+partial failure, and retains observed flags and MTU until the enclosing
+transaction commits or rolls back. A failure is returned to NETCONF. The
+native backends do not create interfaces or publish live kernel state; FreeBSD
+does not yet manage MTUs or neighbors. External address and neighbor drift is
+not yet reconciled.
 
 For example, start `dangd` with the plugin using the module filename produced
 by CMake:

@@ -1,0 +1,110 @@
+// Copyright 2026 David Cornejo
+// SPDX-License-Identifier: Apache-2.0
+
+#include "dangd/plugins/ip_management/platform_backend.h"
+
+#include <arpa/inet.h>
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+#include <cstdlib>
+#include <cstring>
+#include <string>
+#include <string_view>
+
+#include <gtest/gtest.h>
+
+namespace dangd::ip_management {
+namespace {
+
+constexpr std::string_view kAddress = "198.51.100.123";
+
+bool AddressExists(std::string_view expected) {
+  ifaddrs* addresses = nullptr;
+  if (getifaddrs(&addresses) != 0) return false;
+  bool found = false;
+  for (const ifaddrs* value = addresses; value; value = value->ifa_next) {
+    if (!value->ifa_addr || value->ifa_addr->sa_family != AF_INET) continue;
+    char text[INET_ADDRSTRLEN]{};
+    const auto* address =
+        reinterpret_cast<const sockaddr_in*>(value->ifa_addr);
+    if (inet_ntop(AF_INET, &address->sin_addr, text, sizeof(text)) &&
+        expected == text)
+      found = true;
+  }
+  freeifaddrs(addresses);
+  return found;
+}
+
+bool PrivilegedTestsEnabled() {
+  return std::getenv("DANG_RUN_PRIVILEGED_IP_TESTS") != nullptr;
+}
+
+int InterfaceMtu(const char* name) {
+  const int descriptor = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
+  if (descriptor < 0) return -1;
+  ifreq request{};
+  std::strncpy(request.ifr_name, name, sizeof(request.ifr_name) - 1);
+  const int result = ioctl(descriptor, SIOCGIFMTU, &request);
+  close(descriptor);
+  return result == 0 ? request.ifr_mtu : -1;
+}
+
+TEST(LinuxIpBackendTest, AppliesAndRemovesAddressThroughRtnetlink) {
+  if (!PrivilegedTestsEnabled())
+    GTEST_SKIP() << "set DANG_RUN_PRIVILEGED_IP_TESTS=1 in an isolated netns";
+  constexpr const char* empty = "<config/>";
+  constexpr const char* configured =
+      "<config><interfaces><interface><name>lo</name><ipv4><address>"
+      "<ip>198.51.100.123</ip><prefix-length>32</prefix-length>"
+      "</address></ipv4></interface></interfaces></config>";
+  auto backend = MakePlatformBackend();
+  std::string error;
+  ASSERT_TRUE(backend->Reconcile(empty, configured, &error)) << error;
+  EXPECT_TRUE(AddressExists(kAddress));
+  ASSERT_TRUE(backend->Reconcile(configured, empty, &error)) << error;
+  EXPECT_FALSE(AddressExists(kAddress));
+}
+
+TEST(LinuxIpBackendTest, CompensatesAfterLaterOperationFails) {
+  if (!PrivilegedTestsEnabled())
+    GTEST_SKIP() << "set DANG_RUN_PRIVILEGED_IP_TESTS=1 in an isolated netns";
+  constexpr const char* desired =
+      "<config><interfaces>"
+      "<interface><name>lo</name><ipv4><address>"
+      "<ip>198.51.100.123</ip><prefix-length>32</prefix-length>"
+      "</address></ipv4></interface>"
+      "<interface><name>dang-missing0</name><ipv4><address>"
+      "<ip>198.51.100.124</ip><prefix-length>32</prefix-length>"
+      "</address></ipv4></interface>"
+      "</interfaces></config>";
+  auto backend = MakePlatformBackend();
+  std::string error;
+  EXPECT_FALSE(backend->Reconcile("<config/>", desired, &error));
+  EXPECT_NE(error.find("dang-missing0"), std::string::npos) << error;
+  EXPECT_FALSE(AddressExists(kAddress));
+}
+
+TEST(LinuxIpBackendTest, RollbackRestoresObservedMtu) {
+  if (!PrivilegedTestsEnabled())
+    GTEST_SKIP() << "set DANG_RUN_PRIVILEGED_IP_TESTS=1 in an isolated netns";
+  const int original_mtu = InterfaceMtu("lo");
+  ASSERT_GT(original_mtu, 1280);
+  const int changed_mtu = original_mtu - 1;
+  const std::string configured =
+      "<config><interfaces><interface><name>lo</name><ipv4><mtu>" +
+      std::to_string(changed_mtu) +
+      "</mtu></ipv4></interface></interfaces></config>";
+  auto backend = MakePlatformBackend();
+  std::string error;
+  ASSERT_TRUE(backend->Reconcile("<config/>", configured, &error)) << error;
+  EXPECT_EQ(InterfaceMtu("lo"), changed_mtu);
+  ASSERT_TRUE(backend->Reconcile(configured, "<config/>", &error)) << error;
+  EXPECT_EQ(InterfaceMtu("lo"), original_mtu);
+}
+
+}  // namespace
+}  // namespace dangd::ip_management
