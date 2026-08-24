@@ -258,8 +258,11 @@ also require read access to every data ancestor. Only then is the request sent
 to the plugin that owns the defining module. Successful plugin output is NACM
 read-filtered before it is returned.
 
-POSIX plugins are loaded with repeatable `--plugin FILE` arguments. A plugin
-supplies implemented, deviation, and import-only YANG source bytes. `dangd`
+POSIX plugins are configured with repeatable `--plugin FILE` arguments. The
+daemon loads each one only in its supervised `dangd-plugin-worker` process; use
+`--plugin-worker FILE` to override the automatically resolved build-tree or
+installed worker. A plugin supplies implemented, deviation, and import-only YANG
+source bytes. `dangd`
 compiles them into the common effective schema and advertises the resulting
 inventory through the RFC 8525 `/yang-library` operational tree returned by
 `<get>`.

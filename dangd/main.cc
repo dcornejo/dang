@@ -15,10 +15,24 @@
 
 namespace {
 
+std::filesystem::path ExecutablePath(const char* argument) {
+  for (const std::filesystem::path& candidate :
+       {std::filesystem::path("/proc/self/exe"),
+        std::filesystem::path("/proc/curproc/file")}) {
+    std::error_code error;
+    const auto linked = std::filesystem::read_symlink(candidate, error);
+    if (!error && !linked.empty()) return linked;
+  }
+  std::error_code error;
+  return std::filesystem::weakly_canonical(
+      std::filesystem::absolute(argument, error), error);
+}
+
 void Usage() {
   std::cerr
       << "usage: dangd --model FILE --config FILE [--search DIR] [--state FILE]"
          " [--nacm FILE] [--recovery-user USER]... [--plugin FILE]..."
+         " [--plugin-worker FILE]"
          " [--check | --stdio --username USER [--session-id ID]"
          " | --ssh-listen ADDRESS --ssh-port PORT --ssh-host-key FILE"
          " --ssh-authorized-key USER=FILE [--ssh-group USER=GROUP]..."
@@ -31,14 +45,20 @@ void Usage() {
 
 int main(int argc, char* argv[]) {
   dangd::ApplicationOptions options;
-  std::error_code executable_error;
-  const std::filesystem::path executable =
-      std::filesystem::weakly_canonical(
-          std::filesystem::absolute(argv[0], executable_error),
-          executable_error);
-  if (!executable_error) {
+  const std::filesystem::path executable = ExecutablePath(argv[0]);
+  if (!executable.empty()) {
     options.search_paths.push_back(
         executable.parent_path().parent_path() / "share/doc/yang/dangd/models");
+    const auto sibling_worker = executable.parent_path() / "dangd-plugin-worker";
+    std::error_code sibling_error;
+    if (std::filesystem::is_regular_file(sibling_worker, sibling_error) &&
+        !sibling_error) {
+      options.plugin_worker_executable = sibling_worker;
+    } else {
+      options.plugin_worker_executable =
+          executable.parent_path().parent_path() /
+          "libexec/dangd/dangd-plugin-worker";
+    }
   }
   bool stream_mode = false;
   bool ssh_mode = false;
@@ -64,6 +84,8 @@ int main(int argc, char* argv[]) {
       options.recovery_users.emplace_back(argv[++index]);
     } else if (argument == "--plugin" && index + 1 < argc) {
       options.plugins.emplace_back(argv[++index]);
+    } else if (argument == "--plugin-worker" && index + 1 < argc) {
+      options.plugin_worker_executable = std::filesystem::path(argv[++index]);
     } else if (argument == "--username" && index + 1 < argc) {
       username = argv[++index];
     } else if (argument == "--session-id" && index + 1 < argc) {
@@ -175,6 +197,7 @@ int main(int argc, char* argv[]) {
     }
   }
   if (options.model.empty() || options.configuration.empty() ||
+      (!options.plugins.empty() && !options.plugin_worker_executable) ||
       (stream_mode && username.empty()) ||
       (ssh_mode &&
        (ssh.host_key.empty() || ssh.authorized_users.empty())) ||

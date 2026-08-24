@@ -13,9 +13,9 @@ framed POSIX channel; it must never deserialize or retain a worker address.
 
 The framing foundation rejects oversized messages before allocation, applies a
 single monotonic deadline across each complete frame, and distinguishes a clean
-worker exit from timeout, protocol truncation, and host I/O failure. Callback
-routing and worker restart are still active work tracked in `TODO.md`; until
-that migration is complete the existing in-process ABI behavior remains in use.
+worker exit from timeout, protocol truncation, and host I/O failure. Live
+callback routing uses this worker path; automatic worker restart remains active
+work tracked in `TODO.md`.
 The installed `libexec/dangd/dangd-plugin-worker` executable already owns load,
 ABI validation, manifest copying, and YANG source copying for one plugin. Its
 ready handshake reports load failures before it accepts requests, and malformed
@@ -24,8 +24,7 @@ The parent supervisor applies separate startup and callback deadlines. Its
 operational command copies and revalidates every returned field against host
 resource limits, and a timeout, crash, truncation, or invalid response makes the
 worker permanently unhealthy before it is killed and reaped. Requests to one
-stateful plugin worker are serialized. The live server does not use this path
-until transaction and operation callbacks can move with the same context.
+stateful plugin worker are serialized.
 
 Transaction preparation and validation are separate worker requests. Prepare
 copies the before/proposed snapshots and change description into the worker and

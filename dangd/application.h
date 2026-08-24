@@ -86,6 +86,8 @@ struct ApplicationOptions {
   std::vector<std::string> recovery_users;
   /** POSIX shared libraries implementing versioned dangd plugin ABI v1. */
   std::vector<std::filesystem::path> plugins;
+  /** Worker executable enabling isolated live plugin ownership when set. */
+  std::optional<std::filesystem::path> plugin_worker_executable;
   /** In-memory startup configuration used by an atomic runtime reload. */
   std::optional<std::string> configuration_override;
 };

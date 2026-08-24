@@ -834,6 +834,42 @@ TEST(DangdApplicationTest, LoadsPluginModelAndRejectsPluginInvalidCommit) {
             std::string::npos);
 }
 
+TEST(DangdApplicationTest,
+     WorkerRuntimeLoadsModelAndRejectsPluginInvalidCommit) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_PLUGIN_PATH};
+  options.plugin_worker_executable = DANG_TEST_PLUGIN_WORKER_PATH;
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  EXPECT_TRUE(loaded.application->schema()
+                  .FindRoot({"urn:dangd:example-plugin", "plugin-settings"})
+                  .has_value());
+
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+  const auto edit = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="1">
+      <edit-config><target><candidate/></target><config>
+        <plugin-settings xmlns="urn:dangd:example-plugin">
+          <mode>reject</mode>
+        </plugin-settings>
+      </config></edit-config>
+    </rpc>)xml");
+  ASSERT_NE(edit.xml.find("<ok/>"), std::string::npos) << edit.xml;
+  const auto commit = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="2">
+      <commit/>
+    </rpc>)xml");
+  EXPECT_NE(commit.xml.find("operation-failed"), std::string::npos) << commit.xml;
+  EXPECT_NE(commit.xml.find("dangd-example-plugin"), std::string::npos)
+      << commit.xml;
+  EXPECT_EQ(loaded.application->datastores()
+                .Read(yang::netconf::Datastore::kRunning)
+                .ToXml()
+                .find("plugin-settings"),
+            std::string::npos);
+}
+
 TEST(DangdApplicationTest, IpManagementPluginPublishesRfc8344AndPrintsApplyPlan) {
   TemporaryInputs inputs;
   auto options = Options(inputs);

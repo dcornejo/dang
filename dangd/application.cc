@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "dangd/application.h"
+#include "dangd/plugin_worker_runtime.h"
 
 #include <array>
 #include <atomic>
@@ -877,11 +878,18 @@ LoadResult Application::Load(const ApplicationOptions& options) {
       (options.nacm_configuration && !nacm_text))
     return result;
 
-  auto plugins = std::make_unique<PluginManager>();
-  for (const auto& plugin : options.plugins)
-    (void)plugins->Load(plugin, &result.errors);
-  (void)plugins->ValidateDependencies(&result.errors);
-  if (!result.errors.empty()) return result;
+  std::unique_ptr<PluginRuntime> plugins;
+  if (options.plugin_worker_executable) {
+    plugins = PluginWorkerRuntime::Load(*options.plugin_worker_executable,
+                                        options.plugins, &result.errors);
+  } else {
+    auto in_process = std::make_unique<PluginManager>();
+    for (const auto& plugin : options.plugins)
+      (void)in_process->Load(plugin, &result.errors);
+    (void)in_process->ValidateDependencies(&result.errors);
+    plugins = std::move(in_process);
+  }
+  if (!plugins || !result.errors.empty()) return result;
 
   yang::VectorDiagnosticSink diagnostics;
   auto source = yang::SourceFile::Create(options.model.string(), *model_text,

@@ -34,6 +34,8 @@ and releases follow Semantic Versioning.
   from the in-process loader through a common plugin runtime contract.
 - Added a complete worker-owned plugin runtime with isolated discovery,
   dependency validation, transactions, operational data, and operation routing.
+- Switched daemon plugin startup to the worker runtime, with automatic worker
+  path resolution, an explicit override, and no silent in-process fallback.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.
 - Made the per-session NMDA stress duration safely configurable for

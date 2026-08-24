@@ -58,8 +58,8 @@ stays in this file with its remaining work rewritten precisely.
   outcome-uniqueness checks, then compensates if they fail.
   Application, backend, operational publication, and operation dispatch use the
   common `PluginRuntime` contract. `PluginWorkerRuntime` now implements that
-  contract with one supervised process per plugin; select it during application
-  startup and add restart policy to complete the live cutover.
+  contract with one supervised process per plugin. Daemon startup now selects
+  it without an in-process fallback; automatic restart policy remains.
   Malformed typed data and oversized callback XML are rejected atomically with
   provider attribution and bounded copying. Document unsupported optional
   features and deviations before making an RFC 8342 or RFC 8526 compliance claim.

@@ -379,8 +379,9 @@ The application layers now depend on a common plugin runtime contract rather
 than the in-process loader directly; selecting a worker-owned implementation at
 startup remains the live-cutover step.
 The worker-owned implementation of that contract is complete and directly
-tested for discovery, dependency rejection, operational publication, and
-operation routing. Application startup selection and restart policy remain.
+tested for discovery, dependency rejection, operational publication, operation
+routing, model compilation, and rejected commit behavior. Daemon startup now
+selects it; automatic worker restart remains.
 An end-to-end deterministic stress case issues 200 operational retrievals from
 eight sessions, verifies every response, and proves that all eight provider
 callbacks may execute concurrently. The ASan/UBSan release soak completed at
