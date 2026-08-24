@@ -12,6 +12,8 @@ and releases follow Semantic Versioning.
 
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.
+- Made the per-session NMDA stress duration safely configurable for
+  sanitizer-backed release soaks and documented the direct invocation.
 - Bounded operational callback XML before copying it into host memory, rejecting
   payloads above the common XML limit with an attributed atomic NETCONF error;
   added a real oversized-provider regression fixture.

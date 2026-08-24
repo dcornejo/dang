@@ -9,6 +9,8 @@
 
 - Verified concurrent operational publication with a thread-safe test provider,
   eight overlapping sessions, 200 complete retrievals, and response validation.
+- Added a bounded environment override for scaling that identical workload into
+  a long-running ASan/UBSan release soak without slowing routine test runs.
 - Enforced the 16 MiB XML ceiling at the operational plugin callback boundary
   before unbounded string construction, with fail-closed end-to-end coverage.
 - Added atomic reload coverage across deviation and plugin inventory changes,

@@ -7,6 +7,8 @@
 
 #include <algorithm>
 #include <atomic>
+#include <charconv>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -105,6 +107,21 @@ yang::netconf::RpcResponse Commit(Application& application) {
       session,
       "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
       "message-id=\"commit\"><commit/></rpc>");
+}
+
+unsigned int NmdaStressRequestsPerThread() {
+  constexpr unsigned int kDefault = 25;
+  constexpr unsigned int kMaximum = 100000;
+  const char* configured = std::getenv("DANG_NMDA_STRESS_REQUESTS_PER_THREAD");
+  if (!configured || !*configured) return kDefault;
+  const std::string_view text(configured);
+  unsigned int value = 0;
+  const auto parsed = std::from_chars(text.data(), text.data() + text.size(),
+                                      value);
+  if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size() ||
+      value == 0 || value > kMaximum)
+    return kDefault;
+  return value;
 }
 
 TEST(DangdApplicationTest, LoadsModelAndCompleteConfiguration) {
@@ -965,7 +982,7 @@ TEST(DangdApplicationTest, SustainsConcurrentOperationalProviderRetrieval) {
   ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
 
   constexpr unsigned int kThreads = 8;
-  constexpr unsigned int kRequestsPerThread = 25;
+  const unsigned int requests_per_thread = NmdaStressRequestsPerThread();
   std::atomic<unsigned int> ready{0};
   std::atomic<bool> start{false};
   std::atomic<unsigned int> failures{0};
@@ -975,7 +992,7 @@ TEST(DangdApplicationTest, SustainsConcurrentOperationalProviderRetrieval) {
     workers.emplace_back([&, thread] {
       ready.fetch_add(1);
       while (!start.load()) std::this_thread::yield();
-      for (unsigned int request = 0; request < kRequestsPerThread; ++request) {
+      for (unsigned int request = 0; request < requests_per_thread; ++request) {
         yang::netconf::RpcSessionContext session{
             1000 + thread, "alice", "alice", {}};
         const auto response = loaded.application->server().Process(session,

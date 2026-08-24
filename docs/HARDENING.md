@@ -73,8 +73,24 @@ The concurrency stress test shares immutable schema/configuration inputs and
 the synchronized datastore, NACM counters, notification queues, and session
 registry across eight worker threads. It performs 2,000 complete cycles and
 checks final datastore validity, exact denial counters, notification filtering,
-and registry consistency. The complete 224-test suite passes under ASan and
-UBSan as well as the normal build.
+and registry consistency. The complete suite passes under ASan and UBSan as
+well as the normal build.
+
+The `dangd` NMDA stress case performs 25 operational retrievals per worker by
+default and proves that all eight plugin callbacks overlap. Scale the same
+end-to-end test for an instrumented soak with a positive request count no larger
+than 100,000 per worker:
+
+```sh
+DANG_NMDA_STRESS_REQUESTS_PER_THREAD=10000 \
+ASAN_OPTIONS=detect_container_overflow=0 \
+  ./build-sanitizers/dangd_tests \
+  --gtest_filter=DangdApplicationTest.SustainsConcurrentOperationalProviderRetrieval
+```
+
+An invalid, zero, or excessive setting safely falls back to the normal 25.
+The initial scaled ASan/UBSan run completed 100 requests per worker, or 800
+validated operational retrievals, without a sanitizer finding.
 
 ## Deterministic resource ceilings
 

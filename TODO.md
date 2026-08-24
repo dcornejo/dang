@@ -38,7 +38,8 @@ stays in this file with its remaining work rewritten precisely.
 - Run an external NMDA interoperability suite and a long-duration concurrency
   soak under sanitizers. The deterministic end-to-end stress test completes
   200 retrievals across eight sessions while all eight provider callbacks are
-  simultaneously active.
+  simultaneously active, passes under ASan/UBSan, and accepts a bounded request
+  count for release soaks.
   Isolate operational callbacks in a supervised worker boundary so a hung or
   crashed plugin can be timed out without leaving an in-process thread running
   against unloaded plugin state; add timeout/crash recovery tests. Malformed
