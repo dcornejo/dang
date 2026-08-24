@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Refocused the top-level README on the `dangd` server, its primary use cases,
+  runnable transport example, and documentation map. Moved detailed compiler,
+  library, package-consumer, and API-documentation material into focused guides.
 - Started supervised plugin isolation with a bounded, deadline-aware POSIX
   worker protocol that classifies timeout, exit, truncation, and I/O failures.
 - Added an installed standalone worker that exclusively loads one plugin and

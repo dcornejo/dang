@@ -3,10 +3,11 @@
 
 # dangd
 
-`dangd` is the host-application layer for a future production NETCONF
-configuration server. It is kept separate from the reusable `yang` library.
+`dangd` is the repository's model-driven NETCONF configuration server. It is
+kept separate from the reusable `yang` library so transport, identity,
+persistence, plugin supervision, and deployment policy remain host concerns.
 
-The current foundation:
+The server:
 
 - loads one root YANG module and its import/include dependency closure;
 - binds and completely validates an initial XML configuration;
@@ -15,8 +16,11 @@ The current foundation:
   running datastore and reports the schema-aware changes in plain English;
 - optionally restores an atomic datastore snapshot and makes each live
   persistent mutation durable before reporting NETCONF success;
-- provides `--check` startup validation; and
-- provides an RFC 6242 stdin/stdout session for supervised integration tests.
+- provides `--check` startup validation;
+- serves authenticated NETCONF over embedded SSH or mutual TLS;
+- provides an RFC 6242 stdin/stdout session for supervised integration tests;
+- enforces datastore-managed NACM and publishes YANG Library state; and
+- loads device plugins into supervised worker processes.
 
 Build and validate a configuration:
 
@@ -31,20 +35,23 @@ authenticate or encrypt the peer. The supplied `--username` is trusted. Do not
 connect this mode directly to a socket; use it only in tests or behind a local
 supervisor that has already authenticated the peer.
 
-An event-loop production transport, richer operational device state, and a
-device-specific backend remain future `dangd` work. The current English
-backend is deliberately in-memory: it establishes the commit boundary and
-delta vocabulary without pretending to configure an external system.
+Production deployment hardening, broader interoperability coverage, and full
+standards closure remain active work. The built-in English backend remains a
+safe in-memory demonstration, while device plugins can apply native platform
+changes behind the same transaction boundary.
 
 ## RFC 8344 IP-management plugin example
 
 The `dangd_ip_management_plugin` build target is a self-contained example
 provider for RFC 8343 interfaces and RFC 8344 IP configuration. It discovers
 both normative models through the plugin ABI and turns committed interface,
-IPv4, and IPv6 changes into human-readable apply actions. The example prints
-each action to the daemon's diagnostic stream and assumes success; it does not
-modify host networking. See the concrete request and build instructions in
-[the plugin guide](../docs/DANGD_PLUGINS.md).
+IPv4, and IPv6 changes into human-readable apply actions. Linux uses direct
+rtnetlink operations for link state, MTU, addresses, and static neighbors and
+publishes live state for configured interfaces. FreeBSD has a separately
+isolated native backend that still uses its administration utility while its
+direct-kernel implementation remains TODO work. Unsupported development hosts
+use a logging-only backend. See the concrete request, privilege, and build
+instructions in [the plugin guide](../docs/DANGD_PLUGINS.md).
 
 ## Safe hardware application ordering
 

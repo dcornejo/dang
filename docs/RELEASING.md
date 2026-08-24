@@ -44,3 +44,20 @@ automatic substitute for describing compatibility and migration effects.
 ```sh
 python3 scripts/generate_changelog.py --since v0.1.0
 ```
+
+## Build API documentation
+
+Generate the Doxygen HTML and PDF references with:
+
+```sh
+brew install doxygen
+brew install --cask mactex-no-gui
+# Open a new terminal after installing MacTeX so pdflatex is on PATH.
+cmake -S . -B build-docs -DYANG_BUILD_DOCS=ON
+cmake --build build-docs
+```
+
+The build creates `build-docs/docs/html/index.html` and
+`build-docs/docs/latex/refman.pdf`. Installing this configuration places the
+HTML tree under `share/doc/yang/html` and the PDF at
+`share/doc/yang/yang-cpp-reference.pdf`.

@@ -7,6 +7,8 @@
 
 ### Changed
 
+- Refreshed the server overview and IP-management example description to match
+  the implemented SSH/TLS, NACM, worker-plugin, and native Linux behavior.
 - Added the tested framed IPC foundation for moving plugin ownership into
   supervised worker processes without sharing library or opaque state pointers.
 - Added worker startup/load handshakes, manifest/source discovery, malformed

@@ -83,6 +83,7 @@ install(FILES
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/yang)
 install(FILES LICENSE NOTICE README.md TODO.md CHANGELOG.md docs/STANDARDS.md
   docs/RELEASING.md
+  docs/YANG_LIBRARY.md
   docs/BENCHMARKS.md
   docs/HARDENING.md
   docs/COMPLIANCE.md
