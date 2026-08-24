@@ -53,7 +53,7 @@ int InterfaceMtu(const char* name) {
   return result == 0 ? request.ifr_mtu : -1;
 }
 
-TEST(LinuxIpBackendTest, AppliesAndRemovesAddressThroughRtnetlink) {
+TEST(LinuxIpBackendTest, AppliesRepairsAndRemovesAddressThroughRtnetlink) {
   if (!PrivilegedTestsEnabled())
     GTEST_SKIP() << "set DANG_RUN_PRIVILEGED_IP_TESTS=1 in an isolated netns";
   constexpr const char* empty = "<config/>";
@@ -65,6 +65,14 @@ TEST(LinuxIpBackendTest, AppliesAndRemovesAddressThroughRtnetlink) {
   std::string error;
   ASSERT_TRUE(backend->Reconcile(empty, configured, &error)) << error;
   EXPECT_TRUE(AddressExists(kAddress));
+  backend->Commit();
+  auto external = MakePlatformBackend();
+  ASSERT_TRUE(external->Reconcile(configured, empty, &error)) << error;
+  external->Commit();
+  EXPECT_FALSE(AddressExists(kAddress));
+  ASSERT_TRUE(backend->Reconcile(configured, configured, &error)) << error;
+  EXPECT_TRUE(AddressExists(kAddress));
+  backend->Commit();
   ASSERT_TRUE(backend->Reconcile(configured, empty, &error)) << error;
   EXPECT_FALSE(AddressExists(kAddress));
 }
@@ -126,7 +134,7 @@ TEST(LinuxIpBackendTest, PublishesLiveLinkAndAddressState) {
   EXPECT_NE(state.find("<mtu>"), std::string::npos) << state;
 }
 
-TEST(LinuxIpBackendTest, PublishesConfiguredKernelNeighbor) {
+TEST(LinuxIpBackendTest, PublishesAndRepairsConfiguredKernelNeighbor) {
   if (!PrivilegedTestsEnabled())
     GTEST_SKIP() << "set DANG_RUN_PRIVILEGED_IP_TESTS=1 in an isolated netns";
   constexpr const char* configured =
@@ -145,6 +153,15 @@ TEST(LinuxIpBackendTest, PublishesConfiguredKernelNeighbor) {
                 "<link-layer-address>02:00:00:00:00:c8</link-layer-address>"),
             std::string::npos) << state;
   EXPECT_NE(state.find("<origin>static</origin>"), std::string::npos) << state;
+  backend->Commit();
+  auto external = MakePlatformBackend();
+  ASSERT_TRUE(external->Reconcile(configured, "<config/>", &error)) << error;
+  external->Commit();
+  ASSERT_TRUE(backend->Reconcile(configured, configured, &error)) << error;
+  state.clear();
+  ASSERT_TRUE(backend->OperationalXml(configured, &state, &error)) << error;
+  EXPECT_NE(state.find("<ip>198.51.100.200</ip>"), std::string::npos) << state;
+  backend->Commit();
   ASSERT_TRUE(backend->Reconcile(configured, "<config/>", &error)) << error;
 }
 

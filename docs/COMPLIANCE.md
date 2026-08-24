@@ -433,10 +433,10 @@ It does not create/delete interfaces. Linux publishes live link status, MTU,
 assigned prefixes, and complete ARP/IPv6 neighbor entries for configured
 interfaces, but not counters, duplicate-address detection, or unconfigured
 system-controlled interfaces.
-Linux does not yet reconcile configured address and neighbor changes made by
-other agents. FreeBSD publishes live link status, MTU, assigned prefixes, and
-complete IPv4/IPv6
-neighbor entries for configured interfaces, but not counters, duplicate-address
+Linux repairs missing or altered configured addresses and neighbors while
+preserving unrelated kernel state. FreeBSD publishes live link status, MTU,
+assigned prefixes, and complete IPv4/IPv6 neighbor entries for configured
+interfaces, but not counters, duplicate-address
 detection, or unconfigured system-controlled interfaces. Privileged IPv6
 neighbor coverage remains. It repairs missing or altered managed address and
 neighbor entries while preserving unrelated kernel state. Its epair smoke

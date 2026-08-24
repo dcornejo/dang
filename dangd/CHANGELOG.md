@@ -52,6 +52,8 @@
   MTU, assigned IPv4/IPv6 prefixes, and complete ARP/ND neighbor entries.
 - Added live FreeBSD drift repair for configured addresses and neighbors,
   including exact inverse operations and preservation of unrelated kernel state.
+- Added equivalent Linux address and neighbor drift repair with live snapshots,
+  exact rollback, and isolated-namespace regression interactions.
 - Added opt-in privileged FreeBSD backend tests and removed the obsolete
   command-execution helper from the IP plugin.
 - Verified concurrent operational publication with a thread-safe test provider,

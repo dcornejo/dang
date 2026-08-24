@@ -128,7 +128,8 @@ interfaces, but not counters or unconfigured system interfaces. FreeBSD also
 publishes native live link status, MTU, assigned addresses, and complete
 neighbor-cache entries for configured interfaces. FreeBSD also repairs missing
 or altered configured addresses and neighbors without deleting unrelated kernel
-entries. Linux does not yet reconcile external address and neighbor drift.
+entries. Linux likewise repairs drift in configured address and neighbor entries
+without claiming ownership of unrelated kernel state.
 
 For example, start `dangd` with the plugin using the module filename produced
 by CMake:

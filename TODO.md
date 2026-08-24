@@ -15,8 +15,7 @@ stays in this file with its remaining work rewritten precisely.
 
 ### RFC 8343/8344 native IP management closure
 
-- Reconcile managed Linux address and neighbor drift and broaden privileged
-  IPv6 neighbor coverage on FreeBSD. FreeBSD now applies
+- Broaden privileged IPv6 neighbor coverage on FreeBSD. FreeBSD now applies
   enabled state, equal per-family MTUs, and IPv4/IPv6 addresses through native
   `SIOC*` ioctls and static neighbors through acknowledged route-netlink
   requests, with retained live link snapshots and reverse partial-failure
@@ -31,10 +30,12 @@ stays in this file with its remaining work rewritten precisely.
   addresses, equal per-family MTUs, and static neighbors with acknowledged
   rtnetlink requests. It observes live link flags/MTU, compensates a partially
   failed request sequence, and retains the exact observed link snapshot until
-  the enclosing transaction commits or rolls back. Privileged isolated Linux
-  tests cover address apply/removal, partial failure, exact MTU rollback, and
-  live link/MTU/address/neighbor publication for configured interfaces. Linux
-  counters and system-controlled unconfigured interfaces remain.
+  the enclosing transaction commits or rolls back. It repairs missing or
+  altered configured addresses and neighbors without deleting unrelated kernel
+  state. Privileged isolated Linux tests cover address/neighbor apply, removal,
+  out-of-band removal repair, partial failure, exact MTU rollback, and live
+  link/MTU/address/neighbor publication for configured interfaces. Linux counters
+  and system-controlled unconfigured interfaces remain.
 
 ### RFC 8341 NACM compliance closure
 

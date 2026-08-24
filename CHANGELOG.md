@@ -64,6 +64,9 @@ and releases follow Semantic Versioning.
 - Reconciled FreeBSD managed address and neighbor intent against live kernel
   state even when configuration XML is unchanged, repairing missing or altered
   entries while preserving unrelated system-owned networking state.
+- Reconciled Linux managed address and neighbor intent against live kernel
+  state with observed-value rollback, including identical-configuration repair
+  and preservation of unrelated namespace networking state.
 - Removed the now-unused external command runner from the IP plugin.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.
