@@ -561,6 +561,7 @@ if(YANG_BUILD_TESTS)
   endif()
 
   if(YANG_BUILD_DANGD)
+    find_program(DANG_OPENSSH_CLIENT ssh)
     add_executable(dangd_tests dangd/application_test.cc
       dangd/hardware_transaction_test.cc dangd/plugin_manager_test.cc
       dangd/plugin_worker_protocol_test.cc dangd/plugin_worker_test.cc
@@ -579,6 +580,10 @@ if(YANG_BUILD_TESTS)
       DANG_TEST_PROVIDER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_provider_plugin>"
       DANG_TEST_CONSUMER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_consumer_plugin>"
       DANG_TEST_BROKEN_PLUGIN_PATH="$<TARGET_FILE:dangd_test_broken_discovery_plugin>")
+    if(DANG_OPENSSH_CLIENT)
+      target_compile_definitions(dangd_tests PRIVATE
+        DANG_TEST_OPENSSH_CLIENT="${DANG_OPENSSH_CLIENT}")
+    endif()
     target_compile_definitions(dangd_tests PRIVATE
       DANG_TEST_DEVIATION_PLUGIN_PATH="$<TARGET_FILE:dangd_test_deviation_plugin>"
       DANG_TEST_BROKEN_OPERATIONAL_PLUGIN_PATH="$<TARGET_FILE:dangd_test_broken_operational_plugin>"

@@ -7,6 +7,9 @@
 
 ### Changed
 
+- Added an automated independent OpenSSH transport matrix covering rejected
+  keys, rejected non-NETCONF subsystems, and four concurrently initiated
+  authenticated NETCONF/RPC/close interactions.
 - Refreshed the server overview and IP-management example description to match
   the implemented SSH/TLS, NACM, worker-plugin, and native Linux behavior.
 - Added the tested framed IPC foundation for moving plugin ownership into

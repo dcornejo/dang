@@ -116,10 +116,10 @@ and session-loss cleanup are implemented. `dangd` uses libssh to own its listen
 socket, host private key, public-key-only user authentication, session channel,
 and subsystem establishment. Authenticated usernames use the common exact
 mapper, while NACM external groups come only from the matching local authorized
-key record. An OpenSSH client smoke interaction covers public-key
-authentication, subsystem negotiation, RPC framing, and clean close. A broader
-independent matrix and sustained concurrent-session testing remain release
-evidence.
+key record. An automated independent OpenSSH matrix covers unauthorized-key and
+wrong-subsystem rejection plus four concurrently initiated public-key,
+subsystem, RPC-framing, and clean-close interactions. Sustained simultaneous
+session and backpressure testing remains release evidence.
 
 ### RFC 6243 — with-defaults
 

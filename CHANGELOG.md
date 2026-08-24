@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Added an automated independent OpenSSH transport matrix covering negative
+  authentication/subsystem cases and concurrently initiated NETCONF sessions.
 - Refocused the top-level README on the `dangd` server, its primary use cases,
   runnable transport example, and documentation map. Moved detailed compiler,
   library, package-consumer, and API-documentation material into focused guides.

@@ -7,15 +7,18 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <future>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <thread>
 #include <type_traits>
+#include <vector>
 
 #include <libssh/libssh.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <gtest/gtest.h>
@@ -55,6 +58,81 @@ struct ClientResult {
   bool subsystem = false;
   std::string received;
 };
+
+struct ProcessResult {
+  int status = -1;
+  std::string output;
+};
+
+#ifdef DANG_TEST_OPENSSH_CLIENT
+/** Runs the system OpenSSH client with pipes instead of a shell.
+ *
+ * Keeping argv explicit makes paths containing whitespace safe and ensures the
+ * interoperability test cannot accidentally reinterpret XML as shell syntax.
+ * Standard error is deliberately captured with standard output: OpenSSH's
+ * authentication and subsystem diagnostics are useful assertion context.
+ */
+ProcessResult ConnectWithOpenSsh(const std::filesystem::path& private_key,
+                                 std::uint16_t port,
+                                 std::string_view subsystem,
+                                 std::string_view input) {
+  int input_pipe[2] = {-1, -1};
+  int output_pipe[2] = {-1, -1};
+  if (pipe(input_pipe) != 0) return {};
+  if (pipe(output_pipe) != 0) {
+    close(input_pipe[0]);
+    close(input_pipe[1]);
+    return {};
+  }
+  const pid_t child = fork();
+  if (child < 0) {
+    close(input_pipe[0]);
+    close(input_pipe[1]);
+    close(output_pipe[0]);
+    close(output_pipe[1]);
+    return {};
+  }
+  if (child == 0) {
+    (void)dup2(input_pipe[0], STDIN_FILENO);
+    (void)dup2(output_pipe[1], STDOUT_FILENO);
+    (void)dup2(output_pipe[1], STDERR_FILENO);
+    close(input_pipe[0]);
+    close(input_pipe[1]);
+    close(output_pipe[0]);
+    close(output_pipe[1]);
+    const std::string port_text = std::to_string(port);
+    const std::string key_text = private_key.string();
+    const std::string subsystem_text(subsystem);
+    execl(DANG_TEST_OPENSSH_CLIENT, DANG_TEST_OPENSSH_CLIENT, "-p",
+          port_text.c_str(), "-i", key_text.c_str(), "-o",
+          "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o",
+          "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null",
+          "-o", "ConnectTimeout=5", "-s", "alice@127.0.0.1",
+          subsystem_text.c_str(), static_cast<char*>(nullptr));
+    _exit(127);
+  }
+  close(input_pipe[0]);
+  close(output_pipe[1]);
+  std::size_t offset = 0;
+  while (offset < input.size()) {
+    const ssize_t count =
+        write(input_pipe[1], input.data() + offset, input.size() - offset);
+    if (count <= 0) break;
+    offset += static_cast<std::size_t>(count);
+  }
+  close(input_pipe[1]);
+  ProcessResult result;
+  std::array<char, 16 * 1024> buffer{};
+  while (true) {
+    const ssize_t count = read(output_pipe[0], buffer.data(), buffer.size());
+    if (count <= 0) break;
+    result.output.append(buffer.data(), static_cast<std::size_t>(count));
+  }
+  close(output_pipe[0]);
+  if (waitpid(child, &result.status, 0) < 0) result.status = -1;
+  return result;
+}
+#endif
 
 ClientResult Connect(const std::filesystem::path& private_key,
                      std::uint16_t port, std::string_view subsystem,
@@ -169,6 +247,83 @@ TEST(DangdSshTransportTest,
   EXPECT_EQ(valid.received.find("access-denied"), std::string::npos);
   EXPECT_NE(valid.received.find("message-id=\"close\"><ok/>"),
             std::string::npos);
+}
+
+TEST(DangdSshTransportTest, IndependentOpenSshNegativeAndConcurrentMatrix) {
+#ifndef DANG_TEST_OPENSSH_CLIENT
+  GTEST_SKIP() << "OpenSSH client not found at configure time";
+#else
+  ASSERT_EQ(ssh_init(), SSH_OK);
+  const std::filesystem::path source = DANG_TEST_SOURCE_DIR;
+  ApplicationOptions application_options{
+      .model = source / "dangd/examples/appliance.yang",
+      .search_paths = {source / "dangd/models"},
+      .configuration = source / "dangd/examples/config.xml",
+      .nacm_configuration = source / "dangd/examples/nacm.xml"};
+  auto loaded = Application::Load(application_options);
+  ASSERT_NE(loaded.application, nullptr);
+
+  const std::filesystem::path keys = source / "dangd/testdata/ssh";
+  const std::uint16_t port = AvailableLoopbackPort();
+  ASSERT_NE(port, 0);
+  constexpr std::size_t kParallelClients = 4;
+  SshServerOptions options{
+      .address = "127.0.0.1",
+      .port = port,
+      .host_key = keys / "host-key",
+      .authorized_users = {
+          {"alice", keys / "alice-key.pub", {"administrators"}}},
+      .username_mappings = {{"alice", "administrator"}},
+      .require_username_mapping = true,
+      .maximum_connections = 2 + kParallelClients};
+  std::ostringstream diagnostics;
+  int server_result = -1;
+  std::thread server([&] {
+    server_result = RunReloadableSshServer(
+        loaded.application, application_options, options, diagnostics);
+  });
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  const ProcessResult unauthorized =
+      ConnectWithOpenSsh(keys / "host-key", port, "netconf", "");
+  EXPECT_FALSE(WIFEXITED(unauthorized.status) &&
+               WEXITSTATUS(unauthorized.status) == 0)
+      << unauthorized.output;
+  const ProcessResult wrong_subsystem =
+      ConnectWithOpenSsh(keys / "alice-key", port, "shell", "");
+  EXPECT_FALSE(WIFEXITED(wrong_subsystem.status) &&
+               WEXITSTATUS(wrong_subsystem.status) == 0)
+      << wrong_subsystem.output;
+
+  const std::string request =
+      "<hello xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
+      "<capabilities><capability>urn:ietf:params:netconf:base:1.0"
+      "</capability></capabilities></hello>]]>]]>"
+      "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+      "message-id=\"openssh\"><get/></rpc>]]>]]>"
+      "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+      "message-id=\"close\"><close-session/></rpc>]]>]]>";
+  std::vector<std::future<ProcessResult>> clients;
+  for (std::size_t i = 0; i < kParallelClients; ++i) {
+    clients.push_back(std::async(std::launch::async, [&] {
+      return ConnectWithOpenSsh(keys / "alice-key", port, "netconf", request);
+    }));
+  }
+  for (auto& client : clients) {
+    const ProcessResult result = client.get();
+    // OpenSSH may return 255 after a successful close-session because the
+    // NETCONF server closes its channel and connection immediately afterward.
+    // The complete, correlated protocol replies below are the success signal.
+    EXPECT_TRUE(WIFEXITED(result.status)) << result.output;
+    EXPECT_NE(result.output.find("message-id=\"openssh\""), std::string::npos)
+        << result.output;
+    EXPECT_NE(result.output.find("message-id=\"close\"><ok/>"),
+              std::string::npos)
+        << result.output;
+  }
+  server.join();
+  EXPECT_EQ(server_result, 0) << diagnostics.str();
+#endif
 }
 
 }  // namespace
