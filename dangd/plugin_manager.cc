@@ -750,6 +750,45 @@ PluginManager::ReconcileWorkerApplied(std::string_view current_xml,
   return std::nullopt;
 }
 
+yang::netconf::OperationResult PluginManager::InvokeWorkerOperation(
+    std::string_view module_name, std::string_view operation_name,
+    std::string_view instance_path, std::string_view input_xml) {
+  if (state_->plugins.size() != 1) {
+    return {{false,
+             {PluginFinding("worker", {},
+                            "worker must own exactly one plugin")},
+             {}},
+            {}};
+  }
+  State::Plugin& plugin = state_->plugins.front();
+  if (std::ranges::find(plugin.modules, module_name) == plugin.modules.end() ||
+      !plugin.invoke) {
+    auto finding = PluginFinding(
+        plugin.name, {}, "plugin does not implement the requested operation");
+    finding.module_name = module_name;
+    finding.netconf_error_tag = "operation-not-supported";
+    finding.netconf_error_app_tag = "plugin-operation-unsupported";
+    return {{false, {std::move(finding)}, {}}, {}};
+  }
+  const std::string copied_module(module_name);
+  const std::string copied_name(operation_name);
+  const std::string copied_path(instance_path);
+  const std::string copied_input(input_xml);
+  const DangOperationV1 request{
+      copied_module.c_str(), copied_name.c_str(),
+      copied_path.empty() ? nullptr : copied_path.c_str(), copied_input.c_str()};
+  DangOperationResultV1 response{};
+  DangPluginErrorV1 error{};
+  if (!plugin.invoke(plugin.api->context, &request, &response, &error)) {
+    return {{false,
+             {PluginFinding(plugin.name, error,
+                            "operation invocation failed")},
+             {}},
+            {}};
+  }
+  return {{true, {}, {}}, response.output_xml ? response.output_xml : ""};
+}
+
 PluginApplyResult PluginManager::Apply(
     const yang::config::RuntimeSchema& schema,
     const yang::config::ConfigDocument& proposed) {

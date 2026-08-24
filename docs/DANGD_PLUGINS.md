@@ -48,6 +48,12 @@ against the runtime schema, limits changes to modules owned by the reporting
 plugin, rejects duplicate outcome paths, and retains rollback capability until
 every affected report is accepted.
 
+Schema-authorized RPCs and actions are dispatched through the same serialized
+worker channel. Module and operation names, instance paths, and input XML are
+bounded before transmission; output XML and attributed errors are copied and
+revalidated by the parent. The plugin never receives transport credentials or
+an unchecked NETCONF request.
+
 This guide defines the contract between `dangd` and a dynamically loaded
 configuration provider. It is both a how-to and the behavioral specification
 for plugin authors. The first ABI targets POSIX shared libraries only. Windows

@@ -23,6 +23,8 @@
   disposition, path, reason, and provider revalidation in the parent client.
 - Added atomic coordinator reconciliation with schema and ownership validation,
   unique outcome enforcement, commit-after-validation, and rollback on failure.
+- Added operation invocation to the worker protocol and client, preserving
+  operation-not-supported attribution and containing callback failure.
 - Verified concurrent operational publication with a thread-safe test provider,
   eight overlapping sessions, 200 complete retrievals, and response validation.
 - Added a bounded environment override for scaling that identical workload into

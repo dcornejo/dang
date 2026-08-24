@@ -47,9 +47,10 @@ stays in this file with its remaining work rewritten precisely.
   ready handshake plus copied manifest/YANG discovery data; parent-side worker
   ownership now enforces separate startup/request deadlines, bounds copied data,
   and contains/reaps operational callback hangs and crashes. Live application
-  cutover, operation routing, and restart policy remain. Worker prepare,
+  cutover, parent operation-provider routing, and restart policy remain. Worker
+  prepare,
   validate, abort, action discovery, named apply, named rollback, and ABI-v6
-  reconciliation already retain and use opaque
+  reconciliation and RPC/action invocation already retain and use opaque
   transaction state entirely inside the worker process. The parent worker
   coordinator combines copied actions into a global dependency plan and
   compensates action failure in reverse. It now retains a successfully applied

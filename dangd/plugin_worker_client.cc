@@ -451,6 +451,47 @@ PluginWorkerReconcileResult PluginWorkerClient::Reconcile(
   }
 }
 
+PluginWorkerOperationResult PluginWorkerClient::Invoke(
+    std::string module_name, std::string operation_name,
+    std::string instance_path, std::string input_xml) {
+  const auto& limits = yang::DefaultResourceLimits();
+  if (module_name.empty() || operation_name.empty() ||
+      module_name.size() > limits.maximum_xpath_bytes ||
+      operation_name.size() > limits.maximum_xpath_bytes ||
+      instance_path.size() > limits.maximum_xpath_bytes ||
+      input_xml.size() > limits.maximum_xml_bytes) {
+    return {{{false, {}, {}}, {}},
+            "plugin operation exceeds the resource limit"};
+  }
+  ExchangeResult exchanged = Exchange(
+      Json{{"operation", "invoke"},
+           {"module_name", std::move(module_name)},
+           {"operation_name", std::move(operation_name)},
+           {"instance_path", std::move(instance_path)},
+           {"input_xml", std::move(input_xml)}}.dump());
+  if (!exchanged.response)
+    return {{{false, {}, {}}, {}}, exchanged.error};
+  const Json& response = *exchanged.response;
+  try {
+    if (!response.value("ok", false) || !response.contains("accepted") ||
+        !response["accepted"].is_boolean())
+      throw Json::other_error::create(501, "invalid invoke response", &response);
+    if (!response["accepted"].get<bool>()) {
+      auto finding = ParseFinding(response.at("finding"));
+      return {{{false, {std::move(finding)}, {}}, {}}, std::nullopt};
+    }
+    std::string output = response.at("output_xml").get<std::string>();
+    if (output.size() > limits.maximum_xml_bytes)
+      throw Json::other_error::create(501, "oversized operation output",
+                                      &response);
+    return {{{true, {}, {}}, std::move(output)}, std::nullopt};
+  } catch (const Json::exception&) {
+    Terminate();
+    return {{{false, {}, {}}, {}},
+            "malformed plugin worker operation result"};
+  }
+}
+
 std::optional<std::string> PluginWorkerClient::Abort() {
   PluginWorkerTransactionResult result =
       Transaction(Json{{"operation", "abort"}}.dump());

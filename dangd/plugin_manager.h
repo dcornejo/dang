@@ -146,6 +146,10 @@ class PluginManager : public yang::netconf::OperationProvider {
   [[nodiscard]] std::optional<yang::config::ValidationFinding>
   ReconcileWorkerApplied(std::string_view current_xml,
                          PluginWorkerAppliedReport* report);
+  /** Worker-only dispatch using copied operation identity and input XML. */
+  [[nodiscard]] yang::netconf::OperationResult InvokeWorkerOperation(
+      std::string_view module_name, std::string_view operation_name,
+      std::string_view instance_path, std::string_view input_xml);
   /** Applies and schema-validates ABI-v6 reports of actual backend state. */
   [[nodiscard]] PluginApplyResult Apply(
       const yang::config::RuntimeSchema& schema,

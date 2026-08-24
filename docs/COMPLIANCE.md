@@ -373,7 +373,8 @@ all participating workers, including module dependency edges and reverse
 compensation. ABI-v6 reconciliation callbacks now run inside workers and return
 bounded copies. The parent now validates schema, ownership, provider identity,
 and outcome uniqueness before committing its retained plan, and compensates a
-bad report in reverse. RPC/action dispatch and live routing remain unfinished.
+bad report in reverse. RPC/action callbacks now use bounded worker requests;
+live operation-provider selection and application routing remain unfinished.
 An end-to-end deterministic stress case issues 200 operational retrievals from
 eight sessions, verifies every response, and proves that all eight provider
 callbacks may execute concurrently. The ASan/UBSan release soak completed at

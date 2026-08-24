@@ -28,6 +28,8 @@ and releases follow Semantic Versioning.
   configuration and per-node outcomes while retaining opaque transaction state.
 - Retained successful worker hardware plans until parent-side applied-state
   validation succeeds, with reverse compensation on report rejection.
+- Added supervised worker RPC/action dispatch with bounded copied inputs,
+  outputs, and attributed NETCONF errors.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.
 - Made the per-session NMDA stress duration safely configurable for

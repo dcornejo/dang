@@ -58,6 +58,15 @@ struct PluginWorkerReconcileResult {
   }
 };
 
+/** Copied operation result or a worker transport/protocol failure. */
+struct PluginWorkerOperationResult {
+  yang::netconf::OperationResult operation;
+  std::optional<std::string> worker_error;
+  [[nodiscard]] bool ok() const noexcept {
+    return operation.result.ok && !worker_error;
+  }
+};
+
 /**
  * Owns and supervises one long-lived out-of-process plugin instance.
  *
@@ -103,6 +112,10 @@ class PluginWorkerClient {
   /** Retrieves a copied ABI-v6 applied-state report. */
   [[nodiscard]] PluginWorkerReconcileResult Reconcile(
       std::string current_xml);
+  /** Invokes one schema-authorized RPC or action inside the worker. */
+  [[nodiscard]] PluginWorkerOperationResult Invoke(
+      std::string module_name, std::string operation_name,
+      std::string instance_path, std::string input_xml);
   /** Releases retained preparation without applying it. */
   [[nodiscard]] std::optional<std::string> Abort();
   /** Returns whether the worker remains usable after preceding requests. */

@@ -371,5 +371,31 @@ TEST(PluginWorkerClientTest, LegacyReconcileReturnsUnchangedSnapshot) {
   EXPECT_FALSE(client->Abort().has_value());
 }
 
+TEST(PluginWorkerClientTest, InvokesOperationAndCopiesOutput) {
+  std::vector<std::string> errors;
+  auto client = StartClient(DANG_TEST_PROVIDER_PLUGIN_PATH, 5s, &errors);
+  ASSERT_NE(client, nullptr) << testing::PrintToString(errors);
+  const PluginWorkerOperationResult invoked = client->Invoke(
+      "dangd-test-provider", "provider-status", "", "<provider-status/>");
+  ASSERT_TRUE(invoked.ok()) << invoked.worker_error.value_or("");
+  EXPECT_NE(invoked.operation.output_xml.find(">ready</status>"),
+            std::string::npos);
+}
+
+TEST(PluginWorkerClientTest, ReturnsAttributedUnsupportedOperation) {
+  std::vector<std::string> errors;
+  auto client = StartClient(DANG_TEST_PLUGIN_PATH, 5s, &errors);
+  ASSERT_NE(client, nullptr) << testing::PrintToString(errors);
+  const PluginWorkerOperationResult invoked = client->Invoke(
+      "dangd-example-plugin", "missing", "", "<missing/>");
+  ASSERT_FALSE(invoked.ok());
+  ASSERT_EQ(invoked.operation.result.errors.size(), 1u);
+  EXPECT_EQ(invoked.operation.result.errors.front().module_name,
+            "dangd-example-plugin");
+  EXPECT_EQ(invoked.operation.result.errors.front().netconf_error_tag,
+            "operation-not-supported");
+  EXPECT_TRUE(client->healthy());
+}
+
 }  // namespace
 }  // namespace dangd

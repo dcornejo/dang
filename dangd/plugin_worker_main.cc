@@ -207,6 +207,38 @@ int Run(int descriptor, const std::filesystem::path& plugin_path) {
                                {"error", "invalid reconcile request"}}))
           return 1;
       }
+    } else if (operation == "invoke") {
+      try {
+        const auto invoked = manager.InvokeWorkerOperation(
+            parsed.at("module_name").get<std::string>(),
+            parsed.at("operation_name").get<std::string>(),
+            parsed.at("instance_path").get<std::string>(),
+            parsed.at("input_xml").get<std::string>());
+        if (!invoked.result.ok) {
+          yang::config::ValidationFinding finding;
+          if (invoked.result.errors.empty()) {
+            finding.message = "plugin operation failed without diagnostics";
+            finding.module_name =
+                parsed.at("module_name").get<std::string>();
+            finding.netconf_error_tag = "operation-failed";
+          } else {
+            finding = invoked.result.errors.front();
+          }
+          if (!Send(descriptor, Finding(std::move(finding), "invoke")))
+            return 1;
+          continue;
+        }
+        if (!Send(descriptor, {{"ok", true},
+                               {"stage", "invoke"},
+                               {"accepted", true},
+                               {"output_xml", invoked.output_xml}}))
+          return 1;
+      } catch (const Json::exception&) {
+        if (!Send(descriptor, {{"ok", false},
+                               {"stage", "protocol"},
+                               {"error", "invalid invoke request"}}))
+          return 1;
+      }
     } else if (operation == "abort") {
       manager.Abort();
       if (!Send(descriptor,
