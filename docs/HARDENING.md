@@ -88,9 +88,9 @@ ASAN_OPTIONS=detect_container_overflow=0 \
   --gtest_filter=DangdApplicationTest.SustainsConcurrentOperationalProviderRetrieval
 ```
 
-An invalid, zero, or excessive setting safely falls back to the normal 25.
-The initial scaled ASan/UBSan run completed 100 requests per worker, or 800
-validated operational retrievals, without a sanitizer finding.
+An invalid, zero, or excessive setting safely falls back to the normal 25. The
+release soak completed 1,000 requests per worker, or 8,000 validated operational
+retrievals over 315.7 seconds, without an ASan/UBSan finding.
 
 ## Deterministic resource ceilings
 

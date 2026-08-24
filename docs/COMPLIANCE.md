@@ -355,11 +355,9 @@ supervised out-of-process callback boundary; abandoning an in-process worker
 thread would permit it to continue executing against torn-down plugin state.
 An end-to-end deterministic stress case issues 200 operational retrievals from
 eight sessions, verifies every response, and proves that all eight provider
-callbacks may execute concurrently. A sanitizer-backed long-duration soak and
-external interoperability run remain release evidence.
-The same test has passed under ASan/UBSan at 100 requests per worker (800
-validated retrievals) and exposes a bounded per-thread request-count override
-for the outstanding long-duration release run.
+callbacks may execute concurrently. The ASan/UBSan release soak completed at
+1,000 requests per worker: 8,000 validated retrievals over 315.7 seconds with
+no finding. External interoperability remains release evidence.
 
 ### RFC 8525 — YANG Library
 
