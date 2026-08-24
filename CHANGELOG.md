@@ -70,6 +70,9 @@ and releases follow Semantic Versioning.
 - Extended privileged FreeBSD epair coverage through permanent IPv6 ND apply,
   live publication, out-of-band removal repair, and exact rollback alongside
   the existing IPv4 ARP interaction.
+- Published every Linux kernel interface, including unconfigured system-owned
+  devices, with inferred base interface types and native packet, octet, error,
+  and drop counters using kernel boot time as counter discontinuity time.
 - Removed the now-unused external command runner from the IP plugin.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.

@@ -56,6 +56,8 @@
   exact rollback, and isolated-namespace regression interactions.
 - Covered permanent FreeBSD IPv6 neighbor application, publication, drift
   repair, and rollback in the privileged disposable-epair interaction.
+- Expanded Linux operational state to all kernel interfaces and added native
+  packet/octet/error/drop statistics with a boot-time discontinuity marker.
 - Added opt-in privileged FreeBSD backend tests and removed the obsolete
   command-execution helper from the IP plugin.
 - Verified concurrent operational publication with a thread-safe test provider,

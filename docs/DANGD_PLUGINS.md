@@ -123,8 +123,9 @@ acknowledgement, compensates completed operations in reverse order after a
 partial failure, and retains observed flags and MTU until the enclosing
 transaction commits or rolls back. A failure is returned to NETCONF. The
 native backends do not create interfaces. Linux publishes live link status,
-MTU, assigned addresses, and complete neighbor-cache entries for configured
-interfaces, but not counters or unconfigured system interfaces. FreeBSD also
+MTU, assigned addresses, complete neighbor-cache entries, and native packet,
+octet, error, and drop counters for configured and unconfigured kernel
+interfaces. FreeBSD also
 publishes native live link status, MTU, assigned addresses, and complete
 neighbor-cache entries for configured interfaces. FreeBSD also repairs missing
 or altered configured addresses and neighbors without deleting unrelated kernel
@@ -247,8 +248,9 @@ best available path, provider, stage, and reason. The RPC does not return a
 partially assembled operational data payload alongside that error.
 
 The IP-management example uses ABI v3 to publish RFC 8343
-`/interfaces-state`. Linux and FreeBSD read managed-interface flags, MTU,
-addresses, and ARP/IPv6 neighbor caches from the kernel for each retrieval.
+`/interfaces-state`. Linux inventories all kernel interfaces and publishes
+native counters; Linux and FreeBSD read flags, MTU, addresses, and ARP/IPv6
+neighbor caches from the kernel for each retrieval.
 Unsupported development platforms derive `oper-status` from the last
 successfully applied configuration.
 

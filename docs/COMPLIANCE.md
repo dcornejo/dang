@@ -430,17 +430,18 @@ reverse plan until transaction commit, including reverse-order compensation
 after a partial rtnetlink failure.
 
 It does not create/delete interfaces. Linux publishes live link status, MTU,
-assigned prefixes, and complete ARP/IPv6 neighbor entries for configured
-interfaces, but not counters, duplicate-address detection, or unconfigured
-system-controlled interfaces.
+assigned prefixes, complete ARP/IPv6 neighbor entries, and native packet,
+octet, error, and drop counters for all configured and system-controlled kernel
+interfaces. Counter discontinuity uses kernel boot time. Duplicate-address
+detection status remains absent.
 Linux repairs missing or altered configured addresses and neighbors while
 preserving unrelated kernel state. FreeBSD publishes live link status, MTU,
 assigned prefixes, and complete IPv4/IPv6 neighbor entries for configured
-interfaces, but not counters, duplicate-address
-detection, or unconfigured system-controlled interfaces. It repairs missing or
+interfaces, but not counters, duplicate-address detection, or unconfigured
+system-controlled interfaces. It repairs missing or
 altered managed address and neighbor entries while preserving unrelated kernel
-state. Its epair smoke
-covers address/MTU/IPv4 and IPv6 neighbor apply, live-state publication,
+state. Its epair smoke covers address/MTU/IPv4 and IPv6 neighbor apply,
+live-state publication,
 out-of-band removal repair, exact rollback, and forced partial-failure
 compensation. It therefore does not claim operational compliance with RFC 8343
 or RFC 8344.

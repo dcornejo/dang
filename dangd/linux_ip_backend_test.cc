@@ -132,6 +132,15 @@ TEST(LinuxIpBackendTest, PublishesLiveLinkAndAddressState) {
   EXPECT_NE(state.find("<prefix-length>8</prefix-length>"), std::string::npos)
       << state;
   EXPECT_NE(state.find("<mtu>"), std::string::npos) << state;
+  EXPECT_NE(state.find("<statistics>"), std::string::npos) << state;
+  EXPECT_NE(state.find("<discontinuity-time>"), std::string::npos) << state;
+  EXPECT_NE(state.find("<in-octets>"), std::string::npos) << state;
+  EXPECT_NE(state.find("<out-octets>"), std::string::npos) << state;
+  if (PrivilegedTestsEnabled()) {
+    EXPECT_NE(state.find("<name>eth0</name>"), std::string::npos) << state;
+    EXPECT_NE(state.find("<type>iana-if-type:ethernetCsmacd</type>"),
+              std::string::npos) << state;
+  }
 }
 
 TEST(LinuxIpBackendTest, PublishesAndRepairsConfiguredKernelNeighbor) {
