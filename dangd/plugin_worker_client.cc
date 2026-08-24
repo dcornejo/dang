@@ -398,6 +398,59 @@ PluginWorkerTransactionResult PluginWorkerClient::RollbackAction(
                           {"action_id", std::move(action_id)}}.dump());
 }
 
+PluginWorkerReconcileResult PluginWorkerClient::Reconcile(
+    std::string current_xml) {
+  if (current_xml.size() > yang::DefaultResourceLimits().maximum_xml_bytes)
+    return {std::nullopt, std::nullopt,
+            "applied configuration exceeds the resource limit"};
+  ExchangeResult exchanged = Exchange(
+      Json{{"operation", "reconcile"},
+           {"current_xml", std::move(current_xml)}}.dump());
+  if (!exchanged.response)
+    return {std::nullopt, std::nullopt, exchanged.error};
+  const Json& response = *exchanged.response;
+  try {
+    if (!response.value("ok", false) || !response.contains("accepted") ||
+        !response["accepted"].is_boolean())
+      throw Json::other_error::create(501, "invalid reconcile response",
+                                      &response);
+    if (!response["accepted"].get<bool>())
+      return {std::nullopt, ParseFinding(response.at("finding")), std::nullopt};
+    PluginWorkerAppliedReport report;
+    report.applied_xml = response.at("applied_xml").get<std::string>();
+    const Json& outcomes = response.at("outcomes");
+    if (report.applied_xml.empty() ||
+        report.applied_xml.size() >
+            yang::DefaultResourceLimits().maximum_xml_bytes ||
+        !outcomes.is_array())
+      throw Json::other_error::create(501, "invalid reconcile values",
+                                      &response);
+    const std::size_t maximum =
+        yang::DefaultResourceLimits().maximum_xpath_bytes;
+    for (const Json& value : outcomes) {
+      ConfigurationOutcome outcome{
+          value.at("provider").get<std::string>(),
+          value.at("instance_path").get<std::string>(),
+          value.at("disposition").get<std::uint32_t>(),
+          value.at("reason").get<std::string>()};
+      if (outcome.provider.empty() || outcome.provider.size() > maximum ||
+          outcome.instance_path.empty() ||
+          outcome.instance_path.size() > maximum ||
+          outcome.reason.size() > maximum ||
+          outcome.disposition < DANG_CONFIGURATION_APPLIED_V1 ||
+          outcome.disposition > DANG_CONFIGURATION_DELAYED_V1)
+        throw Json::other_error::create(501, "invalid reconcile outcome",
+                                        &value);
+      report.outcomes.push_back(std::move(outcome));
+    }
+    return {std::move(report), std::nullopt, std::nullopt};
+  } catch (const Json::exception&) {
+    Terminate();
+    return {std::nullopt, std::nullopt,
+            "malformed plugin worker applied-state report"};
+  }
+}
+
 std::optional<std::string> PluginWorkerClient::Abort() {
   PluginWorkerTransactionResult result =
       Transaction(Json{{"operation", "abort"}}.dump());

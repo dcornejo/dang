@@ -19,6 +19,8 @@
   requests, including a synthetic transaction action for pre-v4 plugins.
 - Added global worker action coordination with module-owner validation,
   dependency qualification, deterministic ordering, and rollback on failure.
+- Added worker applied-state reconciliation requests with bounded XML,
+  disposition, path, reason, and provider revalidation in the parent client.
 - Verified concurrent operational publication with a thread-safe test provider,
   eight overlapping sessions, 200 complete retrievals, and response validation.
 - Added a bounded environment override for scaling that identical workload into

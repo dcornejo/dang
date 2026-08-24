@@ -180,6 +180,33 @@ int Run(int descriptor, const std::filesystem::path& plugin_path) {
                                {"error", "invalid action request"}}))
           return 1;
       }
+    } else if (operation == "reconcile") {
+      try {
+        dangd::PluginWorkerAppliedReport report;
+        const auto finding = manager.ReconcileWorkerApplied(
+            parsed.at("current_xml").get<std::string>(), &report);
+        if (finding) {
+          if (!Send(descriptor, Finding(finding, "reconcile"))) return 1;
+          continue;
+        }
+        Json outcomes = Json::array();
+        for (const auto& outcome : report.outcomes)
+          outcomes.push_back({{"provider", outcome.provider},
+                              {"instance_path", outcome.instance_path},
+                              {"disposition", outcome.disposition},
+                              {"reason", outcome.reason}});
+        if (!Send(descriptor, {{"ok", true},
+                               {"stage", "reconcile"},
+                               {"accepted", true},
+                               {"applied_xml", report.applied_xml},
+                               {"outcomes", std::move(outcomes)}}))
+          return 1;
+      } catch (const Json::exception&) {
+        if (!Send(descriptor, {{"ok", false},
+                               {"stage", "protocol"},
+                               {"error", "invalid reconcile request"}}))
+          return 1;
+      }
     } else if (operation == "abort") {
       manager.Abort();
       if (!Send(descriptor,

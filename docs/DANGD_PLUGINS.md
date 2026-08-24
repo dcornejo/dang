@@ -41,7 +41,10 @@ use the same global planning path. The worker coordinator qualifies local action
 dependencies, adds edges from a dependent module to every action of its provider,
 rejects duplicate module ownership, and uses the common planner for deterministic
 execution and reverse rollback. Live backend integration and applied-state
-reconciliation have not yet moved to the worker.
+validation have not yet moved to the worker coordinator. ABI-v6 reconciliation
+callbacks already run inside the worker and return only bounded copies of the
+actual configuration and per-node outcomes. The parent must validate those
+copies and retain rollback capability until every affected report is accepted.
 
 This guide defines the contract between `dangd` and a dynamically loaded
 configuration provider. It is both a how-to and the behavioral specification

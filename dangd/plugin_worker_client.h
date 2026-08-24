@@ -48,6 +48,16 @@ struct PluginWorkerHardwareActionsResult {
   }
 };
 
+/** Copied applied-state report or a plugin/worker failure. */
+struct PluginWorkerReconcileResult {
+  std::optional<PluginWorkerAppliedReport> report;
+  std::optional<yang::config::ValidationFinding> finding;
+  std::optional<std::string> worker_error;
+  [[nodiscard]] bool ok() const noexcept {
+    return report.has_value() && !finding && !worker_error;
+  }
+};
+
 /**
  * Owns and supervises one long-lived out-of-process plugin instance.
  *
@@ -90,6 +100,9 @@ class PluginWorkerClient {
   /** Rolls back one previously applied action. */
   [[nodiscard]] PluginWorkerTransactionResult RollbackAction(
       std::string action_id);
+  /** Retrieves a copied ABI-v6 applied-state report. */
+  [[nodiscard]] PluginWorkerReconcileResult Reconcile(
+      std::string current_xml);
   /** Releases retained preparation without applying it. */
   [[nodiscard]] std::optional<std::string> Abort();
   /** Returns whether the worker remains usable after preceding requests. */

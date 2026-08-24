@@ -81,6 +81,12 @@ struct PluginWorkerHardwareAction {
   std::vector<std::string> dependencies;
 };
 
+/** Copied ABI-v6 applied-state report safe to send across IPC. */
+struct PluginWorkerAppliedReport {
+  std::string applied_xml;
+  std::vector<ConfigurationOutcome> outcomes;
+};
+
 /** Loads ABI-v1 plugins and coordinates their configuration transactions. */
 class PluginManager : public yang::netconf::OperationProvider {
  public:
@@ -126,6 +132,10 @@ class PluginManager : public yang::netconf::OperationProvider {
   /** Compensates one named action against the retained preparation. */
   [[nodiscard]] std::optional<yang::config::ValidationFinding>
   RollbackWorkerHardwareAction(std::string_view action_id);
+  /** Copies this worker's applied-state report while preparation is retained. */
+  [[nodiscard]] std::optional<yang::config::ValidationFinding>
+  ReconcileWorkerApplied(std::string_view current_xml,
+                         PluginWorkerAppliedReport* report);
   /** Applies and schema-validates ABI-v6 reports of actual backend state. */
   [[nodiscard]] PluginApplyResult Apply(
       const yang::config::RuntimeSchema& schema,

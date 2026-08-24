@@ -329,5 +329,39 @@ TEST(PluginWorkerCoordinatorTest, AddsCrossModuleDependencyEdges) {
   EXPECT_FALSE(consumer->Abort().has_value());
 }
 
+TEST(PluginWorkerClientTest, CopiesAbiV6AppliedStateReport) {
+  std::vector<std::string> errors;
+  auto client = StartClient(DANG_TEST_PROVIDER_PLUGIN_PATH, 5s, &errors);
+  ASSERT_NE(client, nullptr) << testing::PrintToString(errors);
+  const std::string requested =
+      "<config><provider-settings xmlns=\"urn:dangd:test:provider\">"
+      "<mode>backend-transform</mode></provider-settings></config>";
+  ASSERT_TRUE(client->Prepare("<config/>", requested, "[]").ok());
+  ASSERT_TRUE(client->Validate().ok());
+  const PluginWorkerReconcileResult reconciled = client->Reconcile(requested);
+  ASSERT_TRUE(reconciled.ok());
+  EXPECT_NE(reconciled.report->applied_xml.find("device-normalized"),
+            std::string::npos);
+  ASSERT_EQ(reconciled.report->outcomes.size(), 3u);
+  EXPECT_EQ(reconciled.report->outcomes.front().provider, "test-provider");
+  EXPECT_EQ(reconciled.report->outcomes.front().disposition,
+            DANG_CONFIGURATION_TRANSFORMED_V1);
+  EXPECT_FALSE(client->Abort().has_value());
+}
+
+TEST(PluginWorkerClientTest, LegacyReconcileReturnsUnchangedSnapshot) {
+  std::vector<std::string> errors;
+  auto client = StartClient(DANG_TEST_PLUGIN_PATH, 5s, &errors);
+  ASSERT_NE(client, nullptr) << testing::PrintToString(errors);
+  ASSERT_TRUE(client->Prepare("<config/>", "<config/>", "[]").ok());
+  const PluginWorkerReconcileResult reconciled =
+      client->Reconcile("<config><unchanged/></config>");
+  ASSERT_TRUE(reconciled.ok());
+  EXPECT_EQ(reconciled.report->applied_xml,
+            "<config><unchanged/></config>");
+  EXPECT_TRUE(reconciled.report->outcomes.empty());
+  EXPECT_FALSE(client->Abort().has_value());
+}
+
 }  // namespace
 }  // namespace dangd

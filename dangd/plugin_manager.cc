@@ -716,6 +716,40 @@ PluginManager::RollbackWorkerHardwareAction(std::string_view action_id) {
   return std::nullopt;
 }
 
+std::optional<yang::config::ValidationFinding>
+PluginManager::ReconcileWorkerApplied(std::string_view current_xml,
+                                      PluginWorkerAppliedReport* report) {
+  if (!report) return PluginFinding("worker", {}, "missing report output");
+  report->applied_xml.clear();
+  report->outcomes.clear();
+  if (state_->plugins.size() != 1 || !state_->plugins.front().prepared)
+    return PluginFinding("worker", {}, "no prepared transaction");
+  State::Plugin& plugin = state_->plugins.front();
+  if (!plugin.reconcile_applied) {
+    report->applied_xml = current_xml;
+    return std::nullopt;
+  }
+  DangAppliedConfigurationV1 returned{};
+  DangPluginErrorV1 error{};
+  const std::string copied_current(current_xml);
+  if (!plugin.reconcile_applied(plugin.api->context, plugin.prepared,
+                                copied_current.c_str(), &returned, &error) ||
+      !returned.applied_xml ||
+      (returned.outcome_count && !returned.outcomes))
+    return PluginFinding(plugin.name, error, "invalid applied-state report");
+  report->applied_xml = returned.applied_xml;
+  for (std::size_t index = 0; index < returned.outcome_count; ++index) {
+    const DangConfigurationOutcomeV1& outcome = returned.outcomes[index];
+    if (!outcome.instance_path || !*outcome.instance_path)
+      return PluginFinding(plugin.name, {},
+                           "invalid configuration outcome");
+    report->outcomes.push_back(
+        {plugin.name, outcome.instance_path, outcome.disposition,
+         outcome.reason ? outcome.reason : ""});
+  }
+  return std::nullopt;
+}
+
 PluginApplyResult PluginManager::Apply(
     const yang::config::RuntimeSchema& schema,
     const yang::config::ConfigDocument& proposed) {

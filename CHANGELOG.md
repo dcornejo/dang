@@ -24,6 +24,8 @@ and releases follow Semantic Versioning.
   plugin or receiving its prepared pointers.
 - Added a parent-side worker coordinator that merges local and inter-module
   dependencies into one deterministic hardware plan with reverse compensation.
+- Added bounded worker-side ABI-v6 applied-state reporting, copying actual
+  configuration and per-node outcomes while retaining opaque transaction state.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.
 - Made the per-session NMDA stress duration safely configurable for
