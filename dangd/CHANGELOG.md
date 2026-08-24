@@ -27,6 +27,8 @@
   operation-not-supported attribution and containing callback failure.
 - Added the `PluginRuntime` server-facing interface so live worker ownership can
   replace `PluginManager` without changing datastore or NETCONF layers.
+- Added `PluginWorkerRuntime`, which owns one supervised process per plugin and
+  implements the complete server-facing runtime contract using copied IPC data.
 - Verified concurrent operational publication with a thread-safe test provider,
   eight overlapping sessions, 200 complete retrievals, and response validation.
 - Added a bounded environment override for scaling that identical workload into

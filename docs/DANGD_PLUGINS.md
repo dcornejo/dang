@@ -58,6 +58,10 @@ The server-facing `PluginRuntime` contract separates datastore and NETCONF code
 from plugin ownership. The existing in-process loader and the forthcoming live
 worker runtime implement the same transaction, operational-data, reconciliation,
 and operation-provider surface, allowing the ownership switch to be atomic.
+`PluginWorkerRuntime` now supplies the worker-owned implementation: it validates
+copied discovery and dependency graphs, expands affected modules, prepares every
+worker before validation, coordinates hardware and reconciliation, aggregates
+operational fragments, and selects operation owners without loading plugin code.
 
 This guide defines the contract between `dangd` and a dynamically loaded
 configuration provider. It is both a how-to and the behavioral specification

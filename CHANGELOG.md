@@ -32,6 +32,8 @@ and releases follow Semantic Versioning.
   outputs, and attributed NETCONF errors.
 - Decoupled application, backend, operational, and operation-provider wiring
   from the in-process loader through a common plugin runtime contract.
+- Added a complete worker-owned plugin runtime with isolated discovery,
+  dependency validation, transactions, operational data, and operation routing.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.
 - Made the per-session NMDA stress duration safely configurable for

@@ -56,9 +56,10 @@ stays in this file with its remaining work rewritten precisely.
   compensates action failure in reverse. It now retains a successfully applied
   plan until all reconciliation reports pass schema, module-ownership, and
   outcome-uniqueness checks, then compensates if they fail.
-  Application, backend, operational publication, and operation dispatch now use
-  the common `PluginRuntime` contract; implement and select its worker-owned
-  runtime to complete the live cutover.
+  Application, backend, operational publication, and operation dispatch use the
+  common `PluginRuntime` contract. `PluginWorkerRuntime` now implements that
+  contract with one supervised process per plugin; select it during application
+  startup and add restart policy to complete the live cutover.
   Malformed typed data and oversized callback XML are rejected atomically with
   provider attribution and bounded copying. Document unsupported optional
   features and deviations before making an RFC 8342 or RFC 8526 compliance claim.

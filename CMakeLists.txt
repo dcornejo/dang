@@ -114,6 +114,7 @@ if(YANG_BUILD_DANGD)
     dangd/hardware_transaction.cc
     dangd/plugin_worker_client.cc
     dangd/plugin_worker_coordinator.cc
+    dangd/plugin_worker_runtime.cc
     dangd/plugin_worker_protocol.cc
     dangd/plugin_manager.cc
     dangd/ssh_transport.cc

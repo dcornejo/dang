@@ -5,6 +5,7 @@
 #include "dangd/plugin_worker_client.h"
 #include "dangd/plugin_worker_coordinator.h"
 #include "dangd/plugin_worker_protocol.h"
+#include "dangd/plugin_worker_runtime.h"
 #include "yang/resource_limits.h"
 
 #include <array>
@@ -335,6 +336,38 @@ TEST(PluginWorkerCoordinatorTest, AddsCrossModuleDependencyEdges) {
   EXPECT_TRUE(applied.rollback_failures.empty());
   EXPECT_FALSE(provider->Abort().has_value());
   EXPECT_FALSE(consumer->Abort().has_value());
+}
+
+TEST(PluginWorkerRuntimeTest, LoadsDiscoveryAndRoutesOperations) {
+  std::vector<std::string> errors;
+  auto runtime = PluginWorkerRuntime::Load(
+      DANG_TEST_PLUGIN_WORKER_PATH,
+      {DANG_TEST_PROVIDER_PLUGIN_PATH, DANG_TEST_CONSUMER_PLUGIN_PATH},
+      &errors);
+  ASSERT_NE(runtime, nullptr) << testing::PrintToString(errors);
+  EXPECT_EQ(runtime->manifests().size(), 2u);
+  EXPECT_EQ(runtime->yang_sources().size(), 2u);
+  const auto fragments = runtime->OperationalData();
+  ASSERT_EQ(fragments.size(), 1u);
+  EXPECT_TRUE(std::ranges::none_of(fragments, [](const auto& fragment) {
+    return fragment.error.has_value();
+  }));
+  yang::config::RuntimeSchemaNode operation;
+  operation.module_name = "dangd-test-provider";
+  operation.name.local_name = "provider-status";
+  const auto invoked = runtime->InvokeRpc({}, operation, "<provider-status/>");
+  ASSERT_TRUE(invoked.result.ok);
+  EXPECT_NE(invoked.output_xml.find(">ready</status>"), std::string::npos);
+}
+
+TEST(PluginWorkerRuntimeTest, RejectsMissingRuntimeDependency) {
+  std::vector<std::string> errors;
+  auto runtime = PluginWorkerRuntime::Load(
+      DANG_TEST_PLUGIN_WORKER_PATH, {DANG_TEST_CONSUMER_PLUGIN_PATH}, &errors);
+  EXPECT_EQ(runtime, nullptr);
+  ASSERT_FALSE(errors.empty());
+  EXPECT_NE(errors.back().find("requires missing implementation module"),
+            std::string::npos);
 }
 
 TEST(PluginWorkerClientTest, CopiesAbiV6AppliedStateReport) {
