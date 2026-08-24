@@ -11,8 +11,10 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
+#include <ifaddrs.h>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -27,6 +29,8 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
+#include <pugixml.hpp>
 
 namespace dangd::ip_management {
 namespace {
@@ -299,8 +303,151 @@ bool NeighborRequest(std::string_view interface,
   return false;
 }
 
+struct LiveNeighbor {
+  std::string address;
+  std::string link_layer_address;
+  std::string origin;
+  std::string state;
+  bool ipv6 = false;
+  bool router = false;
+};
+
+bool DumpNeighbors(unsigned interface_index, std::vector<LiveNeighbor>* result,
+                   std::string* error) {
+  const int descriptor = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC,
+                                NETLINK_ROUTE);
+  if (descriptor < 0) {
+    if (error) *error = "open FreeBSD route netlink socket: " +
+                        std::string(std::strerror(errno));
+    return false;
+  }
+  sockaddr_nl local{};
+  local.nl_len = sizeof(local);
+  local.nl_family = AF_NETLINK;
+  if (bind(descriptor, reinterpret_cast<sockaddr*>(&local), sizeof(local))) {
+    if (error) *error = "bind FreeBSD route netlink socket: " +
+                        std::string(std::strerror(errno));
+    close(descriptor);
+    return false;
+  }
+  struct {
+    nlmsghdr header;
+    ndmsg body;
+  } request{};
+  request.header.nlmsg_len = NLMSG_LENGTH(sizeof(ndmsg));
+  request.header.nlmsg_type = RTM_GETNEIGH;
+  request.header.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
+  request.header.nlmsg_seq = 1;
+  request.body.ndm_family = AF_UNSPEC;
+  sockaddr_nl kernel{};
+  kernel.nl_len = sizeof(kernel);
+  kernel.nl_family = AF_NETLINK;
+  if (sendto(descriptor, &request, request.header.nlmsg_len, 0,
+             reinterpret_cast<sockaddr*>(&kernel), sizeof(kernel)) < 0) {
+    if (error) *error = "dump FreeBSD neighbors: " +
+                        std::string(std::strerror(errno));
+    close(descriptor);
+    return false;
+  }
+  std::array<std::byte, 16384> response{};
+  while (true) {
+    const ssize_t received = recv(descriptor, response.data(), response.size(), 0);
+    if (received < 0 && errno == EINTR) continue;
+    if (received <= 0) {
+      if (error) *error = "dump FreeBSD neighbors: " + std::string(
+          received ? std::strerror(errno) : "netlink peer closed");
+      close(descriptor);
+      return false;
+    }
+    std::size_t remaining = static_cast<std::size_t>(received);
+    for (auto* header = reinterpret_cast<nlmsghdr*>(response.data());
+         NLMSG_OK(header, remaining); header = NLMSG_NEXT(header, remaining)) {
+      if (header->nlmsg_seq != request.header.nlmsg_seq) continue;
+      if (header->nlmsg_flags & NLM_F_DUMP_INTR) {
+        if (error) *error = "FreeBSD neighbor dump was interrupted";
+        close(descriptor);
+        return false;
+      }
+      if (header->nlmsg_type == NLMSG_DONE) {
+        close(descriptor);
+        return true;
+      }
+      if (header->nlmsg_type == NLMSG_ERROR) {
+        if (error) *error = "kernel rejected FreeBSD neighbor dump";
+        close(descriptor);
+        return false;
+      }
+      if (header->nlmsg_type != RTM_NEWNEIGH ||
+          NLMSG_PAYLOAD(header, 0) < sizeof(ndmsg))
+        continue;
+      const auto* neighbor =
+          reinterpret_cast<const ndmsg*>(NLMSG_DATA(header));
+      if (neighbor->ndm_ifindex != static_cast<std::int32_t>(interface_index) ||
+          (neighbor->ndm_family != AF_INET && neighbor->ndm_family != AF_INET6))
+        continue;
+      const void* destination = nullptr;
+      std::size_t destination_size = 0;
+      const std::byte* link_layer = nullptr;
+      std::size_t link_layer_size = 0;
+      std::size_t attribute_bytes = NLMSG_PAYLOAD(header, sizeof(ndmsg));
+      const auto* attribute = reinterpret_cast<const nlattr*>(
+          reinterpret_cast<const std::byte*>(neighbor) +
+          NLMSG_ALIGN(sizeof(ndmsg)));
+      while (attribute_bytes >= sizeof(nlattr) &&
+             attribute->nla_len >= NLA_HDRLEN &&
+             attribute->nla_len <= attribute_bytes) {
+        const std::size_t payload = attribute->nla_len - NLA_HDRLEN;
+        const void* data = attribute + 1;
+        if ((attribute->nla_type & NLA_TYPE_MASK) == NDA_DST) {
+          destination = data;
+          destination_size = payload;
+        } else if ((attribute->nla_type & NLA_TYPE_MASK) == NDA_LLADDR) {
+          link_layer = reinterpret_cast<const std::byte*>(data);
+          link_layer_size = payload;
+        }
+        const std::size_t step = NLA_ALIGN(attribute->nla_len);
+        if (step > attribute_bytes) break;
+        attribute_bytes -= step;
+        attribute = reinterpret_cast<const nlattr*>(
+            reinterpret_cast<const std::byte*>(attribute) + step);
+      }
+      const std::size_t expected = neighbor->ndm_family == AF_INET
+          ? sizeof(in_addr) : sizeof(in6_addr);
+      if (!destination || destination_size != expected || !link_layer ||
+          link_layer_size == 0)
+        continue;
+      char address[INET6_ADDRSTRLEN]{};
+      if (!inet_ntop(neighbor->ndm_family, destination, address,
+                     sizeof(address)))
+        continue;
+      std::ostringstream hardware;
+      hardware << std::hex;
+      for (std::size_t index = 0; index < link_layer_size; ++index) {
+        if (index) hardware << ':';
+        hardware.width(2);
+        hardware.fill('0');
+        hardware << static_cast<unsigned>(
+            std::to_integer<unsigned char>(link_layer[index]));
+      }
+      std::string state;
+      if (neighbor->ndm_state & NUD_REACHABLE) state = "reachable";
+      else if (neighbor->ndm_state & NUD_STALE) state = "stale";
+      else if (neighbor->ndm_state & NUD_DELAY) state = "delay";
+      else if (neighbor->ndm_state & NUD_PROBE) state = "probe";
+      else if (neighbor->ndm_state & NUD_INCOMPLETE) state = "incomplete";
+      result->push_back({address, hardware.str(),
+                         (neighbor->ndm_state & NUD_PERMANENT) ||
+                                 (neighbor->ndm_flags & NTF_STICKY)
+                             ? "static" : "dynamic",
+                         state, neighbor->ndm_family == AF_INET6,
+                         (neighbor->ndm_flags & NTF_ROUTER) != 0});
+    }
+  }
+}
+
 struct LinkSnapshot {
   bool enabled = false;
+  bool running = false;
   unsigned mtu = 0;
 };
 
@@ -314,10 +461,108 @@ std::optional<LinkSnapshot> ReadLink(std::string_view interface,
                    "read flags on " + std::string(interface), error))
     return std::nullopt;
   const bool enabled = (request.ifr_flags & IFF_UP) != 0;
+  const bool running = (request.ifr_flags & IFF_RUNNING) != 0;
   if (!socket.Call(SIOCGIFMTU, &request,
                    "read MTU on " + std::string(interface), error))
     return std::nullopt;
-  return LinkSnapshot{enabled, static_cast<unsigned>(request.ifr_mtu)};
+  return LinkSnapshot{enabled, running, static_cast<unsigned>(request.ifr_mtu)};
+}
+
+std::string_view LocalName(std::string_view name) {
+  const std::size_t colon = name.find(':');
+  return colon == std::string_view::npos ? name : name.substr(colon + 1);
+}
+
+pugi::xml_node Child(const pugi::xml_node& parent, std::string_view local) {
+  for (const pugi::xml_node child : parent.children())
+    if (LocalName(child.name()) == local) return child;
+  return {};
+}
+
+unsigned PrefixLength(const sockaddr* mask) {
+  if (!mask) return 0;
+  const std::byte* bytes = nullptr;
+  std::size_t size = 0;
+  if (mask->sa_family == AF_INET) {
+    bytes = reinterpret_cast<const std::byte*>(
+        &reinterpret_cast<const sockaddr_in*>(mask)->sin_addr);
+    size = sizeof(in_addr);
+  } else if (mask->sa_family == AF_INET6) {
+    bytes = reinterpret_cast<const std::byte*>(
+        &reinterpret_cast<const sockaddr_in6*>(mask)->sin6_addr);
+    size = sizeof(in6_addr);
+  }
+  unsigned bits = 0;
+  for (std::size_t index = 0; index < size; ++index)
+    bits += static_cast<unsigned>(__builtin_popcount(
+        std::to_integer<unsigned char>(bytes[index])));
+  return bits;
+}
+
+bool AppendAddresses(const std::string& name, pugi::xml_node entry,
+                     unsigned mtu, std::string* error) {
+  ifaddrs* values = nullptr;
+  if (getifaddrs(&values) != 0) {
+    if (error) *error = "cannot enumerate FreeBSD interface addresses: " +
+                        std::string(std::strerror(errno));
+    return false;
+  }
+  pugi::xml_node ipv4;
+  pugi::xml_node ipv6;
+  for (const ifaddrs* value = values; value; value = value->ifa_next) {
+    if (!value->ifa_addr || name != value->ifa_name) continue;
+    const int family = value->ifa_addr->sa_family;
+    if (family != AF_INET && family != AF_INET6) continue;
+    pugi::xml_node* family_node = family == AF_INET ? &ipv4 : &ipv6;
+    if (!*family_node) {
+      *family_node = entry.append_child(family == AF_INET ? "ipv4" : "ipv6");
+      if (family == AF_INET6 || mtu <= 65535)
+        family_node->append_child("mtu").text() = mtu;
+    }
+    char text[INET6_ADDRSTRLEN]{};
+    const void* binary = family == AF_INET
+        ? static_cast<const void*>(&reinterpret_cast<const sockaddr_in*>(
+              value->ifa_addr)->sin_addr)
+        : static_cast<const void*>(&reinterpret_cast<const sockaddr_in6*>(
+              value->ifa_addr)->sin6_addr);
+    if (!inet_ntop(family, binary, text, sizeof(text))) continue;
+    pugi::xml_node address = family_node->append_child("address");
+    address.append_child("ip").text() = text;
+    address.append_child("prefix-length").text() =
+        PrefixLength(value->ifa_netmask);
+    address.append_child("origin").text() = "other";
+  }
+  freeifaddrs(values);
+  return true;
+}
+
+bool AppendNeighbors(const std::string& name, pugi::xml_node entry,
+                     std::string* error) {
+  const unsigned interface_index = if_nametoindex(name.c_str());
+  if (!interface_index) {
+    if (error) *error = "resolve interface " + name + ": " +
+                        std::strerror(errno);
+    return false;
+  }
+  std::vector<LiveNeighbor> neighbors;
+  if (!DumpNeighbors(interface_index, &neighbors, error)) return false;
+  pugi::xml_node ipv4 = Child(entry, "ipv4");
+  pugi::xml_node ipv6 = Child(entry, "ipv6");
+  for (const LiveNeighbor& value : neighbors) {
+    pugi::xml_node* family = value.ipv6 ? &ipv6 : &ipv4;
+    if (!*family) *family = entry.append_child(value.ipv6 ? "ipv6" : "ipv4");
+    pugi::xml_node neighbor = family->append_child("neighbor");
+    neighbor.append_child("ip").text() = value.address.c_str();
+    neighbor.append_child("link-layer-address").text() =
+        value.link_layer_address.c_str();
+    neighbor.append_child("origin").text() = value.origin.c_str();
+    if (value.ipv6) {
+      if (value.router) neighbor.append_child("is-router");
+      if (!value.state.empty())
+        neighbor.append_child("state").text() = value.state.c_str();
+    }
+  }
+  return true;
 }
 
 bool MtuRequest(std::string_view interface, unsigned mtu, std::string* error) {
@@ -472,6 +717,46 @@ class FreeBsdBackend final : public PlatformBackend {
     rollback_before_.clear();
     rollback_desired_.clear();
     rollback_operations_.clear();
+  }
+
+  bool OperationalXml(std::string_view configuration_xml, std::string* output,
+                      std::string* error) override {
+    pugi::xml_document configuration;
+    const pugi::xml_parse_result parsed = configuration.load_buffer(
+        configuration_xml.data(), configuration_xml.size());
+    if (!parsed) {
+      if (error) *error = "cannot parse applied configuration for live state";
+      return false;
+    }
+    pugi::xml_document state;
+    pugi::xml_node root = state.append_child("interfaces-state");
+    root.append_attribute("xmlns") =
+        "urn:ietf:params:xml:ns:yang:ietf-interfaces";
+    for (const pugi::xml_node top : configuration.document_element().children()) {
+      if (LocalName(top.name()) != "interfaces") continue;
+      for (const pugi::xml_node configured : top.children()) {
+        if (LocalName(configured.name()) != "interface") continue;
+        const pugi::xml_node name_node = Child(configured, "name");
+        const pugi::xml_node type_node = Child(configured, "type");
+        if (!name_node || !type_node) continue;
+        const std::string name = name_node.text().as_string();
+        const auto link = ReadLink(name, error);
+        if (!link) return false;
+        pugi::xml_node entry = root.append_child("interface");
+        entry.append_child("name").text() = name.c_str();
+        entry.append_child("type").text() = type_node.text().as_string();
+        entry.append_child("admin-status").text() =
+            link->enabled ? "up" : "down";
+        entry.append_child("oper-status").text() =
+            link->running ? "up" : (link->enabled ? "dormant" : "down");
+        if (!AppendAddresses(name, entry, link->mtu, error)) return false;
+        if (!AppendNeighbors(name, entry, error)) return false;
+      }
+    }
+    std::ostringstream serialized;
+    state.print(serialized, "", pugi::format_raw);
+    *output = serialized.str();
+    return true;
   }
 
  private:

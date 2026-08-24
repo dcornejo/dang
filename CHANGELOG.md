@@ -58,6 +58,9 @@ and releases follow Semantic Versioning.
 - Added acknowledged native FreeBSD route-netlink operations for permanent
   IPv4/IPv6 neighbors, ordered after address creation and before address removal,
   with exact rollback and privileged disposable-epair coverage.
+- Published live FreeBSD administrative/operational status, MTU, assigned
+  IPv4/IPv6 prefixes, and complete neighbor tables for configured interfaces
+  from native kernel APIs, including FreeBSD permanent-neighbor classification.
 - Removed the now-unused external command runner from the IP plugin.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.

@@ -434,11 +434,13 @@ assigned prefixes, and complete ARP/IPv6 neighbor entries for configured
 interfaces, but not counters, duplicate-address detection, or unconfigured
 system-controlled interfaces.
 Address and neighbor changes made by other agents are not reconciled. FreeBSD
-does not yet publish live kernel state, and privileged IPv6-neighbor coverage
-remains.
-Its privileged epair smoke covers address/MTU/IPv4-neighbor apply, exact
-rollback, and forced partial-failure compensation. It therefore does not claim
-operational compliance with RFC 8343 or RFC 8344.
+publishes live link status, MTU, assigned prefixes, and complete IPv4/IPv6
+neighbor entries for configured interfaces, but not counters, duplicate-address
+detection, or unconfigured system-controlled interfaces. Privileged IPv6
+neighbor coverage remains. Its epair smoke covers address/MTU/IPv4-neighbor
+apply, live-state publication, exact rollback, and forced partial-failure
+compensation. It therefore does not claim operational compliance with RFC 8343
+or RFC 8344.
 
 The transaction machinery is implementation safety behavior, not an RFC 8343
 or RFC 8344 compliance claim. Dynamic capacity rejection, dependency cycles,

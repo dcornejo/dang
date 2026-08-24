@@ -61,7 +61,7 @@ std::string Configuration(const char* interface, const char* address,
                           int mtu = 0) {
   std::string result = "<config><interfaces><interface><name>";
   result += interface;
-  result += "</name><ipv4>";
+  result += "</name><type>iana-if-type:ethernetCsmacd</type><ipv4>";
   if (mtu) result += "<mtu>" + std::to_string(mtu) + "</mtu>";
   if (address && *address) {
     result += "<address><ip>";
@@ -77,7 +77,8 @@ std::string Configuration(const char* interface, const char* address,
 
 std::string NeighborConfiguration(const char* interface) {
   return "<config><interfaces><interface><name>" + std::string(interface) +
-      "</name><ipv4><address><ip>198.51.100.123</ip>"
+      "</name><type>iana-if-type:ethernetCsmacd</type>"
+      "<ipv4><address><ip>198.51.100.123</ip>"
       "<prefix-length>24</prefix-length></address>"
       "<neighbor><ip>198.51.100.200</ip>"
       "<link-layer-address>02:00:00:00:00:c8</link-layer-address>"
@@ -131,6 +132,25 @@ TEST(FreeBsdIpBackendTest, AppliesAndRollsBackStaticNeighbor) {
   auto backend = MakePlatformBackend();
   std::string error;
   ASSERT_TRUE(backend->Reconcile("<config/>", configured, &error)) << error;
+  std::string state;
+  ASSERT_TRUE(backend->OperationalXml(configured, &state, &error)) << error;
+  EXPECT_NE(state.find("<name>" + std::string(interface) + "</name>"),
+            std::string::npos) << state;
+  EXPECT_NE(state.find("<admin-status>up</admin-status>"), std::string::npos)
+      << state;
+  EXPECT_NE(state.find("<oper-status>up</oper-status>"), std::string::npos)
+      << state;
+  EXPECT_NE(state.find("<mtu>" + std::to_string(InterfaceMtu(interface)) +
+                       "</mtu>"),
+            std::string::npos) << state;
+  EXPECT_NE(state.find("<ip>198.51.100.123</ip>"), std::string::npos) << state;
+  EXPECT_NE(state.find("<prefix-length>24</prefix-length>"), std::string::npos)
+      << state;
+  EXPECT_NE(state.find("<ip>198.51.100.200</ip>"), std::string::npos) << state;
+  EXPECT_NE(state.find(
+                "<link-layer-address>02:00:00:00:00:c8</link-layer-address>"),
+            std::string::npos) << state;
+  EXPECT_NE(state.find("<origin>static</origin>"), std::string::npos) << state;
   ASSERT_TRUE(backend->Reconcile(configured, "<config/>", &error)) << error;
 }
 

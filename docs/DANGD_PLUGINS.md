@@ -124,9 +124,10 @@ partial failure, and retains observed flags and MTU until the enclosing
 transaction commits or rolls back. A failure is returned to NETCONF. The
 native backends do not create interfaces. Linux publishes live link status,
 MTU, assigned addresses, and complete neighbor-cache entries for configured
-interfaces, but not counters or unconfigured system interfaces. FreeBSD still
-publishes simulated state. External address
-and neighbor drift is not yet reconciled.
+interfaces, but not counters or unconfigured system interfaces. FreeBSD also
+publishes native live link status, MTU, assigned addresses, and complete
+neighbor-cache entries for configured interfaces. External address and neighbor
+drift is not yet reconciled.
 
 For example, start `dangd` with the plugin using the module filename produced
 by CMake:
