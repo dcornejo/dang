@@ -602,6 +602,48 @@ std::optional<yang::config::ValidationFinding> PluginManager::Prepare(
   return std::nullopt;
 }
 
+std::optional<yang::config::ValidationFinding>
+PluginManager::PrepareWorkerTransaction(std::string before_xml,
+                                        std::string proposed_xml,
+                                        std::string changes_json) {
+  Abort();
+  if (state_->plugins.size() != 1)
+    return PluginFinding("worker", {},
+                         "worker must own exactly one plugin");
+  state_->before_xml = std::move(before_xml);
+  state_->proposed_xml = std::move(proposed_xml);
+  state_->changes_json = std::move(changes_json);
+  state_->order.push_back(0);
+  State::Plugin& plugin = state_->plugins.front();
+  plugin.affected = true;
+  const DangTransactionV1 transaction{state_->before_xml.c_str(),
+                                      state_->proposed_xml.c_str(),
+                                      state_->changes_json.c_str()};
+  DangPluginErrorV1 error{};
+  if (!plugin.api->prepare(plugin.api->context, &transaction,
+                           &plugin.prepared, &error) || !plugin.prepared) {
+    auto finding = PluginFinding(plugin.name, error, "prepare failed");
+    Abort();
+    return finding;
+  }
+  return std::nullopt;
+}
+
+std::optional<yang::config::ValidationFinding>
+PluginManager::ValidateWorkerTransaction() {
+  if (state_->plugins.size() != 1 || state_->order.size() != 1 ||
+      !state_->plugins.front().prepared)
+    return PluginFinding("worker", {}, "no prepared transaction");
+  State::Plugin& plugin = state_->plugins.front();
+  DangPluginErrorV1 error{};
+  if (!plugin.api->validate(plugin.api->context, plugin.prepared, &error)) {
+    auto finding = PluginFinding(plugin.name, error, "validation failed");
+    Abort();
+    return finding;
+  }
+  return std::nullopt;
+}
+
 PluginApplyResult PluginManager::Apply(
     const yang::config::RuntimeSchema& schema,
     const yang::config::ConfigDocument& proposed) {

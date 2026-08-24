@@ -17,6 +17,8 @@ and releases follow Semantic Versioning.
 - Added a parent supervisor and isolated operational command with independent
   startup/callback deadlines, crash/timeout containment, reaping, and
   untrusted-response revalidation.
+- Moved transaction prepare, validate, and abort protocol phases into the
+  worker, retaining opaque preparation only inside the isolated process.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.
 - Made the per-session NMDA stress duration safely configurable for

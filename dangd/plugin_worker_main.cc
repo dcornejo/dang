@@ -83,6 +83,21 @@ Json Operational(const dangd::PluginManager& manager) {
           {"fragments", std::move(fragments)}};
 }
 
+Json Finding(std::optional<yang::config::ValidationFinding> finding,
+             std::string_view stage) {
+  if (!finding)
+    return {{"ok", true}, {"stage", stage}, {"accepted", true}};
+  return {{"ok", true},
+          {"stage", stage},
+          {"accepted", false},
+          {"finding",
+           {{"message", finding->message},
+            {"instance_path", finding->instance_path},
+            {"netconf_error_tag", finding->netconf_error_tag},
+            {"netconf_error_app_tag", finding->netconf_error_app_tag},
+            {"module_name", finding->module_name}}}};
+}
+
 int Run(int descriptor, const std::filesystem::path& plugin_path) {
   dangd::PluginManager manager;
   std::vector<std::string> errors;
@@ -113,6 +128,30 @@ int Run(int descriptor, const std::filesystem::path& plugin_path) {
       if (!Send(descriptor, Discovery(manager))) return 1;
     } else if (operation == "operational") {
       if (!Send(descriptor, Operational(manager))) return 1;
+    } else if (operation == "prepare") {
+      try {
+        if (!Send(descriptor,
+                  Finding(manager.PrepareWorkerTransaction(
+                              parsed.at("before_xml").get<std::string>(),
+                              parsed.at("proposed_xml").get<std::string>(),
+                              parsed.at("changes_json").get<std::string>()),
+                          "prepare")))
+          return 1;
+      } catch (const Json::exception&) {
+        if (!Send(descriptor, {{"ok", false},
+                               {"stage", "protocol"},
+                               {"error", "invalid prepare request"}}))
+          return 1;
+      }
+    } else if (operation == "validate") {
+      if (!Send(descriptor,
+                Finding(manager.ValidateWorkerTransaction(), "validate")))
+        return 1;
+    } else if (operation == "abort") {
+      manager.Abort();
+      if (!Send(descriptor,
+                {{"ok", true}, {"stage", "abort"}, {"accepted", true}}))
+        return 1;
     } else if (operation == "shutdown") {
       (void)Send(descriptor, {{"ok", true}, {"stage", "shutdown"}});
       return 0;

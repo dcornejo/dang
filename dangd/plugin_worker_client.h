@@ -28,6 +28,16 @@ struct PluginWorkerOperationalResult {
   std::optional<std::string> worker_error;
 };
 
+/** Plugin rejection or worker failure for one transaction phase. */
+struct PluginWorkerTransactionResult {
+  std::optional<yang::config::ValidationFinding> finding;
+  std::optional<std::string> worker_error;
+  /** Returns true only when neither the plugin nor worker rejected the phase. */
+  [[nodiscard]] bool ok() const noexcept {
+    return !finding.has_value() && !worker_error.has_value();
+  }
+};
+
 /**
  * Owns and supervises one long-lived out-of-process plugin instance.
  *
@@ -56,6 +66,14 @@ class PluginWorkerClient {
       std::string* error);
   /** Invokes operational publication inside the worker. */
   [[nodiscard]] PluginWorkerOperationalResult OperationalData();
+  /** Retains plugin-owned preparation for a copied transaction. */
+  [[nodiscard]] PluginWorkerTransactionResult Prepare(
+      std::string before_xml, std::string proposed_xml,
+      std::string changes_json);
+  /** Validates the preparation retained by the preceding prepare request. */
+  [[nodiscard]] PluginWorkerTransactionResult Validate();
+  /** Releases retained preparation without applying it. */
+  [[nodiscard]] std::optional<std::string> Abort();
   /** Returns whether the worker remains usable after preceding requests. */
   [[nodiscard]] bool healthy() const noexcept;
 
@@ -63,6 +81,8 @@ class PluginWorkerClient {
   PluginWorkerClient(Options options, int descriptor, int process);
   struct ExchangeResult;
   [[nodiscard]] ExchangeResult Exchange(std::string request);
+  [[nodiscard]] PluginWorkerTransactionResult Transaction(
+      std::string request);
   void Terminate() noexcept;
   void TerminateLocked() noexcept;
 

@@ -287,6 +287,73 @@ PluginWorkerOperationalResult PluginWorkerClient::OperationalData() {
   return result;
 }
 
+PluginWorkerTransactionResult PluginWorkerClient::Transaction(
+    std::string request) {
+  ExchangeResult exchanged = Exchange(std::move(request));
+  if (!exchanged.response) return {std::nullopt, exchanged.error};
+  const Json& response = *exchanged.response;
+  if (!response.value("ok", false) || !response.contains("accepted") ||
+      !response["accepted"].is_boolean()) {
+    Terminate();
+    return {std::nullopt, "invalid plugin worker transaction response"};
+  }
+  if (response["accepted"].get<bool>()) return {};
+  try {
+    const Json& serialized = response.at("finding");
+    yang::config::ValidationFinding finding;
+    finding.code = yang::config::ValidationCode::kInvalidValue;
+    finding.state = yang::config::FindingState::kInvalid;
+    finding.message = serialized.at("message").get<std::string>();
+    finding.instance_path =
+        serialized.at("instance_path").get<std::string>();
+    finding.netconf_error_tag =
+        serialized.at("netconf_error_tag").get<std::string>();
+    finding.netconf_error_app_tag =
+        serialized.at("netconf_error_app_tag").get<std::string>();
+    finding.module_name = serialized.at("module_name").get<std::string>();
+    const std::size_t maximum =
+        yang::DefaultResourceLimits().maximum_xpath_bytes;
+    if (finding.message.empty() || finding.message.size() > maximum ||
+        finding.instance_path.size() > maximum ||
+        finding.netconf_error_tag.size() > maximum ||
+        finding.netconf_error_app_tag.size() > maximum ||
+        finding.module_name.size() > maximum)
+      throw Json::other_error::create(501, "invalid transaction finding",
+                                      &serialized);
+    return {std::move(finding), std::nullopt};
+  } catch (const Json::exception&) {
+    Terminate();
+    return {std::nullopt, "malformed plugin worker transaction finding"};
+  }
+}
+
+PluginWorkerTransactionResult PluginWorkerClient::Prepare(
+    std::string before_xml, std::string proposed_xml,
+    std::string changes_json) {
+  const yang::ResourceLimits& limits = yang::DefaultResourceLimits();
+  if (before_xml.size() > limits.maximum_xml_bytes ||
+      proposed_xml.size() > limits.maximum_xml_bytes ||
+      changes_json.size() > limits.maximum_snapshot_bytes)
+    return {std::nullopt, "plugin transaction exceeds the resource limit"};
+  return Transaction(Json{{"operation", "prepare"},
+                          {"before_xml", std::move(before_xml)},
+                          {"proposed_xml", std::move(proposed_xml)},
+                          {"changes_json", std::move(changes_json)}}
+                         .dump());
+}
+
+PluginWorkerTransactionResult PluginWorkerClient::Validate() {
+  return Transaction(Json{{"operation", "validate"}}.dump());
+}
+
+std::optional<std::string> PluginWorkerClient::Abort() {
+  PluginWorkerTransactionResult result =
+      Transaction(Json{{"operation", "abort"}}.dump());
+  if (result.worker_error) return result.worker_error;
+  if (result.finding) return result.finding->message;
+  return std::nullopt;
+}
+
 bool PluginWorkerClient::healthy() const noexcept {
   std::lock_guard lock(mutex_);
   return healthy_;

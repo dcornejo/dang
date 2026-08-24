@@ -363,6 +363,11 @@ creation now contains and reaps tested operational callback hangs and crashes
 under an independent request deadline. Worker responses are re-bounded by the
 parent. Live cutover remains gated on moving transaction and operation callbacks
 with the same stateful plugin context.
+The worker now implements distinct prepare and validate requests and an abort
+request. Opaque preparation survives between those phases only inside the
+worker, so dependency-wide prepare-before-validate semantics can be retained at
+cutover. Apply/rollback, hardware planning, reconciliation, and RPC/action
+dispatch remain on the unfinished side of that boundary.
 An end-to-end deterministic stress case issues 200 operational retrievals from
 eight sessions, verifies every response, and proves that all eight provider
 callbacks may execute concurrently. The ASan/UBSan release soak completed at

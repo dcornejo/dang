@@ -198,5 +198,36 @@ TEST(PluginWorkerClientTest, ContainsAndReapsCrashedWorker) {
   EXPECT_FALSE(client->healthy());
 }
 
+TEST(PluginWorkerClientTest, RetainsPreparationAcrossValidateAndAbort) {
+  std::vector<std::string> errors;
+  auto client = StartClient(DANG_TEST_PLUGIN_PATH, 5s, &errors);
+  ASSERT_NE(client, nullptr) << testing::PrintToString(errors);
+  EXPECT_TRUE(client->Prepare("<config/>", "<config><mode>ok</mode></config>",
+                              "[]").ok());
+  EXPECT_TRUE(client->Validate().ok());
+  EXPECT_FALSE(client->Abort().has_value());
+
+  const PluginWorkerTransactionResult missing = client->Validate();
+  ASSERT_TRUE(missing.finding.has_value());
+  EXPECT_NE(missing.finding->message.find("no prepared transaction"),
+            std::string::npos);
+  EXPECT_TRUE(client->healthy());
+}
+
+TEST(PluginWorkerClientTest, ReturnsAttributedValidationRejection) {
+  std::vector<std::string> errors;
+  auto client = StartClient(DANG_TEST_PLUGIN_PATH, 5s, &errors);
+  ASSERT_NE(client, nullptr) << testing::PrintToString(errors);
+  ASSERT_TRUE(client->Prepare(
+      "<config/>", "<config><mode>reject</mode></config>", "[]").ok());
+  const PluginWorkerTransactionResult rejected = client->Validate();
+  ASSERT_TRUE(rejected.finding.has_value());
+  EXPECT_NE(rejected.finding->message.find("not supported"), std::string::npos);
+  EXPECT_EQ(rejected.finding->instance_path,
+            "/dep:plugin-settings/dep:mode");
+  EXPECT_EQ(rejected.finding->module_name, "dangd-example-plugin");
+  EXPECT_TRUE(client->healthy());
+}
+
 }  // namespace
 }  // namespace dangd

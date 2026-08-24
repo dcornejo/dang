@@ -102,6 +102,13 @@ class PluginManager : public yang::netconf::OperationProvider {
       const yang::config::ConfigDocument& before,
       const yang::config::ConfigDocument& after,
       std::span<const yang::config::ChangeEvent> changes);
+  /** Worker-only phase one: retains one plugin's opaque prepared state. */
+  [[nodiscard]] std::optional<yang::config::ValidationFinding>
+  PrepareWorkerTransaction(std::string before_xml, std::string proposed_xml,
+                           std::string changes_json);
+  /** Worker-only phase two: validates the retained opaque preparation. */
+  [[nodiscard]] std::optional<yang::config::ValidationFinding>
+  ValidateWorkerTransaction();
   /** Applies and schema-validates ABI-v6 reports of actual backend state. */
   [[nodiscard]] PluginApplyResult Apply(
       const yang::config::RuntimeSchema& schema,
