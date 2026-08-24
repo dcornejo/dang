@@ -56,12 +56,19 @@ class HardwareTransactionPlanner {
       std::vector<HardwareAction> actions);
   /** Applies a successful retained plan and compensates failure in reverse. */
   [[nodiscard]] HardwareTransactionResult Apply();
+  /** Applies but retains successful actions for post-apply validation. */
+  [[nodiscard]] HardwareTransactionResult ApplyRetained();
+  /** Accepts retained successful actions and drops their rollback callbacks. */
+  void Commit() noexcept;
+  /** Compensates every retained successful action in reverse order. */
+  [[nodiscard]] HardwareTransactionResult RollbackApplied();
   /** Drops a retained plan without performing hardware work. */
   void Abort() noexcept;
 
  private:
   std::vector<HardwareAction> actions_;
   std::vector<std::size_t> order_;
+  std::vector<std::size_t> applied_;
 };
 
 }  // namespace dangd

@@ -112,16 +112,22 @@ HardwareTransactionResult HardwareTransactionPlanner::Plan(
 }
 
 HardwareTransactionResult HardwareTransactionPlanner::Apply() {
+  HardwareTransactionResult result = ApplyRetained();
+  if (result.ok) Commit();
+  return result;
+}
+
+HardwareTransactionResult HardwareTransactionPlanner::ApplyRetained() {
   HardwareTransactionResult result;
   for (const std::size_t index : order_)
     result.execution_order.push_back(actions_[index].id);
-  std::vector<std::size_t> applied;
+  applied_.clear();
   for (const std::size_t index : order_) {
     if (const auto error = actions_[index].apply()) {
       result.message = "hardware action " + actions_[index].id +
           " failed: " + *error;
       result.instance_path = actions_[index].instance_path;
-      for (auto rollback = applied.rbegin(); rollback != applied.rend();
+      for (auto rollback = applied_.rbegin(); rollback != applied_.rend();
            ++rollback) {
         if (const auto rollback_error = actions_[*rollback].rollback()) {
           result.rollback_failures.push_back(
@@ -134,9 +140,26 @@ HardwareTransactionResult HardwareTransactionPlanner::Apply() {
       Abort();
       return result;
     }
-    applied.push_back(index);
+    applied_.push_back(index);
   }
   result.ok = true;
+  return result;
+}
+
+void HardwareTransactionPlanner::Commit() noexcept { Abort(); }
+
+HardwareTransactionResult HardwareTransactionPlanner::RollbackApplied() {
+  HardwareTransactionResult result;
+  result.ok = true;
+  for (auto rollback = applied_.rbegin(); rollback != applied_.rend();
+       ++rollback) {
+    if (const auto error = actions_[*rollback].rollback()) {
+      result.ok = false;
+      result.rollback_failures.push_back(actions_[*rollback].id + ": " + *error);
+      result.remnants.push_back(
+          {actions_[*rollback].id, actions_[*rollback].instance_path, *error});
+    }
+  }
   Abort();
   return result;
 }
@@ -144,6 +167,7 @@ HardwareTransactionResult HardwareTransactionPlanner::Apply() {
 void HardwareTransactionPlanner::Abort() noexcept {
   actions_.clear();
   order_.clear();
+  applied_.clear();
 }
 
 }  // namespace dangd

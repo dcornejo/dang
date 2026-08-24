@@ -10,6 +10,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "dangd/plugin_api.h"
@@ -68,9 +69,18 @@ struct ConfigurationOutcome {
 
 /** Successful applied snapshot, or a transaction failure. */
 struct PluginApplyResult {
+  PluginApplyResult(
+      std::optional<yang::config::ValidationFinding> result_error,
+      std::optional<yang::config::ConfigDocument> result_applied,
+      std::string result_applied_xml,
+      std::vector<ConfigurationOutcome> result_outcomes = {})
+      : error(std::move(result_error)), applied(std::move(result_applied)),
+        applied_xml(std::move(result_applied_xml)),
+        outcomes(std::move(result_outcomes)) {}
   std::optional<yang::config::ValidationFinding> error;
   std::optional<yang::config::ConfigDocument> applied;
   std::string applied_xml;
+  std::vector<ConfigurationOutcome> outcomes;
 };
 
 /** Copied worker-owned hardware action safe to send across IPC. */

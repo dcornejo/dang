@@ -21,6 +21,8 @@
   dependency qualification, deterministic ordering, and rollback on failure.
 - Added worker applied-state reconciliation requests with bounded XML,
   disposition, path, reason, and provider revalidation in the parent client.
+- Added atomic coordinator reconciliation with schema and ownership validation,
+  unique outcome enforcement, commit-after-validation, and rollback on failure.
 - Verified concurrent operational publication with a thread-safe test provider,
   eight overlapping sessions, 200 complete retrievals, and response validation.
 - Added a bounded environment override for scaling that identical workload into

@@ -23,16 +23,25 @@ struct PluginWorkerParticipant {
 /** Builds and executes one dependency-ordered plan across plugin workers. */
 class PluginWorkerCoordinator {
  public:
+  PluginWorkerCoordinator() = default;
+  ~PluginWorkerCoordinator();
+  PluginWorkerCoordinator(const PluginWorkerCoordinator&) = delete;
+  PluginWorkerCoordinator& operator=(const PluginWorkerCoordinator&) = delete;
   /** Copies worker action descriptions and creates the global action graph. */
   [[nodiscard]] HardwareTransactionResult Plan(
       std::vector<PluginWorkerParticipant> participants);
   /** Executes the retained plan, compensating prior actions on failure. */
   [[nodiscard]] HardwareTransactionResult Apply();
-  /** Drops the retained parent-side plan without releasing worker state. */
+  /** Validates all applied reports, then commits or compensates the plan. */
+  [[nodiscard]] PluginApplyResult Reconcile(
+      const yang::config::RuntimeSchema& schema,
+      const yang::config::ConfigDocument& proposed);
+  /** Compensates retained actions and releases every worker preparation. */
   void Abort() noexcept;
 
  private:
   HardwareTransactionPlanner planner_;
+  std::vector<PluginWorkerParticipant> participants_;
 };
 
 }  // namespace dangd

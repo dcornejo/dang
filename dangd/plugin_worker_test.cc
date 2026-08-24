@@ -294,7 +294,15 @@ TEST(PluginWorkerCoordinatorTest, PlansAndAppliesOneWorker) {
             std::vector<std::string>{"dangd-example-plugin:transaction"});
   const HardwareTransactionResult applied = coordinator.Apply();
   EXPECT_TRUE(applied.ok) << applied.message;
-  EXPECT_FALSE(client->Abort().has_value());
+  const yang::config::RuntimeSchema empty_schema;
+  const yang::config::ConfigDocument empty_configuration;
+  const PluginApplyResult reconciled =
+      coordinator.Reconcile(empty_schema, empty_configuration);
+  EXPECT_FALSE(reconciled.error.has_value());
+  EXPECT_TRUE(reconciled.applied.has_value());
+  EXPECT_TRUE(reconciled.outcomes.empty());
+  EXPECT_EQ(reconciled.applied_xml,
+            "<config xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" />\n");
 }
 
 TEST(PluginWorkerCoordinatorTest, AddsCrossModuleDependencyEdges) {
@@ -314,8 +322,8 @@ TEST(PluginWorkerCoordinatorTest, AddsCrossModuleDependencyEdges) {
   }
   PluginWorkerCoordinator coordinator;
   const HardwareTransactionResult planned = coordinator.Plan(
-      {{provider_discovery->manifest, provider.get()},
-       {consumer_discovery->manifest, consumer.get()}});
+      {{consumer_discovery->manifest, consumer.get()},
+       {provider_discovery->manifest, provider.get()}});
   ASSERT_TRUE(planned.ok) << planned.message;
   EXPECT_EQ(planned.execution_order,
             (std::vector<std::string>{"test-provider:transaction",

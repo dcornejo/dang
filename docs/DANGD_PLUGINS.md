@@ -43,8 +43,10 @@ rejects duplicate module ownership, and uses the common planner for deterministi
 execution and reverse rollback. Live backend integration and applied-state
 validation have not yet moved to the worker coordinator. ABI-v6 reconciliation
 callbacks already run inside the worker and return only bounded copies of the
-actual configuration and per-node outcomes. The parent must validate those
-copies and retain rollback capability until every affected report is accepted.
+actual configuration and per-node outcomes. The parent validates those copies
+against the runtime schema, limits changes to modules owned by the reporting
+plugin, rejects duplicate outcome paths, and retains rollback capability until
+every affected report is accepted.
 
 This guide defines the contract between `dangd` and a dynamically loaded
 configuration provider. It is both a how-to and the behavioral specification

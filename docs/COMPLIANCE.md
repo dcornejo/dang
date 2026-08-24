@@ -371,9 +371,9 @@ apply/rollback requests; legacy plugins receive a synthetic transaction action.
 The parent worker coordinator now creates one deterministic hardware plan across
 all participating workers, including module dependency edges and reverse
 compensation. ABI-v6 reconciliation callbacks now run inside workers and return
-bounded copies, but parent-side schema, ownership, and outcome uniqueness
-checks—and rollback after a bad report—remain pending. RPC/action dispatch and
-live routing also remain on the unfinished side of that boundary.
+bounded copies. The parent now validates schema, ownership, provider identity,
+and outcome uniqueness before committing its retained plan, and compensates a
+bad report in reverse. RPC/action dispatch and live routing remain unfinished.
 An end-to-end deterministic stress case issues 200 operational retrievals from
 eight sessions, verifies every response, and proves that all eight provider
 callbacks may execute concurrently. The ASan/UBSan release soak completed at

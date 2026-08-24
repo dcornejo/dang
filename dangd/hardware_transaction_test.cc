@@ -96,5 +96,33 @@ TEST(HardwareTransactionPlannerTest,
                                                "rollback reserve"}));
 }
 
+TEST(HardwareTransactionPlannerTest,
+     RetainsSuccessfulApplyForPostApplyRollback) {
+  std::vector<std::string> events;
+  HardwareTransactionPlanner planner;
+  ASSERT_TRUE(planner.Plan(
+      {Action("first", "/first", HardwareActionClass::kNormal, &events),
+       Action("second", "/second", HardwareActionClass::kNormal, &events,
+              {"first"})}).ok);
+  ASSERT_TRUE(planner.ApplyRetained().ok);
+  EXPECT_EQ(events, (std::vector<std::string>{"apply first", "apply second"}));
+  const HardwareTransactionResult rolled_back = planner.RollbackApplied();
+  EXPECT_TRUE(rolled_back.ok);
+  EXPECT_EQ(events, (std::vector<std::string>{"apply first", "apply second",
+                                               "rollback second",
+                                               "rollback first"}));
+}
+
+TEST(HardwareTransactionPlannerTest, CommitDiscardsRetainedRollback) {
+  std::vector<std::string> events;
+  HardwareTransactionPlanner planner;
+  ASSERT_TRUE(planner.Plan(
+      {Action("only", "/only", HardwareActionClass::kNormal, &events)}).ok);
+  ASSERT_TRUE(planner.ApplyRetained().ok);
+  planner.Commit();
+  EXPECT_TRUE(planner.RollbackApplied().ok);
+  EXPECT_EQ(events, (std::vector<std::string>{"apply only"}));
+}
+
 }  // namespace
 }  // namespace dangd

@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <set>
 #include <unordered_map>
 #include <utility>
 
@@ -22,6 +23,8 @@ std::optional<std::string> Failure(
 
 }  // namespace
 
+PluginWorkerCoordinator::~PluginWorkerCoordinator() { Abort(); }
+
 HardwareTransactionResult PluginWorkerCoordinator::Plan(
     std::vector<PluginWorkerParticipant> participants) {
   Abort();
@@ -36,6 +39,38 @@ HardwareTransactionResult PluginWorkerCoordinator::Plan(
                     " has more than one plugin worker owner"};
     }
   }
+  std::set<std::size_t> pending;
+  for (std::size_t index = 0; index < participants.size(); ++index)
+    pending.insert(index);
+  std::vector<PluginWorkerParticipant> ordered;
+  while (!pending.empty()) {
+    bool progressed = false;
+    for (auto iterator = pending.begin(); iterator != pending.end();) {
+      const std::size_t index = *iterator;
+      const bool ready = std::ranges::all_of(
+          participants[index].manifest.dependencies,
+          [&](const std::string& module) {
+            const auto owner = module_owners.find(module);
+            return owner == module_owners.end() ||
+                !pending.contains(owner->second);
+          });
+      if (!ready) {
+        ++iterator;
+        continue;
+      }
+      ordered.push_back(std::move(participants[index]));
+      iterator = pending.erase(iterator);
+      progressed = true;
+    }
+    if (!progressed)
+      return {.ok = false,
+              .message = "plugin worker dependencies contain a cycle"};
+  }
+  participants = std::move(ordered);
+  module_owners.clear();
+  for (std::size_t index = 0; index < participants.size(); ++index)
+    for (const std::string& module : participants[index].manifest.modules)
+      module_owners.emplace(module, index);
 
   std::vector<std::vector<std::string>> participant_actions(
       participants.size());
@@ -92,13 +127,112 @@ HardwareTransactionResult PluginWorkerCoordinator::Plan(
       }
     }
   }
-  return planner_.Plan(std::move(actions));
+  HardwareTransactionResult result = planner_.Plan(std::move(actions));
+  if (result.ok) participants_ = std::move(participants);
+  return result;
 }
 
 HardwareTransactionResult PluginWorkerCoordinator::Apply() {
-  return planner_.Apply();
+  HardwareTransactionResult result = planner_.ApplyRetained();
+  if (!result.ok) {
+    for (const PluginWorkerParticipant& participant : participants_)
+      (void)participant.client->Abort();
+    participants_.clear();
+  }
+  return result;
 }
 
-void PluginWorkerCoordinator::Abort() noexcept { planner_.Abort(); }
+PluginApplyResult PluginWorkerCoordinator::Reconcile(
+    const yang::config::RuntimeSchema& schema,
+    const yang::config::ConfigDocument& proposed) {
+  const auto reject = [&](yang::config::ValidationFinding finding) {
+    const HardwareTransactionResult rolled_back = planner_.RollbackApplied();
+    for (const PluginWorkerParticipant& participant : participants_)
+      (void)participant.client->Abort();
+    participants_.clear();
+    if (!rolled_back.rollback_failures.empty()) {
+      finding.netconf_error_app_tag = "hardware-state-diverged";
+      finding.message += "; rollback incomplete: ";
+      for (std::size_t index = 0;
+           index < rolled_back.rollback_failures.size(); ++index) {
+        if (index) finding.message += ", ";
+        finding.message += rolled_back.rollback_failures[index];
+      }
+    }
+    return PluginApplyResult{std::move(finding), std::nullopt, {}};
+  };
+  yang::config::ConfigDocument accepted = proposed;
+  std::string accepted_xml = proposed.ToXml();
+  std::set<std::string> claimed_paths;
+  std::vector<ConfigurationOutcome> accepted_outcomes;
+  for (const PluginWorkerParticipant& participant : participants_) {
+    PluginWorkerReconcileResult report =
+        participant.client->Reconcile(accepted_xml);
+    if (!report.ok()) {
+      yang::config::ValidationFinding finding;
+      if (report.finding) {
+        finding = std::move(*report.finding);
+      } else {
+        finding.message = report.worker_error.value_or(
+            "plugin worker reconciliation failed");
+        finding.module_name = participant.manifest.plugin_name;
+        finding.netconf_error_tag = "operation-failed";
+      }
+      return reject(std::move(finding));
+    }
+    auto parsed = yang::config::ParseDatastoreXml(
+        schema, report.report->applied_xml, {.allow_origin_metadata = true});
+    if (!parsed.document) {
+      yang::config::ValidationFinding finding = parsed.findings.empty()
+          ? yang::config::ValidationFinding{}
+          : parsed.findings.front();
+      finding.message = "plugin " + participant.manifest.plugin_name +
+          " returned invalid applied state: " + finding.message;
+      finding.module_name = participant.manifest.plugin_name;
+      return reject(std::move(finding));
+    }
+    for (const auto& change :
+         yang::config::DiffConfigDocuments(schema, accepted, *parsed.document)) {
+      const std::string& module = schema.Get(change.schema).module_name;
+      if (std::ranges::find(participant.manifest.modules, module) !=
+          participant.manifest.modules.end())
+        continue;
+      yang::config::ValidationFinding finding;
+      finding.message = "plugin " + participant.manifest.plugin_name +
+          " modified a module it does not own";
+      finding.instance_path = change.instance_path;
+      finding.module_name = module;
+      finding.netconf_error_tag = "operation-failed";
+      return reject(std::move(finding));
+    }
+    for (const ConfigurationOutcome& outcome : report.report->outcomes) {
+      if (outcome.provider != participant.manifest.plugin_name ||
+          !claimed_paths.insert(outcome.instance_path).second) {
+        yang::config::ValidationFinding finding;
+        finding.message = "invalid or duplicate configuration outcome";
+        finding.instance_path = outcome.instance_path;
+        finding.module_name = participant.manifest.plugin_name;
+        finding.netconf_error_tag = "operation-failed";
+        return reject(std::move(finding));
+      }
+      accepted_outcomes.push_back(outcome);
+    }
+    accepted = std::move(*parsed.document);
+    accepted_xml = std::move(report.report->applied_xml);
+  }
+  planner_.Commit();
+  for (const PluginWorkerParticipant& participant : participants_)
+    (void)participant.client->Abort();
+  participants_.clear();
+  return {std::nullopt, std::move(accepted), std::move(accepted_xml),
+          std::move(accepted_outcomes)};
+}
+
+void PluginWorkerCoordinator::Abort() noexcept {
+  (void)planner_.RollbackApplied();
+  for (const PluginWorkerParticipant& participant : participants_)
+    (void)participant.client->Abort();
+  participants_.clear();
+}
 
 }  // namespace dangd
