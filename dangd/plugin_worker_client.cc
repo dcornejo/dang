@@ -54,6 +54,28 @@ std::string WorkerFailure(WorkerIoStatus status, std::string_view detail) {
   return message;
 }
 
+yang::config::ValidationFinding ParseFinding(const Json& serialized) {
+  yang::config::ValidationFinding finding;
+  finding.code = yang::config::ValidationCode::kInvalidValue;
+  finding.state = yang::config::FindingState::kInvalid;
+  finding.message = serialized.at("message").get<std::string>();
+  finding.instance_path = serialized.at("instance_path").get<std::string>();
+  finding.netconf_error_tag =
+      serialized.at("netconf_error_tag").get<std::string>();
+  finding.netconf_error_app_tag =
+      serialized.at("netconf_error_app_tag").get<std::string>();
+  finding.module_name = serialized.at("module_name").get<std::string>();
+  const std::size_t maximum = yang::DefaultResourceLimits().maximum_xpath_bytes;
+  if (finding.message.empty() || finding.message.size() > maximum ||
+      finding.instance_path.size() > maximum ||
+      finding.netconf_error_tag.size() > maximum ||
+      finding.netconf_error_app_tag.size() > maximum ||
+      finding.module_name.size() > maximum)
+    throw Json::other_error::create(501, "invalid transaction finding",
+                                    &serialized);
+  return finding;
+}
+
 }  // namespace
 
 struct PluginWorkerClient::ExchangeResult {
@@ -299,28 +321,7 @@ PluginWorkerTransactionResult PluginWorkerClient::Transaction(
   }
   if (response["accepted"].get<bool>()) return {};
   try {
-    const Json& serialized = response.at("finding");
-    yang::config::ValidationFinding finding;
-    finding.code = yang::config::ValidationCode::kInvalidValue;
-    finding.state = yang::config::FindingState::kInvalid;
-    finding.message = serialized.at("message").get<std::string>();
-    finding.instance_path =
-        serialized.at("instance_path").get<std::string>();
-    finding.netconf_error_tag =
-        serialized.at("netconf_error_tag").get<std::string>();
-    finding.netconf_error_app_tag =
-        serialized.at("netconf_error_app_tag").get<std::string>();
-    finding.module_name = serialized.at("module_name").get<std::string>();
-    const std::size_t maximum =
-        yang::DefaultResourceLimits().maximum_xpath_bytes;
-    if (finding.message.empty() || finding.message.size() > maximum ||
-        finding.instance_path.size() > maximum ||
-        finding.netconf_error_tag.size() > maximum ||
-        finding.netconf_error_app_tag.size() > maximum ||
-        finding.module_name.size() > maximum)
-      throw Json::other_error::create(501, "invalid transaction finding",
-                                      &serialized);
-    return {std::move(finding), std::nullopt};
+    return {ParseFinding(response.at("finding")), std::nullopt};
   } catch (const Json::exception&) {
     Terminate();
     return {std::nullopt, "malformed plugin worker transaction finding"};
@@ -344,6 +345,57 @@ PluginWorkerTransactionResult PluginWorkerClient::Prepare(
 
 PluginWorkerTransactionResult PluginWorkerClient::Validate() {
   return Transaction(Json{{"operation", "validate"}}.dump());
+}
+
+PluginWorkerHardwareActionsResult PluginWorkerClient::HardwareActions() {
+  ExchangeResult exchanged =
+      Exchange(Json{{"operation", "hardware-actions"}}.dump());
+  if (!exchanged.response) return {{}, std::nullopt, exchanged.error};
+  const Json& response = *exchanged.response;
+  try {
+    if (!response.value("ok", false) || !response.contains("accepted") ||
+        !response["accepted"].is_boolean())
+      throw Json::other_error::create(501, "invalid action response", &response);
+    if (!response["accepted"].get<bool>())
+      return {{}, ParseFinding(response.at("finding")), std::nullopt};
+    const Json& serialized = response.at("actions");
+    if (!serialized.is_array())
+      throw Json::other_error::create(501, "invalid action list", &serialized);
+    PluginWorkerHardwareActionsResult result;
+    const auto& limits = yang::DefaultResourceLimits();
+    for (const Json& value : serialized) {
+      PluginWorkerHardwareAction action{
+          value.at("action_id").get<std::string>(),
+          value.at("instance_path").get<std::string>(),
+          value.at("action_class").get<std::uint32_t>(),
+          value.at("dependencies").get<std::vector<std::string>>()};
+      if (action.action_id.empty() ||
+          action.action_id.size() > limits.maximum_xpath_bytes ||
+          action.instance_path.size() > limits.maximum_xpath_bytes ||
+          action.action_class > DANG_HARDWARE_DEACTIVATE_V1 ||
+          std::ranges::any_of(action.dependencies, [&](const std::string& item) {
+            return item.empty() || item.size() > limits.maximum_xpath_bytes;
+          }))
+        throw Json::other_error::create(501, "invalid hardware action", &value);
+      result.actions.push_back(std::move(action));
+    }
+    return result;
+  } catch (const Json::exception&) {
+    Terminate();
+    return {{}, std::nullopt, "malformed plugin worker hardware actions"};
+  }
+}
+
+PluginWorkerTransactionResult PluginWorkerClient::ApplyAction(
+    std::string action_id) {
+  return Transaction(Json{{"operation", "apply-action"},
+                          {"action_id", std::move(action_id)}}.dump());
+}
+
+PluginWorkerTransactionResult PluginWorkerClient::RollbackAction(
+    std::string action_id) {
+  return Transaction(Json{{"operation", "rollback-action"},
+                          {"action_id", std::move(action_id)}}.dump());
 }
 
 std::optional<std::string> PluginWorkerClient::Abort() {

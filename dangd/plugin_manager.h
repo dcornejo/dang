@@ -73,6 +73,14 @@ struct PluginApplyResult {
   std::string applied_xml;
 };
 
+/** Copied worker-owned hardware action safe to send across IPC. */
+struct PluginWorkerHardwareAction {
+  std::string action_id;
+  std::string instance_path;
+  std::uint32_t action_class = DANG_HARDWARE_NORMAL_V1;
+  std::vector<std::string> dependencies;
+};
+
 /** Loads ABI-v1 plugins and coordinates their configuration transactions. */
 class PluginManager : public yang::netconf::OperationProvider {
  public:
@@ -109,6 +117,15 @@ class PluginManager : public yang::netconf::OperationProvider {
   /** Worker-only phase two: validates the retained opaque preparation. */
   [[nodiscard]] std::optional<yang::config::ValidationFinding>
   ValidateWorkerTransaction();
+  /** Copies this worker's action plan without exposing plugin-owned memory. */
+  [[nodiscard]] std::optional<yang::config::ValidationFinding>
+  WorkerHardwareActions(std::vector<PluginWorkerHardwareAction>* actions);
+  /** Applies one named action against the retained worker preparation. */
+  [[nodiscard]] std::optional<yang::config::ValidationFinding>
+  ApplyWorkerHardwareAction(std::string_view action_id);
+  /** Compensates one named action against the retained preparation. */
+  [[nodiscard]] std::optional<yang::config::ValidationFinding>
+  RollbackWorkerHardwareAction(std::string_view action_id);
   /** Applies and schema-validates ABI-v6 reports of actual backend state. */
   [[nodiscard]] PluginApplyResult Apply(
       const yang::config::RuntimeSchema& schema,

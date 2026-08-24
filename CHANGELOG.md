@@ -19,6 +19,9 @@ and releases follow Semantic Versioning.
   untrusted-response revalidation.
 - Moved transaction prepare, validate, and abort protocol phases into the
   worker, retaining opaque preparation only inside the isolated process.
+- Added worker hardware-action discovery, execution, and compensation so the
+  parent can build one global plan from copied descriptors without loading a
+  plugin or receiving its prepared pointers.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.
 - Made the per-session NMDA stress duration safely configurable for

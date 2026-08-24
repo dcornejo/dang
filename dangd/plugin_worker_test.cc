@@ -229,5 +229,52 @@ TEST(PluginWorkerClientTest, ReturnsAttributedValidationRejection) {
   EXPECT_TRUE(client->healthy());
 }
 
+TEST(PluginWorkerClientTest, ExecutesSyntheticLegacyHardwareAction) {
+  std::vector<std::string> errors;
+  auto client = StartClient(DANG_TEST_PLUGIN_PATH, 5s, &errors);
+  ASSERT_NE(client, nullptr) << testing::PrintToString(errors);
+  ASSERT_TRUE(client->Prepare("<config><mode>before</mode></config>",
+                              "<config><mode>after</mode></config>", "[]").ok());
+  ASSERT_TRUE(client->Validate().ok());
+  const PluginWorkerHardwareActionsResult planned = client->HardwareActions();
+  ASSERT_TRUE(planned.ok());
+  ASSERT_EQ(planned.actions.size(), 1u);
+  EXPECT_EQ(planned.actions.front().action_id, "transaction");
+  EXPECT_EQ(planned.actions.front().action_class, DANG_HARDWARE_NORMAL_V1);
+  EXPECT_TRUE(client->ApplyAction("transaction").ok());
+  EXPECT_TRUE(client->RollbackAction("transaction").ok());
+  EXPECT_FALSE(client->Abort().has_value());
+}
+
+TEST(PluginWorkerClientTest, RejectsUnknownLegacyHardwareAction) {
+  std::vector<std::string> errors;
+  auto client = StartClient(DANG_TEST_PLUGIN_PATH, 5s, &errors);
+  ASSERT_NE(client, nullptr) << testing::PrintToString(errors);
+  ASSERT_TRUE(client->Prepare("<config/>", "<config/>", "[]").ok());
+  const PluginWorkerTransactionResult rejected = client->ApplyAction("other");
+  ASSERT_TRUE(rejected.finding.has_value());
+  EXPECT_NE(rejected.finding->message.find("apply failed"), std::string::npos);
+  EXPECT_EQ(rejected.finding->module_name, "dangd-example-plugin");
+  EXPECT_TRUE(client->healthy());
+}
+
+TEST(PluginWorkerClientTest, CopiesAndExecutesAbiV4HardwareAction) {
+  std::vector<std::string> errors;
+  auto client = StartClient(DANG_TEST_PROVIDER_PLUGIN_PATH, 5s, &errors);
+  ASSERT_NE(client, nullptr) << testing::PrintToString(errors);
+  ASSERT_TRUE(client->Prepare("<config/>", "<config/>", "[]").ok());
+  ASSERT_TRUE(client->Validate().ok());
+  const PluginWorkerHardwareActionsResult planned = client->HardwareActions();
+  ASSERT_TRUE(planned.ok());
+  ASSERT_EQ(planned.actions.size(), 1u);
+  EXPECT_EQ(planned.actions.front().action_id, "transaction");
+  EXPECT_EQ(planned.actions.front().instance_path, "");
+  EXPECT_EQ(planned.actions.front().action_class, DANG_HARDWARE_NORMAL_V1);
+  EXPECT_TRUE(planned.actions.front().dependencies.empty());
+  EXPECT_TRUE(client->ApplyAction("transaction").ok());
+  EXPECT_TRUE(client->RollbackAction("transaction").ok());
+  EXPECT_FALSE(client->Abort().has_value());
+}
+
 }  // namespace
 }  // namespace dangd

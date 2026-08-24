@@ -644,6 +644,78 @@ PluginManager::ValidateWorkerTransaction() {
   return std::nullopt;
 }
 
+std::optional<yang::config::ValidationFinding>
+PluginManager::WorkerHardwareActions(
+    std::vector<PluginWorkerHardwareAction>* actions) {
+  if (!actions) return PluginFinding("worker", {}, "missing action output");
+  actions->clear();
+  if (state_->plugins.size() != 1 || state_->order.size() != 1 ||
+      !state_->plugins.front().prepared)
+    return PluginFinding("worker", {}, "no prepared transaction");
+  State::Plugin& plugin = state_->plugins.front();
+  if (!plugin.hardware_action_count) {
+    actions->push_back({"transaction", "", DANG_HARDWARE_NORMAL_V1, {}});
+    return std::nullopt;
+  }
+  const std::size_t count =
+      plugin.hardware_action_count(plugin.api->context, plugin.prepared);
+  for (std::size_t index = 0; index < count; ++index) {
+    DangHardwareActionV1 descriptor{};
+    DangPluginErrorV1 error{};
+    if (!plugin.hardware_action_at(plugin.api->context, plugin.prepared, index,
+                                   &descriptor, &error) ||
+        !descriptor.action_id || !*descriptor.action_id ||
+        (descriptor.dependency_count && !descriptor.dependencies)) {
+      return PluginFinding(plugin.name, error,
+                           "invalid hardware action descriptor");
+    }
+    PluginWorkerHardwareAction copied;
+    copied.action_id = descriptor.action_id;
+    copied.instance_path = descriptor.instance_path ? descriptor.instance_path : "";
+    copied.action_class = descriptor.action_class;
+    for (std::size_t dependency = 0;
+         dependency < descriptor.dependency_count; ++dependency) {
+      if (!descriptor.dependencies[dependency] ||
+          !*descriptor.dependencies[dependency])
+        return PluginFinding(plugin.name, {},
+                             "invalid hardware action dependency");
+      copied.dependencies.emplace_back(descriptor.dependencies[dependency]);
+    }
+    actions->push_back(std::move(copied));
+  }
+  return std::nullopt;
+}
+
+std::optional<yang::config::ValidationFinding>
+PluginManager::ApplyWorkerHardwareAction(std::string_view action_id) {
+  if (state_->plugins.size() != 1 || !state_->plugins.front().prepared)
+    return PluginFinding("worker", {}, "no prepared transaction");
+  State::Plugin& plugin = state_->plugins.front();
+  DangPluginErrorV1 error{};
+  const bool accepted = plugin.apply_hardware_action
+      ? plugin.apply_hardware_action(plugin.api->context, plugin.prepared,
+                                     std::string(action_id).c_str(), &error)
+      : action_id == "transaction" &&
+            plugin.api->apply(plugin.api->context, plugin.prepared, &error);
+  if (!accepted) return PluginFinding(plugin.name, error, "apply failed");
+  return std::nullopt;
+}
+
+std::optional<yang::config::ValidationFinding>
+PluginManager::RollbackWorkerHardwareAction(std::string_view action_id) {
+  if (state_->plugins.size() != 1 || !state_->plugins.front().prepared)
+    return PluginFinding("worker", {}, "no prepared transaction");
+  State::Plugin& plugin = state_->plugins.front();
+  DangPluginErrorV1 error{};
+  const bool accepted = plugin.rollback_hardware_action
+      ? plugin.rollback_hardware_action(plugin.api->context, plugin.prepared,
+                                        std::string(action_id).c_str(), &error)
+      : action_id == "transaction" &&
+            plugin.api->rollback(plugin.api->context, plugin.prepared, &error);
+  if (!accepted) return PluginFinding(plugin.name, error, "rollback failed");
+  return std::nullopt;
+}
+
 PluginApplyResult PluginManager::Apply(
     const yang::config::RuntimeSchema& schema,
     const yang::config::ConfigDocument& proposed) {

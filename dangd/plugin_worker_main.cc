@@ -147,6 +147,39 @@ int Run(int descriptor, const std::filesystem::path& plugin_path) {
       if (!Send(descriptor,
                 Finding(manager.ValidateWorkerTransaction(), "validate")))
         return 1;
+    } else if (operation == "hardware-actions") {
+      std::vector<dangd::PluginWorkerHardwareAction> actions;
+      const auto finding = manager.WorkerHardwareActions(&actions);
+      if (finding) {
+        if (!Send(descriptor, Finding(finding, "hardware-actions"))) return 1;
+        continue;
+      }
+      Json serialized = Json::array();
+      for (const auto& action : actions)
+        serialized.push_back({{"action_id", action.action_id},
+                              {"instance_path", action.instance_path},
+                              {"action_class", action.action_class},
+                              {"dependencies", action.dependencies}});
+      if (!Send(descriptor, {{"ok", true},
+                             {"stage", "hardware-actions"},
+                             {"accepted", true},
+                             {"actions", std::move(serialized)}}))
+        return 1;
+    } else if (operation == "apply-action" ||
+               operation == "rollback-action") {
+      try {
+        const std::string action_id =
+            parsed.at("action_id").get<std::string>();
+        const auto finding = operation == "apply-action"
+            ? manager.ApplyWorkerHardwareAction(action_id)
+            : manager.RollbackWorkerHardwareAction(action_id);
+        if (!Send(descriptor, Finding(finding, operation))) return 1;
+      } catch (const Json::exception&) {
+        if (!Send(descriptor, {{"ok", false},
+                               {"stage", "protocol"},
+                               {"error", "invalid action request"}}))
+          return 1;
+      }
     } else if (operation == "abort") {
       manager.Abort();
       if (!Send(descriptor,

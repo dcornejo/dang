@@ -15,6 +15,8 @@
   worker output, and kills/reaps a worker after callback timeout or crash.
 - Added separate worker prepare/validate phases plus idempotent abort, preserving
   dependency-wide two-phase validation without exporting prepared pointers.
+- Added bounded worker hardware-action descriptions and named apply/rollback
+  requests, including a synthetic transaction action for pre-v4 plugins.
 - Verified concurrent operational publication with a thread-safe test provider,
   eight overlapping sessions, 200 complete retrievals, and response validation.
 - Added a bounded environment override for scaling that identical workload into

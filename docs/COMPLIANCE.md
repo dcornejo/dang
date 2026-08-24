@@ -366,8 +366,10 @@ with the same stateful plugin context.
 The worker now implements distinct prepare and validate requests and an abort
 request. Opaque preparation survives between those phases only inside the
 worker, so dependency-wide prepare-before-validate semantics can be retained at
-cutover. Apply/rollback, hardware planning, reconciliation, and RPC/action
-dispatch remain on the unfinished side of that boundary.
+cutover. Workers now also copy hardware action descriptions and accept named
+apply/rollback requests; legacy plugins receive a synthetic transaction action.
+Global hardware planning, reconciliation, RPC/action dispatch, and live routing
+remain on the unfinished side of that boundary.
 An end-to-end deterministic stress case issues 200 operational retrievals from
 eight sessions, verifies every response, and proves that all eight provider
 callbacks may execute concurrently. The ASan/UBSan release soak completed at

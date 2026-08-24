@@ -33,8 +33,12 @@ retains the plugin's opaque preparation there. This permits the eventual parent
 coordinator to prepare every affected plugin before asking any of them to
 validate. Abort releases the retained object without returning its address;
 validation rejection also releases it and returns only bounded attribution.
-Apply, rollback, hardware action discovery/execution, and applied-state
-reconciliation have not yet moved to the worker.
+Hardware action descriptors are copied from the worker so the parent can build
+one dependency graph across every affected module. The parent then sends named
+apply or rollback requests while the opaque preparation remains in the worker.
+Plugins older than ABI v4 appear as one synthetic `transaction` action, so they
+use the same global planning path. Global coordinator integration and
+applied-state reconciliation have not yet moved to the worker.
 
 This guide defines the contract between `dangd` and a dynamically loaded
 configuration provider. It is both a how-to and the behavioral specification

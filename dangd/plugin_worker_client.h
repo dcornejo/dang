@@ -38,6 +38,16 @@ struct PluginWorkerTransactionResult {
   }
 };
 
+/** Copied action list or a plugin/worker failure. */
+struct PluginWorkerHardwareActionsResult {
+  std::vector<PluginWorkerHardwareAction> actions;
+  std::optional<yang::config::ValidationFinding> finding;
+  std::optional<std::string> worker_error;
+  [[nodiscard]] bool ok() const noexcept {
+    return !finding && !worker_error;
+  }
+};
+
 /**
  * Owns and supervises one long-lived out-of-process plugin instance.
  *
@@ -72,6 +82,14 @@ class PluginWorkerClient {
       std::string changes_json);
   /** Validates the preparation retained by the preceding prepare request. */
   [[nodiscard]] PluginWorkerTransactionResult Validate();
+  /** Retrieves copied descriptors for the retained preparation. */
+  [[nodiscard]] PluginWorkerHardwareActionsResult HardwareActions();
+  /** Applies one action selected by the parent hardware planner. */
+  [[nodiscard]] PluginWorkerTransactionResult ApplyAction(
+      std::string action_id);
+  /** Rolls back one previously applied action. */
+  [[nodiscard]] PluginWorkerTransactionResult RollbackAction(
+      std::string action_id);
   /** Releases retained preparation without applying it. */
   [[nodiscard]] std::optional<std::string> Abort();
   /** Returns whether the worker remains usable after preceding requests. */
