@@ -22,6 +22,8 @@ and releases follow Semantic Versioning.
 - Added worker hardware-action discovery, execution, and compensation so the
   parent can build one global plan from copied descriptors without loading a
   plugin or receiving its prepared pointers.
+- Added a parent-side worker coordinator that merges local and inter-module
+  dependencies into one deterministic hardware plan with reverse compensation.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.
 - Made the per-session NMDA stress duration safely configurable for

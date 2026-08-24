@@ -37,8 +37,11 @@ Hardware action descriptors are copied from the worker so the parent can build
 one dependency graph across every affected module. The parent then sends named
 apply or rollback requests while the opaque preparation remains in the worker.
 Plugins older than ABI v4 appear as one synthetic `transaction` action, so they
-use the same global planning path. Global coordinator integration and
-applied-state reconciliation have not yet moved to the worker.
+use the same global planning path. The worker coordinator qualifies local action
+dependencies, adds edges from a dependent module to every action of its provider,
+rejects duplicate module ownership, and uses the common planner for deterministic
+execution and reverse rollback. Live backend integration and applied-state
+reconciliation have not yet moved to the worker.
 
 This guide defines the contract between `dangd` and a dynamically loaded
 configuration provider. It is both a how-to and the behavioral specification

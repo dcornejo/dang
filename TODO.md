@@ -47,10 +47,11 @@ stays in this file with its remaining work rewritten precisely.
   ready handshake plus copied manifest/YANG discovery data; parent-side worker
   ownership now enforces separate startup/request deadlines, bounds copied data,
   and contains/reaps operational callback hangs and crashes. Live application
-  cutover, global hardware-plan coordination, applied-state reconciliation,
-  operation routing, and restart policy remain. Worker prepare, validate, abort,
-  action discovery, named apply, and named rollback already retain and use
-  opaque transaction state entirely inside the worker process.
+  cutover, applied-state reconciliation, operation routing, and restart policy
+  remain. Worker prepare, validate, abort, action discovery, named apply, and
+  named rollback already retain and use opaque transaction state entirely
+  inside the worker process. The parent worker coordinator now combines copied
+  actions into a global dependency plan and compensates failure in reverse.
   Malformed typed data and oversized callback XML are rejected atomically with
   provider attribution and bounded copying. Document unsupported optional
   features and deviations before making an RFC 8342 or RFC 8526 compliance claim.

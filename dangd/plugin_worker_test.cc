@@ -3,6 +3,7 @@
 
 #include "dangd/plugin_api.h"
 #include "dangd/plugin_worker_client.h"
+#include "dangd/plugin_worker_coordinator.h"
 #include "dangd/plugin_worker_protocol.h"
 #include "yang/resource_limits.h"
 
@@ -274,6 +275,58 @@ TEST(PluginWorkerClientTest, CopiesAndExecutesAbiV4HardwareAction) {
   EXPECT_TRUE(client->ApplyAction("transaction").ok());
   EXPECT_TRUE(client->RollbackAction("transaction").ok());
   EXPECT_FALSE(client->Abort().has_value());
+}
+
+TEST(PluginWorkerCoordinatorTest, PlansAndAppliesOneWorker) {
+  std::vector<std::string> errors;
+  auto client = StartClient(DANG_TEST_PLUGIN_PATH, 5s, &errors);
+  ASSERT_NE(client, nullptr) << testing::PrintToString(errors);
+  std::string discovery_error;
+  auto discovery = client->Discover(&discovery_error);
+  ASSERT_TRUE(discovery.has_value()) << discovery_error;
+  ASSERT_TRUE(client->Prepare("<config/>", "<config/>", "[]").ok());
+  ASSERT_TRUE(client->Validate().ok());
+  PluginWorkerCoordinator coordinator;
+  const HardwareTransactionResult planned =
+      coordinator.Plan({{discovery->manifest, client.get()}});
+  ASSERT_TRUE(planned.ok) << planned.message;
+  EXPECT_EQ(planned.execution_order,
+            std::vector<std::string>{"dangd-example-plugin:transaction"});
+  const HardwareTransactionResult applied = coordinator.Apply();
+  EXPECT_TRUE(applied.ok) << applied.message;
+  EXPECT_FALSE(client->Abort().has_value());
+}
+
+TEST(PluginWorkerCoordinatorTest, AddsCrossModuleDependencyEdges) {
+  std::vector<std::string> errors;
+  auto provider = StartClient(DANG_TEST_PROVIDER_PLUGIN_PATH, 5s, &errors);
+  auto consumer = StartClient(DANG_TEST_CONSUMER_PLUGIN_PATH, 5s, &errors);
+  ASSERT_NE(provider, nullptr) << testing::PrintToString(errors);
+  ASSERT_NE(consumer, nullptr) << testing::PrintToString(errors);
+  std::string discovery_error;
+  auto provider_discovery = provider->Discover(&discovery_error);
+  ASSERT_TRUE(provider_discovery.has_value()) << discovery_error;
+  auto consumer_discovery = consumer->Discover(&discovery_error);
+  ASSERT_TRUE(consumer_discovery.has_value()) << discovery_error;
+  for (PluginWorkerClient* client : {provider.get(), consumer.get()}) {
+    ASSERT_TRUE(client->Prepare("<config/>", "<config/>", "[]").ok());
+    ASSERT_TRUE(client->Validate().ok());
+  }
+  PluginWorkerCoordinator coordinator;
+  const HardwareTransactionResult planned = coordinator.Plan(
+      {{provider_discovery->manifest, provider.get()},
+       {consumer_discovery->manifest, consumer.get()}});
+  ASSERT_TRUE(planned.ok) << planned.message;
+  EXPECT_EQ(planned.execution_order,
+            (std::vector<std::string>{"test-provider:transaction",
+                                      "test-consumer:transaction"}));
+  const HardwareTransactionResult applied = coordinator.Apply();
+  EXPECT_FALSE(applied.ok);
+  EXPECT_NE(applied.message.find("provider was not applied first"),
+            std::string::npos);
+  EXPECT_TRUE(applied.rollback_failures.empty());
+  EXPECT_FALSE(provider->Abort().has_value());
+  EXPECT_FALSE(consumer->Abort().has_value());
 }
 
 }  // namespace
