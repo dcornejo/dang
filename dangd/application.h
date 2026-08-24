@@ -39,7 +39,7 @@ class DangdOperationalData final
   DangdOperationalData(std::string yang_library_xml,
                        std::vector<ModelSource> model_sources,
                        const yang::netconf::NacmPolicy* nacm,
-                       const PluginManager* plugins,
+                       const PluginRuntime* plugins,
                        const yang::config::RuntimeSchema* schema);
   [[nodiscard]] DataResult AugmentDataXml(
       std::string_view configuration_data_xml) const override;
@@ -61,7 +61,7 @@ class DangdOperationalData final
   std::string monitoring_xml_;
   std::vector<ModelSource> model_sources_;
   const yang::netconf::NacmPolicy* nacm_ = nullptr;
-  const PluginManager* plugins_ = nullptr;
+  const PluginRuntime* plugins_ = nullptr;
   const yang::config::RuntimeSchema* schema_ = nullptr;
   std::function<std::string()> applied_configuration_provider_;
 };
@@ -145,12 +145,12 @@ class Application {
               std::optional<std::filesystem::path> state_file,
               yang::netconf::SnapshotSaveCheckpoint snapshot_save_checkpoint,
               yang::netconf::NacmPolicy nacm, bool managed_nacm,
-              std::unique_ptr<PluginManager> plugins,
+              std::unique_ptr<PluginRuntime> plugins,
               std::string yang_library_xml,
               std::vector<DangdOperationalData::ModelSource> model_sources);
 
   yang::config::RuntimeSchema schema_;
-  std::unique_ptr<PluginManager> plugins_;
+  std::unique_ptr<PluginRuntime> plugins_;
   yang::netconf::NacmPolicy nacm_;
   yang::netconf::NotificationManager notifications_;
   DangdOperationalData operational_;

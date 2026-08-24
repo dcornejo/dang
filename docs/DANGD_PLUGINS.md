@@ -54,6 +54,11 @@ bounded before transmission; output XML and attributed errors are copied and
 revalidated by the parent. The plugin never receives transport credentials or
 an unchecked NETCONF request.
 
+The server-facing `PluginRuntime` contract separates datastore and NETCONF code
+from plugin ownership. The existing in-process loader and the forthcoming live
+worker runtime implement the same transaction, operational-data, reconciliation,
+and operation-provider surface, allowing the ownership switch to be atomic.
+
 This guide defines the contract between `dangd` and a dynamically loaded
 configuration provider. It is both a how-to and the behavioral specification
 for plugin authors. The first ABI targets POSIX shared libraries only. Windows

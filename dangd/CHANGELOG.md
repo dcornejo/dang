@@ -25,6 +25,8 @@
   unique outcome enforcement, commit-after-validation, and rollback on failure.
 - Added operation invocation to the worker protocol and client, preserving
   operation-not-supported attribution and containing callback failure.
+- Added the `PluginRuntime` server-facing interface so live worker ownership can
+  replace `PluginManager` without changing datastore or NETCONF layers.
 - Verified concurrent operational publication with a thread-safe test provider,
   eight overlapping sessions, 200 complete retrievals, and response validation.
 - Added a bounded environment override for scaling that identical workload into

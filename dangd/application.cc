@@ -439,7 +439,7 @@ std::vector<DangdOperationalData::ModelSource> BuildModelSources(
 
 DangdOperationalData::DangdOperationalData(
     std::string yang_library_xml, std::vector<ModelSource> model_sources,
-    const yang::netconf::NacmPolicy* nacm, const PluginManager* plugins,
+    const yang::netconf::NacmPolicy* nacm, const PluginRuntime* plugins,
     const yang::config::RuntimeSchema* runtime_schema)
     : yang_library_xml_(std::move(yang_library_xml)),
       model_sources_(std::move(model_sources)), nacm_(nacm),
@@ -774,7 +774,7 @@ Application::Application(yang::config::RuntimeSchema schema,
                          yang::netconf::SnapshotSaveCheckpoint
                              snapshot_save_checkpoint,
                          yang::netconf::NacmPolicy nacm, bool managed_nacm,
-                         std::unique_ptr<PluginManager> plugins,
+                         std::unique_ptr<PluginRuntime> plugins,
                          std::string yang_library_xml,
                          std::vector<DangdOperationalData::ModelSource>
                              model_sources)

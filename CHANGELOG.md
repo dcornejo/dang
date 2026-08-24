@@ -30,6 +30,8 @@ and releases follow Semantic Versioning.
   validation succeeds, with reverse compensation on report rejection.
 - Added supervised worker RPC/action dispatch with bounded copied inputs,
   outputs, and attributed NETCONF errors.
+- Decoupled application, backend, operational, and operation-provider wiring
+  from the in-process loader through a common plugin runtime contract.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.
 - Made the per-session NMDA stress duration safely configurable for

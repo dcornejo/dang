@@ -375,6 +375,9 @@ bounded copies. The parent now validates schema, ownership, provider identity,
 and outcome uniqueness before committing its retained plan, and compensates a
 bad report in reverse. RPC/action callbacks now use bounded worker requests;
 live operation-provider selection and application routing remain unfinished.
+The application layers now depend on a common plugin runtime contract rather
+than the in-process loader directly; selecting a worker-owned implementation at
+startup remains the live-cutover step.
 An end-to-end deterministic stress case issues 200 operational retrievals from
 eight sessions, verifies every response, and proves that all eight provider
 callbacks may execute concurrently. The ASan/UBSan release soak completed at

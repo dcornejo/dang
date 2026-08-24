@@ -97,12 +97,36 @@ struct PluginWorkerAppliedReport {
   std::vector<ConfigurationOutcome> outcomes;
 };
 
+/** Server-facing contract shared by in-process and worker-owned plugins. */
+class PluginRuntime : public yang::netconf::OperationProvider {
+ public:
+  ~PluginRuntime() override = default;
+  [[nodiscard]] virtual const std::vector<PluginYangSource>& yang_sources()
+      const = 0;
+  [[nodiscard]] virtual const std::vector<PluginManifest>& manifests()
+      const = 0;
+  [[nodiscard]] virtual std::vector<PluginOperationalFragment>
+  OperationalData() const = 0;
+  [[nodiscard]] virtual std::string ReconciliationData(
+      std::span<const OperationalProviderFailure> provider_failures = {})
+      const = 0;
+  [[nodiscard]] virtual std::optional<yang::config::ValidationFinding> Prepare(
+      const yang::config::RuntimeSchema& schema,
+      const yang::config::ConfigDocument& before,
+      const yang::config::ConfigDocument& after,
+      std::span<const yang::config::ChangeEvent> changes) = 0;
+  [[nodiscard]] virtual PluginApplyResult Apply(
+      const yang::config::RuntimeSchema& schema,
+      const yang::config::ConfigDocument& proposed) = 0;
+  virtual void Abort() noexcept = 0;
+};
+
 /** Loads ABI-v1 plugins and coordinates their configuration transactions. */
-class PluginManager : public yang::netconf::OperationProvider {
+class PluginManager : public PluginRuntime {
  public:
   /** Constructs an empty plugin registry. */
   PluginManager();
-  ~PluginManager();
+  ~PluginManager() override;
   PluginManager(const PluginManager&) = delete;
   PluginManager& operator=(const PluginManager&) = delete;
 
@@ -112,20 +136,23 @@ class PluginManager : public yang::netconf::OperationProvider {
   /** Validates unique ownership and all declared runtime dependencies. */
   [[nodiscard]] bool ValidateDependencies(std::vector<std::string>* errors) const;
   /** Returns all copied sources in plugin discovery order. */
-  [[nodiscard]] const std::vector<PluginYangSource>& yang_sources() const;
+  [[nodiscard]] const std::vector<PluginYangSource>& yang_sources()
+      const override;
   /** Returns copied plugin manifests in successful load order. */
-  [[nodiscard]] const std::vector<PluginManifest>& manifests() const;
+  [[nodiscard]] const std::vector<PluginManifest>& manifests() const override;
   /** Collects attributed operational callback results from ABI-v3 plugins. */
-  [[nodiscard]] std::vector<PluginOperationalFragment> OperationalData() const;
+  [[nodiscard]] std::vector<PluginOperationalFragment> OperationalData()
+      const override;
   /** Returns modeled state for hardware changes that could not be rolled back. */
   [[nodiscard]] std::string ReconciliationData(
-      std::span<const OperationalProviderFailure> provider_failures = {}) const;
+      std::span<const OperationalProviderFailure> provider_failures = {})
+      const override;
   /** Prepares and validates every plugin affected by a proposed replacement. */
   [[nodiscard]] std::optional<yang::config::ValidationFinding> Prepare(
       const yang::config::RuntimeSchema& schema,
       const yang::config::ConfigDocument& before,
       const yang::config::ConfigDocument& after,
-      std::span<const yang::config::ChangeEvent> changes);
+      std::span<const yang::config::ChangeEvent> changes) override;
   /** Worker-only phase one: retains one plugin's opaque prepared state. */
   [[nodiscard]] std::optional<yang::config::ValidationFinding>
   PrepareWorkerTransaction(std::string before_xml, std::string proposed_xml,
@@ -153,9 +180,9 @@ class PluginManager : public yang::netconf::OperationProvider {
   /** Applies and schema-validates ABI-v6 reports of actual backend state. */
   [[nodiscard]] PluginApplyResult Apply(
       const yang::config::RuntimeSchema& schema,
-      const yang::config::ConfigDocument& proposed);
+      const yang::config::ConfigDocument& proposed) override;
   /** Releases every retained preparation without applying it. */
-  void Abort() noexcept;
+  void Abort() noexcept override;
   [[nodiscard]] yang::netconf::OperationResult InvokeRpc(
       const yang::netconf::RpcSessionContext& session,
       const yang::config::RuntimeSchemaNode& operation,

@@ -22,7 +22,7 @@ class EnglishConfigurationBackend final
  public:
   /** Initializes the backend with the already validated running document. */
   EnglishConfigurationBackend(yang::config::ConfigDocument initial,
-                              PluginManager* plugins,
+                              PluginRuntime* plugins,
                               yang::netconf::NacmPolicy* nacm,
                               bool managed_nacm)
       : plugins_(plugins), nacm_(nacm), managed_nacm_(managed_nacm),
@@ -52,7 +52,7 @@ class EnglishConfigurationBackend final
 
  private:
   mutable std::mutex mutex_;
-  PluginManager* plugins_ = nullptr;
+  PluginRuntime* plugins_ = nullptr;
   yang::netconf::NacmPolicy* nacm_ = nullptr;
   bool managed_nacm_ = false;
   std::optional<yang::netconf::NacmPolicy> prepared_nacm_;
