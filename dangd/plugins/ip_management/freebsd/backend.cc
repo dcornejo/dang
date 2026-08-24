@@ -8,6 +8,8 @@
 #include <array>
 #include <cerrno>
 #include <climits>
+#include <cstddef>
+#include <cstdio>
 #include <cstring>
 #include <memory>
 #include <optional>
@@ -17,6 +19,9 @@
 
 #include <arpa/inet.h>
 #include <net/if.h>
+#include <netlink/netlink.h>
+#include <netlink/route/common.h>
+#include <netlink/route/neigh.h>
 #include <netinet/in.h>
 #include <netinet6/in6_var.h>
 #include <sys/ioctl.h>
@@ -162,6 +167,138 @@ bool AddressRequest(std::string_view interface, const AddressConfig& address,
                      "delete IPv4 address on " + target, error);
 }
 
+std::optional<std::array<std::byte, 6>> EthernetAddress(
+    std::string_view text) {
+  std::array<std::byte, 6> result{};
+  unsigned values[6]{};
+  char trailing = 0;
+  const std::string copied(text);
+  if (std::sscanf(copied.c_str(), "%x:%x:%x:%x:%x:%x%c", &values[0],
+                  &values[1], &values[2], &values[3], &values[4], &values[5],
+                  &trailing) != 6)
+    return std::nullopt;
+  for (std::size_t index = 0; index < result.size(); ++index) {
+    if (values[index] > 255) return std::nullopt;
+    result[index] = static_cast<std::byte>(values[index]);
+  }
+  return result;
+}
+
+bool AddNetlinkAttribute(nlmsghdr* header, std::size_t capacity,
+                         std::uint16_t type, const void* data,
+                         std::size_t size) {
+  const std::size_t attribute_size = NLA_HDRLEN + size;
+  const std::size_t offset = NLMSG_ALIGN(header->nlmsg_len);
+  if (offset + NLA_ALIGN(attribute_size) > capacity) return false;
+  auto* attribute = reinterpret_cast<nlattr*>(
+      reinterpret_cast<std::byte*>(header) + offset);
+  attribute->nla_type = type;
+  attribute->nla_len = static_cast<std::uint16_t>(attribute_size);
+  if (size) std::memcpy(attribute + 1, data, size);
+  header->nlmsg_len = static_cast<std::uint32_t>(
+      offset + NLA_ALIGN(attribute_size));
+  return true;
+}
+
+bool NeighborRequest(std::string_view interface,
+                     const NeighborConfig& neighbor, bool add,
+                     std::string* error) {
+  const std::string target(interface);
+  const unsigned index = if_nametoindex(target.c_str());
+  if (index == 0) {
+    if (error) *error = "resolve interface " + target + ": " +
+                        std::strerror(errno);
+    return false;
+  }
+  const auto link_layer = EthernetAddress(neighbor.link_layer_address);
+  if (!link_layer) {
+    if (error) *error = "unsupported link-layer address " +
+                        neighbor.link_layer_address + " on " + target;
+    return false;
+  }
+  std::array<std::byte, sizeof(in6_addr)> destination{};
+  const int family = neighbor.ipv6 ? AF_INET6 : AF_INET;
+  if (inet_pton(family, neighbor.address.c_str(), destination.data()) != 1) {
+    if (error) *error = "invalid neighbor address " + neighbor.address +
+                        " on " + target;
+    return false;
+  }
+
+  const int descriptor = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC,
+                                NETLINK_ROUTE);
+  if (descriptor < 0) {
+    if (error) *error = "open FreeBSD route netlink socket: " +
+                        std::string(std::strerror(errno));
+    return false;
+  }
+  sockaddr_nl local{};
+  local.nl_len = sizeof(local);
+  local.nl_family = AF_NETLINK;
+  if (bind(descriptor, reinterpret_cast<sockaddr*>(&local), sizeof(local))) {
+    if (error) *error = "bind FreeBSD route netlink socket: " +
+                        std::string(std::strerror(errno));
+    close(descriptor);
+    return false;
+  }
+  std::array<std::byte, 1024> request{};
+  auto* header = reinterpret_cast<nlmsghdr*>(request.data());
+  header->nlmsg_len = NLMSG_LENGTH(sizeof(ndmsg));
+  header->nlmsg_type = add ? RTM_NEWNEIGH : RTM_DELNEIGH;
+  header->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK |
+      (add ? NLM_F_CREATE | NLM_F_REPLACE : 0);
+  header->nlmsg_seq = 1;
+  auto* body = reinterpret_cast<ndmsg*>(NLMSG_DATA(header));
+  body->ndm_family = static_cast<std::uint8_t>(family);
+  body->ndm_ifindex = static_cast<std::int32_t>(index);
+  body->ndm_state = NUD_PERMANENT;
+  const std::size_t destination_size = neighbor.ipv6 ? sizeof(in6_addr) :
+                                                        sizeof(in_addr);
+  const bool attributes_added =
+      AddNetlinkAttribute(header, request.size(), NDA_DST, destination.data(),
+                          destination_size) &&
+      (!add || AddNetlinkAttribute(header, request.size(), NDA_LLADDR,
+                                    link_layer->data(), link_layer->size()));
+  sockaddr_nl kernel{};
+  kernel.nl_len = sizeof(kernel);
+  kernel.nl_family = AF_NETLINK;
+  if (!attributes_added ||
+      sendto(descriptor, header, header->nlmsg_len, 0,
+             reinterpret_cast<sockaddr*>(&kernel), sizeof(kernel)) < 0) {
+    if (error) *error = "send FreeBSD neighbor request for " + neighbor.address +
+                        " on " + target + ": " + std::strerror(errno);
+    close(descriptor);
+    return false;
+  }
+  std::array<std::byte, 4096> response{};
+  ssize_t received = -1;
+  do received = recv(descriptor, response.data(), response.size(), 0);
+  while (received < 0 && errno == EINTR);
+  const int receive_error = errno;
+  close(descriptor);
+  if (received < static_cast<ssize_t>(NLMSG_LENGTH(sizeof(nlmsgerr)))) {
+    if (error) *error = std::string(add ? "add" : "delete") + " neighbor " +
+        neighbor.address + " on " + target + ": " +
+        (received < 0 ? std::strerror(receive_error) :
+                        "truncated netlink reply");
+    return false;
+  }
+  const auto* reply_header =
+      reinterpret_cast<const nlmsghdr*>(response.data());
+  if (reply_header->nlmsg_type != NLMSG_ERROR ||
+      reply_header->nlmsg_seq != header->nlmsg_seq) {
+    if (error) *error = "unexpected FreeBSD neighbor acknowledgement for " +
+                        neighbor.address + " on " + target;
+    return false;
+  }
+  const auto* reply =
+      reinterpret_cast<const nlmsgerr*>(NLMSG_DATA(reply_header));
+  if (reply->error == 0) return true;
+  if (error) *error = std::string(add ? "add" : "delete") + " neighbor " +
+      neighbor.address + " on " + target + ": " +
+      std::strerror(reply->error);
+  return false;
+}
+
 struct LinkSnapshot {
   bool enabled = false;
   unsigned mtu = 0;
@@ -227,18 +364,21 @@ std::optional<unsigned> Mtu(const InterfaceConfig& interface,
 }
 
 struct Operation {
-  enum class Kind { kAddress, kEnabled, kMtu } kind;
+  enum class Kind { kAddress, kEnabled, kMtu, kNeighbor } kind;
   std::string interface;
   std::optional<AddressConfig> address;
   std::optional<bool> enabled;
   std::optional<unsigned> mtu;
   bool add = false;
+  std::optional<NeighborConfig> neighbor;
 
   bool Run(std::string* error) const {
     if (kind == Kind::kAddress)
       return AddressRequest(interface, *address, add, error);
     if (kind == Kind::kEnabled)
       return EnabledRequest(interface, *enabled, error);
+    if (kind == Kind::kNeighbor)
+      return NeighborRequest(interface, *neighbor, add, error);
     return MtuRequest(interface, *mtu, error);
   }
 };
@@ -260,13 +400,20 @@ class FreeBsdBackend final : public PlatformBackend {
     std::vector<std::pair<Operation, Operation>> operations;
     for (const InterfaceConfig& old_interface : before) {
       const InterfaceConfig* replacement = Find(desired, old_interface.name);
+      for (const NeighborConfig& value : old_interface.neighbors)
+        if (!replacement || std::ranges::find(replacement->neighbors, value) ==
+                                replacement->neighbors.end())
+          operations.push_back({{Operation::Kind::kNeighbor,
+                                 old_interface.name, {}, {}, {}, false, value},
+                                {Operation::Kind::kNeighbor,
+                                 old_interface.name, {}, {}, {}, true, value}});
       for (const AddressConfig& value : old_interface.addresses)
         if (!replacement || std::ranges::find(replacement->addresses, value) ==
                                 replacement->addresses.end())
           operations.push_back({{Operation::Kind::kAddress,
-                                 old_interface.name, value, {}, {}, false},
+                                 old_interface.name, value, {}, {}, false, {}},
                                 {Operation::Kind::kAddress,
-                                 old_interface.name, value, {}, {}, true}});
+                                 old_interface.name, value, {}, {}, true, {}}});
     }
     for (const InterfaceConfig& interface : desired) {
       const InterfaceConfig* old = Find(before, interface.name);
@@ -274,9 +421,16 @@ class FreeBsdBackend final : public PlatformBackend {
         if (!old || std::ranges::find(old->addresses, value) ==
                         old->addresses.end())
           operations.push_back({{Operation::Kind::kAddress, interface.name,
-                                 value, {}, {}, true},
+                                 value, {}, {}, true, {}},
                                 {Operation::Kind::kAddress, interface.name,
-                                 value, {}, {}, false}});
+                                 value, {}, {}, false, {}}});
+      for (const NeighborConfig& value : interface.neighbors)
+        if (!old || std::ranges::find(old->neighbors, value) ==
+                        old->neighbors.end())
+          operations.push_back({{Operation::Kind::kNeighbor, interface.name,
+                                 {}, {}, {}, true, value},
+                                {Operation::Kind::kNeighbor, interface.name,
+                                 {}, {}, {}, false, value}});
       const auto desired_mtu = Mtu(interface, error);
       if ((interface.ipv4_mtu || interface.ipv6_mtu) && !desired_mtu)
         return false;
@@ -289,15 +443,16 @@ class FreeBsdBackend final : public PlatformBackend {
       const bool mtu_changed = desired_mtu && snapshot->mtu != *desired_mtu;
       if (mtu_changed)
         operations.push_back(
-            {{Operation::Kind::kMtu, interface.name, {}, {}, desired_mtu, false},
+            {{Operation::Kind::kMtu, interface.name, {}, {}, desired_mtu, false,
+              {}},
              {Operation::Kind::kMtu, interface.name, {}, {}, snapshot->mtu,
-              false}});
+              false, {}}});
       if (enabled_changed) {
         std::pair<Operation, Operation> change{
             {Operation::Kind::kEnabled, interface.name, {}, interface.enabled,
-             {}, false},
+             {}, false, {}},
             {Operation::Kind::kEnabled, interface.name, {}, snapshot->enabled,
-             {}, false}};
+             {}, false, {}}};
         if (*interface.enabled) operations.push_back(std::move(change));
         else operations.insert(operations.begin(), std::move(change));
       }

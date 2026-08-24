@@ -75,6 +75,15 @@ std::string Configuration(const char* interface, const char* address,
   return result;
 }
 
+std::string NeighborConfiguration(const char* interface) {
+  return "<config><interfaces><interface><name>" + std::string(interface) +
+      "</name><ipv4><address><ip>198.51.100.123</ip>"
+      "<prefix-length>24</prefix-length></address>"
+      "<neighbor><ip>198.51.100.200</ip>"
+      "<link-layer-address>02:00:00:00:00:c8</link-layer-address>"
+      "</neighbor></ipv4></interface></interfaces></config>";
+}
+
 TEST(FreeBsdIpBackendTest, AppliesAndRollsBackAddressAndObservedMtu) {
   const char* interface = TestInterface();
   if (!interface)
@@ -112,6 +121,17 @@ TEST(FreeBsdIpBackendTest, CompensatesAfterLaterOperationFails) {
   EXPECT_FALSE(backend->Reconcile("<config/>", desired, &error));
   EXPECT_NE(error.find("dang-missing0"), std::string::npos) << error;
   EXPECT_FALSE(AddressExists(interface, "198.51.100.124"));
+}
+
+TEST(FreeBsdIpBackendTest, AppliesAndRollsBackStaticNeighbor) {
+  const char* interface = TestInterface();
+  if (!interface)
+    GTEST_SKIP() << "set DANG_PRIVILEGED_IP_INTERFACE to a disposable interface";
+  const std::string configured = NeighborConfiguration(interface);
+  auto backend = MakePlatformBackend();
+  std::string error;
+  ASSERT_TRUE(backend->Reconcile("<config/>", configured, &error)) << error;
+  ASSERT_TRUE(backend->Reconcile(configured, "<config/>", &error)) << error;
 }
 
 }  // namespace

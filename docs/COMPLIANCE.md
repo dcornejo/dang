@@ -419,7 +419,8 @@ address work before activation and publishes running only after all actions
 succeed. It prints English apply/rollback actions. Linux uses direct,
 acknowledged rtnetlink operations for enabled state, IPv4/IPv6 addresses,
 equal per-family link MTUs, and static neighbors; FreeBSD reconciles enabled
-state, equal per-family MTUs, and addresses through native interface ioctls. It
+state, equal per-family MTUs, and addresses through native interface ioctls and
+static neighbors through acknowledged route-netlink requests. It
 derives a limited legacy
 `/interfaces-state` tree from the last applied configuration.
 The shared platform parser now retains RFC 8344 IPv4/IPv6 MTUs and static
@@ -433,10 +434,11 @@ assigned prefixes, and complete ARP/IPv6 neighbor entries for configured
 interfaces, but not counters, duplicate-address detection, or unconfigured
 system-controlled interfaces.
 Address and neighbor changes made by other agents are not reconciled. FreeBSD
-still lacks neighbor application and live-state publication; its privileged
-epair smoke covers address/MTU apply, exact rollback, and forced partial-failure
-compensation. It therefore does not claim operational compliance with RFC 8343
-or RFC 8344.
+does not yet publish live kernel state, and privileged IPv6-neighbor coverage
+remains.
+Its privileged epair smoke covers address/MTU/IPv4-neighbor apply, exact
+rollback, and forced partial-failure compensation. It therefore does not claim
+operational compliance with RFC 8343 or RFC 8344.
 
 The transaction machinery is implementation safety behavior, not an RFC 8343
 or RFC 8344 compliance claim. Dynamic capacity rejection, dependency cycles,

@@ -55,6 +55,9 @@ and releases follow Semantic Versioning.
 - Replaced the FreeBSD `/sbin/ifconfig` adapter with native interface ioctls
   for flags, MTU, and IPv4/IPv6 addresses, including retained observed state,
   reverse partial-failure compensation, and disposable-epair validation.
+- Added acknowledged native FreeBSD route-netlink operations for permanent
+  IPv4/IPv6 neighbors, ordered after address creation and before address removal,
+  with exact rollback and privileged disposable-epair coverage.
 - Removed the now-unused external command runner from the IP plugin.
 - Added deterministic multi-session NMDA stress coverage that drives 200
   operational retrievals through eight simultaneously active plugin callbacks.

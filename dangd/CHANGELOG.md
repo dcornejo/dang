@@ -46,6 +46,8 @@
   rtnetlink dump, including static/dynamic origin and IPv6 state metadata.
 - Added native FreeBSD `SIOC*` application for link flags, MTU, and IPv4/IPv6
   addresses with exact transaction rollback and partial-failure compensation.
+- Added acknowledged FreeBSD route-netlink application and rollback for static
+  IPv4/IPv6 neighbors, preserving address/neighbor dependency ordering.
 - Added opt-in privileged FreeBSD backend tests and removed the obsolete
   command-execution helper from the IP plugin.
 - Verified concurrent operational publication with a thread-safe test provider,

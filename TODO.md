@@ -15,14 +15,15 @@ stays in this file with its remaining work rewritten precisely.
 
 ### RFC 8343/8344 native IP management closure
 
-- Add FreeBSD routing-socket neighbor application and publish live FreeBSD
+- Publish live FreeBSD
   link/address/neighbor state; reconcile external address and neighbor drift;
-  and add privileged neighbor coverage on FreeBSD. FreeBSD now applies enabled
-  state, equal per-family MTUs, and IPv4/IPv6 addresses through native `SIOC*`
-  ioctls, with retained live link snapshots and reverse partial-failure
+  and broaden privileged IPv6 neighbor coverage on FreeBSD. FreeBSD now applies
+  enabled state, equal per-family MTUs, and IPv4/IPv6 addresses through native
+  `SIOC*` ioctls and static neighbors through acknowledged route-netlink
+  requests, with retained live link snapshots and reverse partial-failure
   compensation. Automated privileged tests target a disposable interface; a
-  FreeBSD 16 epair smoke passed address/MTU apply, exact rollback, and forced
-  partial-failure compensation. Linux applies enabled state, IPv4/IPv6
+  FreeBSD 16 epair smoke passed address/MTU/IPv4-neighbor apply, exact rollback,
+  and forced partial-failure compensation. Linux applies enabled state, IPv4/IPv6
   addresses, equal per-family MTUs, and static neighbors with acknowledged
   rtnetlink requests. It observes live link flags/MTU, compensates a partially
   failed request sequence, and retains the exact observed link snapshot until
