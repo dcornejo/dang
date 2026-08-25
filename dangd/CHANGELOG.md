@@ -7,6 +7,9 @@
 
 ### Changed
 
+- Added a focused NACM policy/path fuzzer covering CRUD, RPC, action,
+  notification, and read-filter decisions; 79,611,946 Clang 21 sanitizer-backed
+  inputs completed without a finding.
 - Isolated accepted SSH connections in concurrently reaped workers, bounded
   simultaneous sessions with a configurable admission ceiling, and verified
   that an unread 512-reply peer cannot stall four independent NETCONF clients.

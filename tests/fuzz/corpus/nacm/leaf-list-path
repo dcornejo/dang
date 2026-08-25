@@ -1,0 +1,3 @@
+<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm" xmlns:f="urn:fuzz"><groups><group><name>users</name><user-name>fuzz-user</user-name></group></groups><rule-list><name>data</name><group>users</group><rule><name>leaf-list</name><path>/f:system/f:tag[.=&quot;operator's&quot;]</path><access-operations>*</access-operations><action>permit</action></rule></rule-list></nacm>
+@@INSTANCE-PATH@@
+/{urn:fuzz}system/{urn:fuzz}tag[.="operator's"]

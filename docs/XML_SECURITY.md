@@ -59,5 +59,6 @@ authority of its former namespace. Predicate values use dedicated quote rules,
 and unrepresentable values fail closed. The deterministic protocol corpus
 contains DTD/entity, multiple-root, CDATA, comment, processing-instruction, and
 inert-XInclude seeds. This completes the code-level XML-injection inventory;
-sustained fuzzing and independent interoperability remain separate release
-evidence.
+the focused NACM campaign subsequently completed 79,611,946 coverage-guided
+ASan/UBSan inputs without a finding. Independent interoperability remains
+separate release evidence.

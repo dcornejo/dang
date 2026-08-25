@@ -7,6 +7,7 @@
 #include "yang/netconf_filter.h"
 #include "yang/resource_limits.h"
 
+#include <algorithm>
 #include <charconv>
 #include <cctype>
 #include <iterator>

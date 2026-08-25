@@ -3,6 +3,7 @@
 
 #include "yang/netconf_transport.h"
 
+#include <algorithm>
 #include <cctype>
 #include <ranges>
 #include <set>

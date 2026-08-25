@@ -686,16 +686,20 @@ if(YANG_BUILD_FUZZERS)
   endif()
   add_executable(yang_frontend_fuzz tests/fuzz/frontend_fuzz.cc)
   add_executable(yang_protocol_fuzz tests/fuzz/protocol_fuzz.cc)
+  add_executable(yang_nacm_fuzz tests/fuzz/nacm_fuzz.cc)
   if(YANG_FUZZ_STANDALONE)
     target_sources(yang_frontend_fuzz PRIVATE tests/fuzz/standalone_fuzz_main.cc)
     target_sources(yang_protocol_fuzz PRIVATE tests/fuzz/standalone_fuzz_main.cc)
+    target_sources(yang_nacm_fuzz PRIVATE tests/fuzz/standalone_fuzz_main.cc)
   endif()
-  foreach(fuzz_target IN ITEMS yang_frontend_fuzz yang_protocol_fuzz)
+  foreach(fuzz_target IN ITEMS yang_frontend_fuzz yang_protocol_fuzz
+                               yang_nacm_fuzz)
     target_compile_features(${fuzz_target} PRIVATE cxx_std_20)
     target_link_libraries(${fuzz_target} PRIVATE yang::yang)
   endforeach()
   if(NOT YANG_FUZZ_STANDALONE)
-    foreach(fuzz_target IN ITEMS yang_frontend_fuzz yang_protocol_fuzz)
+    foreach(fuzz_target IN ITEMS yang_frontend_fuzz yang_protocol_fuzz
+                                 yang_nacm_fuzz)
       target_compile_options(${fuzz_target} PRIVATE
         -fsanitize=fuzzer -fno-omit-frame-pointer)
       target_link_options(${fuzz_target} PRIVATE

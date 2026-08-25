@@ -1,6 +1,7 @@
 // Copyright 2026 David Cornejo
 // SPDX-License-Identifier: Apache-2.0
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>

@@ -8,6 +8,7 @@
 #include "dangd/plugin_worker_runtime.h"
 #include "yang/resource_limits.h"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <string>

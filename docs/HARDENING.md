@@ -26,14 +26,17 @@ arena, so the implementation now reacquires nodes by stable ID after growth.
 `yang_frontend_fuzz` covers UTF-8 decoding, lexing, statement parsing, YIN XML
 loading, and YIN-tree JSON loading. `yang_protocol_fuzz` covers the shared
 strict XML parser, RFC 6242 framing, RFC 6241 subtree and XPath filters, RFC
-8341 NACM loading, and versioned datastore snapshot restoration. Persistence exposes an in-memory
-restore entry point so fuzzing does not depend on temporary-file behavior.
-Its NACM mode accepts a policy followed by a binary NUL or the textual
+8341 NACM loading, and versioned datastore snapshot restoration. The dedicated
+`yang_nacm_fuzz` target sends every input through NACM instead of spending
+coverage time on protocol dispatch. Persistence exposes an in-memory restore
+entry point so fuzzing does not depend on temporary-file behavior.
+The NACM targets accept a policy followed by a binary NUL or the textual
 `@@INSTANCE-PATH@@` marker and an attacker-controlled expanded instance path.
 When policy loading succeeds, the target exercises all four data-write/read
-authorization bits and readable-data filtering. Seeds cover keyed list and
-leaf-list predicates with namespace and quote edge cases, plus DTD/entity,
-multiple-root, CDATA, comment, processing-instruction, and inert-XInclude XML.
+authorization bits, RPC/action/notification authorization, and readable-data
+filtering. Seeds cover keyed list and leaf-list predicates with namespace and
+quote edge cases, plus DTD/entity, multiple-root, CDATA, comment,
+processing-instruction, and inert-XInclude XML.
 Inputs larger than 1 MiB are rejected by each harness so every iteration has a
 deterministic upper bound.
 
@@ -48,13 +51,21 @@ ASAN_OPTIONS=detect_container_overflow=0 \
   ./build-fuzzers/yang_frontend_fuzz tests/fuzz/corpus/frontend
 ASAN_OPTIONS=detect_container_overflow=0 \
   ./build-fuzzers/yang_protocol_fuzz tests/fuzz/corpus/protocol
+ASAN_OPTIONS=detect_container_overflow=0 \
+  ./build-fuzzers/yang_nacm_fuzz tests/fuzz/corpus/nacm
 ```
 
 For continuous coverage-guided fuzzing, configure with Homebrew LLVM and leave
 `YANG_FUZZ_STANDALONE=OFF`; CMake then links the target with
 `-fsanitize=fuzzer`. Seed files put a one-byte dispatch selector before the
-actual payload. Never treat a bounded smoke run as a substitute for sustained
-fuzzing.
+actual multiplexed-protocol payload; dedicated NACM seeds have no selector.
+
+The focused release campaign ran on Ubuntu 26.04 with Clang/libFuzzer 21,
+ASan, UBSan, leak detection, a five-second per-input timeout, and a 4 GiB RSS
+limit. It completed 79,611,946 inputs in 301 seconds, grew to 190 coverage
+features, used 333 MiB peak RSS, and produced no crash, timeout, leak, or
+undefined-behavior artifact. The identical standalone target completed 1,140
+deterministic sanitizer mutations on Apple Silicon.
 
 Performance workloads, execution instructions, comparison policy, and the
 initial Apple Silicon baseline are maintained in `docs/BENCHMARKS.md`.

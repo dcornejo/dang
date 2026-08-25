@@ -3,6 +3,7 @@
 
 #include "dangd/tls_transport.h"
 
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <cctype>

@@ -210,9 +210,10 @@ body as one authorization unit. Action
 requests are authorized before their parent is resolved, so denied users cannot
 use the existence error to probe datastore contents.
 
-Remaining gaps are tracked in `TODO.md`: sustained fuzzing and independent
-interoperability testing. SSH uses explicit public-key authorization; TLS
-supports CN, DNS SAN, and URI SAN selection plus exact local-account mapping.
+Remaining gaps are tracked in `TODO.md`: independent interoperability testing
+and the final intentional-deviation review. SSH uses explicit public-key
+authorization; TLS supports CN, DNS SAN, and URI SAN selection plus exact
+local-account mapping.
 Transport external
 groups require explicit trusted provenance and bounded, unique values. Every
 recovery-user RPC attempt emits a privacy-minimal host audit record, and only
@@ -228,8 +229,9 @@ embedded NULs, DTD/entity declarations, excess resources, and unexpected
 multiple roots. Internal reparses, namespace rebinding, predicate quoting, and
 output construction/escaping are inventoried in
 [XML_SECURITY.md](XML_SECURITY.md); the code-level XML-injection audit is
-complete. Sustained fuzzing and independent interoperability remain release
-evidence rather than implementation gaps.
+complete. A focused Clang/libFuzzer ASan/UBSan campaign completed 79,611,946
+NACM inputs without a finding. Independent interoperability remains release
+evidence rather than an implementation gap.
 When a runtime schema is supplied, unmodeled data is pruned even for recovery
 users or disabled NACM; only authorization decisions are bypassed. Keyed list
 identity is derived only from declared keys, and incomplete or ambiguous entries

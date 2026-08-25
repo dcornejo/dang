@@ -4,6 +4,7 @@
 #include "dangd/application.h"
 #include "dangd/plugin_worker_runtime.h"
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <fstream>

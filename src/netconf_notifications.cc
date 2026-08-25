@@ -6,6 +6,7 @@
 
 #include "yang/resource_limits.h"
 
+#include <algorithm>
 #include <charconv>
 #include <ctime>
 #include <deque>

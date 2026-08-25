@@ -7,6 +7,7 @@
 #include "yang/resource_limits.h"
 #include "yang/utf8.h"
 
+#include <algorithm>
 #include <cctype>
 #include <functional>
 #include <initializer_list>

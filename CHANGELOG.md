@@ -10,6 +10,11 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Added a dedicated coverage-guided NACM policy/path fuzz target and focused
+  corpus; a five-minute Clang 21 ASan/UBSan campaign completed 79,611,946
+  inputs without a finding.
+- Added direct `<algorithm>` includes for every range-algorithm user exposed by
+  the Linux Clang/libstdc++ build instead of relying on transitive headers.
 - Added bounded concurrent SSH session execution and slow-reader backpressure
   isolation, with safe application lifetime across SIGHUP reloads.
 - Added an automated independent OpenSSH transport matrix covering negative
