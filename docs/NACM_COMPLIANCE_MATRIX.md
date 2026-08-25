@@ -3,10 +3,12 @@
 
 # RFC 8341 NACM compliance matrix
 
-This executable-evidence index follows RFC 8341 section order. A listed test is
-evidence for the stated behavior, not a substitute for independent
-interoperability testing. Open items remain in [TODO.md](../TODO.md); the
-high-level status and variance statement is in [COMPLIANCE.md](COMPLIANCE.md).
+This executable-evidence index follows RFC 8341 section order. In addition to
+the project tests below, the focused decision matrix in
+[`tests/interoperability`](../tests/interoperability/README.md) passed against
+the independent sysrepo 3.7.11 NACM engine with libyang 3.13.6 on Ubuntu 26.04.
+Open transport evidence remains in [TODO.md](../TODO.md); the high-level status
+and variance statement is in [COMPLIANCE.md](COMPLIANCE.md).
 
 ## Sections 3.1–3.3: model and policy controls
 
@@ -119,7 +121,7 @@ No open core-server evidence item remains for initial operation.
 No open core-server or `dangd` SSH integration item remains for session
 establishment. A manual OpenSSH public-key authentication, `netconf` subsystem,
 RPC, and clean-close smoke interaction passed on 2026-08-23 using the documented
-command. A broader independent interoperability matrix remains release evidence.
+command. A broader transport/client matrix remains release evidence.
 
 ## Section 3.4.3: access-denied errors
 
@@ -239,9 +241,11 @@ No open core-server evidence item remains for policy snapshot isolation.
   `NetconfServerTest.FailsRemoteCopiesBeforeTargetMutation`.
 - Denied write accounting: `NacmTest.CountsDeniedOperationsWritesAndNotifications`.
 
-No open core-server data-node evidence item remains. External interoperability,
-host-provider authorization policy, and long-running concurrency evidence remain
-integration responsibilities.
+No open core-server data-node evidence item remains. The sysrepo comparison
+independently confirmed permitted sibling read filtering, denied-leaf omission,
+permitted update, denied update, group membership, and deny-by-default behavior.
+Host-provider authorization policy and long-running deployment concurrency
+remain integration responsibilities.
 
 ## Section 3.4.6: outgoing notification authorization
 
@@ -298,6 +302,15 @@ before an `operation-failed` reply is returned.
 
 The dedicated NACM Clang/libFuzzer target completed 79,611,946 inputs under
 ASan/UBSan and leak detection without a crash, timeout, leak, or undefined-
-behavior finding. Open evidence is independent RFC 8341 interoperability and
-the final intentional-deviation review. No full RFC 8341 compliance claim is
-made until those TODO items and every open entry above are closed.
+behavior finding. On 2026-08-25, sysrepo 3.7.11 independently produced the same
+expected allow/filter/deny outcomes for group rules, read and write defaults,
+data-path rules, and RPC execution rules; the reproducible source and transcript
+format live in `tests/interoperability`.
+
+The final intentional-deviation review found no deliberate variance from RFC
+8341 in the implemented authorization semantics. Host-selected recovery
+identities, authenticated external-group provenance, and fail-closed rejection
+of paths that cannot be represented safely are implementation and security
+policy choices permitted by the standard, not semantic deviations. Full
+compliance is not yet claimed because the open external RFC 5277/NACM
+notification transport case above remains.

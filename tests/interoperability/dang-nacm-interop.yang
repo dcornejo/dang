@@ -1,0 +1,38 @@
+// Copyright 2026 David Cornejo
+// SPDX-License-Identifier: Apache-2.0
+
+module dang-nacm-interop {
+  yang-version 1.1;
+  namespace "urn:dang:nacm:interop";
+  prefix dni;
+
+  import ietf-netconf-acm {
+    prefix nacm;
+  }
+
+  organization "dang project";
+  description
+    "Small model used to compare dang and an independent RFC 8341 engine.";
+
+  revision 2026-08-25 {
+    description "Initial interoperability fixture.";
+  }
+
+  container system {
+    leaf hostname {
+      type string;
+    }
+    leaf secret {
+      nacm:default-deny-all;
+      type string;
+    }
+  }
+
+  rpc reboot {
+    input {
+      leaf delay {
+        type uint16;
+      }
+    }
+  }
+}

@@ -7,6 +7,9 @@
 
 ### Changed
 
+- Compared `dangd` NACM decisions with the independent sysrepo 3.7.11 engine at
+  its datastore authorization boundary, including silent read filtering and
+  denied write/RPC cases; only external notification transport evidence remains.
 - Added a focused NACM policy/path fuzzer covering CRUD, RPC, action,
   notification, and read-filter decisions; 79,611,946 Clang 21 sanitizer-backed
   inputs completed without a finding.

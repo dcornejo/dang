@@ -10,6 +10,10 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Added a reproducible NACM decision interoperability check against sysrepo's
+  independent RFC 8341 engine. Positive and negative read, update, group,
+  default, and RPC cases passed on sysrepo 3.7.11/libyang 3.13.6, and the final
+  intentional-deviation review found no deliberate semantic variance.
 - Added a dedicated coverage-guided NACM policy/path fuzz target and focused
   corpus; a five-minute Clang 21 ASan/UBSan campaign completed 79,611,946
   inputs without a finding.

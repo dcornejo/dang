@@ -104,6 +104,9 @@ install(FILES LICENSE NOTICE README.md TODO.md CHANGELOG.md docs/STANDARDS.md
 install(FILES examples/example.yang examples/library_example.cc
   examples/config_validation_example.cc
   DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/yang/examples)
+install(DIRECTORY tests/interoperability
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/yang/tests
+  USE_SOURCE_PERMISSIONS)
 
 if(YANG_BUILD_DANGD)
   find_package(OpenSSL REQUIRED)

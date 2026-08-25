@@ -210,10 +210,14 @@ body as one authorization unit. Action
 requests are authorized before their parent is resolved, so denied users cannot
 use the existence error to probe datastore contents.
 
-Remaining gaps are tracked in `TODO.md`: independent interoperability testing
-and the final intentional-deviation review. SSH uses explicit public-key
-authorization; TLS supports CN, DNS SAN, and URI SAN selection plus exact
-local-account mapping.
+The independent sysrepo 3.7.11 NACM decision comparison and final intentional-
+deviation review are complete. The comparison covered positive and negative
+group, default, data-read, data-update, and RPC-execution decisions using the
+real sysrepo datastore boundary. No intentional RFC 8341 semantic variance was
+identified. The remaining gap in `TODO.md` is an external RFC 5277 transport
+case proving that NACM permits one event and suppresses another for one NETCONF
+subscriber. SSH uses explicit public-key authorization; TLS supports CN, DNS
+SAN, and URI SAN selection plus exact local-account mapping.
 Transport external
 groups require explicit trusted provenance and bounded, unique values. Every
 recovery-user RPC attempt emits a privacy-minimal host audit record, and only
@@ -230,8 +234,9 @@ multiple roots. Internal reparses, namespace rebinding, predicate quoting, and
 output construction/escaping are inventoried in
 [XML_SECURITY.md](XML_SECURITY.md); the code-level XML-injection audit is
 complete. A focused Clang/libFuzzer ASan/UBSan campaign completed 79,611,946
-NACM inputs without a finding. Independent interoperability remains release
-evidence rather than an implementation gap.
+NACM inputs without a finding. The reusable sysrepo comparison is in
+`tests/interoperability`; broader client/version matrices remain release
+evidence rather than implementation gaps.
 When a runtime schema is supplied, unmodeled data is pruned even for recovery
 users or disabled NACM; only authorization decisions are bypassed. Keyed list
 identity is derived only from declared keys, and incomplete or ambiguous entries
@@ -240,8 +245,8 @@ containing both XPath quote forms also fail closed as unrepresentable.
 Live datastore mutations
 now publish their durable snapshot before success is returned and compensate a
 failed save by restoring the prior snapshot and live backend/NACM state.
-Until the remaining work closes, the project must not describe NACM as fully
-compliant.
+Until the remaining external notification case closes, the project must not
+describe NACM as fully compliant.
 
 The section-indexed implemented and open evidence is maintained in the
 [RFC 8341 NACM compliance matrix](NACM_COMPLIANCE_MATRIX.md).
