@@ -7,6 +7,14 @@
 
 ### Changed
 
+- Completed external NACM notification evidence with ncclient 0.6.17 over
+  mutual TLS: the permitted current YANG Library event was delivered, the
+  denied legacy event was absent, and the denial counter increased exactly once.
+- Poll idle TLS sessions so queued notifications and timers progress without
+  waiting for another client request, and support older packaged pugixml APIs
+  when constructing YANG Library XML.
+- Use the non-mutating IP backend for the conceptual plugin test so its result
+  no longer depends on an interface named `eth0` existing on the build host.
 - Compared `dangd` NACM decisions with the independent sysrepo 3.7.11 engine at
   its datastore authorization boundary, including silent read filtering and
   denied write/RPC cases; only external notification transport evidence remains.

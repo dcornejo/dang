@@ -181,6 +181,23 @@ if(YANG_BUILD_DANGD)
     -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
   set_target_properties(dangd_ip_management_plugin PROPERTIES PREFIX "")
   if(YANG_BUILD_TESTS)
+    # The conceptual plugin test verifies planning and XML integration without
+    # mutating or depending on interfaces of the build host. Native backends
+    # have separate privileged platform tests below.
+    add_library(dangd_test_ip_management_plugin MODULE
+      dangd/plugins/ip_management_plugin.cc
+      dangd/plugins/ip_management/platform_config.cc
+      dangd/plugins/ip_management/unsupported/backend.cc)
+    target_compile_features(dangd_test_ip_management_plugin PRIVATE cxx_std_20)
+    target_include_directories(dangd_test_ip_management_plugin PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/generated)
+    target_link_libraries(dangd_test_ip_management_plugin PRIVATE
+      pugixml::pugixml)
+    target_compile_options(dangd_test_ip_management_plugin PRIVATE
+      -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+    set_target_properties(dangd_test_ip_management_plugin PROPERTIES PREFIX "")
+  endif()
+  if(YANG_BUILD_TESTS)
     add_library(dangd_test_plugin_support SHARED
       dangd/test_plugins/plugin_test_support.cc)
     target_compile_features(dangd_test_plugin_support PRIVATE cxx_std_20)
@@ -540,6 +557,15 @@ if(YANG_BUILD_TESTS)
   enable_testing()
   find_package(GTest CONFIG REQUIRED)
   find_package(Threads REQUIRED)
+  if(YANG_BUILD_DANGD)
+    add_executable(nacm_notification_interop_server
+      tests/interoperability/nacm_notification_server.cc)
+    target_compile_features(nacm_notification_interop_server PRIVATE cxx_std_20)
+    target_link_libraries(nacm_notification_interop_server PRIVATE
+      dangd_core Threads::Threads)
+    target_compile_options(nacm_notification_interop_server PRIVATE
+      -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+  endif()
   add_executable(yang_tests
     tests/lexer_test.cc
     tests/parser_test.cc
@@ -579,7 +605,7 @@ if(YANG_BUILD_TESTS)
       DANG_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
       DANG_TEST_PLUGIN_WORKER_PATH="$<TARGET_FILE:dangd-plugin-worker>"
       DANG_TEST_PLUGIN_PATH="$<TARGET_FILE:dangd_example_plugin>"
-      DANG_TEST_IP_PLUGIN_PATH="$<TARGET_FILE:dangd_ip_management_plugin>"
+      DANG_TEST_IP_PLUGIN_PATH="$<TARGET_FILE:dangd_test_ip_management_plugin>"
       DANG_TEST_PROVIDER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_provider_plugin>"
       DANG_TEST_CONSUMER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_consumer_plugin>"
       DANG_TEST_BROKEN_PLUGIN_PATH="$<TARGET_FILE:dangd_test_broken_discovery_plugin>")
@@ -624,7 +650,7 @@ if(YANG_BUILD_TESTS)
       DANG_TEST_XPATH_ABSENCE_MUST_PLUGIN_PATH="$<TARGET_FILE:dangd_test_xpath_absence_must_plugin>"
       DANG_TEST_XPATH_ABSENCE_WHEN_PLUGIN_PATH="$<TARGET_FILE:dangd_test_xpath_absence_when_plugin>")
     add_dependencies(dangd_tests dangd-plugin-worker
-      dangd_example_plugin dangd_ip_management_plugin
+      dangd_example_plugin dangd_test_ip_management_plugin
       dangd_test_provider_plugin dangd_test_consumer_plugin
       dangd_test_broken_discovery_plugin dangd_test_broken_operational_plugin
       dangd_test_hanging_operational_plugin

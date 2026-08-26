@@ -38,6 +38,11 @@ connection.Poll();  // writable/timer/notification/cancellation processing
 connection.TransportClosed();  // EOF or secure-transport failure
 ```
 
+The TLS listeners poll idle connections at a bounded interval and call the
+adapter even when the peer sends no new bytes. This is required for live RFC
+5277 notifications, confirmed-commit timers, cancellation, and inactivity
+deadlines; a blocking read must not postpone server-originated output.
+
 Hosts should install `NetconfServer::SetRecoveryAuditSink` whenever recovery
 users are configured. The sink receives a record before each recovery-user RPC
 is parsed, including malformed attempts. It contains only session ID, username,

@@ -1,0 +1,39 @@
+<!-- Copyright 2026 David Cornejo -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+  <enable-nacm>true</enable-nacm>
+  <read-default>permit</read-default>
+  <write-default>deny</write-default>
+  <exec-default>deny</exec-default>
+  <groups>
+    <group>
+      <name>subscribers</name>
+      <user-name>alice</user-name>
+    </group>
+  </groups>
+  <rule-list>
+    <name>subscriber-access</name>
+    <group>subscribers</group>
+    <rule>
+      <name>subscribe</name>
+      <module-name>notifications</module-name>
+      <rpc-name>create-subscription</rpc-name>
+      <access-operations>exec</access-operations>
+      <action>permit</action>
+    </rule>
+    <rule>
+      <name>current-library-update</name>
+      <module-name>ietf-yang-library</module-name>
+      <notification-name>yang-library-update</notification-name>
+      <access-operations>read</access-operations>
+      <action>permit</action>
+    </rule>
+    <rule>
+      <name>legacy-library-change</name>
+      <module-name>ietf-yang-library</module-name>
+      <notification-name>yang-library-change</notification-name>
+      <access-operations>read</access-operations>
+      <action>deny</action>
+    </rule>
+  </rule-list>
+</nacm>

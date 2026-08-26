@@ -30,3 +30,31 @@ This focused decision comparison does not claim compatibility with every
 sysrepo or Netopeer2 release, nor does it replace transport interoperability
 testing. The exact independent versions and results used for compliance
 evidence are recorded in the NACM compliance matrix.
+
+## External RFC 5277 notification filtering
+
+`run_ncclient_notification_interop.sh` starts the production mutual-TLS server
+around a deterministic event trigger and connects with the independent Python
+ncclient implementation. One YANG Library publication produces a current and a
+legacy event. NACM permits `yang-library-update`, suppresses
+`yang-library-change`, and increments `denied-notifications` exactly once.
+
+On an isolated Ubuntu validation host:
+
+```console
+sudo apt-get install python3-ncclient
+cmake -S . -B build -DYANG_BUILD_TESTS=ON -DYANG_BUILD_DANGD=ON
+cmake --build build --target nacm_notification_interop_server
+tests/interoperability/run_ncclient_notification_interop.sh build
+```
+
+The successful transcript is:
+
+```text
+ncclient subscription: PASS
+received yang-library-update: PASS
+suppressed yang-library-change: PASS
+dangd delivery: yang-library-update PASS
+dangd suppression: yang-library-change PASS
+denied-notifications counter: 1 PASS
+```

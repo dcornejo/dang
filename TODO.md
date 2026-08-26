@@ -13,14 +13,6 @@ stays in this file with its remaining work rewritten precisely.
 
 ## Active tasks
 
-### RFC 8341 NACM compliance closure
-
-- Run an external RFC 5277 notification-over-NETCONF interoperability case in
-  which NACM permits one event and suppresses another for the same subscriber.
-  The independent sysrepo 3.7.11 decision comparison and final intentional-
-  deviation review are complete; this remaining transport-level event case is
-  required before claiming full RFC 8341 compliance.
-
 ### RFC 8342 / RFC 8526 NMDA compliance closure
 
 - Run an external NMDA interoperability suite. The concurrency release soak

@@ -10,6 +10,15 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Completed RFC 8341 compliance evidence with an external ncclient 0.6.17
+  mutual-TLS subscription that received a permitted YANG Library notification,
+  suppressed its paired denied legacy event, and incremented the denial counter.
+- Made idle TLS sessions poll server-originated notification/timer work instead
+  of blocking indefinitely for more client bytes.
+- Made YANG Library XML construction compatible with packaged pugixml releases
+  that require explicit C-string text assignment.
+- Isolated the conceptual IP-plugin planning test from native host interfaces;
+  production Linux/FreeBSD backends remain covered by their platform tests.
 - Added a reproducible NACM decision interoperability check against sysrepo's
   independent RFC 8341 engine. Positive and negative read, update, group,
   default, and RPC cases passed on sysrepo 3.7.11/libyang 3.13.6, and the final

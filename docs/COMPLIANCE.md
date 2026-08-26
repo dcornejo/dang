@@ -182,7 +182,7 @@ is made.
 
 ### RFC 8341 — NACM
 
-Status: **substantial, compliance closure incomplete**.
+Status: **implemented; project compliance evidence complete**.
 
 Implemented behavior includes datastore-managed `ietf-netconf-acm`, secure
 seeding, enable/default controls, internal and external groups, ordered rule
@@ -214,10 +214,11 @@ The independent sysrepo 3.7.11 NACM decision comparison and final intentional-
 deviation review are complete. The comparison covered positive and negative
 group, default, data-read, data-update, and RPC-execution decisions using the
 real sysrepo datastore boundary. No intentional RFC 8341 semantic variance was
-identified. The remaining gap in `TODO.md` is an external RFC 5277 transport
-case proving that NACM permits one event and suppresses another for one NETCONF
-subscriber. SSH uses explicit public-key authorization; TLS supports CN, DNS
-SAN, and URI SAN selection plus exact local-account mapping.
+identified. An external Python ncclient 0.6.17 session then proved that one
+RFC 5277 subscriber receives the permitted current YANG Library event while
+the paired legacy event is suppressed and counted once. SSH uses explicit
+public-key authorization; TLS supports CN, DNS SAN, and URI SAN selection plus
+exact local-account mapping.
 Transport external
 groups require explicit trusted provenance and bounded, unique values. Every
 recovery-user RPC attempt emits a privacy-minimal host audit record, and only
@@ -245,11 +246,11 @@ containing both XPath quote forms also fail closed as unrepresentable.
 Live datastore mutations
 now publish their durable snapshot before success is returned and compensate a
 failed save by restoring the prior snapshot and live backend/NACM state.
-Until the remaining external notification case closes, the project must not
-describe NACM as fully compliant.
+The RFC 8341 section matrix, independent decision comparison, negative cases,
+notification transport evidence, and intentional-deviation review are complete.
 
-The section-indexed implemented and open evidence is maintained in the
-[RFC 8341 NACM compliance matrix](NACM_COMPLIANCE_MATRIX.md).
+The section-indexed implementation and interoperability evidence is maintained
+in the [RFC 8341 NACM compliance matrix](NACM_COMPLIANCE_MATRIX.md).
 
 ### RFC 8342 — NMDA and RFC 8526 — NETCONF NMDA operations
 

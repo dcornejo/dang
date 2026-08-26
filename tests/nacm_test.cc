@@ -3,6 +3,8 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+
 #include "yang/nacm.h"
 #include "yang/resource_limits.h"
 

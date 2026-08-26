@@ -15,6 +15,7 @@
 #include <string_view>
 
 #include <netdb.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -328,6 +329,19 @@ int RunTlsServer(Application& application, const TlsServerOptions& options,
         application.server(), stream, session_id++, std::move(identity));
     std::array<char, 16 * 1024> buffer{};
     while (adapter.valid()) {
+      if (SSL_pending(tls.get()) == 0) {
+        pollfd descriptor{connection, POLLIN, 0};
+        const int ready = poll(&descriptor, 1, 50);
+        if (ready == 0) {
+          adapter.Poll();
+          continue;
+        }
+        if (ready < 0) {
+          if (errno == EINTR) continue;
+          break;
+        }
+        if ((descriptor.revents & POLLIN) == 0) break;
+      }
       std::size_t count = 0;
       if (SSL_read_ex(tls.get(), buffer.data(), buffer.size(), &count) != 1)
         break;
@@ -452,6 +466,24 @@ int RunReloadableTlsServer(
           application->server(), stream, session_id++, std::move(identity));
       std::array<char, 16 * 1024> buffer{};
       while (adapter.valid()) {
+        if (reload_requested) {
+          replacement = reload();
+          adapter.Poll();
+          break;
+        }
+        if (SSL_pending(tls.get()) == 0) {
+          pollfd descriptor{connection, POLLIN, 0};
+          const int ready = poll(&descriptor, 1, 50);
+          if (ready == 0) {
+            adapter.Poll();
+            continue;
+          }
+          if (ready < 0) {
+            if (errno == EINTR) continue;
+            break;
+          }
+          if ((descriptor.revents & POLLIN) == 0) break;
+        }
         std::size_t count = 0;
         if (SSL_read_ex(tls.get(), buffer.data(), buffer.size(), &count) != 1) {
           if (reload_requested) {

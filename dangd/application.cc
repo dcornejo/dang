@@ -357,22 +357,22 @@ std::string BuildYangLibraryXml(
     const bool is_implemented = implemented.contains(module->name);
     pugi::xml_node entry = set.append_child(
         is_implemented ? "module" : "import-only-module");
-    entry.append_child("name").text() = module->name;
+    entry.append_child("name").text() = module->name.c_str();
     if (module->revision)
-      entry.append_child("revision").text() = *module->revision;
+      entry.append_child("revision").text() = module->revision->c_str();
     else if (!is_implemented)
       entry.append_child("revision").text() = "";
-    entry.append_child("namespace").text() = module->namespace_uri;
+    entry.append_child("namespace").text() = module->namespace_uri.c_str();
     const auto source = std::ranges::find_if(
         plugin_sources, [&](const PluginYangSource& candidate) {
           return candidate.module_name == module->name &&
                  candidate.revision == module->revision;
         });
     if (source != plugin_sources.end() && !source->source_uri.empty())
-      entry.append_child("location").text() = source->source_uri;
+      entry.append_child("location").text() = source->source_uri.c_str();
     if (source != plugin_sources.end() && is_implemented) {
       for (const std::string& feature : source->enabled_features)
-        entry.append_child("feature").text() = feature;
+        entry.append_child("feature").text() = feature.c_str();
     }
     if (is_implemented && module->name == "ietf-netconf") {
       for (const char* feature : {"writable-running", "candidate",
@@ -384,13 +384,13 @@ std::string BuildYangLibraryXml(
       entry.append_child("feature").text() = "origin";
     if (is_implemented) {
       for (const std::string& deviation : deviations[module->name])
-        entry.append_child("deviation").text() = deviation;
+        entry.append_child("deviation").text() = deviation.c_str();
     }
     for (const auto& submodule : module->includes) {
       pugi::xml_node child = entry.append_child("submodule");
-      child.append_child("name").text() = submodule->name;
+      child.append_child("name").text() = submodule->name.c_str();
       if (submodule->revision)
-        child.append_child("revision").text() = *submodule->revision;
+        child.append_child("revision").text() = submodule->revision->c_str();
     }
   }
   pugi::xml_node schema = library.append_child("schema");
@@ -405,7 +405,8 @@ std::string BuildYangLibraryXml(
   }
   std::ostringstream without_id;
   library.print(without_id, "  ", pugi::format_raw);
-  library.append_child("content-id").text() = Sha256(without_id.str());
+  const std::string content_id = Sha256(without_id.str());
+  library.append_child("content-id").text() = content_id.c_str();
   std::ostringstream output;
   library.print(output, "  ", pugi::format_raw);
   return output.str();
@@ -503,10 +504,10 @@ DangdOperationalData::DangdOperationalData(
   pugi::xml_node schemas = monitoring_state.append_child("schemas");
   for (const ModelSource& source : model_sources_) {
     pugi::xml_node schema = schemas.append_child("schema");
-    schema.append_child("identifier").text() = source.identifier;
-    schema.append_child("version").text() = source.version;
+    schema.append_child("identifier").text() = source.identifier.c_str();
+    schema.append_child("version").text() = source.version.c_str();
     schema.append_child("format").text() = "yang";
-    schema.append_child("namespace").text() = source.namespace_uri;
+    schema.append_child("namespace").text() = source.namespace_uri.c_str();
     schema.append_child("location").text() = "NETCONF";
   }
   std::ostringstream monitoring_output;

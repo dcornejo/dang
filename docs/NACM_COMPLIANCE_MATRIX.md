@@ -272,7 +272,11 @@ remain integration responsibilities.
   across policy generations:
   `NetconfNotificationsTest.UsesOnePolicySnapshotForReplayAndLiveFanout`.
 
-Open evidence: an external RFC 5277/NACM interoperability run.
+External evidence: Python ncclient 0.6.17 established a mutual-TLS NETCONF
+session, created an RFC 5277 subscription, received the permitted current YANG
+Library event, and observed no second event when NACM rejected the paired legacy
+notification. The daemon independently reported one denied notification. The
+reproducible driver and transcript are in `tests/interoperability`.
 
 ## Sections 3.5 and 5: model and security considerations
 
@@ -311,6 +315,6 @@ The final intentional-deviation review found no deliberate variance from RFC
 8341 in the implemented authorization semantics. Host-selected recovery
 identities, authenticated external-group provenance, and fail-closed rejection
 of paths that cannot be represented safely are implementation and security
-policy choices permitted by the standard, not semantic deviations. Full
-compliance is not yet claimed because the open external RFC 5277/NACM
-notification transport case above remains.
+policy choices permitted by the standard, not semantic deviations. The
+section-indexed implementation evidence, independent decision comparison, and
+external notification filtering case are now complete for RFC 8341.
