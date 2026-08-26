@@ -7,6 +7,11 @@
 
 ### Changed
 
+- Link the common plugin/transport runtime to the platform thread dependency,
+  fixing production executable linkage on FreeBSD.
+- Added opt-in validation that observes a kernel-reported duplicate IPv6 address
+  created by an independent VNET-jail peer and requires RFC 8344 `duplicate`
+  status in the backend's live operational publication.
 - Added a reproducible external ncclient NMDA interaction over production
   mutual TLS and closed the conventional-datastore compliance TODO after all
   retrieval, edit/commit, origin, and negative checks passed.

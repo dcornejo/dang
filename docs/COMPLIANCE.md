@@ -473,10 +473,12 @@ partial-failure compensation. It therefore does not claim operational
 compliance with RFC 8343 or RFC 8344.
 
 The Linux privileged suite induces and observes a real duplicate on a veth
-pair. FreeBSD rejects assigning the same IPv6 address to two interfaces in one
-host before DAD, so its epair suite covers live preferred-state retrieval and
-deterministically covers all native flag mappings; external-peer or VNET-jail
-duplicate injection has not been run.
+pair. The FreeBSD privileged suite uses an epair endpoint moved into a temporary
+VNET jail to supply the required independent network stack: duplicate IPv6 DAD
+was observed on the host endpoint, and the backend published RFC 8344
+`duplicate` status from the live `SIOCGIFAFLAG_IN6` result. The ordinary epair
+suite also covers preferred-state retrieval, while deterministic tests cover
+native flag precedence.
 
 The transaction machinery is implementation safety behavior, not an RFC 8343
 or RFC 8344 compliance claim. Dynamic capacity rejection, dependency cycles,

@@ -111,6 +111,7 @@ install(DIRECTORY tests/interoperability
 if(YANG_BUILD_DANGD)
   find_package(OpenSSL REQUIRED)
   find_package(PkgConfig REQUIRED)
+  find_package(Threads REQUIRED)
   pkg_check_modules(LIBSSH REQUIRED IMPORTED_TARGET libssh)
   add_library(dangd_core
     dangd/application.cc
@@ -129,7 +130,7 @@ if(YANG_BUILD_DANGD)
     DANGD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     DANGD_INSTALL_MODEL_DIR="${CMAKE_INSTALL_FULL_DATADIR}/doc/yang/dangd/models")
   target_link_libraries(dangd_core PUBLIC yang::yang OpenSSL::SSL OpenSSL::Crypto
-    PkgConfig::LIBSSH ${CMAKE_DL_LIBS})
+    PkgConfig::LIBSSH Threads::Threads ${CMAKE_DL_LIBS})
   target_compile_options(dangd_core PRIVATE
     -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 

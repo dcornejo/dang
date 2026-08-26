@@ -10,6 +10,11 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Propagated the platform thread library from `dangd_core` so production
+  executables and downstream consumers link correctly on FreeBSD.
+- Completed current-tree FreeBSD validation with the 386-test suite, all three
+  privileged epair mutation interactions, and live duplicate IPv6 DAD from a
+  temporary VNET-jail peer; added a regression assertion for published status.
 - Completed RFC 8342/RFC 8526 conventional-datastore interoperability evidence
   with ncclient 0.6.17 over mutual TLS, including NMDA retrieval, edit/commit,
   intended visibility, origin metadata/filtering, and required error behavior.

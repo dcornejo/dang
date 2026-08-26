@@ -15,6 +15,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <string_view>
 
 #include <gtest/gtest.h>
 
@@ -199,6 +200,33 @@ TEST(FreeBsdIpBackendTest, MapsIpv6AddressStatusFlags) {
   EXPECT_EQ(FreeBsdAddressStatus(IN6_IFF_DETACHED), "inaccessible");
   EXPECT_EQ(FreeBsdAddressStatus(IN6_IFF_DUPLICATED | IN6_IFF_TENTATIVE),
             "duplicate");
+}
+
+TEST(FreeBsdIpBackendTest, PublishesLiveDuplicateIpv6DadStatus) {
+  const char* interface =
+      std::getenv("DANG_PRIVILEGED_DUPLICATE_IP_INTERFACE");
+  const char* address = std::getenv("DANG_PRIVILEGED_DUPLICATE_IP_ADDRESS");
+  if (!interface || !address)
+    GTEST_SKIP() << "set duplicate-IP interface and address after inducing "
+                    "DAD from an external network stack";
+
+  auto backend = MakePlatformBackend();
+  std::string state;
+  std::string error;
+  ASSERT_TRUE(backend->OperationalXml("<config/>", &state, &error)) << error;
+  const std::size_t interface_start =
+      state.find("<name>" + std::string(interface) + "</name>");
+  ASSERT_NE(interface_start, std::string::npos) << state;
+  const std::size_t interface_end = state.find("</interface>", interface_start);
+  ASSERT_NE(interface_end, std::string::npos) << state;
+  const std::string_view published(state.data() + interface_start,
+                                   interface_end - interface_start);
+  EXPECT_NE(published.find("<ip>" + std::string(address) + "</ip>"),
+            std::string_view::npos)
+      << published;
+  EXPECT_NE(published.find("<status>duplicate</status>"),
+            std::string_view::npos)
+      << published;
 }
 
 }  // namespace
