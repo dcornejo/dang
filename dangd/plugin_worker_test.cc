@@ -371,6 +371,50 @@ TEST(PluginWorkerRuntimeTest, RejectsMissingRuntimeDependency) {
             std::string::npos);
 }
 
+TEST(PluginWorkerRuntimeTest, RestartsCrashedWorkerForNextIndependentRequest) {
+  std::vector<std::string> errors;
+  auto runtime = PluginWorkerRuntime::Load(
+      DANG_TEST_PLUGIN_WORKER_PATH,
+      {DANG_TEST_CRASHING_OPERATIONAL_PLUGIN_PATH}, &errors);
+  ASSERT_NE(runtime, nullptr) << testing::PrintToString(errors);
+
+  // The first publication crashes its worker. The request is reported as a
+  // failure and is deliberately not replayed because callbacks may have
+  // external side effects.
+  const auto first = runtime->OperationalData();
+  ASSERT_EQ(first.size(), 1u);
+  ASSERT_TRUE(first.front().error.has_value());
+  EXPECT_NE(first.front().error->find("worker exited"), std::string::npos);
+
+  // A later independent publication gets a newly spawned, rediscovered worker.
+  // This deliberately crashing fixture therefore exits again; receiving the
+  // crash error rather than "not available" proves that restart occurred.
+  const auto second = runtime->OperationalData();
+  ASSERT_EQ(second.size(), 1u);
+  ASSERT_TRUE(second.front().error.has_value());
+  EXPECT_NE(second.front().error->find("worker exited"), std::string::npos);
+  EXPECT_EQ(second.front().error->find("not available"), std::string::npos);
+}
+
+TEST(PluginWorkerRuntimeTest, RestartsTimedOutWorkerForNextIndependentRequest) {
+  std::vector<std::string> errors;
+  auto runtime = PluginWorkerRuntime::Load(
+      DANG_TEST_PLUGIN_WORKER_PATH,
+      {DANG_TEST_HANGING_OPERATIONAL_PLUGIN_PATH}, &errors, 5s, 50ms);
+  ASSERT_NE(runtime, nullptr) << testing::PrintToString(errors);
+
+  const auto first = runtime->OperationalData();
+  ASSERT_EQ(first.size(), 1u);
+  ASSERT_TRUE(first.front().error.has_value());
+  EXPECT_NE(first.front().error->find("timed out"), std::string::npos);
+
+  const auto second = runtime->OperationalData();
+  ASSERT_EQ(second.size(), 1u);
+  ASSERT_TRUE(second.front().error.has_value());
+  EXPECT_NE(second.front().error->find("timed out"), std::string::npos);
+  EXPECT_EQ(second.front().error->find("not available"), std::string::npos);
+}
+
 TEST(PluginWorkerClientTest, CopiesAbiV6AppliedStateReport) {
   std::vector<std::string> errors;
   auto client = StartClient(DANG_TEST_PROVIDER_PLUGIN_PATH, 5s, &errors);

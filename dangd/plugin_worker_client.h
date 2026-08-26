@@ -72,7 +72,9 @@ struct PluginWorkerOperationResult {
  *
  * Requests are serialized because a worker owns one stateful ABI context. A
  * timeout, crash, truncated response, or protocol violation permanently marks
- * the client unhealthy and terminates/reaps the worker before returning.
+ * this client unhealthy and terminates/reaps the worker before returning. The
+ * owning runtime may replace it for a later request; failed requests are never
+ * replayed because they may have caused external side effects.
  */
 class PluginWorkerClient {
  public:

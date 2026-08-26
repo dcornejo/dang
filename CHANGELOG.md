@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Added fail-safe plugin-worker recovery for later independent requests after
+  crash, timeout, or protocol failure. Replacement workers must rediscover the
+  exact loaded manifest and YANG sources, and failed requests are never replayed.
 - Completed RFC 8341 compliance evidence with an external ncclient 0.6.17
   mutual-TLS subscription that received a permitted YANG Library notification,
   suppressed its paired denied legacy event, and incremented the denial counter.

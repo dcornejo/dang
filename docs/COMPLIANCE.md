@@ -361,19 +361,14 @@ external interoperability remains. `TODO.md` is the normative work list.
 Operational callback XML is length-bounded before host string construction and
 then passes the common XML byte/node/depth parser limits and schema validation.
 Malformed or oversized provider output fails the retrieval atomically with
-provider/stage attribution. Safe timeout and crash recovery still require a
-supervised out-of-process callback boundary; abandoning an in-process worker
-thread would permit it to continue executing against torn-down plugin state.
-The first isolation layer is implemented: bounded length-prefixed IPC uses a
+provider/stage attribution. Timeout and crash recovery use a supervised
+out-of-process callback boundary. Bounded length-prefixed IPC uses a
 monotonic deadline and classifies timeout, peer exit, truncation, oversized
-frames, and system errors. Plugin loading and callback ownership have not yet
-moved behind that channel in the live server, so timeout/crash recovery remains
-incomplete. The standalone worker does exclusively own plugin loading and
-returns only copied manifest/YANG discovery values; live parent-side worker
-creation now contains and reaps tested operational callback hangs and crashes
-under an independent request deadline. Worker responses are re-bounded by the
-parent. Live cutover remains gated on moving transaction and operation callbacks
-with the same stateful plugin context.
+frames, and system errors. The standalone worker exclusively owns plugin loading
+and returns only copied values. Parent supervision contains and reaps callback
+hangs and crashes under independent deadlines. A failed request is never
+replayed; before a later independent request, a replacement worker is accepted
+only if its manifest and YANG sources exactly match startup discovery.
 The worker now implements distinct prepare and validate requests and an abort
 request. Opaque preparation survives between those phases only inside the
 worker, so dependency-wide prepare-before-validate semantics can be retained at
@@ -384,15 +379,13 @@ all participating workers, including module dependency edges and reverse
 compensation. ABI-v6 reconciliation callbacks now run inside workers and return
 bounded copies. The parent now validates schema, ownership, provider identity,
 and outcome uniqueness before committing its retained plan, and compensates a
-bad report in reverse. RPC/action callbacks now use bounded worker requests;
-live operation-provider selection and application routing remain unfinished.
-The application layers now depend on a common plugin runtime contract rather
-than the in-process loader directly; selecting a worker-owned implementation at
-startup remains the live-cutover step.
+bad report in reverse. RPC/action callbacks use bounded worker requests. The
+application layers depend on a common plugin runtime contract, and daemon
+startup selects its worker-owned implementation without an in-process fallback.
 The worker-owned implementation of that contract is complete and directly
 tested for discovery, dependency rejection, operational publication, operation
 routing, model compilation, and rejected commit behavior. Daemon startup now
-selects it; automatic worker restart remains.
+selects it. Crash/timeout restart for subsequent independent requests is tested.
 An end-to-end deterministic stress case issues 200 operational retrievals from
 eight sessions, verifies every response, and proves that all eight provider
 callbacks may execute concurrently. The ASan/UBSan release soak completed at

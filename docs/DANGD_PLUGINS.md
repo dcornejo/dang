@@ -5,7 +5,7 @@
 
 ## Process ownership
 
-Plugin isolation is being migrated to one long-lived supervised worker per
+Plugin isolation uses one long-lived supervised worker per
 plugin. The worker owns the shared library, callback table, context, prepared
 transactions, and every other opaque plugin pointer for their complete
 lifetime. `dangd` exchanges only bounded copied values over a deadline-aware
@@ -14,8 +14,10 @@ framed POSIX channel; it must never deserialize or retain a worker address.
 The framing foundation rejects oversized messages before allocation, applies a
 single monotonic deadline across each complete frame, and distinguishes a clean
 worker exit from timeout, protocol truncation, and host I/O failure. Live
-callback routing uses this worker path; automatic worker restart remains active
-work tracked in `TODO.md`.
+callback routing uses this worker path. After a worker failure, the failed
+request is reported without replay. A later independent request starts a new
+worker and uses it only if rediscovery exactly matches the manifest and YANG
+sources accepted at daemon startup.
 The installed `libexec/dangd/dangd-plugin-worker` executable already owns load,
 ABI validation, manifest copying, and YANG source copying for one plugin. Its
 ready handshake reports load failures before it accepts requests, and malformed
@@ -39,8 +41,7 @@ Plugins older than ABI v4 appear as one synthetic `transaction` action, so they
 use the same global planning path. The worker coordinator qualifies local action
 dependencies, adds edges from a dependent module to every action of its provider,
 rejects duplicate module ownership, and uses the common planner for deterministic
-execution and reverse rollback. Live backend integration and applied-state
-validation have not yet moved to the worker coordinator. ABI-v6 reconciliation
+execution and reverse rollback. ABI-v6 reconciliation
 callbacks already run inside the worker and return only bounded copies of the
 actual configuration and per-node outcomes. The parent validates those copies
 against the runtime schema, limits changes to modules owned by the reporting
@@ -54,9 +55,9 @@ revalidated by the parent. The plugin never receives transport credentials or
 an unchecked NETCONF request.
 
 The server-facing `PluginRuntime` contract separates datastore and NETCONF code
-from plugin ownership. The existing in-process loader and the forthcoming live
-worker runtime implement the same transaction, operational-data, reconciliation,
-and operation-provider surface, allowing the ownership switch to be atomic.
+from plugin ownership. The in-process loader and live worker runtime implement
+the same transaction, operational-data, reconciliation, and operation-provider
+surface.
 `PluginWorkerRuntime` now supplies the worker-owned implementation: it validates
 copied discovery and dependency graphs, expands affected modules, prepares every
 worker before validation, coordinates hardware and reconciliation, aggregates

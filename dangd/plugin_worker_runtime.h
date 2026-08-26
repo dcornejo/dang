@@ -63,6 +63,7 @@ class PluginWorkerRuntime final : public PluginRuntime {
   std::vector<PluginManifest> manifests_;
   std::vector<std::size_t> affected_;
   PluginWorkerCoordinator coordinator_;
+  mutable std::recursive_mutex worker_mutex_;
   mutable std::mutex reconciliation_mutex_;
   std::vector<HardwareRemnant> remnants_;
   std::vector<ConfigurationOutcome> outcomes_;

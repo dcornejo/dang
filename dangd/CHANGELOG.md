@@ -7,6 +7,9 @@
 
 ### Changed
 
+- Restart an unhealthy plugin worker before a later independent request only
+  after exact manifest/YANG rediscovery; never replay the failed callback or a
+  potentially side-effecting transaction phase.
 - Completed external NACM notification evidence with ncclient 0.6.17 over
   mutual TLS: the permitted current YANG Library event was delivered, the
   denied legacy event was absent, and the denial counter increased exactly once.

@@ -34,7 +34,51 @@ yang::config::ValidationFinding Failure(std::string provider,
 
 struct PluginWorkerRuntime::Entry {
   PluginManifest manifest;
+  std::vector<PluginYangSource> sources;
+  PluginWorkerClient::Options options;
   std::unique_ptr<PluginWorkerClient> client;
+
+  [[nodiscard]] std::optional<std::string> Recover() {
+    if (client->healthy()) return std::nullopt;
+    std::vector<std::string> errors;
+    auto replacement = PluginWorkerClient::Start(options, &errors);
+    if (!replacement) {
+      return errors.empty() ? "cannot restart plugin worker"
+                            : "cannot restart plugin worker: " + errors.front();
+    }
+    std::string error;
+    auto discovery = replacement->Discover(&error);
+    const auto same_manifest = [&](const PluginManifest& other) {
+      return other.plugin_name == manifest.plugin_name &&
+             other.abi_version == manifest.abi_version &&
+             other.modules == manifest.modules &&
+             other.dependencies == manifest.dependencies &&
+             other.supports_operations == manifest.supports_operations &&
+             other.supports_operational_data ==
+                 manifest.supports_operational_data &&
+             other.supports_hardware_actions ==
+                 manifest.supports_hardware_actions &&
+             other.supports_applied_reconciliation ==
+                 manifest.supports_applied_reconciliation;
+    };
+    const auto same_source = [](const PluginYangSource& left,
+                                const PluginYangSource& right) {
+      return left.plugin_name == right.plugin_name &&
+             left.module_name == right.module_name &&
+             left.revision == right.revision && left.source == right.source &&
+             left.source_uri == right.source_uri && left.role == right.role &&
+             left.enabled_features == right.enabled_features;
+    };
+    if (!discovery || !same_manifest(discovery->manifest) ||
+        discovery->sources.size() != sources.size() ||
+        !std::equal(discovery->sources.begin(), discovery->sources.end(),
+                    sources.begin(), same_source)) {
+      return "restarted plugin discovery differs from the loaded plugin" +
+             (error.empty() ? std::string{} : ": " + error);
+    }
+    client = std::move(replacement);
+    return std::nullopt;
+  }
 };
 
 std::unique_ptr<PluginWorkerRuntime> PluginWorkerRuntime::Load(
@@ -67,8 +111,11 @@ std::unique_ptr<PluginWorkerRuntime> PluginWorkerRuntime::Load(
                              discovery->sources.begin(),
                              discovery->sources.end());
     runtime->manifests_.push_back(discovery->manifest);
-    runtime->entries_.push_back(std::make_unique<Entry>(
-        Entry{std::move(discovery->manifest), std::move(client)}));
+    PluginWorkerClient::Options options{worker_executable, plugin,
+                                        startup_timeout, request_timeout};
+    runtime->entries_.push_back(std::make_unique<Entry>(Entry{
+        std::move(discovery->manifest), std::move(discovery->sources),
+        std::move(options), std::move(client)}));
   }
   std::unordered_map<std::string, std::size_t> owner_indexes;
   for (std::size_t index = 0; index < runtime->entries_.size(); ++index)
@@ -114,8 +161,14 @@ const std::vector<PluginManifest>& PluginWorkerRuntime::manifests() const {
 
 std::vector<PluginOperationalFragment>
 PluginWorkerRuntime::OperationalData() const {
+  std::lock_guard lock(worker_mutex_);
   std::vector<PluginOperationalFragment> fragments;
   for (const auto& entry : entries_) {
+    if (auto error = entry->Recover()) {
+      fragments.push_back(
+          {entry->manifest.plugin_name, {}, std::move(error), {}});
+      continue;
+    }
     PluginWorkerOperationalResult result = entry->client->OperationalData();
     if (result.worker_error) {
       fragments.push_back({entry->manifest.plugin_name, {},
@@ -179,6 +232,7 @@ std::optional<yang::config::ValidationFinding> PluginWorkerRuntime::Prepare(
     const yang::config::ConfigDocument& before,
     const yang::config::ConfigDocument& after,
     std::span<const yang::config::ChangeEvent> changes) {
+  std::lock_guard lock(worker_mutex_);
   Abort();
   std::set<std::string> changed_modules;
   nlohmann::json serialized = nlohmann::json::array();
@@ -244,6 +298,11 @@ std::optional<yang::config::ValidationFinding> PluginWorkerRuntime::Prepare(
   const std::string after_xml = after.ToXml();
   const std::string changes_json = serialized.dump();
   for (const std::size_t index : affected_) {
+    if (auto error = entries_[index]->Recover()) {
+      auto finding = Failure(entries_[index]->manifest.plugin_name, *error);
+      Abort();
+      return finding;
+    }
     auto result = entries_[index]->client->Prepare(before_xml, after_xml,
                                                     changes_json);
     if (!result.ok()) {
@@ -270,6 +329,7 @@ std::optional<yang::config::ValidationFinding> PluginWorkerRuntime::Prepare(
 PluginApplyResult PluginWorkerRuntime::Apply(
     const yang::config::RuntimeSchema& schema,
     const yang::config::ConfigDocument& proposed) {
+  std::lock_guard lock(worker_mutex_);
   std::vector<PluginWorkerParticipant> participants;
   for (const std::size_t index : affected_)
     participants.push_back(
@@ -283,7 +343,7 @@ PluginApplyResult PluginWorkerRuntime::Apply(
   HardwareTransactionResult applied = coordinator_.Apply();
   if (!applied.ok) {
     {
-      std::lock_guard lock(reconciliation_mutex_);
+      std::lock_guard reconciliation_lock(reconciliation_mutex_);
       remnants_ = applied.remnants;
     }
     affected_.clear();
@@ -293,7 +353,7 @@ PluginApplyResult PluginWorkerRuntime::Apply(
   PluginApplyResult reconciled = coordinator_.Reconcile(schema, proposed);
   affected_.clear();
   if (!reconciled.error) {
-    std::lock_guard lock(reconciliation_mutex_);
+    std::lock_guard reconciliation_lock(reconciliation_mutex_);
     remnants_.clear();
     outcomes_ = reconciled.outcomes;
   }
@@ -301,6 +361,7 @@ PluginApplyResult PluginWorkerRuntime::Apply(
 }
 
 void PluginWorkerRuntime::Abort() noexcept {
+  std::lock_guard lock(worker_mutex_);
   coordinator_.Abort();
   for (const std::size_t index : affected_)
     (void)entries_[index]->client->Abort();
@@ -318,6 +379,7 @@ yang::netconf::OperationResult PluginWorkerRuntime::InvokeAction(
     const yang::netconf::RpcSessionContext& session,
     const yang::config::RuntimeSchemaNode& operation,
     std::string_view instance_path, std::string_view operation_xml) {
+  std::lock_guard lock(worker_mutex_);
   (void)session;
   const auto owner = std::ranges::find_if(entries_, [&](const auto& entry) {
     return std::ranges::find(entry->manifest.modules, operation.module_name) !=
@@ -330,6 +392,8 @@ yang::netconf::OperationResult PluginWorkerRuntime::InvokeAction(
     finding.netconf_error_app_tag = "plugin-operation-unsupported";
     return {{false, {std::move(finding)}, {}}, {}};
   }
+  if (auto error = (*owner)->Recover())
+    return {{false, {Failure((*owner)->manifest.plugin_name, *error)}, {}}, {}};
   PluginWorkerOperationResult invoked = (*owner)->client->Invoke(
       operation.module_name, operation.name.local_name,
       std::string(instance_path), std::string(operation_xml));
