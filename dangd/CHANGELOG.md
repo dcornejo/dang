@@ -7,6 +7,9 @@
 
 ### Changed
 
+- Updated the plugin developer contract for the supervised worker runtime and
+  current ABI-v1-through-v6 behavior, with embedded diagrams for ownership,
+  capability growth, two-phase hardware transactions, and fail-safe recovery.
 - Link the common plugin/transport runtime to the platform thread dependency,
   fixing production executable linkage on FreeBSD.
 - Added opt-in validation that observes a kernel-reported duplicate IPv6 address

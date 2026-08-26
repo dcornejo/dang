@@ -10,6 +10,10 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Audited the plugin author guide against the live ABI-v1-through-v6 worker
+  implementation, corrected stale process, concurrency, entry-point, and
+  IP-provider descriptions, and added architecture, transaction, capability,
+  and worker-recovery diagrams.
 - Propagated the platform thread library from `dangd_core` so production
   executables and downstream consumers link correctly on FreeBSD.
 - Completed current-tree FreeBSD validation with the 386-test suite, all three

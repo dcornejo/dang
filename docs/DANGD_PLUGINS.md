@@ -3,6 +3,38 @@
 
 # Writing a dangd configuration plugin
 
+This guide is the implementation contract for plugin ABI versions 1 through
+6. It describes the current supervised-worker architecture, shows how a plugin
+participates in schema discovery and transactions, and gives concrete guidance
+for production providers. The public ABI is declared in
+`dangd/plugin_api.h`; when prose and declarations appear to disagree, treat
+that header as the type-level authority and report the documentation defect.
+
+## Architecture at a glance
+
+```mermaid
+flowchart LR
+  client[NETCONF client] --> transport[SSH or mutual TLS<br/>authentication and framing]
+  transport --> core[dangd trusted core<br/>RPC, NACM, schema validation,<br/>datastores and persistence]
+  core --> runtime[PluginWorkerRuntime<br/>copied, bounded IPC]
+  runtime --> workerA[supervised worker<br/>plugin A]
+  runtime --> workerB[supervised worker<br/>plugin B]
+  workerA --> providerA[plugin shared library]
+  workerB --> providerB[plugin shared library]
+  providerA --> resourceA[operating system,<br/>hardware or service]
+  providerB --> resourceB[operating system,<br/>hardware or service]
+  providerA -. embedded YANG sources .-> runtime
+  providerB -. embedded YANG sources .-> runtime
+  runtime -. copied sources and manifests .-> library[RFC 8525 YANG Library<br/>and get-schema]
+  core --> library
+```
+
+The trust boundary is deliberately narrow. `dangd` owns protocol and datastore
+semantics. Each plugin shared library is loaded in its own worker process, and
+only copied manifests, YANG text, transaction snapshots, action descriptions,
+results, and errors cross the framed channel. The worker boundary contains
+crashes and enforces time and size limits, but it is not a privilege sandbox.
+
 ## Process ownership
 
 Plugin isolation uses one long-lived supervised worker per
@@ -30,8 +62,8 @@ stateful plugin worker are serialized.
 
 Transaction preparation and validation are separate worker requests. Prepare
 copies the before/proposed snapshots and change description into the worker and
-retains the plugin's opaque preparation there. This permits the eventual parent
-coordinator to prepare every affected plugin before asking any of them to
+retains the plugin's opaque preparation there. The parent coordinator prepares
+every affected plugin before asking any of them to
 validate. Abort releases the retained object without returning its address;
 validation rejection also releases it and returns only bounded attribution.
 Hardware action descriptors are copied from the worker so the parent can build
@@ -54,19 +86,36 @@ bounded before transmission; output XML and attributed errors are copied and
 revalidated by the parent. The plugin never receives transport credentials or
 an unchecked NETCONF request.
 
-The server-facing `PluginRuntime` contract separates datastore and NETCONF code
-from plugin ownership. The in-process loader and live worker runtime implement
-the same transaction, operational-data, reconciliation, and operation-provider
-surface.
-`PluginWorkerRuntime` now supplies the worker-owned implementation: it validates
+The internal server-facing `PluginRuntime` contract separates datastore and
+NETCONF code from plugin ownership. Production daemon startup uses
+`PluginWorkerRuntime`; `PluginManager` is the worker-side loader and is also
+used directly by focused tests. It is not an alternate deployment mode or a
+plugin-author API. `PluginWorkerRuntime` validates
 copied discovery and dependency graphs, expands affected modules, prepares every
 worker before validation, coordinates hardware and reconciliation, aggregates
 operational fragments, and selects operation owners without loading plugin code.
 
 This guide defines the contract between `dangd` and a dynamically loaded
 configuration provider. It is both a how-to and the behavioral specification
-for plugin authors. The first ABI targets POSIX shared libraries only. Windows
+for plugin authors. The ABI targets POSIX shared libraries only. Windows
 loading and ABI conventions are intentionally out of scope.
+
+## Capability progression
+
+Each newer entry table contains the complete preceding table as its first
+member. Export the highest version your plugin fully implements; do not export
+later entry points with placeholder callbacks.
+
+```mermaid
+flowchart LR
+  v1[ABI v1<br/>models, dependencies,<br/>prepare/validate/apply/rollback]
+  v2[ABI v2<br/>RPC and action invocation]
+  v3[ABI v3<br/>selected operational data]
+  v4[ABI v4<br/>fine-grained hardware actions]
+  v5[ABI v5<br/>operational completeness]
+  v6[ABI v6<br/>actual applied-state reconciliation]
+  v1 --> v2 --> v3 --> v4 --> v5 --> v6
+```
 
 ## Responsibilities
 
@@ -88,17 +137,20 @@ inside the trusted core.
 
 ## Build and entry point
 
-Include `dangd/plugin_api.h`, build a `.so` or `.dylib`, and export exactly this
-symbol with C linkage:
+Include `dangd/plugin_api.h`, build a `.so` or `.dylib`, and export the
+initializer for the highest ABI version implemented. A minimal ABI-v1 plugin
+exports this symbol with C linkage:
 
 ```cpp
 extern "C" const DangPluginV1* dang_plugin_init_v1();
 ```
 
 The returned table and all strings referenced by it must remain valid until
-`destroy` is called or the library is unloaded. The table must declare
-`DANG_PLUGIN_ABI_V1`. Do not pass C++ standard-library objects, exceptions, or
-compiler-specific class layouts across the ABI.
+`destroy` is called or the library is unloaded. Its `abi_version` must match
+the exported initializer. The v1 source, prepare, validate, apply, rollback,
+and release callbacks are mandatory. Supply both dependency callbacks or
+neither. `destroy` is optional. Do not pass C++ standard-library objects,
+exceptions, or compiler-specific class layouts across the ABI.
 
 The reference implementation is `dangd/plugins/example_plugin.cc`; CMake
 builds it as `dangd_example_plugin`.
@@ -196,10 +248,10 @@ Returned XML must be NUL-terminated within the configured XML byte ceiling
 normal XML node/depth and schema limits afterward; an oversized result fails
 the complete retrieval and is attributed to the provider.
 
-Operational callbacks may run concurrently for independent NETCONF sessions.
-The callback and every object reachable through its context must therefore be
-thread-safe; per-response storage must remain valid until the callback returns
-and must not be shared unsafely with another invocation.
+The current worker runtime serializes callback requests. Plugin authors should
+not depend on that as a permanent ABI guarantee: synchronize plugin-created
+threads and external callbacks, and keep per-response storage valid until the
+callback returns. Never return storage that an asynchronous task may mutate.
 
 ABI v5 extends the complete ABI-v4 table with `get_operational_data_v2` and
 `DangOperationalDataV2`. A provider sets `complete` to nonzero only when every
@@ -249,10 +301,11 @@ tag `operational-provider-failure`; its error path and message identify the
 best available path, provider, stage, and reason. The RPC does not return a
 partially assembled operational data payload alongside that error.
 
-The IP-management example uses ABI v3 to publish RFC 8343
-`/interfaces-state`. Linux and FreeBSD inventory all kernel interfaces, publish
-native counters, and read flags, MTU, addresses, and ARP/IPv6 neighbor caches
-from the kernel for each retrieval. Linux rtnetlink and FreeBSD IPv6 address
+The IP-management example exports ABI v4 and uses its embedded ABI-v3 callback
+to publish RFC 8343 `/interfaces-state`. Linux and FreeBSD inventory all kernel
+interfaces, publish native counters, and read flags, MTU, addresses, and
+ARP/IPv6 neighbor caches from the kernel for each retrieval. Linux rtnetlink
+and FreeBSD IPv6 address
 flags supply RFC 8344 preferred, deprecated, tentative, and duplicate status;
 Linux additionally reports optimistic status and FreeBSD detached addresses as
 inaccessible.
@@ -377,16 +430,42 @@ Strings in the transaction are owned by `dangd` and remain valid through
 
 ## Transaction lifecycle
 
-The lifecycle is:
+The live worker lifecycle is:
 
-```text
-prepare every affected plugin
-validate every affected plugin
-collect and verify every hardware action plan
-apply actions in dependency-safe order
-release every prepared object
-publish the proposed running datastore
+```mermaid
+sequenceDiagram
+  participant C as dangd core
+  participant R as worker runtime
+  participant P as affected plugin workers
+  participant H as hardware or service
+  C->>C: validate candidate, NACM and common YANG constraints
+  C->>R: Prepare(before, proposed, changes)
+  loop dependency order
+    R->>P: prepare complete snapshots
+  end
+  loop only after every prepare succeeds
+    R->>P: validate retained plan
+  end
+  C->>R: Apply(proposed)
+  R->>P: copy action descriptors
+  R->>R: build and verify one global dependency graph
+  loop deterministic topological order
+    R->>P: apply named action
+    P->>H: perform retained operation
+  end
+  loop dependency order
+    R->>P: reconcile actual applied configuration
+  end
+  R->>P: release retained preparations
+  R-->>C: schema-valid applied snapshot and outcomes
+  C->>C: replace working configuration and continue commit persistence
 ```
+
+No validation callback runs until every affected plugin has prepared
+successfully. On a prepare, validation, planning, apply, or reconciliation
+failure, retained objects are released. Completed hardware actions are first
+compensated in reverse execution order when necessary; the working datastore is
+not replaced unless the full plugin phase succeeds.
 
 ### prepare
 
@@ -489,9 +568,10 @@ or modify the candidate/running datastore directly.
 
 Configuration callbacks execute under the serialized datastore transaction
 boundary. A callback must not reenter `dangd`, issue NETCONF operations, or
-wait for a request that requires the datastore lock. Operational-state and
-notification callbacks may be added by later ABI versions with separate
-threading rules.
+wait for a request that requires the datastore lock. RPC, action, operational,
+and transaction callback requests are currently serialized by the worker
+runtime as well. This is an implementation property, not permission to use
+unprotected state from plugin-created threads.
 
 Plugins are still responsible for synchronizing their own worker threads and
 external callbacks. `destroy` is called only after prepared transactions have
@@ -499,9 +579,11 @@ been released.
 
 ## Security expectations
 
-A plugin is native code in the `dangd` process and has the daemon's operating
-system privileges. Load only trusted libraries. ABI version checks are not a
-sandbox or signature mechanism.
+A plugin is native code in a supervised child process and normally inherits the
+daemon's operating-system privileges and environment. Load only trusted
+libraries. The process boundary, ABI checks, copied protocol, and resource
+ceilings provide fault containment; they are not a privilege sandbox, code
+signature mechanism, or defense against a deliberately malicious plugin.
 
 Plugins must treat all configuration strings as untrusted input even though
 they have passed schema validation. They should bound derived allocations,
@@ -511,6 +593,27 @@ secrets in error messages or logs.
 NACM authorization has already succeeded before plugin preparation. Plugins
 must not implement an independent, inconsistent authorization policy for the
 same configuration nodes.
+
+## Worker failure and recovery
+
+```mermaid
+stateDiagram-v2
+  [*] --> Healthy: startup and exact discovery
+  Healthy --> Unhealthy: timeout, crash, truncation, protocol or I/O failure
+  Unhealthy --> RequestFailed: fail current request without replay
+  RequestFailed --> Rediscover: later independent request
+  Rediscover --> Healthy: manifest and every YANG source match exactly
+  Rediscover --> Unavailable: restart or discovery mismatch
+  Unavailable --> Rediscover: later independent request
+```
+
+The supervisor never guesses whether a failed callback performed a side
+effect, so it never replays that request. Recovery is attempted only for a
+later independent request. The replacement is accepted only when its copied
+manifest, capabilities, dependencies, enabled features, and complete YANG
+source inventory match the startup discovery exactly. A transaction failure is
+therefore visible to the NETCONF client even when a replacement worker can be
+started immediately afterward.
 
 ## Checklist
 
@@ -527,4 +630,9 @@ Before shipping a plugin, verify that it:
 - reports a module path with actionable failures;
 - frees every prepared object and reservation;
 - is tested for prepare, validation, apply, rollback, and release failures;
+- is tested for callback timeout or worker exit without assuming replay;
+- returns actual applied state, ownership-safe changes, and unique outcome paths
+  when using ABI v6;
+- distinguishes complete from selected operational data correctly when using
+  ABI v5;
 - appears correctly in the RFC 8525 YANG Library response.
