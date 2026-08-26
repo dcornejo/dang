@@ -254,7 +254,8 @@ in the [RFC 8341 NACM compliance matrix](NACM_COMPLIANCE_MATRIX.md).
 
 ### RFC 8342 — NMDA and RFC 8526 — NETCONF NMDA operations
 
-Status: **partial**.
+Status: **conformant for the advertised conventional-datastore feature set;
+optional features listed below are not advertised**.
 
 The server publishes conventional datastores through RFC 8525, exposes a
 read-only `intended` view equal to `running`, builds an `operational` view from
@@ -355,8 +356,27 @@ Dynamic configuration datastores are not implemented or advertised. If one is
 introduced, its schema, protocol operations, validation, persistence, YANG
 Library entry, applied mapping, and derived origin identity are release-gated
 requirements rather than behavior inferred from conventional datastores. The
-internal operation, filter/default/origin/NACM interaction matrix is covered;
-external interoperability remains. `TODO.md` is the normative work list.
+internal operation, filter/default/origin/NACM interaction matrix is covered.
+
+The deliberately unsupported optional surface is:
+
+- dynamic configuration datastores;
+- the RFC 8526 `with-defaults` feature and NETCONF
+  `:with-operational-defaults` capability; and
+- URL content for `<edit-data>`, because the imported NETCONF `url` feature is
+  not enabled.
+
+These are omissions from the advertised feature set, not variances in enabled
+behavior. `intended` being identical to `running` is the RFC 8342 conventional
+datastore model for a device without configuration transformations. No known
+semantic variance remains in the advertised RFC 8342/RFC 8526 behavior.
+
+Independent protocol evidence uses ncclient 0.6.17 over production mutual TLS.
+On Ubuntu 26.04 LTS it passed running/subtree `<get-data>`, locked candidate
+`<edit-data>` and commit, intended visibility, operational intended-origin
+filtering and metadata, and the required `invalid-value` response for
+`with-origin` on running. The reproducible driver and transcript are in
+`tests/interoperability/README.md`.
 
 Operational callback XML is length-bounded before host string construction and
 then passes the common XML byte/node/depth parser limits and schema validation.

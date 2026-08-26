@@ -1,7 +1,40 @@
 <!-- Copyright 2026 David Cornejo -->
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# NACM interoperability evidence
+# External interoperability evidence
+
+## RFC 8342 / RFC 8526 NMDA operations
+
+`run_ncclient_nmda_interop.sh` starts the production mutual-TLS transport and
+uses the independent ncclient NETCONF implementation to exercise the enabled
+NMDA operation model. The interaction retrieves running data with a subtree
+filter, locks and edits candidate with `<edit-data>`, commits it, observes the
+change through intended, retrieves operational data with intended-origin
+filtering and metadata, and verifies the required `invalid-value` response when
+`with-origin` is incorrectly used with running.
+
+On an isolated Ubuntu validation host:
+
+```console
+sudo apt-get install python3-ncclient
+cmake -S . -B build -DYANG_BUILD_TESTS=ON -DYANG_BUILD_DANGD=ON
+cmake --build build --target nmda_interop_server
+tests/interoperability/run_ncclient_nmda_interop.sh build
+```
+
+The successful transcript is:
+
+```text
+ncclient get-data running/subtree: PASS
+ncclient edit-data candidate/lock/commit: PASS
+ncclient intended visibility: PASS
+ncclient operational origin filter/metadata: PASS
+ncclient invalid with-origin rejection: PASS
+```
+
+The recorded compliance run used ncclient 0.6.17 on Ubuntu 26.04 LTS.
+
+## NACM decision comparison
 
 `run_sysrepo_nacm_interop.sh` checks the project's RFC 8341 interpretation
 against sysrepo's independently implemented NACM engine. It uses the public

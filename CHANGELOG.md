@@ -10,6 +10,11 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Completed RFC 8342/RFC 8526 conventional-datastore interoperability evidence
+  with ncclient 0.6.17 over mutual TLS, including NMDA retrieval, edit/commit,
+  intended visibility, origin metadata/filtering, and required error behavior.
+- Defined the NMDA compliance claim around advertised features and explicitly
+  documented unadvertised dynamic-datastore, defaults, and URL options.
 - Added fail-safe plugin-worker recovery for later independent requests after
   crash, timeout, or protocol failure. Replacement workers must rediscover the
   exact loaded manifest and YANG sources, and failed requests are never replayed.

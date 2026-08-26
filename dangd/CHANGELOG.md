@@ -7,6 +7,9 @@
 
 ### Changed
 
+- Added a reproducible external ncclient NMDA interaction over production
+  mutual TLS and closed the conventional-datastore compliance TODO after all
+  retrieval, edit/commit, origin, and negative checks passed.
 - Restart an unhealthy plugin worker before a later independent request only
   after exact manifest/YANG rediscovery; never replay the failed callback or a
   potentially side-effecting transaction phase.

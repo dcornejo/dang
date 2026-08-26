@@ -565,6 +565,13 @@ if(YANG_BUILD_TESTS)
       dangd_core Threads::Threads)
     target_compile_options(nacm_notification_interop_server PRIVATE
       -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+    add_executable(nmda_interop_server
+      tests/interoperability/nmda_interop_server.cc)
+    target_compile_features(nmda_interop_server PRIVATE cxx_std_20)
+    target_link_libraries(nmda_interop_server PRIVATE
+      dangd_core Threads::Threads)
+    target_compile_options(nmda_interop_server PRIVATE
+      -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
   endif()
   add_executable(yang_tests
     tests/lexer_test.cc
