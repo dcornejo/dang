@@ -84,7 +84,7 @@ TEST(SchemaTreeTest, CreatesImplicitCasesForChoiceShorthand) {
             SchemaNodeKind::kCase);
 }
 
-TEST(SchemaTreeTest, ExpandsImportedGroupingWithOriginNamespace) {
+TEST(SchemaTreeTest, InstantiatesImportedGroupingInUsingModuleNamespace) {
   BuiltSchema built;
   built.repository.Add("common", R"yang(module common {
     namespace "urn:common"; prefix c;
@@ -97,9 +97,27 @@ TEST(SchemaTreeTest, ExpandsImportedGroupingWithOriginNamespace) {
   })yang");
   ASSERT_TRUE(built.schema);
   const SchemaNode& service = Child(*built.schema, std::nullopt, "app", "service");
-  const SchemaNode& address = Child(*built.schema, service.id, "common", "address");
+  const SchemaNode& address = Child(*built.schema, service.id, "app", "address");
   EXPECT_EQ(address.origin, SchemaNodeOrigin::kUses);
   EXPECT_NE(address.instantiation, kInvalidStatementId);
+}
+
+TEST(SchemaTreeTest, ResolvesListKeyInstantiatedFromImportedGrouping) {
+  BuiltSchema built;
+  built.repository.Add("common", R"yang(module common {
+    namespace "urn:common"; prefix c;
+    grouping identified { leaf id { type uint32; } }
+  })yang");
+  built.Build(R"yang(module app {
+    namespace "urn:app"; prefix app;
+    import common { prefix c; }
+    list item { key id; uses c:identified; }
+  })yang");
+  ASSERT_TRUE(built.schema);
+  const SchemaNode& item = Child(*built.schema, std::nullopt, "app", "item");
+  ASSERT_EQ(item.key.size(), 1);
+  EXPECT_EQ(built.schema->Get(item.key.front()).name,
+            (SchemaName{"app", "id"}));
 }
 
 TEST(SchemaTreeTest, AppliesRefineProperties) {

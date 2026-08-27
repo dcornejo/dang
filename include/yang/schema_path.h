@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "yang/schema_tree.h"
@@ -40,8 +41,10 @@ class SchemaPathParser {
 class SchemaPathResolver {
  public:
   SchemaPathResolver(const ResolvedModule& source, const SchemaTree& tree,
-                     DiagnosticSink& diagnostics)
-      : source_(source), tree_(tree), diagnostics_(diagnostics) {}
+                     DiagnosticSink& diagnostics,
+                     std::optional<std::string> unprefixed_module = std::nullopt)
+      : source_(source), tree_(tree), diagnostics_(diagnostics),
+        unprefixed_module_(std::move(unprefixed_module)) {}
   [[nodiscard]] std::optional<SchemaNodeId> ResolveAbsolute(
       const SchemaPath& path, SourceRange range) const;
   [[nodiscard]] std::optional<SchemaNodeId> ResolveDescendant(
@@ -55,6 +58,7 @@ class SchemaPathResolver {
   const ResolvedModule& source_;
   const SchemaTree& tree_;
   DiagnosticSink& diagnostics_;
+  std::optional<std::string> unprefixed_module_;
 };
 
 }  // namespace yang::semantic

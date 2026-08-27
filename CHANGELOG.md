@@ -10,6 +10,10 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Instantiate nodes from imported groupings in the using module's namespace and
+  resolve unprefixed key and unique paths against that effective namespace,
+  allowing standards-valid cross-module model families such as Kea DHCP to
+  compile correctly.
 - Audited the plugin author guide against the live ABI-v1-through-v6 worker
   implementation, corrected stale process, concurrency, entry-point, and
   IP-provider descriptions, and added architecture, transaction, capability,

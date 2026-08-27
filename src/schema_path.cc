@@ -73,7 +73,9 @@ std::optional<SchemaPath> SchemaPathParser::Parse(
 std::optional<std::string> SchemaPathResolver::ModuleFor(
     const SchemaPathSegment& segment, SourceRange range) const {
   const std::string local_module = source_.belongs_to.value_or(source_.name);
-  if (!segment.prefix || *segment.prefix == source_.prefix) return local_module;
+  if (!segment.prefix)
+    return unprefixed_module_.value_or(local_module);
+  if (*segment.prefix == source_.prefix) return local_module;
   const auto imported = source_.imports.find(*segment.prefix);
   if (imported != source_.imports.end()) return imported->second->name;
   diagnostics_.Report({DiagnosticCode::kUnknownPrefix, DiagnosticSeverity::kError,

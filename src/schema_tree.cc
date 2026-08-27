@@ -246,11 +246,13 @@ std::optional<SchemaTree> SchemaBuilder::BuildFor(
   };
 
   std::function<void(const std::shared_ptr<const ModuleSymbols>&,
+                     const std::shared_ptr<const ModuleSymbols>&,
                      const std::shared_ptr<const ResolvedModule>&, const Statement&,
                      std::optional<SchemaNodeId>, SchemaNodeOrigin, StatementId,
                      std::vector<GroupingScope>&, std::vector<SchemaNodeId>*)> expand_children;
 
   expand_children = [&](const std::shared_ptr<const ModuleSymbols>& owner,
+                        const std::shared_ptr<const ModuleSymbols>& namespace_owner,
                         const std::shared_ptr<const ResolvedModule>& source,
                         const Statement& parent_statement,
                         std::optional<SchemaNodeId> parent_node,
@@ -291,9 +293,10 @@ std::optional<SchemaTree> SchemaBuilder::BuildFor(
         }
         grouping_scopes.push_back(std::move(top));
         std::vector<SchemaNodeId> uses_nodes;
-        expand_children(grouping->owner, grouping->symbol.source_module, declaration,
-                        parent_node, SchemaNodeOrigin::kUses, statement.id,
-                        grouping_scopes, &uses_nodes);
+        expand_children(grouping->owner, namespace_owner,
+                        grouping->symbol.source_module, declaration, parent_node,
+                        SchemaNodeOrigin::kUses, statement.id, grouping_scopes,
+                        &uses_nodes);
         if (FindChild(*source, statement, "when")) {
           std::function<void(SchemaNodeId)> propagate_when;
           propagate_when = [&](SchemaNodeId node_id) {
@@ -379,7 +382,7 @@ std::optional<SchemaTree> SchemaBuilder::BuildFor(
             continue;
           }
           std::vector<SchemaNodeId> augmented_nodes;
-          expand_children(owner, source, augment, *target,
+          expand_children(owner, namespace_owner, source, augment, *target,
                           SchemaNodeOrigin::kAugment, augment.id, scopes,
                           &augmented_nodes);
           if (FindChild(*source, augment, "when")) {
@@ -404,7 +407,7 @@ std::optional<SchemaTree> SchemaBuilder::BuildFor(
         implicit.parent = parent_node;
         implicit.kind = SchemaNodeKind::kCase;
         implicit.origin = SchemaNodeOrigin::kImplicitCase;
-        implicit.name = {owner->module()->name, node_name};
+        implicit.name = {namespace_owner->module()->name, node_name};
         implicit.source_module = source;
         implicit.declaration = statement.id;
         implicit.instantiation = instantiation;
@@ -417,7 +420,7 @@ std::optional<SchemaTree> SchemaBuilder::BuildFor(
       node.parent = actual_parent;
       node.kind = *kind;
       node.origin = origin;
-      node.name = {owner->module()->name, node_name};
+      node.name = {namespace_owner->module()->name, node_name};
       node.source_module = source;
       node.declaration = statement.id;
       node.instantiation = instantiation;
@@ -446,7 +449,8 @@ std::optional<SchemaTree> SchemaBuilder::BuildFor(
       const auto id = add_node(std::move(node), statement.range);
       if (!id) continue;
       if (created && actual_parent == parent_node) created->push_back(*id);
-      expand_children(owner, source, statement, *id, origin, instantiation, scopes, nullptr);
+      expand_children(owner, namespace_owner, source, statement, *id, origin,
+                      instantiation, scopes, nullptr);
     }
     if (pushed) scopes.pop_back();
   };
@@ -458,9 +462,10 @@ std::optional<SchemaTree> SchemaBuilder::BuildFor(
   scopes.push_back(std::move(top));
   const auto expand_unit = [&](const std::shared_ptr<const ResolvedModule>& unit) {
     if (!unit->syntax || unit->syntax->roots().empty()) return;
-    expand_children(root_symbols, unit, unit->syntax->Get(unit->syntax->roots().front()),
-                    std::nullopt, SchemaNodeOrigin::kDeclared, kInvalidStatementId,
-                    scopes, nullptr);
+    expand_children(root_symbols, root_symbols, unit,
+                    unit->syntax->Get(unit->syntax->roots().front()), std::nullopt,
+                    SchemaNodeOrigin::kDeclared, kInvalidStatementId, scopes,
+                    nullptr);
   };
   expand_unit(root_symbols->module());
   for (const auto& included : root_symbols->module()->includes) expand_unit(included);
@@ -496,7 +501,7 @@ std::optional<SchemaTree> SchemaBuilder::BuildFor(
         continue;
       }
       std::vector<SchemaNodeId> augmented_nodes;
-      expand_children(root_symbols, unit, augment, *target,
+      expand_children(root_symbols, root_symbols, unit, augment, *target,
                       SchemaNodeOrigin::kAugment, augment.id, scopes,
                       &augmented_nodes);
       if (FindChild(*unit, augment, "when")) {
@@ -523,7 +528,8 @@ std::optional<SchemaTree> SchemaBuilder::BuildFor(
         node.declaration == kInvalidStatementId) continue;
     const Statement& declaration = node.source_module->syntax->Get(node.declaration);
     SchemaPathParser path_parser(diagnostics_);
-    SchemaPathResolver path_resolver(*node.source_module, result, diagnostics_);
+    SchemaPathResolver path_resolver(*node.source_module, result, diagnostics_,
+                                     node.name.module);
     if (const Statement* key_statement = FindChild(*node.source_module, declaration, "key");
         key_statement && key_statement->argument) {
       std::istringstream input(*key_statement->argument);
@@ -706,10 +712,12 @@ std::optional<SchemaContext> SchemaContextBuilder::Build(
     std::vector<SchemaNodeId> added_roots;
     std::unordered_set<GroupingKey, GroupingKeyHash> grouping_stack;
     std::function<void(const std::shared_ptr<const ModuleSymbols>&,
+                       const std::shared_ptr<const ModuleSymbols>&,
                        const std::shared_ptr<const ResolvedModule>&,
                        const Statement&, SchemaNodeId, StatementId,
                        SchemaNodeOrigin)> append_children;
     append_children = [&](const std::shared_ptr<const ModuleSymbols>& defining_owner,
+                          const std::shared_ptr<const ModuleSymbols>& namespace_owner,
                           const std::shared_ptr<const ResolvedModule>& defining_source,
                           const Statement& parent_statement, SchemaNodeId parent,
                           StatementId instantiation, SchemaNodeOrigin expansion_origin) {
@@ -746,8 +754,9 @@ std::optional<SchemaContext> SchemaContextBuilder::Build(
             continue;
           }
           const Statement& grouping = symbol->source_module->syntax->Get(symbol->statement);
-          append_children(grouping_owner, symbol->source_module, grouping, parent,
-                          statement.id, SchemaNodeOrigin::kUses);
+          append_children(grouping_owner, namespace_owner,
+                          symbol->source_module, grouping, parent, statement.id,
+                          SchemaNodeOrigin::kUses);
           grouping_stack.erase(key);
           continue;
         }
@@ -762,7 +771,7 @@ std::optional<SchemaContext> SchemaContextBuilder::Build(
           implicit.parent = parent;
           implicit.kind = SchemaNodeKind::kCase;
           implicit.origin = SchemaNodeOrigin::kImplicitCase;
-          implicit.name = {defining_owner->module()->name, local_name};
+          implicit.name = {namespace_owner->module()->name, local_name};
           implicit.source_module = defining_source;
           implicit.declaration = statement.id;
           implicit.instantiation = instantiation;
@@ -779,7 +788,7 @@ std::optional<SchemaContext> SchemaContextBuilder::Build(
         node.parent = actual_parent;
         node.kind = *kind;
         node.origin = expansion_origin;
-        node.name = {defining_owner->module()->name, local_name};
+        node.name = {namespace_owner->module()->name, local_name};
         node.source_module = defining_source;
         node.declaration = statement.id;
         node.instantiation = instantiation;
@@ -823,11 +832,12 @@ std::optional<SchemaContext> SchemaContextBuilder::Build(
         if (actual_parent == parent && parent == target) {
           added_roots.push_back(id);
         }
-        append_children(defining_owner, defining_source, statement, id,
-                        instantiation, expansion_origin);
+        append_children(defining_owner, namespace_owner, defining_source,
+                        statement, id, instantiation, expansion_origin);
       }
     };
-    append_children(source_owner, source, augment, target, augment.id,
+    append_children(source_owner, source_owner, source, augment, target,
+                    augment.id,
                     SchemaNodeOrigin::kAugment);
     if (FindChild(*source, augment, "when")) {
       std::function<void(SchemaNodeId)> propagate_when;

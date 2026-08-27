@@ -7,6 +7,9 @@
 
 ### Changed
 
+- Corrected effective namespaces and unprefixed key resolution for schema nodes
+  instantiated from imported groupings, enabling the official Kea DHCPv4 and
+  DHCPv6 model family to load as plugin-supplied YANG.
 - Updated the plugin developer contract for the supervised worker runtime and
   current ABI-v1-through-v6 behavior, with embedded diagrams for ownership,
   capability growth, two-phase hardware transactions, and fail-safe recovery.
