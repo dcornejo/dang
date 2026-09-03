@@ -83,6 +83,7 @@ install(FILES
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/yang)
 install(FILES LICENSE NOTICE README.md TODO.md CHANGELOG.md docs/STANDARDS.md
   docs/RELEASING.md
+  docs/PACKAGING.md
   docs/YANG_LIBRARY.md
   docs/BENCHMARKS.md
   docs/HARDENING.md
@@ -490,7 +491,7 @@ if(YANG_BUILD_DANGD)
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dangd)
   install(FILES dangd/README.md dangd/CHANGELOG.md docs/DANGD_PLUGINS.md
     DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/yang/dangd)
-  install(DIRECTORY dangd/examples dangd/models dangd/testdata
+  install(DIRECTORY dangd/examples dangd/models
     DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/yang/dangd)
 endif()
 
@@ -752,3 +753,5 @@ if(YANG_BUILD_BENCHMARKS)
   target_compile_options(yang_benchmarks PRIVATE
     -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 endif()
+
+include(packaging/Packaging.cmake)

@@ -17,7 +17,8 @@ ABI stability before 1.0.
    version section and update its comparison links.
 2. Set the identical version in `project(... VERSION ...)` in `CMakeLists.txt`.
 3. Run the normal, sanitizer, documentation, installation, and package-consumer
-   checks. Create and push an annotated tag named `v<version>`.
+   checks, plus both native package builds described in `PACKAGING.md`. Create
+   and push an annotated tag named `v<version>`.
 4. The release workflow verifies that the tag and CMake version match. It then
    creates the source archive twice and rejects non-reproducible output.
 5. The workflow publishes the archive, SHA-256 checksum file, HTML and PDF

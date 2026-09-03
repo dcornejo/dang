@@ -8,6 +8,16 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Added native Debian and FreeBSD package generation from the audited CMake
+  install manifest, including platform dependency metadata and packaging
+  instructions. Packages remain deliberately service-neutral until an
+  administrator supplies deployment-specific model, datastore, NACM, key,
+  and recovery configuration.
+- Excluded repository-only SSH and TLS test credentials from the production
+  install and native package manifests.
+
 ### Changed
 
 - Permit `must` and `when` paths to refer to schema nodes removed by a disabled
