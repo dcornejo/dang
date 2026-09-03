@@ -7,6 +7,8 @@
 
 ### Changed
 
+- Accept standards-valid XPath constraints that reference feature-pruned
+  schema nodes, enabling RFC 7317 without falsely advertising RADIUS support.
 - Corrected effective namespaces and unprefixed key resolution for schema nodes
   instantiated from imported groupings, enabling the official Kea DHCPv4 and
   DHCPv6 model family to load as plugin-supplied YANG.

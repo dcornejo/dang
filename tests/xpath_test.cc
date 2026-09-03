@@ -3,6 +3,7 @@
 
 #include <gtest/gtest.h>
 
+#include "yang/identity_feature.h"
 #include "yang/module_resolver.h"
 #include "yang/schema_tree.h"
 #include "yang/semantic_model.h"
@@ -19,9 +20,10 @@ struct XPathPipeline {
   std::shared_ptr<const ResolvedModule> module;
   std::optional<SemanticContext> semantics;
   std::optional<TypeContext> types;
+  std::optional<IdentityFeatureContext> identity_features;
   std::optional<SchemaContext> schemas;
 
-  void Build(std::string source) {
+  void Build(std::string source, bool filter_features = false) {
     ModuleResolver module_resolver(repository, sink);
     module = module_resolver.Resolve(test::Source(std::move(source), sink));
     if (!module) return;
@@ -31,8 +33,15 @@ struct XPathPipeline {
     TypeResolver type_resolver(sink);
     types = type_resolver.Resolve(*semantics);
     if (!types) return;
+    const FeatureSet* features = nullptr;
+    if (filter_features) {
+      IdentityFeatureResolver feature_resolver(sink);
+      identity_features = feature_resolver.Resolve(*semantics);
+      if (!identity_features) return;
+      features = &identity_features->features;
+    }
     SchemaContextBuilder schema_builder(sink);
-    schemas = schema_builder.Build(*semantics, *types);
+    schemas = schema_builder.Build(*semantics, *types, features);
   }
 };
 
@@ -149,6 +158,29 @@ TEST(XPathTest, RejectsUnknownStaticSchemaPath) {
   EXPECT_FALSE(validator.Validate(*pipeline.schemas));
   EXPECT_EQ(pipeline.sink.diagnostics().back().code,
             DiagnosticCode::kUnknownXPathNode);
+}
+
+TEST(XPathTest, AllowsConstraintPathToFeaturePrunedNode) {
+  XPathPipeline pipeline;
+  pipeline.Build(R"yang(module app {
+    namespace "urn:app"; prefix app;
+    feature optional;
+    container root {
+      container optional-data {
+        if-feature optional;
+        leaf value { type string; }
+      }
+      leaf guard { type string; must "../optional-data/value"; }
+    }
+  })yang", true);
+  ASSERT_TRUE(pipeline.schemas);
+  const auto root = pipeline.schemas->root().FindChild(
+      std::nullopt, {"app", "root"});
+  ASSERT_TRUE(root);
+  ASSERT_FALSE(pipeline.schemas->root().FindChild(
+      *root, {"app", "optional-data"}));
+  XPathValidator validator(pipeline.sink);
+  EXPECT_TRUE(validator.Validate(*pipeline.schemas));
 }
 
 TEST(XPathTest, RejectsInvalidFunctionArity) {

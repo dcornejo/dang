@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Permit `must` and `when` paths to refer to schema nodes removed by a disabled
+  `if-feature`, while continuing to reject genuinely unknown paths. This is
+  required by the unmodified RFC 7317 model when RADIUS is not advertised.
 - Instantiate nodes from imported groupings in the using module's namespace and
   resolve unprefixed key and unique paths against that effective namespace,
   allowing standards-valid cross-module model families such as Kea DHCP to

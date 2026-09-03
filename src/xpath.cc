@@ -321,6 +321,28 @@ const ResolvedModule* ModuleNamed(const SchemaContext& schemas,
   return nullptr;
 }
 
+bool HasFeatureGatedChildNamed(const SchemaTree& tree, SchemaNodeId parent,
+                              std::string_view local_name) {
+  const SchemaNode& parent_node = tree.Get(parent);
+  const ResolvedModule& source = *parent_node.source_module;
+  if (!source.syntax || parent_node.declaration == kInvalidStatementId)
+    return false;
+  const Statement& parent_statement =
+      source.syntax->Get(parent_node.declaration);
+  for (const StatementId child_id : parent_statement.children) {
+    const Statement& statement = source.syntax->Get(child_id);
+    if (!statement.argument || *statement.argument != local_name) continue;
+    if (statement.keyword != "container" && statement.keyword != "list" &&
+        statement.keyword != "leaf" && statement.keyword != "leaf-list" &&
+        statement.keyword != "choice" && statement.keyword != "case" &&
+        statement.keyword != "anydata" && statement.keyword != "anyxml")
+      continue;
+    for (const StatementId property_id : statement.children)
+      if (source.syntax->Get(property_id).keyword == "if-feature") return true;
+  }
+  return false;
+}
+
 }  // namespace
 
 std::optional<XPathContext> XPathValidator::Validate(
@@ -432,6 +454,7 @@ std::optional<XPathContext> XPathValidator::Validate(
             active_tree = active_module ? schemas.Find(*active_module) : nullptr;
           }
           bool resolved = active_tree != nullptr;
+          bool feature_pruned = false;
           for (const std::string& step : path.steps) {
             if (!resolved) break;
             if (step == ".") {
@@ -450,19 +473,26 @@ std::optional<XPathContext> XPathValidator::Validate(
             }
             const auto module_name = ModuleFor(constraint_source, step);
             if (!module_name) { resolved = false; break; }
-            current = FindStep(*active_tree, current,
+            const std::optional<SchemaNodeId> parent = current;
+            current = FindStep(*active_tree, parent,
                                {*module_name, std::string(LocalName(step))});
-            if (!current) { resolved = false; break; }
+            if (!current) {
+              feature_pruned = parent &&
+                  HasFeatureGatedChildNamed(*active_tree, *parent,
+                                            LocalName(step));
+              resolved = false;
+              break;
+            }
             path_step_contexts[path_index].push_back(
                 {active_module, *current});
           }
-          if (!resolved || !current) {
+          if ((!resolved || !current) && !feature_pruned) {
             diagnostics_.Report({DiagnosticCode::kUnknownXPathNode,
                                  DiagnosticSeverity::kError,
                                  fmt::format("XPath path in '{}' cannot be resolved", *constraint.argument),
                                  constraint.range});
             valid = false;
-          } else {
+          } else if (resolved && current) {
             path_contexts[path_index] = SchemaNodeRef{active_module, *current};
             if (path.statically_resolvable) {
               validated.statically_resolved_nodes.push_back(
