@@ -557,7 +557,7 @@ PersistentDatastoreState DatastoreManager::ExportPersistentState() const {
 }
 
 TransactionResult DatastoreManager::RestorePersistentState(
-    const PersistentDatastoreState& state) {
+    const PersistentDatastoreState& state, RestoreBackend backend) {
   const auto parse = [&](std::string_view xml)
       -> std::optional<config::ConfigDocument> {
     if (xml.empty()) return config::ConfigDocument();
@@ -614,9 +614,13 @@ TransactionResult DatastoreManager::RestorePersistentState(
   }
   std::vector<config::ChangeEvent> changes =
       config::DiffConfigDocuments(schema_, running_, restored_running);
-  TransactionResult replaced =
-      ReplaceRunning(std::move(restored_running), std::move(changes));
-  if (!replaced.ok) return replaced;
+  if (backend == RestoreBackend::kApply) {
+    TransactionResult replaced =
+        ReplaceRunning(std::move(restored_running), std::move(changes));
+    if (!replaced.ok) return replaced;
+  } else {
+    running_ = std::move(restored_running);
+  }
   return {true, {}, {}};
 }
 

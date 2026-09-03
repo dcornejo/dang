@@ -225,16 +225,18 @@ PersistenceResult SaveDatastoreSnapshot(
 }
 
 PersistenceResult LoadDatastoreSnapshot(const std::filesystem::path& path,
-                                        DatastoreManager& datastores) {
+                                        DatastoreManager& datastores,
+                                        DatastoreManager::RestoreBackend backend) {
   std::string contents;
   if (const auto error = ReadPrivateFile(
           path, DefaultResourceLimits().maximum_snapshot_bytes, &contents))
     return {false, *error};
-  return LoadDatastoreSnapshotJson(contents, datastores);
+  return LoadDatastoreSnapshotJson(contents, datastores, backend);
 }
 
 PersistenceResult LoadDatastoreSnapshotJson(std::string_view contents,
-                                            DatastoreManager& datastores) {
+                                            DatastoreManager& datastores,
+                                            DatastoreManager::RestoreBackend backend) {
   if (contents.size() > DefaultResourceLimits().maximum_snapshot_bytes) {
     return {false, "datastore snapshot exceeds the byte limit"};
   }
@@ -242,7 +244,8 @@ PersistenceResult LoadDatastoreSnapshotJson(std::string_view contents,
     const nlohmann::json json = nlohmann::json::parse(contents);
     const auto state = FromJson(json);
     if (!state) return {false, "unsupported or malformed datastore snapshot"};
-    TransactionResult restored = datastores.RestorePersistentState(*state);
+    TransactionResult restored =
+        datastores.RestorePersistentState(*state, backend);
     if (!restored.ok) {
       return {false, restored.errors.empty()
                          ? "datastore snapshot restore failed"

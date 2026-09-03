@@ -177,6 +177,9 @@ backup rotation, and how to react to storage failure. They can use
 inside the same transaction boundary.
 
 This persistence covers the NETCONF datastore and confirmed-commit recovery
-state. A remaining startup integration task must hydrate every affected plugin
-from the restored running configuration before the server accepts requests;
-see `TODO.md`.
+state. Restore first updates the in-memory datastores without invoking the
+backend. Dangd then presents the complete effective running tree as a single
+change from an empty baseline, causing every affected plugin and dependency to
+prepare, validate, apply, and reconcile before an application can be served.
+This separate activation step also runs for first-boot and reload-provided
+configuration and prevents a restored change from being applied twice.

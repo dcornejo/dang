@@ -834,6 +834,67 @@ TEST(DangdApplicationTest, LoadsPluginModelAndRejectsPluginInvalidCommit) {
             std::string::npos);
 }
 
+TEST(DangdApplicationTest, ActivatesInitialAndRestoredPluginConfiguration) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.configuration = inputs.Write(
+      "plugin-config.xml",
+      "<config xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
+      "<system xmlns=\"urn:example:appliance\"><hostname>edge-1</hostname>"
+      "</system><provider-settings xmlns=\"urn:dangd:test:provider\">"
+      "<mode>active</mode></provider-settings></config>");
+  options.plugins = {DANG_TEST_CONSUMER_PLUGIN_PATH,
+                     DANG_TEST_PROVIDER_PLUGIN_PATH};
+  options.state_file = inputs.Path("plugin-state.json");
+  const std::vector<std::string> expected{
+      "provider.prepare", "consumer.prepare", "provider.validate",
+      "consumer.validate", "provider.apply", "consumer.apply",
+      "consumer.release", "provider.release"};
+
+  test_plugin::ResetTrace();
+  auto initial = Application::Load(options);
+  ASSERT_NE(initial.application, nullptr)
+      << testing::PrintToString(initial.errors);
+  EXPECT_EQ(test_plugin::Trace(), expected);
+  EXPECT_NE(test_plugin::Active("provider").find("<mode>active</mode>"),
+            std::string::npos);
+
+  test_plugin::ResetTrace();
+  auto restored = Application::Load(options);
+  ASSERT_NE(restored.application, nullptr)
+      << testing::PrintToString(restored.errors);
+  EXPECT_EQ(test_plugin::Trace(), expected);
+  EXPECT_NE(test_plugin::Active("provider").find("<mode>active</mode>"),
+            std::string::npos);
+  EXPECT_TRUE(restored.application->DrainBackendDeltas().empty());
+}
+
+TEST(DangdApplicationTest, RejectsStartupWhenPluginHydrationFails) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.configuration = inputs.Write(
+      "rejected-plugin-config.xml",
+      "<config xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
+      "<system xmlns=\"urn:example:appliance\"><hostname>edge-1</hostname>"
+      "</system><provider-settings xmlns=\"urn:dangd:test:provider\">"
+      "<mode>consumer-validate-fail</mode></provider-settings></config>");
+  options.plugins = {DANG_TEST_CONSUMER_PLUGIN_PATH,
+                     DANG_TEST_PROVIDER_PLUGIN_PATH};
+  options.state_file = inputs.Path("rejected-state.json");
+
+  test_plugin::ResetTrace();
+  auto loaded = Application::Load(options);
+  EXPECT_EQ(loaded.application, nullptr);
+  ASSERT_FALSE(loaded.errors.empty());
+  EXPECT_NE(loaded.errors.front().find("cannot activate startup configuration"),
+            std::string::npos);
+  EXPECT_FALSE(std::filesystem::exists(*options.state_file));
+  EXPECT_EQ(test_plugin::Trace(),
+            (std::vector<std::string>{
+                "provider.prepare", "consumer.prepare", "provider.validate",
+                "consumer.validate", "consumer.release", "provider.release"}));
+}
+
 TEST(DangdApplicationTest,
      WorkerRuntimeLoadsModelAndRejectsPluginInvalidCommit) {
   TemporaryInputs inputs;
@@ -867,6 +928,28 @@ TEST(DangdApplicationTest,
                 .Read(yang::netconf::Datastore::kRunning)
                 .ToXml()
                 .find("plugin-settings"),
+            std::string::npos);
+}
+
+TEST(DangdApplicationTest, WorkerRejectsInvalidStartupPluginConfiguration) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.configuration = inputs.Write(
+      "worker-startup.xml",
+      "<config xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
+      "<system xmlns=\"urn:example:appliance\"><hostname>edge-1</hostname>"
+      "</system><plugin-settings xmlns=\"urn:dangd:example-plugin\">"
+      "<mode>reject</mode></plugin-settings></config>");
+  options.plugins = {DANG_TEST_PLUGIN_PATH};
+  options.plugin_worker_executable = DANG_TEST_PLUGIN_WORKER_PATH;
+
+  auto loaded = Application::Load(options);
+  EXPECT_EQ(loaded.application, nullptr);
+  ASSERT_FALSE(loaded.errors.empty());
+  EXPECT_NE(loaded.errors.front().find("cannot activate startup configuration"),
+            std::string::npos);
+  EXPECT_NE(loaded.errors.front().find(
+                "mode 'reject' is not supported by the reference plugin"),
             std::string::npos);
 }
 

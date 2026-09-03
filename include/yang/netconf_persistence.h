@@ -41,10 +41,14 @@ using SnapshotSaveCheckpoint =
     const SnapshotSaveCheckpoint& checkpoint = {});
 /** Loads a private regular snapshot owned by this process and validates it. */
 [[nodiscard]] PersistenceResult LoadDatastoreSnapshot(
-    const std::filesystem::path& path, DatastoreManager& datastores);
+    const std::filesystem::path& path, DatastoreManager& datastores,
+    DatastoreManager::RestoreBackend backend =
+        DatastoreManager::RestoreBackend::kApply);
 /** Parses and restores an in-memory versioned JSON snapshot. */
 [[nodiscard]] PersistenceResult LoadDatastoreSnapshotJson(
-    std::string_view json, DatastoreManager& datastores);
+    std::string_view json, DatastoreManager& datastores,
+    DatastoreManager::RestoreBackend backend =
+        DatastoreManager::RestoreBackend::kApply);
 
 }  // namespace yang::netconf
 

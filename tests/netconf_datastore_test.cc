@@ -121,6 +121,27 @@ TEST(NetconfDatastoreTest, LocksEditsCandidateAndCommitsAtomically) {
             std::string::npos);
 }
 
+TEST(NetconfDatastoreTest, CanDeferBackendActivationDuringOfflineRestore) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager source(fixture->schema, fixture->initial);
+  ASSERT_TRUE(source.EditConfig(
+      {"one", Datastore::kCandidate,
+       {HostnameEdit(fixture->schema, "restored")}}).ok);
+  ASSERT_TRUE(source.Commit("one").ok);
+
+  RecordingBackend backend;
+  DatastoreManager target(fixture->schema, fixture->initial, std::nullopt,
+                          &backend);
+  ASSERT_TRUE(target.RestorePersistentState(
+      source.ExportPersistentState(),
+      DatastoreManager::RestoreBackend::kDefer).ok);
+  EXPECT_TRUE(backend.working_xml.empty());
+  EXPECT_NE(target.Read(Datastore::kRunning).ToXml().find(">restored</"),
+            std::string::npos);
+}
+
 TEST(NetconfDatastoreTest, PersistenceFailureRollsBackLiveCommit) {
   VectorDiagnosticSink diagnostics;
   auto fixture = BuildFixture(&diagnostics);

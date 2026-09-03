@@ -1025,6 +1025,7 @@ LoadResult Application::Load(const ApplicationOptions& options) {
       std::move(schema), std::move(*parsed.document), options.state_file,
       options.snapshot_save_checkpoint, std::move(nacm), managed_nacm,
       std::move(plugins), yang_library_xml, std::move(model_sources)));
+  bool restored_snapshot = false;
   if (options.state_file && !options.configuration_override) {
     std::error_code exists_error;
     const bool exists =
@@ -1035,14 +1036,30 @@ LoadResult Application::Load(const ApplicationOptions& options) {
       result.application.reset();
     } else if (exists) {
       const auto loaded = yang::netconf::LoadDatastoreSnapshot(
-          *options.state_file, result.application->datastores_);
+          *options.state_file, result.application->datastores_,
+          yang::netconf::DatastoreManager::RestoreBackend::kDefer);
       if (!loaded.ok) {
         result.errors.push_back("cannot restore state file: " +
                                 loaded.error.value_or("unknown error"));
         result.application.reset();
+      } else {
+        restored_snapshot = true;
       }
-    } else if (const auto persistence_error =
-                   result.application->SaveState()) {
+    }
+  }
+  if (result.application) {
+    const auto running = result.application->datastores_.Read(
+        yang::netconf::Datastore::kRunning);
+    if (auto error = result.application->backend_.Initialize(
+            result.application->schema_, running)) {
+      result.errors.push_back("cannot activate startup configuration: " +
+                              error->message);
+      result.application.reset();
+    }
+  }
+  if (result.application && options.state_file &&
+      !options.configuration_override && !restored_snapshot) {
+    if (const auto persistence_error = result.application->SaveState()) {
       result.errors.push_back("cannot persist initial state file: " +
                               *persistence_error);
       result.application.reset();

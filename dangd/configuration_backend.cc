@@ -77,6 +77,36 @@ std::string ManagedNacmXml(const yang::config::ConfigDocument& document) {
 }  // namespace
 
 std::optional<yang::config::ValidationFinding>
+EnglishConfigurationBackend::Initialize(
+    const yang::config::RuntimeSchema& schema,
+    const yang::config::ConfigDocument& configuration) {
+  auto empty = yang::config::ParseDatastoreXml(
+      schema,
+      "<config xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\"/>");
+  if (!empty.document) {
+    yang::config::ValidationFinding finding;
+    finding.code = yang::config::ValidationCode::kMalformedXml;
+    finding.state = yang::config::FindingState::kInvalid;
+    finding.message = "cannot construct empty startup configuration";
+    finding.netconf_error_tag = "operation-failed";
+    return finding;
+  }
+  const auto changes =
+      yang::config::DiffConfigDocuments(schema, *empty.document, configuration);
+  if (auto error =
+          PrepareReplacement(schema, *empty.document, configuration, changes))
+    return error;
+  if (auto error = Replace(schema, *empty.document, configuration, changes)) {
+    AbortPreparedReplacement();
+    return error;
+  }
+  // Startup activation is not a user configuration edit.
+  std::lock_guard lock(mutex_);
+  deltas_.clear();
+  return std::nullopt;
+}
+
+std::optional<yang::config::ValidationFinding>
 EnglishConfigurationBackend::PrepareReplacement(
     const yang::config::RuntimeSchema& schema,
     const yang::config::ConfigDocument& before,

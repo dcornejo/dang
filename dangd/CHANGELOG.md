@@ -7,6 +7,9 @@
 
 ### Changed
 
+- Activated the complete initial or restored running tree through affected
+  plugins before startup succeeds, including unchanged restored configuration,
+  with dependency ordering, rollback, and fail-closed startup behavior.
 - Hardened configured state-file save and restore: snapshots are always private,
   unsafe restore paths fail closed, interrupted writes leave no temporary file,
   and the supported backup/restore lifecycle is documented.

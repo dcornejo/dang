@@ -109,9 +109,9 @@ Known boundaries and optional omissions:
 Configured persistence atomically saves and schema-validates the conventional
 datastores and confirmed-commit recovery state. POSIX snapshots are private
 regular files owned by the effective service user; symlinks and group/other
-access fail closed. The remaining startup gap is delivery of an unchanged
-initial or restored running tree to plugins before accepting sessions, as
-tracked in `TODO.md`.
+access fail closed. Initial and restored running configuration is activated
+through affected plugins before the application is made available to a
+transport; activation failure makes startup fail closed.
 
 ### RFC 6242 — NETCONF over SSH and message framing
 

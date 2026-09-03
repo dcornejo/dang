@@ -28,6 +28,11 @@ class EnglishConfigurationBackend final
       : plugins_(plugins), nacm_(nacm), managed_nacm_(managed_nacm),
         working_xml_(initial.ToXml()), working_(std::move(initial)) {}
 
+  /** Activates one complete startup tree as a single plugin transaction. */
+  [[nodiscard]] std::optional<yang::config::ValidationFinding> Initialize(
+      const yang::config::RuntimeSchema& schema,
+      const yang::config::ConfigDocument& configuration);
+
   [[nodiscard]] std::optional<yang::config::ValidationFinding>
   PrepareReplacement(
       const yang::config::RuntimeSchema& schema,

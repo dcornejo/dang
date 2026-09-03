@@ -100,6 +100,11 @@ class RunningConfigBackend {
  */
 class DatastoreManager {
  public:
+  /**
+   * Controls whether snapshot restore updates the configured backend. A host
+   * using kDefer must activate the restored running tree before exposing it.
+   */
+  enum class RestoreBackend { kApply, kDefer };
   using Clock = std::chrono::steady_clock;
   /**
    * Publishes one persistent-state transition. A failure must leave durable
@@ -158,7 +163,8 @@ class DatastoreManager {
   [[nodiscard]] PersistentDatastoreState ExportPersistentState() const;
   /** Atomically replaces unlocked state after parsing and validation. */
   [[nodiscard]] TransactionResult RestorePersistentState(
-      const PersistentDatastoreState& state);
+      const PersistentDatastoreState& state,
+      RestoreBackend backend = RestoreBackend::kApply);
   /** Installs the durability participant used by subsequent mutations. */
   void SetPersistentStateCommitter(PersistentStateCommitter committer);
 

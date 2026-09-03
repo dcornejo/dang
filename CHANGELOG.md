@@ -20,11 +20,16 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Completed startup configuration detection and plugin hydration. Initial,
+  restored, and reload-provided running trees are activated as one full-tree,
+  dependency-ordered plugin transaction before an application is returned;
+  snapshot restoration defers backend work to prevent duplicate application,
+  and activation failure leaves the daemon unavailable and first-boot state
+  unpublished.
 - Completed the configuration save/restore TODO with private mode-0600 atomic
   snapshots, same-descriptor restore checks for type, ownership, permissions,
   size and symlinks, cleanup after interrupted saves, and a documented live
-  backup and offline restore procedure. Initial plugin hydration remains a
-  separate startup task.
+  backup and offline restore procedure.
 - Refreshed the documentation checkpoint to reconcile current FreeBSD IP
   behavior, transport evidence, persistence boundaries, package security, and
   the newly recorded standards, privileged-identity, startup-hydration, and

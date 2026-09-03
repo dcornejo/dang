@@ -15,9 +15,6 @@ stays in this file with its remaining work rewritten precisely.
 
 ### Configuration lifecycle and privileged recovery
 
-- [ ] Detect and load the initial configuration at startup, including delivery
-  of both initial and restored running configuration to every affected plugin
-  before serving requests, even when there is no configuration delta.
 - [ ] Create and ship a default super-user identity exclusively for dangd
   privileged access. It must not authenticate to, authorize, or provision any
   other operating-system or application service, and its bootstrap, rotation,

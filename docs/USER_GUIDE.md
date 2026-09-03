@@ -129,7 +129,9 @@ target_compile_features(my_application PRIVATE cxx_std_20)
 `dangd` demonstrates the host-application pattern. It compiles a root model,
 loads and validates initial configuration, owns the datastores and protocol
 server, optionally persists datastore state, and reports committed changes to
-an in-memory backend in English.
+an in-memory backend in English. Initial, restored, and reload-provided running
+configuration is activated through affected plugins before the application is
+made available to a transport.
 
 ### 1. Create a model
 
@@ -335,10 +337,12 @@ install -m 600 appliance-state.json appliance-state.backup.json
 To restore, stop dangd, retain the failed/current snapshot separately, install
 the chosen backup at the configured `--state` path with mode 0600 and the
 service identity as owner, then start dangd normally. Startup parses and
-schema-validates every stored datastore before changing live state and fails
-closed if the snapshot is corrupt, incompatible, unsafe, or unreadable. Do not
-edit snapshot JSON manually; use NETCONF to migrate configuration between
-different schemas or software versions.
+schema-validates every stored datastore, then activates the effective running
+tree through affected plugins in dependency order before serving requests. It
+fails closed if the snapshot is corrupt, incompatible, unsafe, or unreadable,
+or if a plugin rejects or cannot apply the restored configuration. Do not edit
+snapshot JSON manually; use NETCONF to migrate configuration between different
+schemas or software versions.
 
 ## Embedding the same pattern
 

@@ -320,7 +320,14 @@ dangd --model appliance.yang --config config.xml \
 ```
 
 Plugin initialization and model discovery happen before `dangd` accepts a
-connection.
+connection. After schema validation and optional snapshot restore, dangd
+presents the complete effective running tree as a change from an empty baseline
+to every affected plugin. Providers prepare, validate, and apply before their
+dependents. This happens even when a restored tree is byte-for-byte identical
+to the packaged initial configuration, so a plugin must treat startup apply as
+idempotent reconciliation with the actual device rather than assume that no
+ordinary NETCONF delta means no work is required. Startup fails if any phase
+fails; a first-boot state snapshot is not published until activation succeeds.
 
 ## Supplying YANG sources
 
@@ -472,6 +479,13 @@ not replaced unless the full plugin phase succeeds.
 `prepare` parses relevant configuration, resolves references, calculates an
 implementation plan, and may acquire temporary reservations. It returns an
 opaque prepared object through `prepared`.
+
+At startup, `before_xml` is an empty NETCONF configuration and `proposed_xml`
+is the complete initial or restored running tree. `changes_json` therefore
+contains creation events for explicit configured nodes. During an ordinary
+commit, both snapshots and the change list describe the actual running-tree
+transition. Plugins should always use the complete proposed tree to satisfy
+cross-module dependencies and use the change list to plan owned actions.
 
 Preparation must not make externally visible configuration changes. Every
 successful preparation must be releasable even if another plugin later fails.
