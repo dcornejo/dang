@@ -68,7 +68,8 @@ instance path where possible.
 
 ## Try NETCONF over mutual TLS
 
-The bundled certificates are public test fixtures and must never be deployed.
+The bundled certificates and private keys are repository-only test fixtures,
+are excluded from installed packages, and must never be deployed.
 Start the local server:
 
 ```sh
@@ -131,6 +132,7 @@ implementation expectations.
 - [Standards compliance](docs/COMPLIANCE.md) and
   [NACM compliance matrix](docs/NACM_COMPLIANCE_MATRIX.md)
 - [Release and documentation builds](docs/RELEASING.md)
+- [Debian and FreeBSD packaging](docs/PACKAGING.md)
 - [Changelog](CHANGELOG.md) and [remaining work](TODO.md)
 
 Copyright 2026 David Cornejo. Licensed under the Apache License, Version 2.0.

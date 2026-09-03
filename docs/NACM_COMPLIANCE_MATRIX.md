@@ -5,10 +5,11 @@
 
 This executable-evidence index follows RFC 8341 section order. In addition to
 the project tests below, the focused decision matrix in
-[`tests/interoperability`](../tests/interoperability/README.md) passed against
+the fixtures and transcript under `tests/interoperability` passed against
 the independent sysrepo 3.7.11 NACM engine with libyang 3.13.6 on Ubuntu 26.04.
-Open transport evidence remains in [TODO.md](../TODO.md); the high-level status
-and variance statement is in [COMPLIANCE.md](COMPLIANCE.md).
+Automated embedded-SSH and mutual-TLS evidence, plus independent OpenSSH and
+ncclient interactions, are indexed below. The high-level status and variance
+statement is in [COMPLIANCE.md](COMPLIANCE.md).
 
 ## Sections 3.1–3.3: model and policy controls
 

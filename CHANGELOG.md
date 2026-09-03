@@ -20,6 +20,10 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Refreshed the documentation checkpoint to reconcile current FreeBSD IP
+  behavior, transport evidence, persistence boundaries, package security, and
+  the newly recorded standards, privileged-identity, startup-hydration, and
+  datastore roadmap.
 - Permit `must` and `when` paths to refer to schema nodes removed by a disabled
   `if-feature`, while continuing to reject genuinely unknown paths. This is
   required by the unmodified RFC 7317 model when RADIUS is not advertised.

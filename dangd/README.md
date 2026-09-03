@@ -47,9 +47,11 @@ provider for RFC 8343 interfaces and RFC 8344 IP configuration. It discovers
 both normative models through the plugin ABI and turns committed interface,
 IPv4, and IPv6 changes into human-readable apply actions. Linux uses direct
 rtnetlink operations for link state, MTU, addresses, and static neighbors and
-publishes live state for configured interfaces. FreeBSD has a separately
-isolated native backend using interface ioctls for link state, MTU, and
-addresses; routing-socket neighbors and live publication remain TODO work.
+publishes live state for configured interfaces. FreeBSD uses interface ioctls
+and route netlink for link state, MTU, addresses, and static neighbors, plus
+live interface/IP operational publication. Neither backend creates or deletes
+interfaces, so this remains a partial device implementation rather than a
+complete RFC 8343/8344 claim.
 Unsupported development hosts use a logging-only backend. See the concrete
 request, privilege, and build instructions in
 [the plugin guide](../docs/DANGD_PLUGINS.md).
@@ -150,7 +152,8 @@ host authenticates the key before constructing a NETCONF identity, accepts only
 the exact `netconf` subsystem, and obtains NACM external groups only from the
 local authorized-key record.
 
-The keys under `testdata/ssh` are public test fixtures. Never deploy them.
+The keys under `testdata/ssh` are repository-only test fixtures, including
+private keys. They are excluded from installed packages. Never deploy them.
 
 Start the server:
 
@@ -196,7 +199,8 @@ verified identity without an exact mapping.
 The example certificate for `alice` therefore selects the `alice` rules in
 `examples/nacm.xml`.
 
-The material under `testdata/tls` is public, test-only cryptographic material.
+The material under `testdata/tls` is repository-only test cryptographic
+material, including private keys. It is excluded from installed packages.
 Never deploy those keys or trust their CA outside a local demonstration.
 
 Start the server from the repository root:
@@ -248,7 +252,7 @@ operational monitoring, and protected deployment credentials.
 
 `ietf-netconf-acm` is a core `dangd` model. `--nacm FILE` seeds the initial
 datastore only when the configuration does not already contain `/nacm`; it is
-not a permanent override. When `--state-file` names a file that does not yet
+not a permanent override. When `--state` names a file that does not yet
 exist, this seeded state is durably saved before startup succeeds. Thereafter
 authorized clients manage NACM through
 ordinary candidate edits and commits. The policy active at RPC start

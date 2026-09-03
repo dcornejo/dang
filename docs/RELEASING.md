@@ -52,6 +52,7 @@ Generate the Doxygen HTML and PDF references with:
 
 ```sh
 brew install doxygen
+brew install mermaid-cli
 brew install --cask mactex-no-gui
 # Open a new terminal after installing MacTeX so pdflatex is on PATH.
 cmake -S . -B build-docs -DYANG_BUILD_DOCS=ON

@@ -238,6 +238,13 @@ complete. A focused Clang/libFuzzer ASan/UBSan campaign completed 79,611,946
 NACM inputs without a finding. The reusable sysrepo comparison is in
 `tests/interoperability`; broader client/version matrices remain release
 evidence rather than implementation gaps.
+
+No default privileged identity is currently shipped. Recovery users must be
+explicitly bound to authenticated transport identities by the administrator.
+The planned dedicated dangd-only bootstrap super-user, including rotation and
+removal semantics, is tracked in `TODO.md`; it must not become an operating
+system or general application account.
+
 When a runtime schema is supplied, unmodeled data is pruned even for recovery
 users or disabled NACM; only authorization decisions are bypassed. Keyed list
 identity is derived only from declared keys, and incomplete or ambiguous entries
@@ -444,9 +451,8 @@ succeed. It prints English apply/rollback actions. Linux uses direct,
 acknowledged rtnetlink operations for enabled state, IPv4/IPv6 addresses,
 equal per-family link MTUs, and static neighbors; FreeBSD reconciles enabled
 state, equal per-family MTUs, and addresses through native interface ioctls and
-static neighbors through acknowledged route-netlink requests. It
-derives a limited legacy
-`/interfaces-state` tree from the last applied configuration.
+static neighbors through acknowledged route-netlink requests. Both backends
+publish live RFC 8343 `/interfaces-state` and RFC 8344 IP operational data.
 The shared platform parser now retains RFC 8344 IPv4/IPv6 MTUs and static
 neighbors, enforces family ranges and keyed uniqueness, and fails closed on
 incomplete modeled data. Linux snapshots live flags and MTU and retains the
@@ -486,6 +492,21 @@ activation/deactivation ordering, partial failure, successful compensation, and
 incomplete compensation with explicit `hardware-state-diverged` reporting are
 covered by automated tests. A real device plugin must still reserve platform
 resources during preflight and provide backend-specific dependency edges.
+
+## Roadmap-only standards and models
+
+RFC 9644 SSH client/server groupings, the RFC 9642 keystore, the RFC 8431 RIB
+model, the RFC 9067 routing-policy model, and OpenConfig VLAN draft models are
+planned but not implemented, advertised, or claimed. Exact module revisions,
+feature/deviation choices, plugin ownership, platform effects, and
+interoperability evidence must be established before their status moves into
+an implemented section of this ledger. Their release-gated work is tracked in
+`TODO.md`.
+
+BaseX is likewise only a datastore architecture investigation. The current
+implementation remains the in-process validated datastore manager with atomic
+JSON snapshots; no BaseX runtime, query, packaging, or compliance dependency
+exists today.
 
 ## Imported typedef and reference RFCs
 

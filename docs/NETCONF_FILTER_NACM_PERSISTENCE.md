@@ -169,3 +169,9 @@ Library hosts decide when to snapshot, file ownership and permissions,
 encryption, backup rotation, and how to react to storage failure. They can use
 `DatastoreManager::SetPersistentStateCommitter` to place their own durable store
 inside the same transaction boundary.
+
+This persistence covers the NETCONF datastore and confirmed-commit recovery
+state. A remaining startup integration task must hydrate affected plugins from
+the restored running configuration before the server accepts requests. The
+administrator-facing backup/restore lifecycle and secure file ownership policy
+also remain deployment work; see `TODO.md`.
