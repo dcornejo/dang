@@ -13,13 +13,6 @@ stays in this file with its remaining work rewritten precisely.
 
 ## Active tasks
 
-### Configuration lifecycle and privileged recovery
-
-- [ ] Create and ship a default super-user identity exclusively for dangd
-  privileged access. It must not authenticate to, authorize, or provision any
-  other operating-system or application service, and its bootstrap, rotation,
-  recovery, audit, and removal behavior must be documented and tested.
-
 ### Standards and models
 
 - [ ] Implement and document RFC 9644 YANG SSH client/server groupings, with

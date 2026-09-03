@@ -19,7 +19,10 @@ statement is in [COMPLIANCE.md](COMPLIANCE.md).
   `NacmTest.AppliesOrderedGroupRulesAndDefaults`, and
   `NacmTest.AppliesWildcardGroupsModulesNamesAndCrudxBitsInOrder`.
 - Recovery-session bypass: `NacmTest.RecoveryUsersBypassRules` and
-  `NacmTest.PreservesRecoveryIdentityWhenManagedPolicyChanges`. Recovery and
+  `NacmTest.PreservesRecoveryIdentityWhenManagedPolicyChanges`. Dangd also
+  installs the NETCONF-only `dangd-superuser` recovery identity by default;
+  `DangdApplicationTest.ProvidesRemovableDangdOnlySuperuser` verifies bypass,
+  audit, and explicit removal. Recovery and
   disabled-enforcement read-filter bypasses still enforce XML syntax, size,
   node-count, depth, one namespace-valid `<data>` document envelope, and any
   explicitly supplied runtime schema.

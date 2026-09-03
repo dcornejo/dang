@@ -344,6 +344,40 @@ or if a plugin rejects or cannot apply the restored configuration. Do not edit
 snapshot JSON manually; use NETCONF to migrate configuration between different
 schemas or software versions.
 
+### 9. Bootstrap and rotate privileged access
+
+Dangd includes the recovery name `dangd-superuser`. It exists only inside
+dangd's NACM enforcement and is not a Unix user. Installation creates no login,
+password, home directory, private key, or certificate, so the name cannot log
+in to SSH, PAM, or another application by itself.
+
+For the embedded SSH server, explicitly bind a public key:
+
+```sh
+--ssh-authorized-key dangd-superuser=/secure/admin-key.pub
+```
+
+For mutual TLS, either issue a trusted client certificate whose selected
+CN/SAN is exactly `dangd-superuser`, or use an exact mapping such as:
+
+```sh
+--username-map device-recovery-certificate=dangd-superuser
+```
+
+Every RPC attempted with this identity is written to dangd's recovery audit
+stream with the session ID, safely encoded username, and request byte count.
+Protect and retain the daemon diagnostic/audit output according to local
+policy; no NETCONF payload or secret is included in this record.
+
+Rotate the SSH key or TLS certificate in the transport configuration and use a
+controlled restart or SIGHUP, then verify NETCONF recovery access with the new
+credential before revoking the old one. For permanent removal, first configure
+and test another `--recovery-user`, then add `--no-default-superuser` and reload.
+The identity is absent immediately in the replacement application. There is no
+operating-system account or stored dangd credential to delete. If all recovery
+access is accidentally removed, stop the daemon and repair its launch options
+or initial NACM input through the protected host console before restarting.
+
 ## Embedding the same pattern
 
 The essential ownership pattern used by `dangd` is:

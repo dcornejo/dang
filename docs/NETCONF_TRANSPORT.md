@@ -51,6 +51,16 @@ storage, retention, and access control. `dangd` installs this hook and writes
 safely encoded records to its diagnostic stream. Recovery RPC processing fails
 closed with `operation-failed` if the sink throws.
 
+Dangd installs `dangd-superuser` in this recovery set by default. This is a
+NETCONF identity only, not a Unix account or a credential. For SSH, bind its
+public key with `--ssh-authorized-key dangd-superuser=FILE`. For TLS, issue a
+trusted client certificate whose selected identity is `dangd-superuser`, or
+map a certificate identity explicitly with
+`--username-map CERTIFICATE_NAME=dangd-superuser`. Credential rotation remains
+a transport operation and takes effect on restart or SIGHUP. Disable the name
+with `--no-default-superuser` only after testing another recovery identity;
+ordinary NACM configuration cannot silently remove host recovery access.
+
 For SSH, set `transport` to `kSsh`, preserve the SSH-authenticated username,
 and set `ssh_subsystem` to the requested subsystem. The adapter rejects every
 subsystem except the exact RFC 6242 name `netconf`. For TLS, the host performs

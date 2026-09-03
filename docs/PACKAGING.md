@@ -7,8 +7,10 @@ The CMake install manifest is the single source of truth for Debian and
 FreeBSD packages. It includes the YANG library and headers, command-line
 tools, dangd, the supervised plugin worker, built-in plugins, models, examples,
 and documentation. Packaging does not install an enabled daemon service:
-dangd requires deployment-specific model, datastore, NACM, transport key, and
-recovery-user choices that cannot be selected safely by a package script.
+dangd requires deployment-specific model, datastore, NACM, and transport-key
+choices that cannot be selected safely by a package script. The compiled-in
+`dangd-superuser` is a dangd-only recovery name, not an operating-system user;
+packages intentionally create no account, password, key, or certificate for it.
 
 ## Debian
 

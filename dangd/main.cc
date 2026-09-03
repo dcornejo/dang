@@ -33,7 +33,8 @@ std::filesystem::path ExecutablePath(const char* argument) {
 void Usage() {
   std::cerr
       << "usage: dangd --model FILE --config FILE [--search DIR] [--state FILE]"
-         " [--nacm FILE] [--recovery-user USER]... [--plugin FILE]..."
+         " [--nacm FILE] [--recovery-user USER]... [--no-default-superuser]"
+         " [--plugin FILE]..."
          " [--plugin-worker FILE]"
          " [--check | --stdio --username USER [--session-id ID]"
          " | --ssh-listen ADDRESS --ssh-port PORT --ssh-host-key FILE"
@@ -85,6 +86,8 @@ int main(int argc, char* argv[]) {
       options.nacm_configuration = std::filesystem::path(argv[++index]);
     } else if (argument == "--recovery-user" && index + 1 < argc) {
       options.recovery_users.emplace_back(argv[++index]);
+    } else if (argument == "--no-default-superuser") {
+      options.default_superuser = false;
     } else if (argument == "--plugin" && index + 1 < argc) {
       options.plugins.emplace_back(argv[++index]);
     } else if (argument == "--plugin-worker" && index + 1 < argc) {

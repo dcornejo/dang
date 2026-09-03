@@ -259,10 +259,13 @@ ordinary candidate edits and commits. The policy active at RPC start
 authorizes the change, and its compiled replacement becomes active only after
 the complete backend transaction succeeds. When the NACM container is absent,
 the RFC 8341 defaults remain active: reads and operations are permitted, while
-configuration writes are denied. Configure at least one repeatable
-`--recovery-user USER` whose authenticated sessions may bypass NACM to install
-or repair policy. Recovery identities are host configuration, are never read
-from the datastore, and survive NACM commits and `SIGHUP` reloads. They must be
+configuration writes are denied. The built-in `dangd-superuser` identity may
+bypass NACM to install or repair policy once an SSH key or TLS certificate is
+authenticated as that exact name. Dangd and its packages create no
+operating-system account or credential for it. Use `--no-default-superuser`
+after establishing and testing another repeatable `--recovery-user USER`.
+Recovery identities are host configuration, are never read from the datastore,
+and survive NACM commits and `SIGHUP` reloads. They must be
 unique canonical UTF-8 names; padded, control-containing, embedded-NUL,
 oversized, malformed, or duplicate identities make startup fail. Denial
 counters remain core-owned operational state and are returned by `<get>`.

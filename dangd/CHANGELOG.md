@@ -5,6 +5,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added a default, removable `dangd-superuser` recovery identity scoped solely
+  to dangd NACM bypass. No operating-system account, password, private key, or
+  trust mapping is created by the daemon or native packages.
+
 ### Changed
 
 - Activated the complete initial or restored running tree through affected

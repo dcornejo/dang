@@ -669,6 +669,41 @@ TEST(DangdApplicationTest, UsesSecureNacmDefaultsWhenSubtreeIsAbsent) {
   EXPECT_NE(denied.xml.find("access-denied"), std::string::npos) << denied.xml;
 }
 
+TEST(DangdApplicationTest, ProvidesRemovableDangdOnlySuperuser) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.recovery_users.clear();
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
+  const std::string edit = R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="bootstrap">
+      <edit-config><target><candidate/></target><config>
+        <system xmlns="urn:example:appliance"><hostname>recovered</hostname></system>
+      </config></edit-config>
+    </rpc>)xml";
+  EXPECT_NE(loaded.application->server().Process("guest", edit).xml.find(
+                "access-denied"),
+            std::string::npos);
+  EXPECT_NE(loaded.application->server()
+                .Process(std::string(kDefaultSuperuser), edit)
+                .xml.find("<ok/>"),
+            std::string::npos);
+  const auto audit = loaded.application->DrainRecoveryAuditRecords();
+  ASSERT_EQ(audit.size(), 1U);
+  EXPECT_NE(audit.front().find("user=dangd-superuser"), std::string::npos);
+
+  options.default_superuser = false;
+  auto disabled = Application::Load(options);
+  ASSERT_NE(disabled.application, nullptr)
+      << testing::PrintToString(disabled.errors);
+  EXPECT_NE(disabled.application->server()
+                .Process(std::string(kDefaultSuperuser), edit)
+                .xml.find("access-denied"),
+            std::string::npos);
+  EXPECT_TRUE(disabled.application->DrainRecoveryAuditRecords().empty());
+}
+
 TEST(DangdApplicationTest, LoadsNacmAndUsesAuthenticatedSessionIdentity) {
   TemporaryInputs inputs;
   auto options = Options(inputs);
@@ -729,6 +764,7 @@ TEST(DangdApplicationTest, EmitsSafeRecoveryAuditRecords) {
 TEST(DangdApplicationTest, RejectsUnsafeOrDuplicateRecoveryUsers) {
   const std::vector<std::vector<std::string>> invalid = {
       {"alice", "alice"},
+      {std::string(kDefaultSuperuser)},
       {" alice"},
       {"alice "},
       {"line\nuser"},

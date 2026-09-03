@@ -10,11 +10,15 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added the built-in `dangd-superuser` NETCONF recovery identity. It exists only
+  in dangd's NACM recovery set, has no packaged credential or operating-system
+  account, is audited like every recovery identity, and can be removed with
+  `--no-default-superuser` after an alternate recovery path is verified.
 - Added native Debian and FreeBSD package generation from the audited CMake
   install manifest, including platform dependency metadata and packaging
   instructions. Packages remain deliberately service-neutral until an
   administrator supplies deployment-specific model, datastore, NACM, key,
-  and recovery configuration.
+  and authenticated-identity binding configuration.
 - Excluded repository-only SSH and TLS test credentials from the production
   install and native package manifests.
 

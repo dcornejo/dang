@@ -12,6 +12,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "dangd/configuration_backend.h"
@@ -25,6 +26,9 @@
 #include "yang/netconf_server.h"
 
 namespace dangd {
+
+/** Built-in NETCONF-only identity used for emergency NACM recovery. */
+inline constexpr std::string_view kDefaultSuperuser = "dangd-superuser";
 
 /** Immutable RFC 8525 operational data supplied to NETCONF get. */
 class DangdOperationalData final
@@ -84,6 +88,8 @@ struct ApplicationOptions {
   std::optional<std::filesystem::path> nacm_configuration;
   /** Host-authenticated users whose sessions bypass NACM for recovery. */
   std::vector<std::string> recovery_users;
+  /** Enables the built-in dangd-only recovery identity. */
+  bool default_superuser = true;
   /** POSIX shared libraries implementing versioned dangd plugin ABI v1. */
   std::vector<std::filesystem::path> plugins;
   /** Worker executable enabling isolated live plugin ownership when set. */

@@ -246,11 +246,14 @@ NACM inputs without a finding. The reusable sysrepo comparison is in
 `tests/interoperability`; broader client/version matrices remain release
 evidence rather than implementation gaps.
 
-No default privileged identity is currently shipped. Recovery users must be
-explicitly bound to authenticated transport identities by the administrator.
-The planned dedicated dangd-only bootstrap super-user, including rotation and
-removal semantics, is tracked in `TODO.md`; it must not become an operating
-system or general application account.
+Dangd includes the `dangd-superuser` recovery identity by default. It is only a
+name in dangd's trusted NACM recovery set: no operating-system account,
+password, private key, certificate, or authorization for another service is
+created. An administrator must bind a transport credential to that exact name.
+Every RPC attempt is recovery-audited, and `--no-default-superuser` removes the
+identity on startup or reload after an alternate recovery route is established.
+`DangdApplicationTest.ProvidesRemovableDangdOnlySuperuser` covers privilege,
+audit, and removal; duplicate explicit registration still fails closed.
 
 When a runtime schema is supplied, unmodeled data is pruned even for recovery
 users or disabled NACM; only authorization decisions are bypassed. Keyed list

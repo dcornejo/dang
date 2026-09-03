@@ -1013,6 +1013,11 @@ LoadResult Application::Load(const ApplicationOptions& options) {
   } else {
     nacm.set_enabled(true);
   }
+  if (options.default_superuser &&
+      !nacm.AddRecoveryUser(std::string(kDefaultSuperuser))) {
+    result.errors.push_back("cannot install the default dangd super-user");
+    return result;
+  }
   for (const std::string& recovery_user : options.recovery_users) {
     if (!nacm.AddRecoveryUser(recovery_user)) {
       result.errors.push_back(
