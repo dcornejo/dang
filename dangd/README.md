@@ -267,6 +267,12 @@ unique canonical UTF-8 names; padded, control-containing, embedded-NUL,
 oversized, malformed, or duplicate identities make startup fail. Denial
 counters remain core-owned operational state and are returned by `<get>`.
 
+The state snapshot is server-owned and may contain modeled secrets. Dangd
+creates it mode 0600 and restores only a regular, non-symlink file owned by its
+effective user with no group or other access. The backup and offline restore
+procedure is documented in the user guide. Initial/restored plugin hydration
+when no configuration delta exists remains separate startup work.
+
 Application RPCs and YANG 1.1 actions are resolved against the compiled schema
 before dispatch. `dangd` applies operation rules and `default-deny-all`; actions
 also require read access to every data ancestor. Only then is the request sent

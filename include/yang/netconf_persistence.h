@@ -31,7 +31,7 @@ enum class SnapshotSaveStage {
 using SnapshotSaveCheckpoint =
     std::function<bool(SnapshotSaveStage stage)>;
 
-/** Saves a versioned JSON snapshot using same-directory atomic replacement. */
+/** Saves a private versioned JSON snapshot using atomic replacement. */
 [[nodiscard]] PersistenceResult SaveDatastoreSnapshot(
     const std::filesystem::path& path, const DatastoreManager& datastores,
     const SnapshotSaveCheckpoint& checkpoint = {});
@@ -39,7 +39,7 @@ using SnapshotSaveCheckpoint =
 [[nodiscard]] PersistenceResult SaveDatastoreSnapshot(
     const std::filesystem::path& path, const PersistentDatastoreState& state,
     const SnapshotSaveCheckpoint& checkpoint = {});
-/** Loads and restores a versioned JSON snapshot after schema validation. */
+/** Loads a private regular snapshot owned by this process and validates it. */
 [[nodiscard]] PersistenceResult LoadDatastoreSnapshot(
     const std::filesystem::path& path, DatastoreManager& datastores);
 /** Parses and restores an in-memory versioned JSON snapshot. */

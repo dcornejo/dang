@@ -319,7 +319,26 @@ persistent datastore state after session activity:
 
 Treat the snapshot as server-owned data. It is a persistence format for this
 implementation, not a client-facing replacement for NETCONF configuration
-encoding.
+encoding. The file contains the complete configuration, including modeled
+password hashes or other secrets, and is created mode 0600. Startup refuses a
+symbolic link, non-regular file, file owned by another effective user, or file
+with any group/other permission bits.
+
+Because each update atomically replaces the snapshot, an administrator may
+copy it while dangd is running and will obtain either the complete previous or
+complete current generation. Preserve private permissions on the backup:
+
+```sh
+install -m 600 appliance-state.json appliance-state.backup.json
+```
+
+To restore, stop dangd, retain the failed/current snapshot separately, install
+the chosen backup at the configured `--state` path with mode 0600 and the
+service identity as owner, then start dangd normally. Startup parses and
+schema-validates every stored datastore before changing live state and fails
+closed if the snapshot is corrupt, incompatible, unsafe, or unreadable. Do not
+edit snapshot JSON manually; use NETCONF to migrate configuration between
+different schemas or software versions.
 
 ## Embedding the same pattern
 

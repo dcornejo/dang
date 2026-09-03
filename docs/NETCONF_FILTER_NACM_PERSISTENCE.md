@@ -134,6 +134,12 @@ describe the device's complete resulting change.
 startup, and confirmed-commit recovery state. It writes a same-directory
 temporary file, flushes and synchronizes it, atomically renames it, and
 synchronizes the containing directory on macOS/POSIX systems.
+Temporary and final snapshots are mode 0600 regardless of the process umask,
+and failed saves remove any pre-rename temporary file. Restore opens the path
+without following symbolic links and, on POSIX hosts, accepts only a regular
+file owned by the effective user with no group or other permission bits. The
+same open descriptor is inspected and read so a path cannot be swapped between
+the security check and content read.
 
 ```cpp
 using yang::netconf::LoadDatastoreSnapshot;
@@ -165,13 +171,12 @@ the prior snapshot and restores the running tree, candidate/startup state,
 confirmed-commit metadata, backend/plugins, and managed NACM policy before the
 RPC returns `operation-failed`. Locks remain session state and are excluded.
 
-Library hosts decide when to snapshot, file ownership and permissions,
-encryption, backup rotation, and how to react to storage failure. They can use
+Library hosts decide when to snapshot, whether stronger encryption is needed,
+backup rotation, and how to react to storage failure. They can use
 `DatastoreManager::SetPersistentStateCommitter` to place their own durable store
 inside the same transaction boundary.
 
 This persistence covers the NETCONF datastore and confirmed-commit recovery
-state. A remaining startup integration task must hydrate affected plugins from
-the restored running configuration before the server accepts requests. The
-administrator-facing backup/restore lifecycle and secure file ownership policy
-also remain deployment work; see `TODO.md`.
+state. A remaining startup integration task must hydrate every affected plugin
+from the restored running configuration before the server accepts requests;
+see `TODO.md`.

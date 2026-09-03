@@ -15,14 +15,9 @@ stays in this file with its remaining work rewritten precisely.
 
 ### Configuration lifecycle and privileged recovery
 
-- [ ] Complete the configuration save/restore workflow. The current
-  `--state FILE` implementation atomically persists and validates conventional
-  NETCONF datastores and confirmed-commit recovery state; finish the
-  administrator-facing backup/restore lifecycle, permissions and recovery
-  guidance, and restored-plugin hydration so the complete device configuration
-  is available before requests are served.
 - [ ] Detect and load the initial configuration at startup, including delivery
-  of the restored configuration to affected plugins before serving requests.
+  of both initial and restored running configuration to every affected plugin
+  before serving requests, even when there is no configuration delta.
 - [ ] Create and ship a default super-user identity exclusively for dangd
   privileged access. It must not authenticate to, authorize, or provision any
   other operating-system or application service, and its bootstrap, rotation,

@@ -8,6 +8,11 @@
 
 #include <gtest/gtest.h>
 
+#if defined(__unix__) || defined(__APPLE__)
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
+
 #include "yang/compiler.h"
 #include "yang/module_resolver.h"
 #include "yang/netconf_persistence.h"
@@ -67,6 +72,38 @@ TEST(NetconfPersistenceTest, SavesAndRestoresAllDatastores) {
             std::string::npos);
   std::error_code ignored;
   std::filesystem::remove(path, ignored);
+}
+
+TEST(NetconfPersistenceTest, ProtectsSnapshotAndRejectsUnsafeRestorePaths) {
+#if defined(__unix__) || defined(__APPLE__)
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildPersistenceFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  const std::filesystem::path directory =
+      std::filesystem::temp_directory_path() /
+      ("yang-private-snapshot-" +
+       std::to_string(std::chrono::steady_clock::now()
+                          .time_since_epoch().count()));
+  ASSERT_TRUE(std::filesystem::create_directory(directory));
+  const std::filesystem::path path = directory / "state.json";
+  ASSERT_TRUE(SaveDatastoreSnapshot(path, stores).ok);
+  struct stat status {};
+  ASSERT_EQ(stat(path.c_str(), &status), 0);
+  EXPECT_EQ(status.st_mode & (S_IRWXG | S_IRWXO), 0);
+
+  ASSERT_EQ(chmod(path.c_str(), S_IRUSR | S_IWUSR | S_IRGRP), 0);
+  EXPECT_FALSE(LoadDatastoreSnapshot(path, stores).ok);
+  ASSERT_EQ(chmod(path.c_str(), S_IRUSR | S_IWUSR), 0);
+  const std::filesystem::path link = directory / "state-link.json";
+  ASSERT_EQ(symlink(path.c_str(), link.c_str()), 0);
+  EXPECT_FALSE(LoadDatastoreSnapshot(link, stores).ok);
+
+  std::error_code ignored;
+  std::filesystem::remove_all(directory, ignored);
+#else
+  GTEST_SKIP() << "POSIX snapshot permissions are not available";
+#endif
 }
 
 TEST(NetconfPersistenceTest, RestoresOrExpiresConfirmedCommitSafely) {
@@ -160,6 +197,12 @@ TEST(NetconfPersistenceTest, AtomicSnapshotSurvivesEveryInterruptedSaveStage) {
           return stage != interrupted_stage;
         });
     EXPECT_FALSE(result.ok);
+
+    for (const auto& entry : std::filesystem::directory_iterator(directory)) {
+      EXPECT_EQ(entry.path().filename().string().find("state.json.tmp-"),
+                std::string::npos)
+          << entry.path();
+    }
 
     DatastoreManager recovered(fixture->schema, fixture->initial);
     ASSERT_TRUE(LoadDatastoreSnapshot(path, recovered).ok);

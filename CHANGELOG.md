@@ -20,6 +20,11 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Completed the configuration save/restore TODO with private mode-0600 atomic
+  snapshots, same-descriptor restore checks for type, ownership, permissions,
+  size and symlinks, cleanup after interrupted saves, and a documented live
+  backup and offline restore procedure. Initial plugin hydration remains a
+  separate startup task.
 - Refreshed the documentation checkpoint to reconcile current FreeBSD IP
   behavior, transport evidence, persistence boundaries, package security, and
   the newly recorded standards, privileged-identity, startup-hydration, and

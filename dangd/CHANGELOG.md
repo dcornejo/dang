@@ -7,6 +7,9 @@
 
 ### Changed
 
+- Hardened configured state-file save and restore: snapshots are always private,
+  unsafe restore paths fail closed, interrupted writes leave no temporary file,
+  and the supported backup/restore lifecycle is documented.
 - Accept standards-valid XPath constraints that reference feature-pruned
   schema nodes, enabling RFC 7317 without falsely advertising RADIUS support.
 - Corrected effective namespaces and unprefixed key resolution for schema nodes
