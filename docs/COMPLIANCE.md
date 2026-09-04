@@ -469,9 +469,16 @@ replaces only those roots in the complete dangd applied snapshot. This exposes
 FRR's accepted configuration, including deletion or normalization, while
 preserving configuration owned by other providers.
 
+Those reconciled roots are retained as expected state. Subsequent operational
+retrievals compare fresh mgmtd running roots semantically, ignoring namespace
+prefix spelling but not modeled names, namespaces, attributes, values, or child
+order. A mismatch fails the provider at the affected root and is exposed by
+dangd's modeled operational-provider failure telemetry. Detection is currently
+read-triggered; unsolicited drift notification remains open.
+
 This is conformance to the installed FRR-native model set rather than an IETF
-routing-model claim. Explicit out-of-band drift detection, runtime feature
-discovery, RPC and notification dispatch, isolated
+routing-model claim. Unsolicited drift notification, runtime feature discovery,
+RPC and notification dispatch, isolated
 native mutation coverage, and additional protocol-daemon modules remain open.
 
 ### RFC 8343 — interface management and RFC 8344 — IP management
