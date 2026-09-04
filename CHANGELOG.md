@@ -38,6 +38,11 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Promoted the FRR-native provider to the highest roadmap priority, immediately
+  followed by the IETF RFC 8431 provider. Recorded the decisions to use one
+  coordinated plugin, pinned native FRR YANG, the programmatic `mgmtd` API,
+  dangd configuration authority with drift detection, and exclusive ownership
+  of routing resources.
 - Made programmatic library, kernel, and structured daemon APIs the required
   preference for new plugin implementations; command execution now requires a
   documented lack of a suitable API plus argv-only failure/rollback coverage.

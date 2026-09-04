@@ -15,24 +15,26 @@ stays in this file with its remaining work rewritten precisely.
 
 ### Standards and models
 
-- [ ] Complete RFC 9642 beyond the implemented central cleartext symmetric-key
-  slice: add asymmetric key-pair verification, genuinely hidden and encrypted
-  key representations, encryption and zeroization beyond the private snapshot
-  boundary, built-in operational keys, CSR/certificate behavior, and
-  independent behavioral interoperability evidence.
+- [ ] Implement the top-priority FRR provider as one coordinated, separately
+  packaged plugin for Linux and FreeBSD. Pin and expose FRR's native YANG
+  modules, use the programmatic `mgmtd` frontend API, and make dangd
+  authoritative for managed FRR configuration while detecting out-of-band
+  drift. Add routing-resource ownership so this provider and the native IETF
+  RIB provider cannot both program routes, express the eventual package
+  conflict, and validate transactions and rollback in isolation without
+  attaching host LAN interfaces. Begin with common infrastructure, zebra, and
+  static routing before enabling each additional protocol daemon.
 - [ ] Complete RFC 8431 after the external plugin's schema, strict portable
   route parser, delta planner, and transaction-safe native execution: wire the
   executor into the plugin ABI, implement all seven RPCs and both notifications,
   publish observed operational state, resolve FreeBSD interface-only nexthops,
   replace numeric-only RIB names with an explicit platform mapping, then
   advertise and test the module end to end.
-- [ ] Implement an FRR-backed routing plugin for Linux and FreeBSD without
-  attaching tests to host LAN interfaces. Define its exact model surface and
-  use a supported FRR management interface rather than parsing interactive CLI
-  output. Before advertising any module also define delegation or strict
-  mutual exclusion with the native RFC 8431 provider: packages should declare
-  the conflict, while dangd must independently reject duplicate runtime module
-  ownership.
+- [ ] Complete RFC 9642 beyond the implemented central cleartext symmetric-key
+  slice: add asymmetric key-pair verification, genuinely hidden and encrypted
+  key representations, encryption and zeroization beyond the private snapshot
+  boundary, built-in operational keys, CSR/certificate behavior, and
+  independent behavioral interoperability evidence.
 - [ ] Implement and document the RFC 9067 routing-policy model, with conformance
   and interoperability tests and any variance recorded in
   `docs/COMPLIANCE.md`.
