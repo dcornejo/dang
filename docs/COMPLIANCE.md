@@ -463,11 +463,15 @@ publishes only complete, correlated XML `TREE_DATA` replies through dangd's
 operational-provider ABI. For augments below imported interface and VRF lists,
 only identifying keys and `frr-zebra` descendants are retained; unrelated base
 state is discarded. Partial results, unexpected formats, continuation replies,
-and protocol-correlation failures fail closed.
+and protocol-correlation failures fail closed. After apply, ABI-v6
+reconciliation reads both managed roots from FRR's running datastore and
+replaces only those roots in the complete dangd applied snapshot. This exposes
+FRR's accepted configuration, including deletion or normalization, while
+preserving configuration owned by other providers.
 
 This is conformance to the installed FRR-native model set rather than an IETF
-routing-model claim. Applied-state reconciliation, explicit out-of-band drift
-detection, runtime feature discovery, RPC and notification dispatch, isolated
+routing-model claim. Explicit out-of-band drift detection, runtime feature
+discovery, RPC and notification dispatch, isolated
 native mutation coverage, and additional protocol-daemon modules remain open.
 
 ### RFC 8343 — interface management and RFC 8344 — IP management

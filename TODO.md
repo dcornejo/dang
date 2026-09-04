@@ -22,8 +22,9 @@ stays in this file with its remaining work rewritten precisely.
   protocol, claims ABI-v7 `routing`, validates in disposable sessions, commits
   atomically, restores the before-image on rollback, and publishes live
   owned top-level and augmented zebra operational XML through native mgmtd
-  `GET_DATA`. Add applied-state reconciliation, out-of-band drift detection,
-  feature discovery,
+  `GET_DATA`. It reads the managed running roots back after apply for ABI-v6
+  applied-state reconciliation. Add out-of-band drift detection, feature
+  discovery,
   RPCs and notifications, isolated native mutation tests, the eventual package
   conflict with an executable IETF RIB provider, and then enable each additional
   FRR protocol daemon without attaching host LAN interfaces.
