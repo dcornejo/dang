@@ -36,5 +36,6 @@ modules are pinned at 2024-10-16. The exact RFC 9640 crypto-types, RFC 9641
 truststore, RFC 9642 keystore, and RFC 7317 `iana-crypt-hash` dependency sources
 are included beside them. These are unmodified registry sources (apart from a
 final newline where absent) with their embedded license notices. Dangd exposes
-the complete closure as import-only modules; bundling a dependency does not
-claim that its top-level configuration is implemented.
+the complete closure in its library. `ietf-keystore` is implemented with only
+the central and symmetric-key features; the other dependency modules remain
+import-only.

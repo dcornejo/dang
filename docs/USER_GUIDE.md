@@ -344,6 +344,31 @@ or if a plugin rejects or cannot apply the restored configuration. Do not edit
 snapshot JSON manually; use NETCONF to migrate configuration between different
 schemas or software versions.
 
+### Store a central symmetric key
+
+The built-in RFC 9642 slice accepts central cleartext symmetric keys. A recovery
+identity (or an explicitly authorized NACM user) can place this inside an
+`edit-config` candidate `<config>` and then commit it:
+
+```xml
+<keystore xmlns="urn:ietf:params:xml:ns:yang:ietf-keystore"
+          xmlns:ct="urn:ietf:params:xml:ns:yang:ietf-crypto-types">
+  <symmetric-keys>
+    <symmetric-key>
+      <name>backup-key</name>
+      <key-format>ct:octet-string-key-format</key-format>
+      <cleartext-symmetric-key>AQIDBA==</cleartext-symmetric-key>
+    </symmetric-key>
+  </symmetric-keys>
+</keystore>
+```
+
+The value is base64-encoded binary, not a password string. Its standard
+`default-deny-all` annotation prevents ordinary NETCONF reads, and its parent
+keystore is `default-deny-write`. When `--state` is used, the cleartext value is
+inside the owner-only mode-0600 snapshot; dangd does not yet encrypt that file.
+Do not use this model as the source of SSH or TLS host keys yet.
+
 ### 9. Bootstrap and rotate privileged access
 
 Dangd includes the recovery name `dangd-superuser`. It exists only inside

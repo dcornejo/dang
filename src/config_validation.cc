@@ -1672,8 +1672,15 @@ RuntimeSchema RuntimeSchemaBuilder::FromCompilation(const Compilation& compilati
     const std::string own_module = source.belongs_to.value_or(source.name);
     if (namespaces.contains(own_module)) {
       lowered.namespaces.push_back({source.prefix, namespaces.at(own_module)});
-      lowered.namespaces.push_back({"", namespaces.at(own_module)});
     }
+    // An unprefixed node test follows the effective schema tree.  This matters
+    // for constraints declared inside an imported grouping: its instantiated
+    // data nodes belong to the using module even though explicit prefixes are
+    // still resolved against the module that authored the expression.
+    const std::string& effective_module =
+        constraint.constrained_node.tree_module->name;
+    if (namespaces.contains(effective_module))
+      lowered.namespaces.push_back({"", namespaces.at(effective_module)});
     for (const auto& [prefix, imported] : source.imports) {
       lowered.namespaces.push_back({prefix, imported->namespace_uri});
     }

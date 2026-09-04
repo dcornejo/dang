@@ -15,8 +15,11 @@ stays in this file with its remaining work rewritten precisely.
 
 ### Standards and models
 
-- [ ] Implement and document the RFC 9642 keystore model, with conformance and
-  interoperability tests and any variance recorded in `docs/COMPLIANCE.md`.
+- [ ] Complete RFC 9642 beyond the implemented central cleartext symmetric-key
+  slice: add asymmetric key-pair verification, genuinely hidden and encrypted
+  key representations, encryption and zeroization beyond the private snapshot
+  boundary, built-in operational keys, CSR/certificate behavior, and
+  independent behavioral interoperability evidence.
 - [ ] Implement and document the RFC 8431 RIB model, with conformance and
   interoperability tests and any variance recorded in `docs/COMPLIANCE.md`.
 - [ ] Implement and document the RFC 9067 routing-policy model, with conformance

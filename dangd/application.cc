@@ -382,6 +382,10 @@ std::string BuildYangLibraryXml(
     }
     if (is_implemented && module->name == "ietf-netconf-nmda")
       entry.append_child("feature").text() = "origin";
+    if (is_implemented && module->name == "ietf-keystore") {
+      entry.append_child("feature").text() = "central-keystore-supported";
+      entry.append_child("feature").text() = "symmetric-keys";
+    }
     if (is_implemented) {
       for (const std::string& deviation : deviations[module->name])
         entry.append_child("deviation").text() = deviation.c_str();
@@ -963,7 +967,13 @@ LoadResult Application::Load(const ApplicationOptions& options) {
         {"ietf-netconf", "validate"},
         {"ietf-netconf", "startup"},
         {"ietf-netconf", "xpath"},
-        {"ietf-netconf-nmda", "origin"}};
+        {"ietf-netconf-nmda", "origin"},
+        // RFC 9642 phase one provides a central symmetric-key datastore.  The
+        // asymmetric and encrypted/hidden representations remain disabled
+        // until their backing cryptographic semantics are implemented.
+        {"ietf-keystore", "central-keystore-supported"},
+        {"ietf-keystore", "symmetric-keys"},
+        {"ietf-crypto-types", "cleartext-symmetric-keys"}};
     for (const PluginYangSource& plugin_source : plugins->yang_sources()) {
       for (const std::string& feature : plugin_source.enabled_features)
         features.push_back({plugin_source.module_name, feature});
@@ -979,7 +989,7 @@ LoadResult Application::Load(const ApplicationOptions& options) {
                                     "ietf-yang-library",
                                     "ietf-netconf-monitoring",
                                     "ietf-netconf", "ietf-netconf-nmda",
-                                    "dangd-reconciliation"};
+                                    "dangd-reconciliation", "ietf-keystore"};
   for (const PluginYangSource& plugin_source : plugins->yang_sources()) {
     if (plugin_source.role != DANG_YANG_IMPORT_ONLY_V1)
       implemented.insert(plugin_source.module_name);

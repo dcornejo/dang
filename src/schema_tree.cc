@@ -166,7 +166,6 @@ SchemaNode& SchemaTree::Get(SchemaNodeId id) { return nodes_.at(id); }
 
 void SchemaTree::DisableSubtree(SchemaNodeId id) {
   SchemaNode& node = Get(id);
-  if (!node.supported) return;
   node.supported = false;
   const std::vector<SchemaNodeId> children = node.children;
   for (const SchemaNodeId child : children) DisableSubtree(child);
@@ -195,6 +194,7 @@ std::optional<SchemaTree> SchemaBuilder::BuildFor(
   SchemaTree result;
   bool valid = true;
   std::unordered_set<GroupingKey, GroupingKeyHash> expanding;
+  std::vector<SchemaNodeId> feature_disabled_roots;
 
   struct ResolvedGrouping {
     Symbol symbol;
@@ -272,9 +272,13 @@ std::optional<SchemaTree> SchemaBuilder::BuildFor(
 
     for (const StatementId child_id : parent_statement.children) {
       const Statement& statement = source->syntax->Get(child_id);
-      if (!StatementEnabled(*source, statement, features, diagnostics_, valid)) {
-        continue;
-      }
+      const bool statement_enabled =
+          StatementEnabled(*source, statement, features, diagnostics_, valid);
+      // Keep feature-disabled schema nodes until augments have been resolved.
+      // RFC modules may legally augment a node guarded by an independently
+      // selectable feature (RFC 9642 does this for encrypted key cases).  The
+      // disabled subtree is removed only after augment processing completes.
+      if (!statement_enabled && !NodeKind(statement.keyword)) continue;
       if (statement.keyword == "uses" && statement.argument) {
         const auto grouping = resolve_grouping(owner, source, *statement.argument, scopes);
         if (!grouping) continue;  // Symbol resolution already diagnosed this.
@@ -448,6 +452,10 @@ std::optional<SchemaTree> SchemaBuilder::BuildFor(
           *kind == SchemaNodeKind::kNotification) node.declared_config = false;
       const auto id = add_node(std::move(node), statement.range);
       if (!id) continue;
+      if (!statement_enabled) {
+        result.Get(*id).supported = false;
+        feature_disabled_roots.push_back(*id);
+      }
       if (created && actual_parent == parent_node) created->push_back(*id);
       expand_children(owner, namespace_owner, source, statement, *id, origin,
                       instantiation, scopes, nullptr);
@@ -513,6 +521,7 @@ std::optional<SchemaTree> SchemaBuilder::BuildFor(
   };
   apply_augments(root_symbols->module());
   for (const auto& included : root_symbols->module()->includes) apply_augments(included);
+  for (const SchemaNodeId id : feature_disabled_roots) result.DisableSubtree(id);
 
   std::function<void(SchemaNodeId, bool)> inherit_config;
   inherit_config = [&](SchemaNodeId id, bool parent_config) {
@@ -524,7 +533,7 @@ std::optional<SchemaTree> SchemaBuilder::BuildFor(
 
   for (std::size_t index = 0; index < result.size(); ++index) {
     SchemaNode& node = result.Get(static_cast<SchemaNodeId>(index));
-    if (node.kind != SchemaNodeKind::kList || !node.source_module ||
+    if (!node.supported || node.kind != SchemaNodeKind::kList || !node.source_module ||
         node.declaration == kInvalidStatementId) continue;
     const Statement& declaration = node.source_module->syntax->Get(node.declaration);
     SchemaPathParser path_parser(diagnostics_);
@@ -599,6 +608,7 @@ std::optional<SchemaTree> SchemaBuilder::BuildFor(
   }
   for (std::size_t index = 0; index < result.size(); ++index) {
     const SchemaNode& node = result.Get(static_cast<SchemaNodeId>(index));
+    if (!node.supported) continue;
     if (node.min_elements && node.max_elements &&
         *node.min_elements > *node.max_elements) {
       diagnostics_.Report({DiagnosticCode::kInvalidElementBounds,

@@ -7,6 +7,8 @@
 
 ### Added
 
+- Added managed RFC 9642 central cleartext symmetric keys with standard NACM
+  protection, persistence/restart coverage, retrieval, and feature reporting.
 - Added the RFC 9644 SSH client/server grouping family and its pinned dependency
   closure to the built-in import-only schema library and `get-schema` service.
 
@@ -16,6 +18,8 @@
 
 ### Changed
 
+- Resolve augments into feature-disabled branches before pruning them and use
+  the effective module namespace for imported-grouping XPath evaluation.
 - Compile the RFC 9644 family without advertising writable transport or
   keystore behavior; the embedded SSH listener remains explicitly configured.
 

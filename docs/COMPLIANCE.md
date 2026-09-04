@@ -518,15 +518,43 @@ This is schema/grouping conformance, not a claim that the grouping contents are
 writable dangd configuration. RFC 9644 intentionally defines reusable
 groupings and omits transport addresses and ports. The embedded libssh listener
 continues to use explicit command-line settings. Dangd does not instantiate an
-RFC 9644 consuming transport model, and the bundled RFC 9642 keystore and RFC
-9641 truststore dependencies remain import-only; their configuration and
-operational behavior are not implemented. These are explicit variances from a
-server that uses RFC 9644 as its management interface.
+RFC 9644 consuming transport model, and its RFC 9641 truststore dependency
+remains import-only. The RFC 9642 keystore is independently instantiated, but
+transport host keys are not yet sourced from it.
+
+## RFC 9642 keystore
+
+Status: **partial implementation: central cleartext symmetric keys**.
+
+Dangd implements the `ietf-keystore` revision 2024-10-10 top-level datastore
+with `central-keystore-supported` and `symmetric-keys`. The effective
+`ietf-crypto-types` schema enables `cleartext-symmetric-keys`. NETCONF clients
+can edit, validate, commit, retrieve, and restart with named symmetric keys and
+their key-format identities. The standard `default-deny-write` and
+`default-deny-all` annotations are enforced: ordinary users cannot change the
+keystore and cannot retrieve cleartext key values, while configured recovery
+identities retain explicit break-glass access. The implemented module and its
+two features are published in RFC 8525/RFC 7895 inventories and its source is
+available through RFC 6022 `get-schema`.
+
+Committed key data uses the same atomic, owner-only mode-0600 state snapshot as
+the other datastores. This meets RFC 9642's fallback requirement that persisted
+cleartext key storage be inaccessible to other users, but it is not encryption
+at rest. Backups therefore require the same secret-handling controls.
+
+The asymmetric-key, hidden-key, and encrypted-key features are not advertised
+or accepted. Dangd does not yet verify asymmetric key pairs, generate CSRs,
+emit certificate-expiration notifications, zeroize key buffers, expose
+built-in operational keys, or connect SSH/TLS host credentials to this model.
+The imported `ietf-crypto-types` feature used to shape the effective grouping
+cannot be listed on an RFC 8525 import-only module entry. Independent schema
+interoperability is covered through the bundled unmodified module family;
+independent behavioral interoperability remains release-gated in `TODO.md`.
 
 ## Roadmap-only standards and models
 
-The RFC 9642 keystore, the RFC 8431 RIB model, the RFC 9067 routing-policy
-model, and OpenConfig VLAN draft models are
+The remaining RFC 9642 keystore work, the RFC 8431 RIB model, the RFC 9067
+routing-policy model, and OpenConfig VLAN draft models are
 planned but not implemented, advertised, or claimed. Exact module revisions,
 feature/deviation choices, plugin ownership, platform effects, and
 interoperability evidence must be established before their status moves into

@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added the first managed RFC 9642 keystore slice: central cleartext symmetric
+  keys, NACM-protected edit/retrieval, durable restart restoration, built-in
+  model retrieval, and accurate YANG Library feature publication.
 - Added the complete pinned RFC 9644 SSH grouping family and dependency closure
   as built-in import-only schemas, including YANG Library advertisement,
   `get-schema` retrieval, internal conformance coverage, and independent
@@ -29,6 +32,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Preserve feature-disabled schema branches until standards-valid augments have
+  resolved, then prune them before runtime use; lower unprefixed XPath names in
+  imported groupings against their effective using-module namespace.
 - Resolve XPath data paths through transparent `choice` and `case` schema nodes
   and use the effective namespace for unprefixed paths in imported groupings,
   allowing unmodified modern IETF crypto and SSH modules to compile.

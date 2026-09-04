@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include "yang/module_resolver.h"
+#include "yang/identity_feature.h"
 #include "yang/schema_tree.h"
 #include "yang/semantic_model.h"
 #include "yang/type_system.h"
@@ -20,7 +21,8 @@ struct BuiltSchema {
   std::optional<TypeContext> types;
   std::optional<SchemaTree> schema;
 
-  void Build(std::string source) {
+  void Build(std::string source,
+             const std::vector<QualifiedSymbolName>& features = {}) {
     ModuleResolver module_resolver(repository, sink);
     module = module_resolver.Resolve(test::Source(std::move(source), sink));
     if (!module) return;
@@ -30,8 +32,13 @@ struct BuiltSchema {
     TypeResolver type_resolver(sink);
     types = type_resolver.Resolve(*semantics);
     if (!types) return;
+    IdentityFeatureResolver feature_resolver(sink);
+    const auto feature_context = feature_resolver.Resolve(*semantics, features);
+    if (!feature_context) return;
     SchemaBuilder schema_builder(sink);
-    schema = schema_builder.Build(*semantics, *types);
+    schema = schema_builder.Build(*semantics, *types,
+                                  features.empty() ? nullptr
+                                                   : &feature_context->features);
   }
 };
 
@@ -244,6 +251,37 @@ TEST(SchemaTreeTest, AppliesUsesLocalAugment) {
   const SchemaNode& target = Child(*built.schema, root.id, "app", "target");
   EXPECT_EQ(Child(*built.schema, target.id, "app", "added").origin,
             SchemaNodeOrigin::kAugment);
+}
+
+TEST(SchemaTreeTest, ResolvesUsesAugmentIntoFeatureDisabledCaseBeforePruning) {
+  BuiltSchema built;
+  built.Build(R"yang(module app {
+    yang-version 1.1;
+    namespace "urn:app"; prefix app;
+    feature clear;
+    feature encrypted;
+    grouping key {
+      choice kind {
+        case clear { if-feature clear; leaf value { type string; } }
+        case encrypted {
+          if-feature encrypted;
+          container ciphertext { container encrypted-by; }
+        }
+      }
+    }
+    container keys {
+      uses key {
+        augment "kind/encrypted/ciphertext/encrypted-by" {
+          leaf key-ref { type string; }
+        }
+      }
+    }
+  })yang", {{"app", "clear"}});
+  ASSERT_TRUE(built.schema) << testing::PrintToString(built.sink.diagnostics());
+  const SchemaNode& keys = Child(*built.schema, std::nullopt, "app", "keys");
+  const SchemaNode& kind = Child(*built.schema, keys.id, "app", "kind");
+  EXPECT_TRUE(built.schema->FindChild(kind.id, {"app", "clear"}));
+  EXPECT_FALSE(built.schema->FindChild(kind.id, {"app", "encrypted"}));
 }
 
 TEST(SchemaTreeTest, RejectsAugmentOfLeaf) {

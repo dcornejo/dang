@@ -159,6 +159,91 @@ TEST(DangdApplicationTest, LoadsModelAndCompleteConfiguration) {
       << library.xml;
 }
 
+TEST(DangdApplicationTest, ManagesNacmProtectedCentralSymmetricKeys) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.state_file = inputs.Path("keystore-state.json");
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+
+  yang::netconf::RpcSessionContext recovery{1, "alice", "alice", {}};
+  const auto edit = loaded.application->server().Process(recovery, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="edit">
+      <edit-config><target><candidate/></target><config>
+        <keystore xmlns="urn:ietf:params:xml:ns:yang:ietf-keystore"
+                  xmlns:ct="urn:ietf:params:xml:ns:yang:ietf-crypto-types">
+          <symmetric-keys><symmetric-key>
+            <name>backup-key</name>
+            <key-format>ct:octet-string-key-format</key-format>
+            <cleartext-symmetric-key>AQIDBA==</cleartext-symmetric-key>
+          </symmetric-key></symmetric-keys>
+        </keystore>
+      </config></edit-config>
+    </rpc>)xml");
+  ASSERT_NE(edit.xml.find("<ok/>"), std::string::npos) << edit.xml;
+  const auto committed = Commit(*loaded.application);
+  ASSERT_NE(committed.xml.find("<ok/>"), std::string::npos) << committed.xml;
+
+  const auto privileged = loaded.application->server().Process(recovery, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="read">
+      <get-config><source><running/></source></get-config>
+    </rpc>)xml");
+  EXPECT_NE(privileged.xml.find("<name>backup-key</name>"), std::string::npos)
+      << privileged.xml;
+  EXPECT_NE(privileged.xml.find("AQIDBA=="), std::string::npos)
+      << privileged.xml;
+
+  yang::netconf::RpcSessionContext ordinary{2, "bob", "bob", {}};
+  const auto filtered = loaded.application->server().Process(ordinary, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="read">
+      <get-config><source><running/></source></get-config>
+    </rpc>)xml");
+  EXPECT_NE(filtered.xml.find("<name>backup-key</name>"), std::string::npos)
+      << filtered.xml;
+  EXPECT_EQ(filtered.xml.find("AQIDBA=="), std::string::npos) << filtered.xml;
+  EXPECT_EQ(filtered.xml.find("cleartext-symmetric-key"), std::string::npos)
+      << filtered.xml;
+
+  const auto denied = loaded.application->server().Process(ordinary, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="denied">
+      <edit-config><target><candidate/></target><config>
+        <keystore xmlns="urn:ietf:params:xml:ns:yang:ietf-keystore"
+                  xmlns:ct="urn:ietf:params:xml:ns:yang:ietf-crypto-types">
+          <symmetric-keys><symmetric-key><name>intruder-key</name>
+            <key-format>ct:octet-string-key-format</key-format>
+            <cleartext-symmetric-key>AQ==</cleartext-symmetric-key>
+          </symmetric-key></symmetric-keys>
+        </keystore>
+      </config></edit-config>
+    </rpc>)xml");
+  EXPECT_NE(denied.xml.find("access-denied"), std::string::npos) << denied.xml;
+
+  const auto library = loaded.application->server().Process(recovery, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="library">
+      <get/>
+    </rpc>)xml");
+  EXPECT_NE(library.xml.find("<name>ietf-keystore</name>"), std::string::npos)
+      << library.xml;
+  EXPECT_NE(library.xml.find("<feature>central-keystore-supported</feature>"),
+            std::string::npos) << library.xml;
+  EXPECT_NE(library.xml.find("<feature>symmetric-keys</feature>"),
+            std::string::npos) << library.xml;
+
+  loaded.application.reset();
+  auto restored = Application::Load(options);
+  ASSERT_NE(restored.application, nullptr)
+      << testing::PrintToString(restored.errors);
+  const auto after_restart = restored.application->server().Process(
+      recovery, R"xml(
+        <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="restored">
+          <get-config><source><running/></source></get-config>
+        </rpc>)xml");
+  EXPECT_NE(after_restart.xml.find("<name>backup-key</name>"),
+            std::string::npos) << after_restart.xml;
+  EXPECT_NE(after_restart.xml.find("AQIDBA=="), std::string::npos)
+      << after_restart.xml;
+}
+
 TEST(DangdApplicationTest, RetrievesAndEditsConventionalNmdaDatastores) {
   TemporaryInputs inputs;
   auto loaded = Application::Load(Options(inputs));
