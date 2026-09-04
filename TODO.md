@@ -20,8 +20,10 @@ stays in this file with its remaining work rewritten precisely.
   configuration implementation. The external plugin now publishes the
   runtime-matched native schema closure, uses the programmatic `mgmtd` frontend
   protocol, claims ABI-v7 `routing`, validates in disposable sessions, commits
-  atomically, and restores the before-image on rollback. Add operational data,
-  applied-state reconciliation, out-of-band drift detection, feature discovery,
+  atomically, restores the before-image on rollback, and publishes live
+  `/frr-zebra:zebra` operational XML through native mgmtd `GET_DATA`. Add
+  zebra state augmented below interface/VRF roots, applied-state
+  reconciliation, out-of-band drift detection, feature discovery,
   RPCs and notifications, isolated native mutation tests, the eventual package
   conflict with an executable IETF RIB provider, and then enable each additional
   FRR protocol daemon without attaching host LAN interfaces.

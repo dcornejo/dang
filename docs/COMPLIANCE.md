@@ -449,6 +449,26 @@ advertised. External interoperability testing remains.
 
 ## Example management models
 
+### FRRouting native models
+
+Status: **partial external-provider implementation**.
+
+The separately packaged `dang-frr` provider publishes the runtime-matched
+schema closure for `frr-routing`, `frr-zebra`, and `frr-staticd`, claims the
+exclusive `routing` resource domain, validates changes in disposable mgmtd
+candidate sessions, commits them atomically, and restores a retained
+before-image on rollback. It retrieves the provider-owned top-level
+`/frr-zebra:zebra` state from FRR's operational datastore through native
+`GET_DATA` and publishes only complete, correlated XML `TREE_DATA` replies
+through dangd's operational-provider ABI. Partial results, unexpected formats,
+continuation replies, and protocol-correlation failures fail closed. Zebra
+state augmented below imported interface and VRF roots is not yet published.
+
+This is conformance to the installed FRR-native model set rather than an IETF
+routing-model claim. Applied-state reconciliation, explicit out-of-band drift
+detection, runtime feature discovery, RPC and notification dispatch, isolated
+native mutation coverage, and additional protocol-daemon modules remain open.
+
 ### RFC 8343 — interface management and RFC 8344 — IP management
 
 Status: **schema support and partial Linux/FreeBSD device implementation**.
