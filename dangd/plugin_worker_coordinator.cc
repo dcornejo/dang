@@ -29,6 +29,7 @@ HardwareTransactionResult PluginWorkerCoordinator::Plan(
     std::vector<PluginWorkerParticipant> participants) {
   Abort();
   std::unordered_map<std::string, std::size_t> module_owners;
+  std::unordered_map<std::string, std::size_t> resource_owners;
   for (std::size_t index = 0; index < participants.size(); ++index) {
     if (!participants[index].client)
       return {.ok = false, .message = "plugin worker participant is missing"};
@@ -36,6 +37,13 @@ HardwareTransactionResult PluginWorkerCoordinator::Plan(
       if (!module_owners.emplace(module, index).second)
         return {.ok = false,
                 .message = "module " + module +
+                    " has more than one plugin worker owner"};
+    }
+    for (const std::string& domain :
+         participants[index].manifest.resource_domains) {
+      if (!resource_owners.emplace(domain, index).second)
+        return {.ok = false,
+                .message = "resource domain " + domain +
                     " has more than one plugin worker owner"};
     }
   }

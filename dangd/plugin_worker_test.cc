@@ -348,6 +348,8 @@ TEST(PluginWorkerRuntimeTest, LoadsDiscoveryAndRoutesOperations) {
   ASSERT_NE(runtime, nullptr) << testing::PrintToString(errors);
   EXPECT_EQ(runtime->manifests().size(), 2u);
   EXPECT_EQ(runtime->yang_sources().size(), 2u);
+  EXPECT_EQ(runtime->manifests().front().resource_domains,
+            std::vector<std::string>{"routing"});
   const auto fragments = runtime->OperationalData();
   ASSERT_EQ(fragments.size(), 1u);
   EXPECT_TRUE(std::ranges::none_of(fragments, [](const auto& fragment) {
@@ -359,6 +361,41 @@ TEST(PluginWorkerRuntimeTest, LoadsDiscoveryAndRoutesOperations) {
   const auto invoked = runtime->InvokeRpc({}, operation, "<provider-status/>");
   ASSERT_TRUE(invoked.result.ok);
   EXPECT_NE(invoked.output_xml.find(">ready</status>"), std::string::npos);
+}
+
+TEST(PluginWorkerRuntimeTest, RejectsDuplicateResourceOwnership) {
+  std::vector<std::string> errors;
+  auto runtime = PluginWorkerRuntime::Load(
+      DANG_TEST_PLUGIN_WORKER_PATH,
+      {DANG_TEST_PROVIDER_PLUGIN_PATH,
+       DANG_TEST_RESOURCE_CONFLICT_PLUGIN_PATH},
+      &errors);
+  EXPECT_EQ(runtime, nullptr);
+  ASSERT_FALSE(errors.empty());
+  EXPECT_NE(errors.back().find("resource domain routing is owned by plugins"),
+            std::string::npos);
+}
+
+TEST(PluginWorkerCoordinatorTest, DefensivelyRejectsDuplicateResourceOwners) {
+  std::vector<std::string> errors;
+  auto provider = StartClient(DANG_TEST_PROVIDER_PLUGIN_PATH, 5s, &errors);
+  auto conflict =
+      StartClient(DANG_TEST_RESOURCE_CONFLICT_PLUGIN_PATH, 5s, &errors);
+  ASSERT_NE(provider, nullptr) << testing::PrintToString(errors);
+  ASSERT_NE(conflict, nullptr) << testing::PrintToString(errors);
+  std::string discovery_error;
+  auto provider_discovery = provider->Discover(&discovery_error);
+  auto conflict_discovery = conflict->Discover(&discovery_error);
+  ASSERT_TRUE(provider_discovery.has_value()) << discovery_error;
+  ASSERT_TRUE(conflict_discovery.has_value()) << discovery_error;
+  PluginWorkerCoordinator coordinator;
+  const HardwareTransactionResult planned = coordinator.Plan(
+      {{provider_discovery->manifest, provider.get()},
+       {conflict_discovery->manifest, conflict.get()}});
+  EXPECT_FALSE(planned.ok);
+  EXPECT_NE(planned.message.find(
+                "resource domain routing has more than one plugin worker owner"),
+            std::string::npos);
 }
 
 TEST(PluginWorkerRuntimeTest, RejectsMissingRuntimeDependency) {

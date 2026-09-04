@@ -113,6 +113,12 @@ the final accepted snapshot in `<operational>` and exposes the results through
 the reconciliation model. Invalid XML, invalid dispositions, or duplicate path
 claims fail closed and initiate transaction compensation.
 
+ABI v7 adds exclusive resource-domain claims for conflicts that module names
+cannot reveal. For example, an FRR-native provider and an RFC 8431 provider
+expose different YANG modules but both control the host routing plane; both
+claim `routing`, so dangd rejects the deployment during discovery before either
+can apply configuration.
+
 On hardware with staging support, replacement can program a new ACL in an
 inactive slot, atomically switch the interface binding, and then remove the old
 ACL.

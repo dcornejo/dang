@@ -204,6 +204,24 @@ typedef struct DangPluginV6 {
 /** Type of the optional exported `dang_plugin_init_v6` entry point. */
 typedef const DangPluginV6* (*DangPluginInitV6)(void);
 
+#define DANG_PLUGIN_ABI_V7 7u
+
+/**
+ * ABI v7 declares exclusive ownership of non-schema resource domains.
+ *
+ * Domain identifiers are lowercase ASCII tokens such as `routing`. They let
+ * dangd reject providers which expose different YANG modules but would mutate
+ * the same underlying resource.
+ */
+typedef struct DangPluginV7 {
+  DangPluginV6 v6;
+  size_t (*resource_domain_count)(void* context);
+  const char* (*resource_domain_at)(void* context, size_t index);
+} DangPluginV7;
+
+/** Type of the optional exported `dang_plugin_init_v7` entry point. */
+typedef const DangPluginV7* (*DangPluginInitV7)(void);
+
 #ifdef __cplusplus
 }
 #endif

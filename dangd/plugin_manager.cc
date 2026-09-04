@@ -30,6 +30,21 @@ std::optional<std::string> CopyBoundedCString(const char* value,
   return std::string(value, length);
 }
 
+bool ValidResourceDomain(std::string_view value) {
+  if (value.empty() || value.size() > 64 || value.front() == '.' ||
+      value.back() == '.')
+    return false;
+  bool previous_dot = false;
+  for (const char byte : value) {
+    const bool alpha = byte >= 'a' && byte <= 'z';
+    const bool digit = byte >= '0' && byte <= '9';
+    if (!alpha && !digit && byte != '-' && byte != '.') return false;
+    if (byte == '.' && previous_dot) return false;
+    previous_dot = byte == '.';
+  }
+  return true;
+}
+
 yang::config::ValidationFinding PluginFinding(
     std::string_view plugin, const DangPluginErrorV1& error,
     std::string_view fallback) {
@@ -70,6 +85,7 @@ struct PluginManager::State {
     std::string name;
     std::vector<std::string> modules;
     std::vector<std::string> dependencies;
+    std::vector<std::string> resource_domains;
     void* prepared = nullptr;
     bool affected = false;
   };
@@ -121,6 +137,12 @@ bool PluginManager::Load(const std::filesystem::path& path,
     return false;
   }
   dlerror();
+  auto initialize_v7 = reinterpret_cast<DangPluginInitV7>(
+      dlsym(library, "dang_plugin_init_v7"));
+  const char* v7_error = dlerror();
+  const DangPluginV7* api_v7 =
+      v7_error == nullptr && initialize_v7 ? initialize_v7() : nullptr;
+  dlerror();
   auto initialize_v6 = reinterpret_cast<DangPluginInitV6>(
       dlsym(library, "dang_plugin_init_v6"));
   const char* v6_error = dlerror();
@@ -154,22 +176,25 @@ bool PluginManager::Load(const std::filesystem::path& path,
   auto initialize = reinterpret_cast<DangPluginInitV1>(
       dlsym(library, "dang_plugin_init_v1"));
   const char* v1_error = dlerror();
-  if (api_v6 == nullptr && api_v5 == nullptr && api_v4 == nullptr &&
-      api_v3 == nullptr && api_v2 == nullptr && v1_error != nullptr) {
+  if (api_v7 == nullptr && api_v6 == nullptr && api_v5 == nullptr &&
+      api_v4 == nullptr && api_v3 == nullptr && api_v2 == nullptr &&
+      v1_error != nullptr) {
     errors->push_back("plugin " + path.string() +
                       " has no supported dang_plugin_init entry point");
     dlclose(library);
     return false;
   }
   const DangPluginV1* api =
-      api_v6   ? &api_v6->v5.v4.v3.v2.v1
+      api_v7   ? &api_v7->v6.v5.v4.v3.v2.v1
+      : api_v6 ? &api_v6->v5.v4.v3.v2.v1
       : api_v5 ? &api_v5->v4.v3.v2.v1
       : api_v4 ? &api_v4->v3.v2.v1
       : api_v3 ? &api_v3->v2.v1
       : api_v2 ? &api_v2->v1
                : (initialize ? initialize() : nullptr);
   if (!api || api->abi_version !=
-                  (api_v6 ? DANG_PLUGIN_ABI_V6
+                  (api_v7 ? DANG_PLUGIN_ABI_V7
+                          : api_v6 ? DANG_PLUGIN_ABI_V6
                           : api_v5 ? DANG_PLUGIN_ABI_V5
                           : api_v4 ? DANG_PLUGIN_ABI_V4
                           : api_v3 ? DANG_PLUGIN_ABI_V3
@@ -183,7 +208,8 @@ bool PluginManager::Load(const std::filesystem::path& path,
     dlclose(library);
     return false;
   }
-  const DangPluginV5* complete_api = api_v6 ? &api_v6->v5 : api_v5;
+  const DangPluginV6* reconcile_api = api_v7 ? &api_v7->v6 : api_v6;
+  const DangPluginV5* complete_api = reconcile_api ? &reconcile_api->v5 : api_v5;
   const DangPluginV4* action_api = complete_api ? &complete_api->v4 : api_v4;
   if (action_api &&
       (!action_api->hardware_action_count || !action_api->hardware_action_at ||
@@ -210,6 +236,14 @@ bool PluginManager::Load(const std::filesystem::path& path,
     dlclose(library);
     return false;
   }
+  if (api_v7 && ((api_v7->resource_domain_count == nullptr) !=
+                 (api_v7->resource_domain_at == nullptr))) {
+    errors->push_back("plugin " + std::string(api->plugin_name) +
+                      " must provide both resource-domain callbacks or neither");
+    if (api->destroy) api->destroy(api->context);
+    dlclose(library);
+    return false;
+  }
   if (std::ranges::any_of(state_->plugins, [&](const State::Plugin& plugin) {
         return plugin.name == api->plugin_name;
       })) {
@@ -221,14 +255,16 @@ bool PluginManager::Load(const std::filesystem::path& path,
   State::Plugin plugin;
   plugin.library = library;
   plugin.api = api;
-  plugin.invoke = api_v6   ? api_v6->v5.v4.v3.v2.invoke
+  plugin.invoke = api_v7   ? api_v7->v6.v5.v4.v3.v2.invoke
+                  : api_v6 ? api_v6->v5.v4.v3.v2.invoke
                   : api_v5 ? api_v5->v4.v3.v2.invoke
                   : api_v4 ? api_v4->v3.v2.invoke
                   : api_v3 ? api_v3->v2.invoke
                   : api_v2 ? api_v2->invoke
                            : nullptr;
   plugin.operational =
-      api_v6   ? api_v6->v5.v4.v3.get_operational_data
+      api_v7   ? api_v7->v6.v5.v4.v3.get_operational_data
+      : api_v6 ? api_v6->v5.v4.v3.get_operational_data
       : api_v5 ? api_v5->v4.v3.get_operational_data
       : api_v4 ? api_v4->v3.get_operational_data
       : api_v3 ? api_v3->get_operational_data
@@ -236,7 +272,7 @@ bool PluginManager::Load(const std::filesystem::path& path,
   plugin.operational_v2 =
       complete_api ? complete_api->get_operational_data_v2 : nullptr;
   plugin.reconcile_applied =
-      api_v6 ? api_v6->reconcile_applied_configuration : nullptr;
+      reconcile_api ? reconcile_api->reconcile_applied_configuration : nullptr;
   if (action_api) {
     plugin.hardware_action_count = action_api->hardware_action_count;
     plugin.hardware_action_at = action_api->hardware_action_at;
@@ -331,6 +367,23 @@ bool PluginManager::Load(const std::filesystem::path& path,
       plugin.dependencies.emplace_back(dependency);
     }
   }
+  if (api_v7 && api_v7->resource_domain_count &&
+      api_v7->resource_domain_at) {
+    for (std::size_t index = 0;
+         index < api_v7->resource_domain_count(api->context); ++index) {
+      const char* domain = api_v7->resource_domain_at(api->context, index);
+      if (!domain || !ValidResourceDomain(domain) ||
+          std::ranges::find(plugin.resource_domains, domain) !=
+              plugin.resource_domains.end()) {
+        errors->push_back("plugin " + plugin.name +
+                          ": invalid or duplicate resource domain");
+        if (api->destroy) api->destroy(api->context);
+        dlclose(library);
+        return false;
+      }
+      plugin.resource_domains.emplace_back(domain);
+    }
+  }
   state_->sources.insert(state_->sources.end(),
                          std::make_move_iterator(discovered_sources.begin()),
                          std::make_move_iterator(discovered_sources.end()));
@@ -342,7 +395,8 @@ bool PluginManager::Load(const std::filesystem::path& path,
        plugin.invoke != nullptr,
        plugin.operational_v2 != nullptr || plugin.operational != nullptr,
        plugin.hardware_action_count != nullptr,
-       plugin.reconcile_applied != nullptr});
+       plugin.reconcile_applied != nullptr,
+       plugin.resource_domains});
   state_->plugins.push_back(std::move(plugin));
   return true;
 }
@@ -461,6 +515,7 @@ bool PluginManager::ValidateDependencies(
     std::vector<std::string>* errors) const {
   std::unordered_map<std::string, std::string> owners;
   std::unordered_map<std::string, std::size_t> owner_indexes;
+  std::unordered_map<std::string, std::string> resource_owners;
   for (std::size_t index = 0; index < state_->plugins.size(); ++index) {
     const State::Plugin& plugin = state_->plugins[index];
     for (const std::string& module : plugin.modules) {
@@ -470,6 +525,14 @@ bool PluginManager::ValidateDependencies(
                           found->second + " and " + plugin.name);
       else
         owner_indexes.emplace(module, index);
+    }
+    for (const std::string& domain : plugin.resource_domains) {
+      const auto [found, inserted] =
+          resource_owners.emplace(domain, plugin.name);
+      if (!inserted)
+        errors->push_back("resource domain " + domain +
+                          " is owned by plugins " + found->second + " and " +
+                          plugin.name);
     }
   }
   for (const State::Plugin& plugin : state_->plugins) {

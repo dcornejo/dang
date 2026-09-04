@@ -40,6 +40,8 @@ struct PluginManifest {
   bool supports_operational_data = false;
   bool supports_hardware_actions = false;
   bool supports_applied_reconciliation = false;
+  /** Exclusive non-schema resources, for example the host routing plane. */
+  std::vector<std::string> resource_domains;
 };
 
 /** One ABI-v3 operational callback result, including provider attribution. */

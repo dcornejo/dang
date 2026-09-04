@@ -10,6 +10,11 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added plugin ABI v7 exclusive resource-domain declarations and copied them
+  through supervised worker discovery. In-process loading, worker-runtime
+  assembly, recovery identity checks, and the hardware coordinator now reject
+  duplicate claims such as two different model families controlling
+  `routing`; malformed and duplicate declarations fail discovery.
 - Added low-priority work to replace command-driven plugin backends with
   programmatic APIs, including Linux and FreeBSD netlink evaluation, and to
   evaluate separately packaged, explicitly Linux-only FD.io VPP providers.

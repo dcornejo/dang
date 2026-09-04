@@ -232,16 +232,18 @@ std::optional<PluginWorkerDiscovery> PluginWorkerClient::Discover(
         value.at("supports_operations").get<bool>(),
         value.at("supports_operational_data").get<bool>(),
         value.at("supports_hardware_actions").get<bool>(),
-        value.at("supports_applied_reconciliation").get<bool>()};
+        value.at("supports_applied_reconciliation").get<bool>(),
+        value.at("resource_domains").get<std::vector<std::string>>()};
     if (discovery.manifest.plugin_name.empty() ||
         discovery.manifest.abi_version < DANG_PLUGIN_ABI_V1 ||
-        discovery.manifest.abi_version > DANG_PLUGIN_ABI_V6)
+        discovery.manifest.abi_version > DANG_PLUGIN_ABI_V7)
       throw Json::other_error::create(501, "invalid plugin manifest", &value);
     const auto valid_names = [](const std::vector<std::string>& values) {
       return std::ranges::none_of(values, &std::string::empty);
     };
     if (!valid_names(discovery.manifest.modules) ||
-        !valid_names(discovery.manifest.dependencies))
+        !valid_names(discovery.manifest.dependencies) ||
+        !valid_names(discovery.manifest.resource_domains))
       throw Json::other_error::create(501, "invalid plugin names", &value);
     for (const Json& source : response["sources"]) {
       PluginYangSource copied;

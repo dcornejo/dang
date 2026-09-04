@@ -114,7 +114,8 @@ flowchart LR
   v4[ABI v4<br/>fine-grained hardware actions]
   v5[ABI v5<br/>operational completeness]
   v6[ABI v6<br/>actual applied-state reconciliation]
-  v1 --> v2 --> v3 --> v4 --> v5 --> v6
+  v7[ABI v7<br/>exclusive resource domains]
+  v1 --> v2 --> v3 --> v4 --> v5 --> v6 --> v7
 ```
 
 ## Responsibilities
@@ -130,6 +131,15 @@ Every implemented module has exactly one owning plugin. One plugin may own a
 closely related family of modules. Multiple plugins may supply the same
 byte-identical import-only module, but they may not both claim its
 implementation.
+
+Different module families can still control the same underlying resource.
+ABI v7 providers declare each exclusive lowercase resource token through
+`resource_domain_count` and `resource_domain_at`. Dangd copies and validates
+the declarations during discovery and rejects duplicate ownership both for
+in-process plugins and across supervised workers. `routing` is the canonical
+domain for providers that program the host routing plane. Claims are exclusive
+for the entire loaded provider lifetime; they are not locks acquired only
+during a transaction.
 
 NACM is deliberately not a plugin. `ietf-netconf-acm` configuration is stored
 in the normal datastores, while `dangd` compiles and enforces the active policy
@@ -645,6 +655,7 @@ Before shipping a plugin, verify that it:
 
 - supplies exact module names, revisions, source sizes, and roles;
 - declares only genuine runtime dependencies;
+- declares every exclusively controlled non-schema resource when using ABI v7;
 - does no visible work during prepare or validate;
 - retains one exact apply plan through the transaction;
 - classifies activation and deactivation and declares every backend-specific

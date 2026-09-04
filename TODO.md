@@ -19,11 +19,12 @@ stays in this file with its remaining work rewritten precisely.
   packaged plugin for Linux and FreeBSD. Pin and expose FRR's native YANG
   modules, use the programmatic `mgmtd` frontend API, and make dangd
   authoritative for managed FRR configuration while detecting out-of-band
-  drift. Add routing-resource ownership so this provider and the native IETF
-  RIB provider cannot both program routes, express the eventual package
-  conflict, and validate transactions and rollback in isolation without
-  attaching host LAN interfaces. Begin with common infrastructure, zebra, and
-  static routing before enabling each additional protocol daemon.
+  drift. Use the implemented ABI-v7 `routing` resource claim so this provider
+  and the native IETF RIB provider cannot both program routes, express the
+  eventual package conflict, and validate transactions and rollback in
+  isolation without attaching host LAN interfaces. Begin with common
+  infrastructure, zebra, and static routing before enabling each additional
+  protocol daemon.
 - [ ] Complete RFC 8431 after the external plugin's schema, strict portable
   route parser, delta planner, and transaction-safe native execution: wire the
   executor into the plugin ABI, implement all seven RPCs and both notifications,

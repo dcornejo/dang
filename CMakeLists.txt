@@ -221,6 +221,31 @@ if(YANG_BUILD_DANGD)
       set_target_properties(dangd_test_${test_plugin}_plugin PROPERTIES
         PREFIX "")
     endforeach()
+    foreach(resource_plugin IN ITEMS conflict invalid)
+      add_library(dangd_test_resource_${resource_plugin}_plugin MODULE
+        dangd/test_plugins/resource_plugin.cc)
+      target_compile_features(dangd_test_resource_${resource_plugin}_plugin
+        PRIVATE cxx_std_20)
+      target_include_directories(dangd_test_resource_${resource_plugin}_plugin
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+      target_compile_definitions(dangd_test_resource_${resource_plugin}_plugin
+        PRIVATE
+        DANG_RESOURCE_PLUGIN_NAME="test-resource-${resource_plugin}"
+        DANG_RESOURCE_MODULE_NAME="dangd-test-resource-${resource_plugin}")
+      if(resource_plugin STREQUAL "conflict")
+        target_compile_definitions(
+          dangd_test_resource_${resource_plugin}_plugin PRIVATE
+          DANG_RESOURCE_DOMAIN="routing")
+      else()
+        target_compile_definitions(
+          dangd_test_resource_${resource_plugin}_plugin PRIVATE
+          DANG_RESOURCE_DOMAIN="Routing Invalid")
+      endif()
+      target_compile_options(dangd_test_resource_${resource_plugin}_plugin
+        PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+      set_target_properties(dangd_test_resource_${resource_plugin}_plugin
+        PROPERTIES PREFIX "")
+    endforeach()
     foreach(xpath_provider IN ITEMS context must when)
       add_library(dangd_test_xpath_${xpath_provider}_plugin MODULE
         dangd/test_plugins/operational_xpath_plugin.cc)
@@ -626,6 +651,8 @@ if(YANG_BUILD_TESTS)
       DANG_TEST_IP_PLUGIN_PATH="$<TARGET_FILE:dangd_test_ip_management_plugin>"
       DANG_TEST_PROVIDER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_provider_plugin>"
       DANG_TEST_CONSUMER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_consumer_plugin>"
+      DANG_TEST_RESOURCE_CONFLICT_PLUGIN_PATH="$<TARGET_FILE:dangd_test_resource_conflict_plugin>"
+      DANG_TEST_RESOURCE_INVALID_PLUGIN_PATH="$<TARGET_FILE:dangd_test_resource_invalid_plugin>"
       DANG_TEST_BROKEN_PLUGIN_PATH="$<TARGET_FILE:dangd_test_broken_discovery_plugin>")
     if(DANG_OPENSSH_CLIENT)
       target_compile_definitions(dangd_tests PRIVATE
@@ -670,6 +697,7 @@ if(YANG_BUILD_TESTS)
     add_dependencies(dangd_tests dangd-plugin-worker
       dangd_example_plugin dangd_test_ip_management_plugin
       dangd_test_provider_plugin dangd_test_consumer_plugin
+      dangd_test_resource_conflict_plugin dangd_test_resource_invalid_plugin
       dangd_test_broken_discovery_plugin dangd_test_broken_operational_plugin
       dangd_test_hanging_operational_plugin
       dangd_test_crashing_operational_plugin

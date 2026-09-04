@@ -31,6 +31,10 @@ int SourceAt(void*, size_t index, DangYangSourceV1* source,
              nullptr, 0};
   return 1;
 }
+size_t ResourceDomainCount(void*) { return 1; }
+const char* ResourceDomainAt(void*, size_t index) {
+  return index == 0 ? "routing" : nullptr;
+}
 int Prepare(void*, const DangTransactionV1* transaction, void** result,
             DangPluginErrorV1*) {
   dangd::test_plugin::Record("provider.prepare");
@@ -127,22 +131,24 @@ int ReconcileApplied(void*, void* opaque, const char* current_xml,
   return 1;
 }
 
-DangPluginV6 MakePlugin() {
-  DangPluginV6 plugin{};
-  plugin.v5.v4.v3.v2.v1 =
-      {DANG_PLUGIN_ABI_V6, "test-provider", nullptr, SourceCount, SourceAt,
+DangPluginV7 MakePlugin() {
+  DangPluginV7 plugin{};
+  plugin.v6.v5.v4.v3.v2.v1 =
+      {DANG_PLUGIN_ABI_V7, "test-provider", nullptr, SourceCount, SourceAt,
        nullptr, nullptr, Prepare, Validate, Apply, Rollback, Release, nullptr};
-  plugin.v5.v4.v3.v2.invoke = Invoke;
-  plugin.v5.v4.hardware_action_count = HardwareActionCount;
-  plugin.v5.v4.hardware_action_at = HardwareActionAt;
-  plugin.v5.v4.apply_hardware_action = ApplyHardwareAction;
-  plugin.v5.v4.rollback_hardware_action = RollbackHardwareAction;
-  plugin.v5.get_operational_data_v2 = OperationalV2;
-  plugin.reconcile_applied_configuration = ReconcileApplied;
+  plugin.v6.v5.v4.v3.v2.invoke = Invoke;
+  plugin.v6.v5.v4.hardware_action_count = HardwareActionCount;
+  plugin.v6.v5.v4.hardware_action_at = HardwareActionAt;
+  plugin.v6.v5.v4.apply_hardware_action = ApplyHardwareAction;
+  plugin.v6.v5.v4.rollback_hardware_action = RollbackHardwareAction;
+  plugin.v6.v5.get_operational_data_v2 = OperationalV2;
+  plugin.v6.reconcile_applied_configuration = ReconcileApplied;
+  plugin.resource_domain_count = ResourceDomainCount;
+  plugin.resource_domain_at = ResourceDomainAt;
   return plugin;
 }
-const DangPluginV6 kPlugin = MakePlugin();
+const DangPluginV7 kPlugin = MakePlugin();
 
 }  // namespace
 
-extern "C" const DangPluginV6* dang_plugin_init_v6() { return &kPlugin; }
+extern "C" const DangPluginV7* dang_plugin_init_v7() { return &kPlugin; }

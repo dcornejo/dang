@@ -44,6 +44,7 @@ Json Discovery(const dangd::PluginManager& manager) {
          {"abi_version", manifest.abi_version},
          {"modules", manifest.modules},
          {"dependencies", manifest.dependencies},
+         {"resource_domains", manifest.resource_domains},
          {"supports_operations", manifest.supports_operations},
          {"supports_operational_data", manifest.supports_operational_data},
          {"supports_hardware_actions", manifest.supports_hardware_actions},

@@ -53,6 +53,7 @@ struct PluginWorkerRuntime::Entry {
              other.abi_version == manifest.abi_version &&
              other.modules == manifest.modules &&
              other.dependencies == manifest.dependencies &&
+             other.resource_domains == manifest.resource_domains &&
              other.supports_operations == manifest.supports_operations &&
              other.supports_operational_data ==
                  manifest.supports_operational_data &&
@@ -89,6 +90,7 @@ std::unique_ptr<PluginWorkerRuntime> PluginWorkerRuntime::Load(
   if (!errors) return nullptr;
   auto runtime = std::unique_ptr<PluginWorkerRuntime>(new PluginWorkerRuntime);
   std::unordered_map<std::string, std::string> owners;
+  std::unordered_map<std::string, std::string> resource_owners;
   for (const auto& plugin : plugins) {
     auto client = PluginWorkerClient::Start(
         {worker_executable, plugin, startup_timeout, request_timeout}, errors);
@@ -105,6 +107,14 @@ std::unique_ptr<PluginWorkerRuntime> PluginWorkerRuntime::Load(
       if (!inserted)
         errors->push_back("module " + module + " is implemented by plugins " +
                           owner->second + " and " +
+                          discovery->manifest.plugin_name);
+    }
+    for (const std::string& domain : discovery->manifest.resource_domains) {
+      const auto [owner, inserted] =
+          resource_owners.emplace(domain, discovery->manifest.plugin_name);
+      if (!inserted)
+        errors->push_back("resource domain " + domain +
+                          " is owned by plugins " + owner->second + " and " +
                           discovery->manifest.plugin_name);
     }
     runtime->sources_.insert(runtime->sources_.end(),
