@@ -60,5 +60,6 @@ stays in this file with its remaining work rewritten precisely.
 - [ ] Evaluate one or more FD.io VPP plugins. Define which YANG modules and
   resources VPP would own, use VPP's supported programmatic APIs, determine
   whether routing, interface, ACL, and other domains belong in one transaction
-  provider or separately packaged plugins, and validate on isolated Linux and
-  FreeBSD systems without attaching host LAN interfaces.
+  provider or separately packaged plugins, and validate on isolated Linux
+  systems without attaching host LAN interfaces. VPP is Linux-only, so this
+  work is explicitly exempt from the normal FreeBSD plugin requirement.

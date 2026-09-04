@@ -12,7 +12,7 @@ and releases follow Semantic Versioning.
 
 - Added low-priority work to replace command-driven plugin backends with
   programmatic APIs, including Linux and FreeBSD netlink evaluation, and to
-  evaluate separately packaged FD.io VPP providers.
+  evaluate separately packaged, explicitly Linux-only FD.io VPP providers.
 - Added an FRR-backed routing plugin work item with Linux and FreeBSD isolation,
   supported-management-interface, and explicit native-RIB ownership/conflict
   requirements.
