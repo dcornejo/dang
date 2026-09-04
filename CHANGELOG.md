@@ -10,6 +10,12 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added plugin ABI v8 modeled event publication. Isolated workers copy bounded,
+  nonblocking provider events to the trusted core, which validates their YANG
+  identity and XML content before applying RFC 5277 subscription filters and
+  RFC 8341 NACM. SSH, TLS, and stdin sessions poll the path, concurrent
+  in-process drains are serialized, and worker plus end-to-end subscription
+  tests cover one-shot delivery.
 - Added plugin ABI v7 exclusive resource-domain declarations and copied them
   through supervised worker discovery. In-process loading, worker-runtime
   assembly, recovery identity checks, and the hardware coordinator now reject

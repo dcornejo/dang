@@ -350,6 +350,14 @@ TEST(PluginWorkerRuntimeTest, LoadsDiscoveryAndRoutesOperations) {
   EXPECT_EQ(runtime->yang_sources().size(), 2u);
   EXPECT_EQ(runtime->manifests().front().resource_domains,
             std::vector<std::string>{"routing"});
+  const auto events = runtime->Notifications();
+  ASSERT_EQ(events.size(), 1u);
+  EXPECT_EQ(events.front().provider, "test-provider");
+  EXPECT_EQ(events.front().module_name, "dangd-test-provider");
+  EXPECT_EQ(events.front().notification_name, "provider-event");
+  EXPECT_NE(events.front().content_xml.find("<status>ready</status>"),
+            std::string::npos);
+  EXPECT_TRUE(runtime->Notifications().empty());
   const auto fragments = runtime->OperationalData();
   ASSERT_EQ(fragments.size(), 1u);
   EXPECT_TRUE(std::ranges::none_of(fragments, [](const auto& fragment) {

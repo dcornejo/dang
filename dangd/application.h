@@ -90,7 +90,7 @@ struct ApplicationOptions {
   std::vector<std::string> recovery_users;
   /** Enables the built-in dangd-only recovery identity. */
   bool default_superuser = true;
-  /** POSIX shared libraries implementing versioned dangd plugin ABI v1. */
+  /** POSIX shared libraries implementing a supported dangd plugin ABI. */
   std::vector<std::filesystem::path> plugins;
   /** Worker executable enabling isolated live plugin ownership when set. */
   std::optional<std::filesystem::path> plugin_worker_executable;
@@ -136,6 +136,8 @@ class Application {
   }
   /** Drains privacy-minimal records of recovery-user RPC attempts. */
   [[nodiscard]] std::vector<std::string> DrainRecoveryAuditRecords();
+  /** Drains plugin events through schema validation and NACM publication. */
+  [[nodiscard]] std::vector<std::string> PollPluginNotifications();
   /** Returns an immutable copy of the backend's current working configuration. */
   [[nodiscard]] yang::config::ConfigDocument working_configuration() const {
     return backend_.Working();

@@ -5,6 +5,7 @@
 #include "dangd/test_plugins/plugin_test_support.h"
 
 #include <cstring>
+#include <atomic>
 #include <string>
 
 namespace {
@@ -18,7 +19,10 @@ constexpr char kModel[] = R"yang(module dangd-test-provider {
     leaf mode { type string; default "normal"; }
   }
   rpc provider-status { output { leaf status { type string; } } }
+  notification provider-event { leaf status { type string; } }
 })yang";
+
+std::atomic<bool> notification_pending{true};
 
 struct Prepared { std::string before; std::string proposed; };
 
@@ -131,24 +135,34 @@ int ReconcileApplied(void*, void* opaque, const char* current_xml,
   return 1;
 }
 
-DangPluginV7 MakePlugin() {
-  DangPluginV7 plugin{};
-  plugin.v6.v5.v4.v3.v2.v1 =
-      {DANG_PLUGIN_ABI_V7, "test-provider", nullptr, SourceCount, SourceAt,
+int NextNotification(void*, DangNotificationV1* event, DangPluginErrorV1*) {
+  if (!event || !notification_pending.exchange(false)) return 0;
+  *event = {"NETCONF", "dangd-test-provider", "provider-event",
+            "<provider-event xmlns=\"urn:dangd:test:provider\">"
+            "<status>ready</status></provider-event>",
+            "", 0};
+  return 1;
+}
+
+DangPluginV8 MakePlugin() {
+  DangPluginV8 plugin{};
+  plugin.v7.v6.v5.v4.v3.v2.v1 =
+      {DANG_PLUGIN_ABI_V8, "test-provider", nullptr, SourceCount, SourceAt,
        nullptr, nullptr, Prepare, Validate, Apply, Rollback, Release, nullptr};
-  plugin.v6.v5.v4.v3.v2.invoke = Invoke;
-  plugin.v6.v5.v4.hardware_action_count = HardwareActionCount;
-  plugin.v6.v5.v4.hardware_action_at = HardwareActionAt;
-  plugin.v6.v5.v4.apply_hardware_action = ApplyHardwareAction;
-  plugin.v6.v5.v4.rollback_hardware_action = RollbackHardwareAction;
-  plugin.v6.v5.get_operational_data_v2 = OperationalV2;
-  plugin.v6.reconcile_applied_configuration = ReconcileApplied;
-  plugin.resource_domain_count = ResourceDomainCount;
-  plugin.resource_domain_at = ResourceDomainAt;
+  plugin.v7.v6.v5.v4.v3.v2.invoke = Invoke;
+  plugin.v7.v6.v5.v4.hardware_action_count = HardwareActionCount;
+  plugin.v7.v6.v5.v4.hardware_action_at = HardwareActionAt;
+  plugin.v7.v6.v5.v4.apply_hardware_action = ApplyHardwareAction;
+  plugin.v7.v6.v5.v4.rollback_hardware_action = RollbackHardwareAction;
+  plugin.v7.v6.v5.get_operational_data_v2 = OperationalV2;
+  plugin.v7.v6.reconcile_applied_configuration = ReconcileApplied;
+  plugin.v7.resource_domain_count = ResourceDomainCount;
+  plugin.v7.resource_domain_at = ResourceDomainAt;
+  plugin.next_notification = NextNotification;
   return plugin;
 }
-const DangPluginV7 kPlugin = MakePlugin();
+const DangPluginV8 kPlugin = MakePlugin();
 
 }  // namespace
 
-extern "C" const DangPluginV7* dang_plugin_init_v7() { return &kPlugin; }
+extern "C" const DangPluginV8* dang_plugin_init_v8() { return &kPlugin; }

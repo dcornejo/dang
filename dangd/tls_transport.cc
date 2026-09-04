@@ -38,6 +38,15 @@ using Context = std::unique_ptr<SSL_CTX, decltype(&SSL_CTX_free)>;
 using Session = std::unique_ptr<SSL, decltype(&SSL_free)>;
 using Certificate = std::unique_ptr<X509, decltype(&X509_free)>;
 
+void DrainDiagnostics(Application& application, std::ostream& diagnostics) {
+  for (const std::string& delta : application.DrainBackendDeltas())
+    diagnostics << "dangd: configuration delta: " << delta << '\n';
+  for (const std::string& audit : application.DrainRecoveryAuditRecords())
+    diagnostics << "dangd: audit: " << audit << '\n';
+  for (const std::string& error : application.PollPluginNotifications())
+    diagnostics << "dangd: plugin notification: " << error << '\n';
+}
+
 std::string LastTlsError(std::string_view prefix) {
   const unsigned long code = ERR_get_error();
   if (code == 0) return std::string(prefix);
@@ -333,6 +342,7 @@ int RunTlsServer(Application& application, const TlsServerOptions& options,
         pollfd descriptor{connection, POLLIN, 0};
         const int ready = poll(&descriptor, 1, 50);
         if (ready == 0) {
+          DrainDiagnostics(application, diagnostics);
           adapter.Poll();
           continue;
         }
@@ -346,10 +356,7 @@ int RunTlsServer(Application& application, const TlsServerOptions& options,
       if (SSL_read_ex(tls.get(), buffer.data(), buffer.size(), &count) != 1)
         break;
       adapter.Receive(std::string_view(buffer.data(), count));
-      for (const std::string& delta : application.DrainBackendDeltas())
-        diagnostics << "dangd: configuration delta: " << delta << '\n';
-      for (const std::string& audit : application.DrainRecoveryAuditRecords())
-        diagnostics << "dangd: audit: " << audit << '\n';
+      DrainDiagnostics(application, diagnostics);
     }
     adapter.TransportClosed();
     SSL_shutdown(tls.get());
@@ -475,6 +482,7 @@ int RunReloadableTlsServer(
           pollfd descriptor{connection, POLLIN, 0};
           const int ready = poll(&descriptor, 1, 50);
           if (ready == 0) {
+            DrainDiagnostics(*application, diagnostics);
             adapter.Poll();
             continue;
           }
@@ -493,11 +501,7 @@ int RunReloadableTlsServer(
           break;
         }
         adapter.Receive(std::string_view(buffer.data(), count));
-        for (const std::string& delta : application->DrainBackendDeltas())
-          diagnostics << "dangd: configuration delta: " << delta << '\n';
-        for (const std::string& audit :
-             application->DrainRecoveryAuditRecords())
-          diagnostics << "dangd: audit: " << audit << '\n';
+        DrainDiagnostics(*application, diagnostics);
       }
       adapter.TransportClosed();
     }

@@ -84,6 +84,21 @@ Json Operational(const dangd::PluginManager& manager) {
           {"fragments", std::move(fragments)}};
 }
 
+Json Notifications(dangd::PluginManager& manager) {
+  Json events = Json::array();
+  for (const dangd::PluginNotification& event : manager.Notifications())
+    events.push_back({{"provider", event.provider},
+                      {"stream_name", event.stream_name},
+                      {"module_name", event.module_name},
+                      {"notification_name", event.notification_name},
+                      {"content_xml", event.content_xml},
+                      {"instance_path", event.instance_path},
+                      {"default_deny_all", event.default_deny_all},
+                      {"error", event.error ? Json(*event.error)
+                                            : Json(nullptr)}});
+  return {{"ok", true}, {"stage", "notifications"}, {"events", events}};
+}
+
 Json Finding(std::optional<yang::config::ValidationFinding> finding,
              std::string_view stage) {
   if (!finding)
@@ -129,6 +144,8 @@ int Run(int descriptor, const std::filesystem::path& plugin_path) {
       if (!Send(descriptor, Discovery(manager))) return 1;
     } else if (operation == "operational") {
       if (!Send(descriptor, Operational(manager))) return 1;
+    } else if (operation == "notifications") {
+      if (!Send(descriptor, Notifications(manager))) return 1;
     } else if (operation == "prepare") {
       try {
         if (!Send(descriptor,

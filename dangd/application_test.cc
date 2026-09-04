@@ -2122,6 +2122,53 @@ TEST(DangdApplicationTest, PublishesYangLibraryUpdateToSubscribers) {
                   .empty());
 }
 
+TEST(DangdApplicationTest, ValidatesAndPublishesPluginNotifications) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_PROVIDER_PLUGIN_PATH};
+  options.plugin_worker_executable = DANG_TEST_PLUGIN_WORKER_PATH;
+  options.nacm_configuration = inputs.Write("notification-nacm.xml", R"xml(
+    <nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+      <read-default>deny</read-default><write-default>deny</write-default>
+      <exec-default>permit</exec-default>
+    </nacm>)xml");
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+
+  yang::netconf::RpcSessionContext session{43, "alice", "alice", {}};
+  const auto subscribe = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="sub">
+      <create-subscription
+        xmlns="urn:ietf:params:xml:ns:netconf:notification:1.0"/>
+    </rpc>)xml");
+  ASSERT_NE(subscribe.xml.find("<ok/>"), std::string::npos) << subscribe.xml;
+  yang::netconf::RpcSessionContext denied{44, "bob", "bob", {}};
+  const auto denied_subscribe = loaded.application->server().Process(denied, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="denied-sub">
+      <create-subscription
+        xmlns="urn:ietf:params:xml:ns:netconf:notification:1.0"/>
+    </rpc>)xml");
+  ASSERT_NE(denied_subscribe.xml.find("<ok/>"), std::string::npos)
+      << denied_subscribe.xml;
+
+  EXPECT_TRUE(loaded.application->PollPluginNotifications().empty());
+  const auto notifications =
+      loaded.application->server().DrainNotifications(session.session_id);
+  ASSERT_EQ(notifications.size(), 1u);
+  EXPECT_NE(notifications.front().find("<provider-event"), std::string::npos)
+      << notifications.front();
+  EXPECT_TRUE(loaded.application->server()
+                  .DrainNotifications(denied.session_id)
+                  .empty());
+  EXPECT_NE(notifications.front().find("<status>ready</status>"),
+            std::string::npos)
+      << notifications.front();
+  EXPECT_TRUE(loaded.application->PollPluginNotifications().empty());
+  EXPECT_TRUE(loaded.application->server()
+                  .DrainNotifications(session.session_id)
+                  .empty());
+}
+
 TEST(DangdApplicationTest, AtomicallyReloadsSchemaWithRunningConfiguration) {
   TemporaryInputs inputs;
   const auto model = inputs.Write("reload.yang", R"yang(module reloadable {

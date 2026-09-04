@@ -474,7 +474,10 @@ retrievals compare fresh mgmtd running roots semantically, ignoring namespace
 prefix spelling but not modeled names, namespaces, attributes, values, or child
 order. A mismatch fails the provider at the affected root and is exposed by
 dangd's modeled operational-provider failure telemetry. Detection is currently
-read-triggered; unsolicited drift notification remains open.
+read-triggered; unsolicited FRR drift notification remains open. The host now
+provides ABI-v8 plugin event transport across worker isolation, followed by
+trusted-core schema validation, subscription filtering, and NACM enforcement;
+the FRR provider has not yet connected its backend watcher to that path.
 
 At discovery, the provider reads FRR's RFC 8525 YANG Library through mgmtd and
 copies daemon-enabled features into the corresponding YANG source descriptors.
@@ -491,9 +494,7 @@ candidate and running datastores for every configuration transaction.
 
 This is conformance to the installed FRR-native model set rather than an IETF
 routing-model claim. Unsolicited drift notification, RPC and notification
-dispatch and additional protocol-daemon modules remain open. Unsolicited plugin
-events additionally require a host ABI path that validates modeled content and
-applies NACM after crossing worker isolation.
+dispatch and additional protocol-daemon modules remain open.
 
 ### RFC 8343 — interface management and RFC 8344 — IP management
 

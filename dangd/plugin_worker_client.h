@@ -28,6 +28,12 @@ struct PluginWorkerOperationalResult {
   std::optional<std::string> worker_error;
 };
 
+/** Copied notification batch or worker transport/supervision failure. */
+struct PluginWorkerNotificationResult {
+  std::vector<PluginNotification> notifications;
+  std::optional<std::string> worker_error;
+};
+
 /** Plugin rejection or worker failure for one transaction phase. */
 struct PluginWorkerTransactionResult {
   std::optional<yang::config::ValidationFinding> finding;
@@ -97,6 +103,8 @@ class PluginWorkerClient {
       std::string* error);
   /** Invokes operational publication inside the worker. */
   [[nodiscard]] PluginWorkerOperationalResult OperationalData();
+  /** Drains one bounded notification batch inside the worker. */
+  [[nodiscard]] PluginWorkerNotificationResult Notifications();
   /** Retains plugin-owned preparation for a copied transaction. */
   [[nodiscard]] PluginWorkerTransactionResult Prepare(
       std::string before_xml, std::string proposed_xml,

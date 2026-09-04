@@ -4,7 +4,7 @@
 # Writing a dangd configuration plugin
 
 This guide is the implementation contract for plugin ABI versions 1 through
-6. It describes the current supervised-worker architecture, shows how a plugin
+8. It describes the current supervised-worker architecture, shows how a plugin
 participates in schema discovery and transactions, and gives concrete guidance
 for production providers. The public ABI is declared in
 `dangd/plugin_api.h`; when prose and declarations appear to disagree, treat
@@ -115,7 +115,8 @@ flowchart LR
   v5[ABI v5<br/>operational completeness]
   v6[ABI v6<br/>actual applied-state reconciliation]
   v7[ABI v7<br/>exclusive resource domains]
-  v1 --> v2 --> v3 --> v4 --> v5 --> v6 --> v7
+  v8[ABI v8<br/>modeled event notifications]
+  v1 --> v2 --> v3 --> v4 --> v5 --> v6 --> v7 --> v8
 ```
 
 ## Responsibilities
@@ -406,6 +407,31 @@ Authentication, NACM, schema dispatch, and NETCONF error serialization must
 not be duplicated in the callback. The plugin should perform only the actual
 module operation and return its result.
 
+## Event notification publication
+
+An ABI-v8 plugin exports `dang_plugin_init_v8` and supplies
+`next_notification`. Dangd polls this nonblocking callback: return `1` with one
+event, `0` when the queue is empty, or `-1` with `DangPluginErrorV1` when the
+provider cannot inspect its event source. Never wait in this callback; retain
+backend watches or file descriptors in plugin context and report only events
+that are already available.
+
+Each successful result supplies the registered stream name, implemented module
+name, modeled notification name, and one self-contained XML element containing
+the notification body. A data-associated notification also supplies its
+complete schema-qualified `instance_path`. Set `default_deny_all` only for an
+additional provider policy; annotations in the compiled YANG schema are always
+enforced by the host.
+
+All returned pointers are borrowed for the callback duration. The worker copies
+and bounds every string, and the trusted core then verifies that the claimed
+module and notification match the XML root and compiled schema. It validates
+the content, resolves any data-associated instance, applies subscription
+filters and NACM independently for each session, and constructs the RFC 5277
+wrapper and event time. Plugins must not construct that wrapper, inspect user
+credentials, make NACM decisions, or address individual subscribers. Invalid
+events fail closed and are reported in daemon diagnostics.
+
 ## Runtime dependencies
 
 `dependency_count` and `dependency_at` name implemented modules whose provider
@@ -670,4 +696,6 @@ Before shipping a plugin, verify that it:
   when using ABI v6;
 - distinguishes complete from selected operational data correctly when using
   ABI v5;
+- keeps `next_notification` nonblocking and returns only schema-valid modeled
+  event bodies when using ABI v8;
 - appears correctly in the RFC 8525 YANG Library response.

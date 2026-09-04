@@ -832,6 +832,24 @@ std::vector<std::string> Application::DrainRecoveryAuditRecords() {
   return records;
 }
 
+std::vector<std::string> Application::PollPluginNotifications() {
+  std::vector<std::string> errors;
+  if (!plugins_) return errors;
+  for (PluginNotification& event : plugins_->Notifications()) {
+    if (event.error) {
+      errors.push_back("plugin " + event.provider + ": " + *event.error);
+      continue;
+    }
+    if (!notifications_.Publish(
+            event.stream_name, event.module_name, event.notification_name,
+            event.content_xml, std::chrono::system_clock::now(),
+            event.default_deny_all, event.instance_path))
+      errors.push_back("plugin " + event.provider +
+                       ": notification was rejected by the host");
+  }
+  return errors;
+}
+
 bool Application::PublishYangLibraryUpdate(std::string_view content_id) {
   if (content_id == operational_.content_id()) return true;
   const auto notification = [content_id](std::string_view root,
@@ -1205,6 +1223,8 @@ int RunStreamSession(Application& application, std::istream& input,
       errors << "dangd: configuration delta: " << delta << '\n';
     for (const std::string& audit : application.DrainRecoveryAuditRecords())
       errors << "dangd: audit: " << audit << '\n';
+    for (const std::string& error : application.PollPluginNotifications())
+      errors << "dangd: plugin notification: " << error << '\n';
     if (response.close_transport) return response.error ? 1 : 0;
   }
   session.TransportClosed();

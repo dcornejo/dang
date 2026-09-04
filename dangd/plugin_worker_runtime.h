@@ -34,6 +34,7 @@ class PluginWorkerRuntime final : public PluginRuntime {
   [[nodiscard]] const std::vector<PluginManifest>& manifests() const override;
   [[nodiscard]] std::vector<PluginOperationalFragment> OperationalData()
       const override;
+  [[nodiscard]] std::vector<PluginNotification> Notifications() override;
   [[nodiscard]] std::string ReconciliationData(
       std::span<const OperationalProviderFailure> failures = {}) const override;
   [[nodiscard]] std::optional<yang::config::ValidationFinding> Prepare(

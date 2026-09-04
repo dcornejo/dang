@@ -192,6 +192,28 @@ PluginWorkerRuntime::OperationalData() const {
   return fragments;
 }
 
+std::vector<PluginNotification> PluginWorkerRuntime::Notifications() {
+  std::lock_guard lock(worker_mutex_);
+  std::vector<PluginNotification> events;
+  for (const auto& entry : entries_) {
+    if (auto error = entry->Recover()) {
+      events.push_back({.provider = entry->manifest.plugin_name,
+                        .error = std::move(error)});
+      continue;
+    }
+    PluginWorkerNotificationResult result = entry->client->Notifications();
+    if (result.worker_error) {
+      events.push_back({.provider = entry->manifest.plugin_name,
+                        .error = std::move(result.worker_error)});
+      continue;
+    }
+    events.insert(events.end(),
+                  std::make_move_iterator(result.notifications.begin()),
+                  std::make_move_iterator(result.notifications.end()));
+  }
+  return events;
+}
+
 std::string PluginWorkerRuntime::ReconciliationData(
     std::span<const OperationalProviderFailure> failures) const {
   std::lock_guard lock(reconciliation_mutex_);

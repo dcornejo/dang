@@ -63,6 +63,8 @@ yang::config::ValidationFinding PluginFinding(
 }  // namespace
 
 struct PluginManager::State {
+  std::mutex notification_mutex;
+
   struct Plugin {
     void* library = nullptr;
     const DangPluginV1* api = nullptr;
@@ -82,6 +84,8 @@ struct PluginManager::State {
     int (*reconcile_applied)(void*, void*, const char*,
                              DangAppliedConfigurationV1*,
                              DangPluginErrorV1*) = nullptr;
+    int (*next_notification)(void*, DangNotificationV1*, DangPluginErrorV1*) =
+        nullptr;
     std::string name;
     std::vector<std::string> modules;
     std::vector<std::string> dependencies;
@@ -137,6 +141,12 @@ bool PluginManager::Load(const std::filesystem::path& path,
     return false;
   }
   dlerror();
+  auto initialize_v8 = reinterpret_cast<DangPluginInitV8>(
+      dlsym(library, "dang_plugin_init_v8"));
+  const char* v8_error = dlerror();
+  const DangPluginV8* api_v8 =
+      v8_error == nullptr && initialize_v8 ? initialize_v8() : nullptr;
+  dlerror();
   auto initialize_v7 = reinterpret_cast<DangPluginInitV7>(
       dlsym(library, "dang_plugin_init_v7"));
   const char* v7_error = dlerror();
@@ -176,7 +186,7 @@ bool PluginManager::Load(const std::filesystem::path& path,
   auto initialize = reinterpret_cast<DangPluginInitV1>(
       dlsym(library, "dang_plugin_init_v1"));
   const char* v1_error = dlerror();
-  if (api_v7 == nullptr && api_v6 == nullptr && api_v5 == nullptr &&
+  if (api_v8 == nullptr && api_v7 == nullptr && api_v6 == nullptr && api_v5 == nullptr &&
       api_v4 == nullptr && api_v3 == nullptr && api_v2 == nullptr &&
       v1_error != nullptr) {
     errors->push_back("plugin " + path.string() +
@@ -185,7 +195,8 @@ bool PluginManager::Load(const std::filesystem::path& path,
     return false;
   }
   const DangPluginV1* api =
-      api_v7   ? &api_v7->v6.v5.v4.v3.v2.v1
+      api_v8   ? &api_v8->v7.v6.v5.v4.v3.v2.v1
+      : api_v7 ? &api_v7->v6.v5.v4.v3.v2.v1
       : api_v6 ? &api_v6->v5.v4.v3.v2.v1
       : api_v5 ? &api_v5->v4.v3.v2.v1
       : api_v4 ? &api_v4->v3.v2.v1
@@ -193,7 +204,8 @@ bool PluginManager::Load(const std::filesystem::path& path,
       : api_v2 ? &api_v2->v1
                : (initialize ? initialize() : nullptr);
   if (!api || api->abi_version !=
-                  (api_v7 ? DANG_PLUGIN_ABI_V7
+                  (api_v8 ? DANG_PLUGIN_ABI_V8
+                          : api_v7 ? DANG_PLUGIN_ABI_V7
                           : api_v6 ? DANG_PLUGIN_ABI_V6
                           : api_v5 ? DANG_PLUGIN_ABI_V5
                           : api_v4 ? DANG_PLUGIN_ABI_V4
@@ -208,7 +220,8 @@ bool PluginManager::Load(const std::filesystem::path& path,
     dlclose(library);
     return false;
   }
-  const DangPluginV6* reconcile_api = api_v7 ? &api_v7->v6 : api_v6;
+  const DangPluginV7* resource_api = api_v8 ? &api_v8->v7 : api_v7;
+  const DangPluginV6* reconcile_api = resource_api ? &resource_api->v6 : api_v6;
   const DangPluginV5* complete_api = reconcile_api ? &reconcile_api->v5 : api_v5;
   const DangPluginV4* action_api = complete_api ? &complete_api->v4 : api_v4;
   if (action_api &&
@@ -236,10 +249,17 @@ bool PluginManager::Load(const std::filesystem::path& path,
     dlclose(library);
     return false;
   }
-  if (api_v7 && ((api_v7->resource_domain_count == nullptr) !=
-                 (api_v7->resource_domain_at == nullptr))) {
+  if (resource_api && ((resource_api->resource_domain_count == nullptr) !=
+                 (resource_api->resource_domain_at == nullptr))) {
     errors->push_back("plugin " + std::string(api->plugin_name) +
                       " must provide both resource-domain callbacks or neither");
+    if (api->destroy) api->destroy(api->context);
+    dlclose(library);
+    return false;
+  }
+  if (api_v8 && !api_v8->next_notification) {
+    errors->push_back("plugin " + std::string(api->plugin_name) +
+                      " does not implement ABI v8 notification draining");
     if (api->destroy) api->destroy(api->context);
     dlclose(library);
     return false;
@@ -255,7 +275,8 @@ bool PluginManager::Load(const std::filesystem::path& path,
   State::Plugin plugin;
   plugin.library = library;
   plugin.api = api;
-  plugin.invoke = api_v7   ? api_v7->v6.v5.v4.v3.v2.invoke
+  plugin.invoke = api_v8   ? api_v8->v7.v6.v5.v4.v3.v2.invoke
+                  : api_v7 ? api_v7->v6.v5.v4.v3.v2.invoke
                   : api_v6 ? api_v6->v5.v4.v3.v2.invoke
                   : api_v5 ? api_v5->v4.v3.v2.invoke
                   : api_v4 ? api_v4->v3.v2.invoke
@@ -263,7 +284,8 @@ bool PluginManager::Load(const std::filesystem::path& path,
                   : api_v2 ? api_v2->invoke
                            : nullptr;
   plugin.operational =
-      api_v7   ? api_v7->v6.v5.v4.v3.get_operational_data
+      api_v8   ? api_v8->v7.v6.v5.v4.v3.get_operational_data
+      : api_v7 ? api_v7->v6.v5.v4.v3.get_operational_data
       : api_v6 ? api_v6->v5.v4.v3.get_operational_data
       : api_v5 ? api_v5->v4.v3.get_operational_data
       : api_v4 ? api_v4->v3.get_operational_data
@@ -273,6 +295,7 @@ bool PluginManager::Load(const std::filesystem::path& path,
       complete_api ? complete_api->get_operational_data_v2 : nullptr;
   plugin.reconcile_applied =
       reconcile_api ? reconcile_api->reconcile_applied_configuration : nullptr;
+  plugin.next_notification = api_v8 ? api_v8->next_notification : nullptr;
   if (action_api) {
     plugin.hardware_action_count = action_api->hardware_action_count;
     plugin.hardware_action_at = action_api->hardware_action_at;
@@ -367,11 +390,11 @@ bool PluginManager::Load(const std::filesystem::path& path,
       plugin.dependencies.emplace_back(dependency);
     }
   }
-  if (api_v7 && api_v7->resource_domain_count &&
-      api_v7->resource_domain_at) {
+  if (resource_api && resource_api->resource_domain_count &&
+      resource_api->resource_domain_at) {
     for (std::size_t index = 0;
-         index < api_v7->resource_domain_count(api->context); ++index) {
-      const char* domain = api_v7->resource_domain_at(api->context, index);
+         index < resource_api->resource_domain_count(api->context); ++index) {
+      const char* domain = resource_api->resource_domain_at(api->context, index);
       if (!domain || !ValidResourceDomain(domain) ||
           std::ranges::find(plugin.resource_domains, domain) !=
               plugin.resource_domains.end()) {
@@ -456,6 +479,52 @@ std::vector<PluginOperationalFragment> PluginManager::OperationalData() const {
       else
         result.push_back(
             {plugin.name, std::move(*copied), std::nullopt, {}});
+    }
+  }
+  return result;
+}
+
+std::vector<PluginNotification> PluginManager::Notifications() {
+  constexpr std::size_t kMaximumEventsPerPlugin = 64;
+  std::lock_guard lock(state_->notification_mutex);
+  const auto& limits = yang::DefaultResourceLimits();
+  std::vector<PluginNotification> result;
+  for (State::Plugin& plugin : state_->plugins) {
+    if (!plugin.next_notification) continue;
+    for (std::size_t index = 0; index < kMaximumEventsPerPlugin; ++index) {
+      DangNotificationV1 event{};
+      DangPluginErrorV1 error{};
+      const int status =
+          plugin.next_notification(plugin.api->context, &event, &error);
+      if (status == 0) break;
+      if (status < 0) {
+        result.push_back({.provider = plugin.name,
+                          .error = error.message
+                              ? std::optional<std::string>(error.message)
+                              : std::optional<std::string>(
+                                    "notification callback failed")});
+        break;
+      }
+      auto stream = CopyBoundedCString(event.stream_name,
+                                       limits.maximum_xpath_bytes);
+      auto module = CopyBoundedCString(event.module_name,
+                                       limits.maximum_xpath_bytes);
+      auto name = CopyBoundedCString(event.notification_name,
+                                     limits.maximum_xpath_bytes);
+      auto content =
+          CopyBoundedCString(event.content_xml, limits.maximum_xml_bytes);
+      auto path = event.instance_path
+          ? CopyBoundedCString(event.instance_path, limits.maximum_xpath_bytes)
+          : std::optional<std::string>("");
+      if (!stream || stream->empty() || !module || module->empty() || !name ||
+          name->empty() || !content || content->empty() || !path) {
+        result.push_back({.provider = plugin.name,
+                          .error = "plugin returned an invalid notification"});
+        break;
+      }
+      result.push_back({plugin.name, std::move(*stream), std::move(*module),
+                        std::move(*name), std::move(*content), std::move(*path),
+                        event.default_deny_all != 0, std::nullopt});
     }
   }
   return result;

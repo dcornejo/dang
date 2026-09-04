@@ -222,6 +222,40 @@ typedef struct DangPluginV7 {
 /** Type of the optional exported `dang_plugin_init_v7` entry point. */
 typedef const DangPluginV7* (*DangPluginInitV7)(void);
 
+#define DANG_PLUGIN_ABI_V8 8u
+
+/** Borrowed modeled notification copied by dangd before the callback returns. */
+typedef struct DangNotificationV1 {
+  /** Registered stream, normally `NETCONF`. */
+  const char* stream_name;
+  /** Implemented module that declares the notification. */
+  const char* module_name;
+  /** Notification schema-node name within `module_name`. */
+  const char* notification_name;
+  /** Self-contained modeled event element, without the RFC 5277 wrapper. */
+  const char* content_xml;
+  /** Complete instance path for an associated notification, or empty. */
+  const char* instance_path;
+  /** Nonzero requests default denial in addition to schema annotations. */
+  uint32_t default_deny_all;
+} DangNotificationV1;
+
+/**
+ * ABI v8 lets the host drain queued plugin events without blocking.
+ *
+ * Return one when an event was written, zero when the queue is empty, and -1
+ * with `error` populated when draining failed. Dangd bounds calls per poll and
+ * validates the copied event against the compiled schema before publication.
+ */
+typedef struct DangPluginV8 {
+  DangPluginV7 v7;
+  int (*next_notification)(void* context, DangNotificationV1* notification,
+                           DangPluginErrorV1* error);
+} DangPluginV8;
+
+/** Type of the optional exported `dang_plugin_init_v8` entry point. */
+typedef const DangPluginV8* (*DangPluginInitV8)(void);
+
 #ifdef __cplusplus
 }
 #endif

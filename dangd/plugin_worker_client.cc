@@ -236,7 +236,7 @@ std::optional<PluginWorkerDiscovery> PluginWorkerClient::Discover(
         value.at("resource_domains").get<std::vector<std::string>>()};
     if (discovery.manifest.plugin_name.empty() ||
         discovery.manifest.abi_version < DANG_PLUGIN_ABI_V1 ||
-        discovery.manifest.abi_version > DANG_PLUGIN_ABI_V7)
+        discovery.manifest.abi_version > DANG_PLUGIN_ABI_V8)
       throw Json::other_error::create(501, "invalid plugin manifest", &value);
     const auto valid_names = [](const std::vector<std::string>& values) {
       return std::ranges::none_of(values, &std::string::empty);
@@ -307,6 +307,49 @@ PluginWorkerOperationalResult PluginWorkerClient::OperationalData() {
   } catch (const Json::exception&) {
     Terminate();
     return {{}, "malformed plugin worker operational values"};
+  }
+  return result;
+}
+
+PluginWorkerNotificationResult PluginWorkerClient::Notifications() {
+  ExchangeResult exchanged =
+      Exchange(Json{{"operation", "notifications"}}.dump());
+  if (!exchanged.response) return {{}, exchanged.error};
+  const Json& response = *exchanged.response;
+  if (!response.value("ok", false) || !response.contains("events") ||
+      !response["events"].is_array()) {
+    Terminate();
+    return {{}, "invalid plugin worker notification response"};
+  }
+  PluginWorkerNotificationResult result;
+  const auto& limits = yang::DefaultResourceLimits();
+  try {
+    for (const Json& value : response["events"]) {
+      PluginNotification event;
+      event.provider = value.at("provider").get<std::string>();
+      event.stream_name = value.at("stream_name").get<std::string>();
+      event.module_name = value.at("module_name").get<std::string>();
+      event.notification_name =
+          value.at("notification_name").get<std::string>();
+      event.content_xml = value.at("content_xml").get<std::string>();
+      event.instance_path = value.at("instance_path").get<std::string>();
+      event.default_deny_all = value.at("default_deny_all").get<bool>();
+      if (!value.at("error").is_null())
+        event.error = value.at("error").get<std::string>();
+      if (event.provider.empty() ||
+          event.provider.size() > limits.maximum_xpath_bytes ||
+          event.stream_name.size() > limits.maximum_xpath_bytes ||
+          event.module_name.size() > limits.maximum_xpath_bytes ||
+          event.notification_name.size() > limits.maximum_xpath_bytes ||
+          event.content_xml.size() > limits.maximum_xml_bytes ||
+          event.instance_path.size() > limits.maximum_xpath_bytes ||
+          (event.error && event.error->size() > limits.maximum_xpath_bytes))
+        throw Json::other_error::create(501, "invalid notification", &value);
+      result.notifications.push_back(std::move(event));
+    }
+  } catch (const Json::exception&) {
+    Terminate();
+    return {{}, "malformed plugin worker notification values"};
   }
   return result;
 }

@@ -53,6 +53,18 @@ struct PluginOperationalFragment {
   bool complete = false;
 };
 
+/** Host-owned modeled event or attributed drain failure from one plugin. */
+struct PluginNotification {
+  std::string provider;
+  std::string stream_name;
+  std::string module_name;
+  std::string notification_name;
+  std::string content_xml;
+  std::string instance_path;
+  bool default_deny_all = false;
+  std::optional<std::string> error;
+};
+
 /** Failure exposed in the current operational reconciliation snapshot. */
 struct OperationalProviderFailure {
   std::string provider;
@@ -109,6 +121,10 @@ class PluginRuntime : public yang::netconf::OperationProvider {
       const = 0;
   [[nodiscard]] virtual std::vector<PluginOperationalFragment>
   OperationalData() const = 0;
+  /** Drains a bounded batch of queued modeled events. */
+  [[nodiscard]] virtual std::vector<PluginNotification> Notifications() {
+    return {};
+  }
   [[nodiscard]] virtual std::string ReconciliationData(
       std::span<const OperationalProviderFailure> provider_failures = {})
       const = 0;
@@ -145,6 +161,7 @@ class PluginManager : public PluginRuntime {
   /** Collects attributed operational callback results from ABI-v3 plugins. */
   [[nodiscard]] std::vector<PluginOperationalFragment> OperationalData()
       const override;
+  [[nodiscard]] std::vector<PluginNotification> Notifications() override;
   /** Returns modeled state for hardware changes that could not be rolled back. */
   [[nodiscard]] std::string ReconciliationData(
       std::span<const OperationalProviderFailure> provider_failures = {})

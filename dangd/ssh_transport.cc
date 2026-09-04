@@ -206,11 +206,15 @@ void DrainDiagnostics(Application& application, std::ostream& diagnostics,
   const std::vector<std::string> deltas = application.DrainBackendDeltas();
   const std::vector<std::string> audits =
       application.DrainRecoveryAuditRecords();
+  const std::vector<std::string> notification_errors =
+      application.PollPluginNotifications();
   std::lock_guard lock(mutex);
   for (const std::string& delta : deltas)
     diagnostics << "dangd: configuration delta: " << delta << '\n';
   for (const std::string& audit : audits)
     diagnostics << "dangd: audit: " << audit << '\n';
+  for (const std::string& error : notification_errors)
+    diagnostics << "dangd: plugin notification: " << error << '\n';
 }
 
 bool BoundHandshakeIo(ssh_session session) {
@@ -282,6 +286,7 @@ void ServeSshSession(Handle<ssh_session, ssh_free> session,
     const int count = ssh_channel_read_timeout(
         channel.get(), buffer.data(), buffer.size(), 0, 1000);
     if (count == SSH_AGAIN) {
+      DrainDiagnostics(application, diagnostics, diagnostics_mutex);
       adapter.Poll();
       continue;
     }
