@@ -18,6 +18,9 @@ and releases follow Semantic Versioning.
   tests cover one-shot delivery.
 - Recorded the external FRR provider's adoption of ABI v8 for deduplicated,
   unsolicited configuration-drift events from its read-only mgmtd watcher.
+- Recorded generic external-provider dispatch for all installed `frr-zebra`
+  RPCs through FRR's public native mgmtd protocol, while retaining live backend
+  interoperability as an explicit validation gap.
 - Added plugin ABI v7 exclusive resource-domain declarations and copied them
   through supervised worker discovery. In-process loading, worker-runtime
   assembly, recovery identity checks, and the hardware coordinator now reject

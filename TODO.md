@@ -26,7 +26,11 @@ stays in this file with its remaining work rewritten precisely.
   applied-state reconciliation and compares later running reads to detect
   out-of-band changes during operational retrieval, while a read-only watcher
   emits deduplicated ABI-v8 drift events through host schema and NACM checks.
-  Add RPCs and native notifications, resolve the
+  The public native mgmtd RPC codec and generic `frr-zebra` dispatch are wired
+  and covered by portable correlated-session tests; complete live RPC
+  interoperability on a validation host with an active zebra backend. Add
+  notifications from later FRR protocol modules (the current routing, zebra,
+  and staticd model set declares none), resolve the
   eventual package conflict with an executable IETF RIB provider, and then
   enable each additional
   FRR protocol daemon without attaching host LAN interfaces.

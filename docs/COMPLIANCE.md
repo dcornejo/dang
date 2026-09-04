@@ -493,8 +493,15 @@ This testing exposed and corrected the frontend requirement to lock both
 candidate and running datastores for every configuration transaction.
 
 This is conformance to the installed FRR-native model set rather than an IETF
-routing-model claim. Native FRR RPC and notification dispatch and additional
-protocol-daemon modules remain open.
+routing-model claim. All fourteen RPCs in the installed `frr-zebra` schema now
+use a generic native mgmtd RPC request/reply path after dangd input validation
+and NACM authorization; replies return through host output validation and read
+filtering. Portable framing, correlation, format, and session behavior are
+tested on Linux and FreeBSD. Live interoperability remains unconfirmed because
+Linux mgmtd reported no active zebra backend for the RPC path and the FreeBSD
+socket refused connections. The current routing, zebra, and staticd models
+declare no native notifications; notification work belongs to later protocol
+modules, which also remain open.
 
 ### RFC 8343 — interface management and RFC 8344 — IP management
 
