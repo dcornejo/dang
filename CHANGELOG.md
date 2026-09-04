@@ -32,6 +32,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Narrowed the RFC 8431 work item after staging its exact normative schema and
+  independent validation in `dang_plugins`; dangd continues to advertise no
+  RIB implementation until the external runtime plugin is complete.
 - Preserve feature-disabled schema branches until standards-valid augments have
   resolved, then prune them before runtime use; lower unprefixed XPath names in
   imported groupings against their effective using-module namespace.

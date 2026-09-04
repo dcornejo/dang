@@ -561,6 +561,14 @@ interoperability evidence must be established before their status moves into
 an implemented section of this ledger. Their release-gated work is tracked in
 `TODO.md`.
 
+RFC 8431 schema preparation has begun in the separate `dang_plugins`
+repository. It pins the unmodified `ietf-i2rs-rib` revision 2018-09-13 and
+`ietf-interfaces` revision 2018-02-20 dependency, verifies them with independent
+libyang, and installs them as model artifacts. No plugin advertises the module,
+so dangd's YANG Library and runtime behavior correctly make no RFC 8431 claim
+until platform transactions, RPCs, notifications, and operational observation
+are complete on both supported operating systems.
+
 BaseX is likewise only a datastore architecture investigation. The current
 implementation remains the in-process validated datastore manager with atomic
 JSON snapshots; no BaseX runtime, query, packaging, or compliance dependency

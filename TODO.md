@@ -20,8 +20,10 @@ stays in this file with its remaining work rewritten precisely.
   key representations, encryption and zeroization beyond the private snapshot
   boundary, built-in operational keys, CSR/certificate behavior, and
   independent behavioral interoperability evidence.
-- [ ] Implement and document the RFC 8431 RIB model, with conformance and
-  interoperability tests and any variance recorded in `docs/COMPLIANCE.md`.
+- [ ] Complete the RFC 8431 RIB plugin after the normative schema checkpoint in
+  `dang_plugins`: implement transaction-safe route/nexthop changes, all seven
+  RPCs, both notifications, operational fidelity, advertised feature choices,
+  and isolated Linux network-namespace and FreeBSD VNET-jail validation.
 - [ ] Implement and document the RFC 9067 routing-policy model, with conformance
   and interoperability tests and any variance recorded in
   `docs/COMPLIANCE.md`.
