@@ -32,9 +32,11 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
-- Narrowed the RFC 8431 work item after staging its exact normative schema and
-  independent validation in `dang_plugins`; dangd continues to advertise no
-  RIB implementation until the external runtime plugin is complete.
+- Narrowed the RFC 8431 work item after adding the strict portable route parser,
+  delete-before-install delta planning, and separate shell-free Linux/FreeBSD
+  command planners in `dang_plugins`; dangd continues to advertise no RIB
+  implementation until execution, rollback, RPC, notification, and operational
+  behavior are complete.
 - Preserve feature-disabled schema branches until standards-valid augments have
   resolved, then prune them before runtime use; lower unprefixed XPath names in
   imported groupings against their effective using-module namespace.

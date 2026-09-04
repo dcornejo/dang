@@ -561,12 +561,15 @@ interoperability evidence must be established before their status moves into
 an implemented section of this ledger. Their release-gated work is tracked in
 `TODO.md`.
 
-RFC 8431 schema preparation has begun in the separate `dang_plugins`
-repository. It pins the unmodified `ietf-i2rs-rib` revision 2018-09-13 and
-`ietf-interfaces` revision 2018-02-20 dependency, verifies them with independent
-libyang, and installs them as model artifacts. No plugin advertises the module,
-so dangd's YANG Library and runtime behavior correctly make no RFC 8431 claim
-until platform transactions, RPCs, notifications, and operational observation
+RFC 8431 preparation has begun in the separate `dang_plugins` repository. It
+pins and independently validates the unmodified schema family. Its runtime
+foundation strictly parses destination-prefix IPv4/IPv6 routes with portable
+base nexthops, computes delete-before-install replacements, and produces
+shell-free Linux and FreeBSD command vectors. Unsupported match and nexthop
+semantics fail with an attributed model path. Numeric-only RIB/FIB names are a
+temporary platform-mapping variance. No commands are executed and no plugin
+advertises the module, so dangd correctly makes no RFC 8431 claim until kernel
+transactions, rollback, RPCs, notifications, and observed operational state
 are complete on both supported operating systems.
 
 BaseX is likewise only a datastore architecture investigation. The current
