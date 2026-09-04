@@ -457,12 +457,13 @@ The separately packaged `dang-frr` provider publishes the runtime-matched
 schema closure for `frr-routing`, `frr-zebra`, and `frr-staticd`, claims the
 exclusive `routing` resource domain, validates changes in disposable mgmtd
 candidate sessions, commits them atomically, and restores a retained
-before-image on rollback. It retrieves the provider-owned top-level
-`/frr-zebra:zebra` state from FRR's operational datastore through native
-`GET_DATA` and publishes only complete, correlated XML `TREE_DATA` replies
-through dangd's operational-provider ABI. Partial results, unexpected formats,
-continuation replies, and protocol-correlation failures fail closed. Zebra
-state augmented below imported interface and VRF roots is not yet published.
+before-image on rollback. It retrieves provider-owned top-level and augmented
+zebra state from FRR's operational datastore through native `GET_DATA` and
+publishes only complete, correlated XML `TREE_DATA` replies through dangd's
+operational-provider ABI. For augments below imported interface and VRF lists,
+only identifying keys and `frr-zebra` descendants are retained; unrelated base
+state is discarded. Partial results, unexpected formats, continuation replies,
+and protocol-correlation failures fail closed.
 
 This is conformance to the installed FRR-native model set rather than an IETF
 routing-model claim. Applied-state reconciliation, explicit out-of-band drift

@@ -44,7 +44,8 @@ and releases follow Semantic Versioning.
 ### Changed
 
 - Narrowed the external FRR-provider roadmap after adding fail-closed live
-  operational XML retrieval through FRR's native mgmtd frontend API.
+  operational XML retrieval through FRR's native mgmtd frontend API, including
+  ownership-filtered zebra augments below imported interface and VRF lists.
 - Promoted the FRR-native provider to the highest roadmap priority, immediately
   followed by the IETF RFC 8431 provider. Recorded the decisions to use one
   coordinated plugin, pinned native FRR YANG, the programmatic `mgmtd` API,
