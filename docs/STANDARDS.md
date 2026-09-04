@@ -12,6 +12,17 @@ boundaries that callers should understand.
 
 ## Resolved issues
 
+### RFC 9644 groupings require data-tree XPath semantics
+
+Modern IETF crypto and SSH groupings place constraints beneath `choice` and
+`case` statements and are commonly instantiated in another module. XPath data
+paths do not contain those schema-only nodes, and unprefixed names in the
+instantiated grouping use the using module's effective namespace. Static XPath
+validation now treats `choice` and `case` as transparent and resolves those
+unprefixed names against the effective tree. The pinned RFC 9644 dependency
+closure is compiled by the internal conformance suite and independently by
+libyang `yanglint`.
+
 ### YANG Library current and legacy views describe one schema inventory
 
 RFC 8525 clients receive `/yang-library`, including implemented and

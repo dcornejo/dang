@@ -7,11 +7,17 @@
 
 ### Added
 
+- Added the RFC 9644 SSH client/server grouping family and its pinned dependency
+  closure to the built-in import-only schema library and `get-schema` service.
+
 - Added a default, removable `dangd-superuser` recovery identity scoped solely
   to dangd NACM bypass. No operating-system account, password, private key, or
   trust mapping is created by the daemon or native packages.
 
 ### Changed
+
+- Compile the RFC 9644 family without advertising writable transport or
+  keystore behavior; the embedded SSH listener remains explicitly configured.
 
 - Activated the complete initial or restored running tree through affected
   plugins before startup succeeds, including unchanged restored configuration,

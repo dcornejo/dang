@@ -149,6 +149,12 @@ TEST(DangdApplicationTest, LoadsModelAndCompleteConfiguration) {
   EXPECT_NE(library.xml.find("<name>dangd-reconciliation</name>"),
             std::string::npos)
       << library.xml;
+  EXPECT_NE(library.xml.find("<name>ietf-ssh-common</name>"),
+            std::string::npos) << library.xml;
+  EXPECT_NE(library.xml.find("<name>ietf-ssh-client</name>"),
+            std::string::npos) << library.xml;
+  EXPECT_NE(library.xml.find("<name>ietf-ssh-server</name>"),
+            std::string::npos) << library.xml;
   EXPECT_NE(library.xml.find("<feature>xpath</feature>"), std::string::npos)
       << library.xml;
 }
@@ -1944,6 +1950,11 @@ TEST(DangdApplicationTest, RetrievesBuiltInAndPluginYangSources) {
   EXPECT_NE(reconciliation.xml.find("module dangd-reconciliation"),
             std::string::npos)
       << reconciliation.xml;
+  const auto ssh_server = retrieve(
+      "<identifier>ietf-ssh-server</identifier>"
+      "<version>2024-10-10</version>");
+  EXPECT_NE(ssh_server.xml.find("module ietf-ssh-server"),
+            std::string::npos) << ssh_server.xml;
   EXPECT_NE(retrieve("<identifier>missing</identifier>")
                 .xml.find("invalid-value"),
             std::string::npos);

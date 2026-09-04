@@ -587,7 +587,8 @@ if(YANG_BUILD_TESTS)
     tests/xml_security_test.cc)
   target_sources(yang_tests PRIVATE tests/concurrency_stress_test.cc tests/config_edit_test.cc tests/config_validation_test.cc tests/conformance_test.cc tests/deviation_test.cc tests/extension_test.cc tests/feature_schema_test.cc tests/identity_feature_test.cc tests/leafref_test.cc tests/module_resolver_test.cc tests/nacm_test.cc tests/netconf_datastore_test.cc tests/netconf_filter_test.cc tests/netconf_framing_test.cc tests/netconf_notifications_test.cc tests/netconf_persistence_test.cc tests/netconf_server_test.cc tests/netconf_session_registry_test.cc tests/netconf_transport_test.cc tests/netconf_with_defaults_test.cc tests/schema_path_test.cc tests/schema_tree_test.cc tests/schema_value_test.cc tests/semantic_model_test.cc tests/type_system_test.cc tests/validator_test.cc tests/xpath_test.cc tests/yin_document_test.cc)
   target_compile_definitions(yang_tests PRIVATE
-    YANG_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests")
+    YANG_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests"
+    YANG_PROJECT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
   target_link_libraries(yang_tests PRIVATE yang::yang GTest::gtest_main Threads::Threads)
   include(GoogleTest)
   if(YANG_ENABLE_SANITIZERS AND APPLE)
@@ -596,6 +597,14 @@ if(YANG_BUILD_TESTS)
     gtest_discover_tests(yang_tests DISCOVERY_MODE PRE_TEST)
   else()
     gtest_discover_tests(yang_tests)
+  endif()
+
+  find_program(YANG_YANGLINT_EXECUTABLE yanglint)
+  if(YANG_YANGLINT_EXECUTABLE)
+    add_test(NAME rfc9644_yanglint_interoperability
+      COMMAND
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/interoperability/run_rfc9644_yanglint.sh
+        ${YANG_YANGLINT_EXECUTABLE})
   endif()
 
   if(YANG_BUILD_DANGD)

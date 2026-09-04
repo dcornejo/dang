@@ -145,6 +145,25 @@ TEST(ConformanceTest, CompilesPinnedIetfIpDependencyClosure) {
   EXPECT_FALSE(diagnostics.has_errors());
 }
 
+TEST(ConformanceTest, CompilesPinnedRfc9644DependencyClosure) {
+  const std::filesystem::path directory =
+      std::filesystem::path(YANG_PROJECT_SOURCE_DIR) / "dangd" / "models";
+  for (const std::string_view module : {"ietf-ssh-common", "ietf-ssh-client",
+                                        "ietf-ssh-server"}) {
+    SCOPED_TRACE(module);
+    VectorDiagnosticSink diagnostics;
+    auto source = LoadFixture(
+        directory / (std::string(module) + "@2024-10-10.yang"), diagnostics);
+    ASSERT_TRUE(source);
+    FilesystemModuleRepository repository({directory});
+    Compiler compiler(repository, diagnostics);
+    const auto result = compiler.Compile(source);
+    ASSERT_TRUE(result);
+    EXPECT_EQ(result->module->name, module);
+    EXPECT_FALSE(diagnostics.has_errors());
+  }
+}
+
 TEST(ConformanceTest, RejectsEveryMalformedYangCorpusEntry) {
   const std::filesystem::path directory =
       std::filesystem::path(YANG_TEST_SOURCE_DIR) / "corpus" / "yang";

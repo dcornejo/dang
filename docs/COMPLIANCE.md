@@ -503,10 +503,30 @@ incomplete compensation with explicit `hardware-state-diverged` reporting are
 covered by automated tests. A real device plugin must still reserve platform
 resources during preflight and provide backend-specific dependency edges.
 
+## RFC 9644 SSH client and server groupings
+
+Status: **published as a complete import-only schema family**.
+
+Dangd bundles the unmodified `ietf-ssh-common`, `ietf-ssh-client`, and
+`ietf-ssh-server` revision 2024-10-10 modules and the pinned IANA algorithm and
+normative dependency closure. The modules compile with both this project's
+compiler and independent libyang `yanglint`, appear as import-only modules in
+the RFC 8525 and legacy RFC 7895 inventories, and are available through RFC
+6022 `get-schema`. No RFC 9644 feature is advertised.
+
+This is schema/grouping conformance, not a claim that the grouping contents are
+writable dangd configuration. RFC 9644 intentionally defines reusable
+groupings and omits transport addresses and ports. The embedded libssh listener
+continues to use explicit command-line settings. Dangd does not instantiate an
+RFC 9644 consuming transport model, and the bundled RFC 9642 keystore and RFC
+9641 truststore dependencies remain import-only; their configuration and
+operational behavior are not implemented. These are explicit variances from a
+server that uses RFC 9644 as its management interface.
+
 ## Roadmap-only standards and models
 
-RFC 9644 SSH client/server groupings, the RFC 9642 keystore, the RFC 8431 RIB
-model, the RFC 9067 routing-policy model, and OpenConfig VLAN draft models are
+The RFC 9642 keystore, the RFC 8431 RIB model, the RFC 9067 routing-policy
+model, and OpenConfig VLAN draft models are
 planned but not implemented, advertised, or claimed. Exact module revisions,
 feature/deviation choices, plugin ownership, platform effects, and
 interoperability evidence must be established before their status moves into

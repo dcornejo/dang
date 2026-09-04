@@ -287,9 +287,10 @@ class Parser {
 };
 
 std::optional<std::string> ModuleFor(const ResolvedModule& source,
-                                     std::string_view step) {
+                                     std::string_view step,
+                                     std::string_view default_module) {
   const std::size_t colon = step.find(':');
-  if (colon == std::string_view::npos) return source.belongs_to.value_or(source.name);
+  if (colon == std::string_view::npos) return std::string(default_module);
   const std::string prefix(step.substr(0, colon));
   if (prefix == source.prefix) return source.belongs_to.value_or(source.name);
   const auto imported = source.imports.find(prefix);
@@ -302,15 +303,27 @@ std::string_view LocalName(std::string_view step) {
   return colon == std::string_view::npos ? step : step.substr(colon + 1);
 }
 
+bool IsSchemaOnlyNode(const SchemaNode& node) {
+  return node.kind == SchemaNodeKind::kChoice ||
+         node.kind == SchemaNodeKind::kCase;
+}
+
+std::optional<SchemaNodeId> DataParent(const SchemaTree& tree,
+                                       SchemaNodeId node) {
+  std::optional<SchemaNodeId> parent = tree.Get(node).parent;
+  while (parent && IsSchemaOnlyNode(tree.Get(*parent)))
+    parent = tree.Get(*parent).parent;
+  return parent;
+}
+
 std::optional<SchemaNodeId> FindStep(const SchemaTree& tree,
                                      std::optional<SchemaNodeId> parent,
                                      const SchemaName& name) {
   if (const auto direct = tree.FindChild(parent, name)) return direct;
   const auto& candidates = parent ? tree.Get(*parent).children : tree.roots();
   for (const SchemaNodeId id : candidates) {
-    if (tree.Get(id).kind == SchemaNodeKind::kCase) {
-      if (const auto nested = tree.FindChild(id, name)) return nested;
-    }
+    if (!IsSchemaOnlyNode(tree.Get(id))) continue;
+    if (const auto nested = FindStep(tree, id, name)) return nested;
   }
   return std::nullopt;
 }
@@ -449,7 +462,8 @@ std::optional<XPathContext> XPathValidator::Validate(
           }
           if (path.absolute) {
             const auto module_name =
-                ModuleFor(constraint_source, path.steps.front());
+                ModuleFor(constraint_source, path.steps.front(),
+                          active_module->name);
             active_module = module_name ? ModuleNamed(schemas, *module_name) : nullptr;
             active_tree = active_module ? schemas.Find(*active_module) : nullptr;
           }
@@ -465,13 +479,15 @@ std::optional<XPathContext> XPathValidator::Validate(
               continue;
             }
             if (step == "..") {
-              if (!current || !active_tree->Get(*current).parent) { resolved = false; break; }
-              current = active_tree->Get(*current).parent;
+              if (!current) { resolved = false; break; }
+              current = DataParent(*active_tree, *current);
+              if (!current) { resolved = false; break; }
               path_step_contexts[path_index].push_back(
                   {active_module, *current});
               continue;
             }
-            const auto module_name = ModuleFor(constraint_source, step);
+            const auto module_name =
+                ModuleFor(constraint_source, step, active_module->name);
             if (!module_name) { resolved = false; break; }
             const std::optional<SchemaNodeId> parent = current;
             current = FindStep(*active_tree, parent,

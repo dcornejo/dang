@@ -75,6 +75,15 @@ NETCONF framing and lifecycle. There is no sidecar with overlapping framing or
 identity responsibility. Password, keyboard-interactive, shell, exec, PTY,
 forwarding, and non-session channels are not accepted.
 
+The built-in schema library also ships the RFC 9644 `ietf-ssh-common`,
+`ietf-ssh-client`, and `ietf-ssh-server` revision 2024-10-10 groupings and their
+pinned dependency closure. They are advertised as import-only and are
+retrievable with `get-schema`. RFC 9644 deliberately supplies reusable SSH
+groupings and no listener address or port, so it does not replace these dangd
+command-line transport settings. Dangd does not currently instantiate the
+groupings into a writable transport model, enable any RFC 9644 feature, or
+claim RFC 9642 keystore behavior.
+
 Each accepted SSH connection runs in an independent worker so a client blocked
 on authentication, input, or output cannot stop other NETCONF sessions. The
 listener admits at most 64 simultaneous workers by default; use

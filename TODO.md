@@ -15,9 +15,6 @@ stays in this file with its remaining work rewritten precisely.
 
 ### Standards and models
 
-- [ ] Implement and document RFC 9644 YANG SSH client/server groupings, with
-  conformance and interoperability tests and any variance recorded in
-  `docs/COMPLIANCE.md`.
 - [ ] Implement and document the RFC 9642 keystore model, with conformance and
   interoperability tests and any variance recorded in `docs/COMPLIANCE.md`.
 - [ ] Implement and document the RFC 8431 RIB model, with conformance and

@@ -71,6 +71,66 @@ TEST(XPathTest, ValidatesMustAndWhenWithRelativePaths) {
   EXPECT_FALSE(context->expressions()[0].statically_resolved_nodes.empty());
 }
 
+TEST(XPathTest, TreatsChoiceAndCaseAsTransparentInDataPaths) {
+  XPathPipeline pipeline;
+  pipeline.Build(R"yang(module app {
+    namespace "urn:app"; prefix app;
+    container key {
+      leaf format { type string; }
+      choice representation {
+        case cleartext {
+          leaf value { type string; must "../format"; }
+        }
+      }
+    }
+  })yang");
+  ASSERT_TRUE(pipeline.schemas);
+
+  XPathValidator validator(pipeline.sink);
+  auto context = validator.Validate(*pipeline.schemas);
+
+  ASSERT_TRUE(context);
+  ASSERT_EQ(context->expressions().size(), 1U);
+  ASSERT_EQ(context->expressions()[0].statically_resolved_nodes.size(), 1U);
+  const SchemaNodeRef& resolved =
+      context->expressions()[0].statically_resolved_nodes[0];
+  EXPECT_EQ(resolved.tree_module->name, "app");
+  EXPECT_EQ(pipeline.schemas->Find(*resolved.tree_module)
+                ->Get(resolved.node)
+                .name.local_name,
+            "format");
+}
+
+TEST(XPathTest, ResolvesUnprefixedGroupingPathsInUsingModuleNamespace) {
+  XPathPipeline pipeline;
+  pipeline.repository.Add("types", R"yang(module types {
+    namespace "urn:types"; prefix t;
+    grouping key {
+      leaf format { type string; }
+      choice representation {
+        leaf value { type string; must "../format"; }
+      }
+    }
+  })yang");
+  pipeline.Build(R"yang(module app {
+    namespace "urn:app"; prefix app;
+    import types { prefix t; }
+    container key { uses t:key; }
+  })yang");
+  ASSERT_TRUE(pipeline.schemas);
+
+  XPathValidator validator(pipeline.sink);
+  auto context = validator.Validate(*pipeline.schemas);
+
+  ASSERT_TRUE(context);
+  ASSERT_EQ(context->expressions().size(), 1U);
+  ASSERT_EQ(context->expressions()[0].statically_resolved_nodes.size(), 1U);
+  EXPECT_EQ(context->expressions()[0]
+                .statically_resolved_nodes[0]
+                .tree_module->name,
+            "app");
+}
+
 TEST(XPathTest, ResolvesAbsoluteCrossModulePaths) {
   XPathPipeline pipeline;
   pipeline.repository.Add("base", R"yang(module base {

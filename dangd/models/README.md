@@ -29,3 +29,12 @@ IETF Trust license notices.
 for hardware actions whose compensation failed. It is implemented by the core,
 published through RFC 8525 YANG Library, and retrievable through RFC 6022
 `get-schema` like the bundled standards modules.
+
+The RFC 9644 SSH grouping family is pinned at revision 2024-10-10:
+`ietf-ssh-common`, `ietf-ssh-client`, and `ietf-ssh-server`. Its IANA algorithm
+modules are pinned at 2024-10-16. The exact RFC 9640 crypto-types, RFC 9641
+truststore, RFC 9642 keystore, and RFC 7317 `iana-crypt-hash` dependency sources
+are included beside them. These are unmodified registry sources (apart from a
+final newline where absent) with their embedded license notices. Dangd exposes
+the complete closure as import-only modules; bundling a dependency does not
+claim that its top-level configuration is implemented.

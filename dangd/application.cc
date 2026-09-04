@@ -937,6 +937,12 @@ LoadResult Application::Load(const ApplicationOptions& options) {
     add_import("ietf-netconf-monitoring", std::string("2010-10-04"));
     add_import("ietf-netconf-nmda", std::string("2019-01-07"));
     add_import("dangd-reconciliation", std::string("2026-08-23"));
+    // RFC 9644 publishes reusable groupings rather than top-level datastore
+    // nodes.  Import all three modules so their complete dependency closure is
+    // visible through YANG Library and get-schema as import-only modules.
+    add_import("ietf-ssh-common", std::string("2024-10-10"));
+    add_import("ietf-ssh-client", std::string("2024-10-10"));
+    add_import("ietf-ssh-server", std::string("2024-10-10"));
     for (const PluginYangSource& plugin_source : plugins->yang_sources()) {
       if (plugin_source.role != DANG_YANG_IMPORT_ONLY_V1)
         add_import(plugin_source.module_name, plugin_source.revision);

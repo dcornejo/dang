@@ -10,6 +10,11 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added the complete pinned RFC 9644 SSH grouping family and dependency closure
+  as built-in import-only schemas, including YANG Library advertisement,
+  `get-schema` retrieval, internal conformance coverage, and independent
+  libyang `yanglint` interoperability validation.
+
 - Added the built-in `dangd-superuser` NETCONF recovery identity. It exists only
   in dangd's NACM recovery set, has no packaged credential or operating-system
   account, is audited like every recovery identity, and can be removed with
@@ -23,6 +28,10 @@ and releases follow Semantic Versioning.
   install and native package manifests.
 
 ### Changed
+
+- Resolve XPath data paths through transparent `choice` and `case` schema nodes
+  and use the effective namespace for unprefixed paths in imported groupings,
+  allowing unmodified modern IETF crypto and SSH modules to compile.
 
 - Completed startup configuration detection and plugin hydration. Initial,
   restored, and reload-provided running trees are activated as one full-tree,
