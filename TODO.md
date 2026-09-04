@@ -24,9 +24,9 @@ stays in this file with its remaining work rewritten precisely.
   owned top-level and augmented zebra operational XML through native mgmtd
   `GET_DATA`. It reads the managed running roots back after apply for ABI-v6
   applied-state reconciliation and compares later running reads to detect
-  out-of-band changes during operational retrieval. Use the now-available ABI-v8
-  schema-validating, NACM-enforcing event path to add unsolicited drift
-  notification; add RPCs and native notifications, resolve the
+  out-of-band changes during operational retrieval, while a read-only watcher
+  emits deduplicated ABI-v8 drift events through host schema and NACM checks.
+  Add RPCs and native notifications, resolve the
   eventual package conflict with an executable IETF RIB provider, and then
   enable each additional
   FRR protocol daemon without attaching host LAN interfaces.

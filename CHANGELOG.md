@@ -16,6 +16,8 @@ and releases follow Semantic Versioning.
   RFC 8341 NACM. SSH, TLS, and stdin sessions poll the path, concurrent
   in-process drains are serialized, and worker plus end-to-end subscription
   tests cover one-shot delivery.
+- Recorded the external FRR provider's adoption of ABI v8 for deduplicated,
+  unsolicited configuration-drift events from its read-only mgmtd watcher.
 - Added plugin ABI v7 exclusive resource-domain declarations and copied them
   through supervised worker discovery. In-process loading, worker-runtime
   assembly, recovery identity checks, and the hardware coordinator now reject
