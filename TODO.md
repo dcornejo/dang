@@ -21,10 +21,11 @@ stays in this file with its remaining work rewritten precisely.
   boundary, built-in operational keys, CSR/certificate behavior, and
   independent behavioral interoperability evidence.
 - [ ] Complete RFC 8431 after the external plugin's schema, strict portable
-  route parser, delta planner, and Linux/FreeBSD argv planners: execute and
-  roll back isolated kernel changes, implement all seven RPCs and both
-  notifications, publish observed operational state, replace numeric-only RIB
-  names with an explicit platform mapping, then advertise and test the module.
+  route parser, delta planner, and transaction-safe native execution: wire the
+  executor into the plugin ABI, implement all seven RPCs and both notifications,
+  publish observed operational state, resolve FreeBSD interface-only nexthops,
+  replace numeric-only RIB names with an explicit platform mapping, then
+  advertise and test the module end to end.
 - [ ] Implement and document the RFC 9067 routing-policy model, with conformance
   and interoperability tests and any variance recorded in
   `docs/COMPLIANCE.md`.

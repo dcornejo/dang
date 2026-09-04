@@ -565,12 +565,16 @@ RFC 8431 preparation has begun in the separate `dang_plugins` repository. It
 pins and independently validates the unmodified schema family. Its runtime
 foundation strictly parses destination-prefix IPv4/IPv6 routes with portable
 base nexthops, computes delete-before-install replacements, and produces
-shell-free Linux and FreeBSD command vectors. Unsupported match and nexthop
-semantics fail with an attributed model path. Numeric-only RIB/FIB names are a
-temporary platform-mapping variance. No commands are executed and no plugin
-advertises the module, so dangd correctly makes no RFC 8431 claim until kernel
-transactions, rollback, RPCs, notifications, and observed operational state
-are complete on both supported operating systems.
+shell-free Linux and FreeBSD command vectors. Its `posix_spawnp` executor stops
+on failure and compensates completed changes in reverse order, retaining any
+rollback failures for reconciliation. Opt-in native tests install, observe,
+delete, and recheck a documentation-prefix route inside a Linux network
+namespace and FreeBSD VNET jail without touching host routes. Unsupported match
+and nexthop semantics fail with an attributed model path. Numeric-only RIB/FIB
+names and rejected FreeBSD interface-only nexthops are temporary platform
+mapping variances. The executor is not wired into an advertised plugin, so
+dangd correctly makes no RFC 8431 claim until ABI transactions, RPCs,
+notifications, and observed operational state are complete.
 
 BaseX is likewise only a datastore architecture investigation. The current
 implementation remains the in-process validated datastore manager with atomic
