@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added an FRR-backed routing plugin work item with Linux and FreeBSD isolation,
+  supported-management-interface, and explicit native-RIB ownership/conflict
+  requirements.
 - Added the first managed RFC 9642 keystore slice: central cleartext symmetric
   keys, NACM-protected edit/retrieval, durable restart restoration, built-in
   model retrieval, and accurate YANG Library feature publication.

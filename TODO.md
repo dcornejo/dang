@@ -26,6 +26,13 @@ stays in this file with its remaining work rewritten precisely.
   publish observed operational state, resolve FreeBSD interface-only nexthops,
   replace numeric-only RIB names with an explicit platform mapping, then
   advertise and test the module end to end.
+- [ ] Implement an FRR-backed routing plugin for Linux and FreeBSD without
+  attaching tests to host LAN interfaces. Define its exact model surface and
+  use a supported FRR management interface rather than parsing interactive CLI
+  output. Before advertising any module also define delegation or strict
+  mutual exclusion with the native RFC 8431 provider: packages should declare
+  the conflict, while dangd must independently reject duplicate runtime module
+  ownership.
 - [ ] Implement and document the RFC 9067 routing-policy model, with conformance
   and interoperability tests and any variance recorded in
   `docs/COMPLIANCE.md`.
