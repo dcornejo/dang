@@ -46,3 +46,19 @@ stays in this file with its remaining work rewritten precisely.
   concurrency, validation, query, durability, backup/restore, access-control,
   operational complexity, packaging, and Linux/FreeBSD behavior with the
   current store before deciding whether to prototype or adopt it.
+
+### Low priority
+
+- [ ] Audit existing plugins for operating-system work performed by spawning
+  command-line programs. Replace it with stable programmatic library, daemon,
+  socket, or kernel APIs wherever available, preserving transaction rollback,
+  error attribution, and Linux/FreeBSD behavior. In particular, prototype and
+  evaluate netlink route and interface operations on both Linux and FreeBSD;
+  document any operation for which a command remains unavoidable and test its
+  strict argv-only execution. New plugin code must prefer programmatic APIs
+  from the outset.
+- [ ] Evaluate one or more FD.io VPP plugins. Define which YANG modules and
+  resources VPP would own, use VPP's supported programmatic APIs, determine
+  whether routing, interface, ACL, and other domains belong in one transaction
+  provider or separately packaged plugins, and validate on isolated Linux and
+  FreeBSD systems without attaching host LAN interfaces.

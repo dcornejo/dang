@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added low-priority work to replace command-driven plugin backends with
+  programmatic APIs, including Linux and FreeBSD netlink evaluation, and to
+  evaluate separately packaged FD.io VPP providers.
 - Added an FRR-backed routing plugin work item with Linux and FreeBSD isolation,
   supported-management-interface, and explicit native-RIB ownership/conflict
   requirements.
@@ -35,6 +38,9 @@ and releases follow Semantic Versioning.
 
 ### Changed
 
+- Made programmatic library, kernel, and structured daemon APIs the required
+  preference for new plugin implementations; command execution now requires a
+  documented lack of a suitable API plus argv-only failure/rollback coverage.
 - Narrowed the RFC 8431 work item after adding the strict portable route parser,
   delete-before-install delta planning, shell-free Linux/FreeBSD execution,
   reverse compensation, and isolated native route tests in `dang_plugins`;

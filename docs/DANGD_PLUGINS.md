@@ -601,8 +601,18 @@ signature mechanism, or defense against a deliberately malicious plugin.
 
 Plugins must treat all configuration strings as untrusted input even though
 they have passed schema validation. They should bound derived allocations,
-avoid shell interpretation, validate external identifiers, and never include
-secrets in error messages or logs.
+validate external identifiers, and never include secrets in error messages or
+logs.
+
+New implementation code must prefer stable programmatic interfaces—native
+libraries, kernel interfaces, or structured daemon protocols—over spawning a
+command-line utility. This improves error fidelity, removes locale and output
+format dependencies, and makes transaction results easier to attribute. A
+command is acceptable only when no suitable programmatic interface exists;
+that exception must be documented, must pass fixed validated arguments without
+a shell, and must have failure and rollback tests. This rule applies equally
+on Linux and FreeBSD; FreeBSD netlink is a candidate for routing and interface
+providers and must be evaluated rather than assuming `route(8)` is required.
 
 NACM authorization has already succeeded before plugin preparation. Plugins
 must not implement an independent, inconsistent authorization policy for the
