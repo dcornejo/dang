@@ -482,10 +482,18 @@ It rejects required-module absence and installed-source versus running-daemon
 revision or namespace skew, preventing dangd from compiling a feature set that
 differs from the backend it controls.
 
+Opt-in native Linux and FreeBSD tests now create a disposable mgmtd pathspace,
+validate and commit an empty staticd protocol instance, read the accepted
+running tree, commit the exact before-image as rollback, and verify restoration.
+The fixture starts no forwarding daemon and attaches no host or LAN interface.
+This testing exposed and corrected the frontend requirement to lock both
+candidate and running datastores for every configuration transaction.
+
 This is conformance to the installed FRR-native model set rather than an IETF
 routing-model claim. Unsolicited drift notification, RPC and notification
-dispatch, isolated
-native mutation coverage, and additional protocol-daemon modules remain open.
+dispatch and additional protocol-daemon modules remain open. Unsolicited plugin
+events additionally require a host ABI path that validates modeled content and
+applies NACM after crossing worker isolation.
 
 ### RFC 8343 — interface management and RFC 8344 — IP management
 

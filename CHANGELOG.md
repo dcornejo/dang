@@ -49,7 +49,9 @@ and releases follow Semantic Versioning.
   post-apply running-datastore reconciliation, and read-triggered detection of
   out-of-band FRR configuration drift. The provider now also derives enabled
   features from the running daemon's RFC 8525 YANG Library and rejects schema
-  skew during discovery.
+  skew during discovery. Opt-in Linux and FreeBSD tests now exercise an actual
+  isolated mgmtd commit, read-back, rollback, and restoration check; the work
+  also corrected candidate/running transaction locking in the provider.
 - Promoted the FRR-native provider to the highest roadmap priority, immediately
   followed by the IETF RFC 8431 provider. Recorded the decisions to use one
   coordinated plugin, pinned native FRR YANG, the programmatic `mgmtd` API,

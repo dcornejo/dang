@@ -25,8 +25,10 @@ stays in this file with its remaining work rewritten precisely.
   `GET_DATA`. It reads the managed running roots back after apply for ABI-v6
   applied-state reconciliation and compares later running reads to detect
   out-of-band changes during operational retrieval. Add unsolicited drift
-  notification, RPCs and notifications, isolated native mutation tests, the eventual package
-  conflict with an executable IETF RIB provider, and then enable each additional
+  notification after adding a schema-validating, NACM-enforcing plugin event
+  path across worker isolation; add RPCs and native notifications, resolve the
+  eventual package conflict with an executable IETF RIB provider, and then
+  enable each additional
   FRR protocol daemon without attaching host LAN interfaces.
 - [ ] Complete RFC 8431 after the external plugin's schema, strict portable
   route parser, delta planner, and transaction-safe native execution: wire the
