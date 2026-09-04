@@ -15,16 +15,16 @@ stays in this file with its remaining work rewritten precisely.
 
 ### Standards and models
 
-- [ ] Implement the top-priority FRR provider as one coordinated, separately
-  packaged plugin for Linux and FreeBSD. Pin and expose FRR's native YANG
-  modules, use the programmatic `mgmtd` frontend API, and make dangd
-  authoritative for managed FRR configuration while detecting out-of-band
-  drift. Use the implemented ABI-v7 `routing` resource claim so this provider
-  and the native IETF RIB provider cannot both program routes, express the
-  eventual package conflict, and validate transactions and rollback in
-  isolation without attaching host LAN interfaces. Begin with common
-  infrastructure, zebra, and static routing before enabling each additional
-  protocol daemon.
+- [ ] Complete the top-priority, separately packaged FRR provider after its
+  initial Linux/FreeBSD `frr-routing`, `frr-zebra`, and `frr-staticd`
+  configuration implementation. The external plugin now publishes the
+  runtime-matched native schema closure, uses the programmatic `mgmtd` frontend
+  protocol, claims ABI-v7 `routing`, validates in disposable sessions, commits
+  atomically, and restores the before-image on rollback. Add operational data,
+  applied-state reconciliation, out-of-band drift detection, feature discovery,
+  RPCs and notifications, isolated native mutation tests, the eventual package
+  conflict with an executable IETF RIB provider, and then enable each additional
+  FRR protocol daemon without attaching host LAN interfaces.
 - [ ] Complete RFC 8431 after the external plugin's schema, strict portable
   route parser, delta planner, and transaction-safe native execution: wire the
   executor into the plugin ABI, implement all seven RPCs and both notifications,
