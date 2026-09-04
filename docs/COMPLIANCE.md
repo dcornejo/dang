@@ -476,9 +476,15 @@ order. A mismatch fails the provider at the affected root and is exposed by
 dangd's modeled operational-provider failure telemetry. Detection is currently
 read-triggered; unsolicited drift notification remains open.
 
+At discovery, the provider reads FRR's RFC 8525 YANG Library through mgmtd and
+copies daemon-enabled features into the corresponding YANG source descriptors.
+It rejects required-module absence and installed-source versus running-daemon
+revision or namespace skew, preventing dangd from compiling a feature set that
+differs from the backend it controls.
+
 This is conformance to the installed FRR-native model set rather than an IETF
-routing-model claim. Unsolicited drift notification, runtime feature discovery,
-RPC and notification dispatch, isolated
+routing-model claim. Unsolicited drift notification, RPC and notification
+dispatch, isolated
 native mutation coverage, and additional protocol-daemon modules remain open.
 
 ### RFC 8343 — interface management and RFC 8344 — IP management

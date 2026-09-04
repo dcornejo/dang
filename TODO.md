@@ -25,8 +25,7 @@ stays in this file with its remaining work rewritten precisely.
   `GET_DATA`. It reads the managed running roots back after apply for ABI-v6
   applied-state reconciliation and compares later running reads to detect
   out-of-band changes during operational retrieval. Add unsolicited drift
-  notification, feature discovery,
-  RPCs and notifications, isolated native mutation tests, the eventual package
+  notification, RPCs and notifications, isolated native mutation tests, the eventual package
   conflict with an executable IETF RIB provider, and then enable each additional
   FRR protocol daemon without attaching host LAN interfaces.
 - [ ] Complete RFC 8431 after the external plugin's schema, strict portable
