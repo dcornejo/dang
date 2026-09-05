@@ -10,6 +10,8 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Corrected the external FRR provider's hardware plan so dangd schedules its
+  atomic mgmtd configuration transaction as one normal coordinator action.
 - Completed the external Kea provider item after both pinned modules gained
   full configuration and state-tree coverage, bounded native enumeration, host
   option-data translation, and truthful ABI-v5 completeness. Linux and FreeBSD
