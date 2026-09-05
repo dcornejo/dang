@@ -259,6 +259,24 @@ Returned XML must be NUL-terminated within the configured XML byte ceiling
 normal XML node/depth and schema limits afterward; an oversized result fails
 the complete retrieval and is attributed to the provider.
 
+### Paging large provider data
+
+When a native backend offers paging, a provider must use it instead of an
+unbounded "get all" operation. Treat the backend cursor as opaque and carry it
+forward exactly as documented. A paging loop must bound page size, page count,
+total items, accumulated bytes, and elapsed time; reject malformed counts,
+oversized pages, and a cursor that fails to advance. Never publish a partial
+collection as complete merely because a resource limit was reached. A limit or
+backend failure fails the provider retrieval with its module and instance path.
+
+Internal paging protects the native service and bounds intermediate replies; it
+does not paginate NETCONF itself. RFC 6241 and RFC 8526 retrievals still produce
+one logical RPC reply after filtering and NACM. If that reply exceeds dangd's
+ceiling, it fails rather than being silently truncated. Any future client-visible
+pagination must be an explicitly advertised extension with snapshot consistency,
+opaque continuation tokens, expiry, and NACM applied independently to every
+page.
+
 The current worker runtime serializes callback requests. Plugin authors should
 not depend on that as a permanent ABI guarantee: synchronize plugin-created
 threads and external callbacks, and keep per-response storage valid until the

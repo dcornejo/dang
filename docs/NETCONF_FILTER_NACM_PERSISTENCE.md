@@ -176,6 +176,14 @@ backup rotation, and how to react to storage failure. They can use
 `DatastoreManager::SetPersistentStateCommitter` to place their own durable store
 inside the same transaction boundary.
 
+That committer is also the intended seam for evaluating an external XML store
+such as BaseX. Such a backend must atomically compare and replace the complete
+versioned `PersistentDatastoreState`, and restore must still enter through
+`RestorePersistentState`. Schema validation, NACM, candidate/running/startup
+semantics, confirmed-commit recovery, plugin ordering, and rollback remain in
+dangd. Database-native query or access-control behavior must not create a second
+policy authority with observably different NETCONF semantics.
+
 This persistence covers the NETCONF datastore and confirmed-commit recovery
 state. Restore first updates the in-memory datastores without invoking the
 backend. Dangd then presents the complete effective running tree as a single

@@ -10,6 +10,12 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Documented the provider paging contract: backend pages require opaque,
+  advancing cursors and independent page, item, byte, and elapsed-time bounds,
+  while client-facing NETCONF remains a single fail-closed reply unless a
+  separately advertised pagination extension is designed. Narrowed the Kea
+  gap after native lease paging and recorded BaseX as a deferred backend behind
+  dangd's existing persistent-state transaction seam.
 - Refined the external Kea completion item after ABI-v3 operational publication
   of DHCPv4/DHCPv6 leases and supplemental lease statistics passed live Linux
   and FreeBSD validation. Safe paging, host reservations, complete-state schema

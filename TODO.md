@@ -21,11 +21,11 @@ stays in this file with its remaining work rewritten precisely.
   and modeled JSON-valued leaves, with live isolated validation, apply, and
   rollback on Linux and FreeBSD. ABI-v3 selected operational publication now
   translates leases and supplemental per-subnet lease statistics from both
-  native daemons and is exercised live on Linux and FreeBSD. Replace the
-  bounded but potentially expensive all-leases commands with paging, add paged
-  host-reservation retrieval, verify the complete state schema, and move to
-  ABI v5 with truthful subtree completeness before claiming complete module
-  support.
+  native daemons and is exercised live on Linux and FreeBSD. Lease enumeration
+  now uses bounded native address-cursor paging. Add paged host-reservation
+  retrieval, split statistics into bounded subnet ranges, verify the complete
+  state schema, and move to ABI v5 with truthful subtree completeness before
+  claiming complete module support.
 - [ ] Complete the top-priority, separately packaged FRR provider after its
   initial Linux/FreeBSD `frr-routing`, `frr-zebra`, and `frr-staticd`
   configuration implementation. The external plugin now publishes the
@@ -65,10 +65,18 @@ stays in this file with its remaining work rewritten precisely.
 
 ### Datastore architecture
 
-- [ ] Evaluate BaseX as a configuration datastore. Compare its transaction,
+- [ ] Define client-visible handling for a standards-compliant NETCONF result
+  that exceeds the configured reply ceiling. Internal provider paging protects
+  backends but still produces one logical `<rpc-reply>`; evaluate filtering,
+  explicit failure, and a separately advertised pagination extension without
+  silently truncating standards-defined replies or weakening NACM.
+- [ ] Evaluate BaseX as a deferred configuration-datastore backend behind the
+  existing persistent-state transaction seam. Compare its transaction,
   concurrency, validation, query, durability, backup/restore, access-control,
   operational complexity, packaging, and Linux/FreeBSD behavior with the
-  current store before deciding whether to prototype or adopt it.
+  current store before deciding whether to prototype or adopt it. Keep YANG
+  validation, NACM, candidate/running/startup semantics, commit ordering, and
+  plugin rollback in dangd rather than delegating policy to the database.
 
 ### Low priority
 
