@@ -482,8 +482,10 @@ schema validation, subscription filtering, and NACM enforcement.
 At discovery, the provider reads FRR's RFC 8525 YANG Library through mgmtd and
 copies daemon-enabled features into the corresponding YANG source descriptors.
 It rejects required-module absence and installed-source versus running-daemon
-revision or namespace skew, preventing dangd from compiling a feature set that
-differs from the backend it controls.
+revision or namespace skew. The closure follows `include` and `belongs-to` in
+addition to imports, and validates every selected submodule against its nested
+RFC 8525 owner and revision. This prevents dangd from compiling an incomplete
+model or a feature set that differs from the backend it controls.
 
 Opt-in native Linux and FreeBSD tests now create a disposable mgmtd pathspace,
 validate and commit an empty staticd protocol instance, read the accepted
@@ -499,9 +501,11 @@ and NACM authorization; replies return through host output validation and read
 filtering. Portable framing, correlation, format, and session behavior are
 tested on Linux and FreeBSD. Live interoperability remains unconfirmed because
 Linux mgmtd reported no active zebra backend for the RPC path and the FreeBSD
-socket refused connections. The current routing, zebra, and staticd models
-declare no native notifications; notification work belongs to later protocol
-modules, which also remain open.
+socket refused connections. No FRR-native model notification is forwarded yet;
+notification work and protocols beyond routing, zebra, and staticd remain
+open. FRR 10.7.1 installs the complete BGP source family, but its live library
+omits `frr-bgp` and running bgpd registers no mgmtd backend; the provider does
+not advertise that unavailable runtime capability.
 
 ### RFC 8343 — interface management and RFC 8344 — IP management
 

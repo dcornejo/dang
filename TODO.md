@@ -18,7 +18,8 @@ stays in this file with its remaining work rewritten precisely.
 - [ ] Complete the top-priority, separately packaged FRR provider after its
   initial Linux/FreeBSD `frr-routing`, `frr-zebra`, and `frr-staticd`
   configuration implementation. The external plugin now publishes the
-  runtime-matched native schema closure, uses the programmatic `mgmtd` frontend
+  runtime-matched native import-and-submodule schema closure, uses the
+  programmatic `mgmtd` frontend
   protocol, claims ABI-v7 `routing`, validates in disposable sessions, commits
   atomically, restores the before-image on rollback, and publishes live
   owned top-level and augmented zebra operational XML through native mgmtd
@@ -31,9 +32,11 @@ stays in this file with its remaining work rewritten precisely.
   validation backend registers configuration and operational paths but no
   `/frr-zebra` RPC path, and rejects `get-vrf-info` as unimplemented. Re-run
   successful live RPC interoperability when an FRR backend registers the
-  modeled RPC subtree. Add
-  notifications from later FRR protocol modules (the current routing, zebra,
-  and staticd model set declares none), resolve the
+  modeled RPC subtree. FRR 10.7.1 ships the complete `frr-bgp` source family,
+  but its live RFC 8525 library omits `frr-bgp` and running bgpd registers no
+  mgmtd backend; add BGP only after upstream exposes a native configuration and
+  operational path. Add
+  notifications from FRR protocol modules, resolve the
   eventual package conflict with an executable IETF RIB provider, and then
   enable each additional
   FRR protocol daemon without attaching host LAN interfaces.
