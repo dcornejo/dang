@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Narrowed the external Kea completion item after supplemental statistics were
+  bounded to exact subnet IDs from the accepted configuration. Complete-state
+  schema verification and a truthful ABI-v5 declaration remain open.
 - Documented the provider paging contract: backend pages require opaque,
   advancing cursors and independent page, item, byte, and elapsed-time bounds,
   while client-facing NETCONF remains a single fail-closed reply unless a
