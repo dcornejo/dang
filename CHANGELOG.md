@@ -16,6 +16,9 @@ and releases follow Semantic Versioning.
   separately advertised pagination extension is designed. Narrowed the Kea
   gap after native lease paging and recorded BaseX as a deferred backend behind
   dangd's existing persistent-state transaction seam.
+- Narrowed the external Kea completion item again after bounded, paged native
+  host-reservation publication joined the existing lease state. Bounded
+  statistics ranges and complete-state verification remain open.
 - Refined the external Kea completion item after ABI-v3 operational publication
   of DHCPv4/DHCPv6 leases and supplemental lease statistics passed live Linux
   and FreeBSD validation. Safe paging, host reservations, complete-state schema

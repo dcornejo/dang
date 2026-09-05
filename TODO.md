@@ -20,10 +20,10 @@ stays in this file with its remaining work rewritten precisely.
   the pinned configuration models, Kea-specific JSON names, decimal values,
   and modeled JSON-valued leaves, with live isolated validation, apply, and
   rollback on Linux and FreeBSD. ABI-v3 selected operational publication now
-  translates leases and supplemental per-subnet lease statistics from both
-  native daemons and is exercised live on Linux and FreeBSD. Lease enumeration
-  now uses bounded native address-cursor paging. Add paged host-reservation
-  retrieval, split statistics into bounded subnet ranges, verify the complete
+  translates leases, host reservations, and supplemental per-subnet lease
+  statistics from both native daemons and is exercised live on Linux and
+  FreeBSD. Lease and host enumeration now use their respective bounded native
+  cursors. Split statistics into bounded subnet ranges, verify the complete
   state schema, and move to ABI v5 with truthful subtree completeness before
   claiming complete module support.
 - [ ] Complete the top-priority, separately packaged FRR provider after its
