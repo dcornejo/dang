@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Advanced RFC 8431 from schema-only preparation to an external ABI-v7 runtime
+  provider with exclusive routing ownership and tested Linux/FreeBSD route
+  apply and rollback; RPC, notification, operational, and mapping gaps remain.
 - Corrected the external FRR provider's hardware plan so dangd schedules its
   atomic mgmtd configuration transaction as one normal coordinator action.
 - Refined the remaining FRR RPC gap after live 10.5.1 probing confirmed that

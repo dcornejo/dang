@@ -37,9 +37,9 @@ stays in this file with its remaining work rewritten precisely.
   eventual package conflict with an executable IETF RIB provider, and then
   enable each additional
   FRR protocol daemon without attaching host LAN interfaces.
-- [ ] Complete RFC 8431 after the external plugin's schema, strict portable
-  route parser, delta planner, and transaction-safe native execution: wire the
-  executor into the plugin ABI, implement all seven RPCs and both notifications,
+- [ ] Complete RFC 8431 after the external ABI-v7 plugin wired its strict
+  portable route parser, delta planner, and transaction-safe native execution
+  into one reversible `routing` action: implement all seven RPCs and both notifications,
   publish observed operational state, resolve FreeBSD interface-only nexthops,
   replace numeric-only RIB names with an explicit platform mapping, then
   advertise and test the module end to end.

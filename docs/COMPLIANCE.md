@@ -625,7 +625,7 @@ embedded revisions and Kea 3.2.x control-command behavior.
 
 ## Roadmap-only standards and models
 
-The remaining RFC 9642 keystore work, the RFC 8431 RIB model, the RFC 9067
+The remaining RFC 9642 keystore work, RFC 8431 completion, the RFC 9067
 routing-policy model, and OpenConfig VLAN draft models are
 planned but not implemented, advertised, or claimed. Exact module revisions,
 feature/deviation choices, plugin ownership, platform effects, and
@@ -633,7 +633,9 @@ interoperability evidence must be established before their status moves into
 an implemented section of this ledger. Their release-gated work is tracked in
 `TODO.md`.
 
-RFC 8431 preparation has begun in the separate `dang_plugins` repository. It
+RFC 8431 partial runtime support lives in the separate `dang_plugins`
+repository. Its ABI-v7 provider advertises the pinned schema, claims exclusive
+`routing` ownership, and
 pins and independently validates the unmodified schema family. Its runtime
 foundation strictly parses destination-prefix IPv4/IPv6 routes with portable
 base nexthops, computes delete-before-install replacements, and produces
@@ -644,9 +646,10 @@ delete, and recheck a documentation-prefix route inside a Linux network
 namespace and FreeBSD VNET jail without touching host routes. Unsupported match
 and nexthop semantics fail with an attributed model path. Numeric-only RIB/FIB
 names and rejected FreeBSD interface-only nexthops are temporary platform
-mapping variances. The executor is not wired into an advertised plugin, so
-dangd correctly makes no RFC 8431 claim until ABI transactions, RPCs,
-notifications, and observed operational state are complete.
+mapping variances. The provider intentionally publishes incomplete operational
+data and has no RPC callback. All seven RPCs, both notifications, observed
+state, interface-only FreeBSD nexthops, and arbitrary RIB-name mapping remain
+before a substantial RFC 8431 claim.
 
 BaseX is likewise only a datastore architecture investigation. The current
 implementation remains the in-process validated datastore manager with atomic
