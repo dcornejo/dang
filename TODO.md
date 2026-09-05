@@ -15,18 +15,6 @@ stays in this file with its remaining work rewritten precisely.
 
 ### Standards and models
 
-- [ ] Complete the Kea DHCPv4/DHCPv6 provider beyond its transaction-safe
-  configuration scope. The translator now covers every list and leaf-list in
-  the pinned configuration models, Kea-specific JSON names, decimal values,
-  and modeled JSON-valued leaves, with live isolated validation, apply, and
-  rollback on Linux and FreeBSD. ABI-v3 selected operational publication now
-  translates leases, host reservations, and supplemental per-subnet lease
-  statistics from both native daemons and is exercised live on Linux and
-  FreeBSD. Lease and host enumeration now use their respective bounded native
-  cursors, and supplemental statistics query exact accepted subnet IDs under
-  aggregate resource bounds. Verify the complete state schema and move to ABI
-  v5 with truthful subtree completeness before
-  claiming complete module support.
 - [ ] Complete the top-priority, separately packaged FRR provider after its
   initial Linux/FreeBSD `frr-routing`, `frr-zebra`, and `frr-staticd`
   configuration implementation. The external plugin now publishes the

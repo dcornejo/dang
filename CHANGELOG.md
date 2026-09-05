@@ -10,6 +10,10 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Completed the external Kea provider item after both pinned modules gained
+  full configuration and state-tree coverage, bounded native enumeration, host
+  option-data translation, and truthful ABI-v5 completeness. Linux and FreeBSD
+  native interactions verify the complete provider path.
 - Narrowed the external Kea completion item after supplemental statistics were
   bounded to exact subnet IDs from the accepted configuration. Complete-state
   schema verification and a truthful ABI-v5 declaration remain open.

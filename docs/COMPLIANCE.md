@@ -605,6 +605,24 @@ cannot be listed on an RFC 8525 import-only module entry. Independent schema
 interoperability is covered through the bundled unmodified module family;
 independent behavioral interoperability remains release-gated in `TODO.md`.
 
+## External vendor models
+
+### ISC Kea DHCPv4 and DHCPv6 3.2.0 models
+
+Status: **implemented for the pinned revisions**.
+
+The separately packaged `dang_plugins` provider implements the complete
+configuration and state trees from `kea-dhcp4-server@2026-06-24` and
+`kea-dhcp6-server@2026-06-24`. It validates and applies complete native Kea
+configurations transactionally, compensates partial failure, and publishes
+ABI-v5 complete operational leases, per-subnet statistics, and host
+reservations including option data. Lease, host, and statistic collection has
+independent page/query, item, byte, and duration bounds. Disposable native
+interactions exercise the provider against packaged DHCPv4 and DHCPv6 daemons
+on Linux and FreeBSD without exposing a LAN interface. These are ISC vendor
+models rather than an IETF RFC compliance claim; support is pinned to the
+embedded revisions and Kea 3.2.x control-command behavior.
+
 ## Roadmap-only standards and models
 
 The remaining RFC 9642 keystore work, the RFC 8431 RIB model, the RFC 9067
