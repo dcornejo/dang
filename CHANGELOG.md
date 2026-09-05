@@ -12,6 +12,8 @@ and releases follow Semantic Versioning.
 
 - Corrected the external FRR provider's hardware plan so dangd schedules its
   atomic mgmtd configuration transaction as one normal coordinator action.
+- Refined the remaining FRR RPC gap after live 10.5.1 probing confirmed that
+  active zebra does not register its modeled RPC subtree with mgmtd.
 - Completed the external Kea provider item after both pinned modules gained
   full configuration and state-tree coverage, bounded native enumeration, host
   option-data translation, and truthful ABI-v5 completeness. Linux and FreeBSD

@@ -27,8 +27,11 @@ stays in this file with its remaining work rewritten precisely.
   out-of-band changes during operational retrieval, while a read-only watcher
   emits deduplicated ABI-v8 drift events through host schema and NACM checks.
   The public native mgmtd RPC codec and generic `frr-zebra` dispatch are wired
-  and covered by portable correlated-session tests; complete live RPC
-  interoperability on a validation host with an active zebra backend. Add
+  and covered by portable correlated-session tests. An active FRR 10.5.1 zebra
+  validation backend registers configuration and operational paths but no
+  `/frr-zebra` RPC path, and rejects `get-vrf-info` as unimplemented. Re-run
+  successful live RPC interoperability when an FRR backend registers the
+  modeled RPC subtree. Add
   notifications from later FRR protocol modules (the current routing, zebra,
   and staticd model set declares none), resolve the
   eventual package conflict with an executable IETF RIB provider, and then
