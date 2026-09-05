@@ -19,11 +19,13 @@ stays in this file with its remaining work rewritten precisely.
   configuration scope. The translator now covers every list and leaf-list in
   the pinned configuration models, Kea-specific JSON names, decimal values,
   and modeled JSON-valued leaves, with live isolated validation, apply, and
-  rollback on Linux and FreeBSD. Add bounded native operational retrieval for
-  both modules' `state` containers, translate lease, host, and lease-statistic
-  replies into schema-valid XML, publish them with explicit subtree
-  completeness through the current plugin ABI, and add Linux/FreeBSD
-  interoperability tests before claiming complete module support.
+  rollback on Linux and FreeBSD. ABI-v3 selected operational publication now
+  translates leases and supplemental per-subnet lease statistics from both
+  native daemons and is exercised live on Linux and FreeBSD. Replace the
+  bounded but potentially expensive all-leases commands with paging, add paged
+  host-reservation retrieval, verify the complete state schema, and move to
+  ABI v5 with truthful subtree completeness before claiming complete module
+  support.
 - [ ] Complete the top-priority, separately packaged FRR provider after its
   initial Linux/FreeBSD `frr-routing`, `frr-zebra`, and `frr-staticd`
   configuration implementation. The external plugin now publishes the
