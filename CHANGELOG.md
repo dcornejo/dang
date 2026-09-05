@@ -10,6 +10,10 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Added a precise completion item for the external Kea provider: its
+  configuration translator is now shape-complete for the pinned models, while
+  lease, host, and lease-statistics operational publication remains required
+  before claiming complete module support.
 - Added plugin ABI v8 modeled event publication. Isolated workers copy bounded,
   nonblocking provider events to the trusted core, which validates their YANG
   identity and XML content before applying RFC 5277 subscription filters and
