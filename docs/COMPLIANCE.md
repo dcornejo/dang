@@ -664,7 +664,9 @@ when installation fails. `rib-add` validates Linux logical tables or existing
 FreeBSD FIBs and rejects unsupported RPF enforcement; `rib-delete` uses a
 compensated plan to empty the observed RIB. `nh-add` and `nh-delete` allocate
 and remove portable base nexthops in a thread-safe, per-RIB process registry.
-That registry is not yet persistent or represented in operational state.
+That registry is not yet persistent. Its identifiers are represented in live
+operational RIB state; interface-only entries without an observed containing
+RIB are omitted because the provider cannot infer their mandatory family.
 Configuration commits, `route-add`, and prefix-selected `route-update` resolve
 identifiers through `nexthop-ref` with per-RIB isolation, while reference
 lifetime is enforced across datastore prepare, apply, rollback, and release.

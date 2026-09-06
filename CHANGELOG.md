@@ -23,6 +23,8 @@ and releases follow Semantic Versioning.
   deletion-lifetime work to routes created or changed through imperative RPCs.
 - Recorded completion of reusable-nexthop lifetime enforcement for imperative
   route RPCs, including release on successful route and RIB deletion.
+- Recorded live RFC 8431 nexthop identifier publication and narrowed the state
+  gap to family-ambiguous interface-only objects without an observed RIB.
 
 - Moved the RFC 8343/8344 IP-management provider, pinned `ietf-ip` model,
   platform backends, and focused tests into the separately packaged

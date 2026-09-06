@@ -43,7 +43,8 @@ stays in this file with its remaining work rewritten precisely.
 - [ ] Complete RFC 8431 after the external ABI-v7 plugin wired its strict
   portable route parser, delta planner, and transaction-safe native execution
   into one reversible `routing` action and native Linux/FreeBSD route observation:
-  persist and publish the reusable-nexthop registry, implement both
+  persist the reusable-nexthop registry, provide an explicit family source for
+  interface-only entries without an observed containing RIB, implement both
   notifications, resolve
   FreeBSD interface-only nexthops,
   replace numeric-only RIB names with an explicit platform mapping, then
