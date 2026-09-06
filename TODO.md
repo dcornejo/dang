@@ -43,8 +43,8 @@ stays in this file with its remaining work rewritten precisely.
 - [ ] Complete RFC 8431 after the external ABI-v7 plugin wired its strict
   portable route parser, delta planner, and transaction-safe native execution
   into one reversible `routing` action and native Linux/FreeBSD route observation:
-  complete the four RPCs remaining after portable `route-add`,
-  observed-route-backed `route-delete`, and prefix-selected `route-update`,
+  complete the `nh-add` and `nh-delete` RPCs after the five portable route/RIB
+  operations,
   and implement both notifications, resolve FreeBSD interface-only nexthops,
   replace numeric-only RIB names with an explicit platform mapping, then
   advertise and test the module end to end.
