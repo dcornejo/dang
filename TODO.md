@@ -38,9 +38,11 @@ stays in this file with its remaining work rewritten precisely.
   operational path. Add
   notifications from FRR protocol modules. The native codec now builds
   bounded `NOTIFY_SELECT` requests and validates modeled XML `NOTIFY` frames;
-  the transport/session layer now supports one-way selection, safe idle waits,
-  resumed unsolicited reads, and session attribution. Add the plugin-owned
-  reader and expose only live implemented `frr-isisd`/`frr-ripd` events. Resolve the
+  the transport/session layer supports one-way selection, safe idle waits,
+  resumed unsolicited reads, and session attribution. The plugin-owned reader
+  now conditionally loads, selects, bounds, and forwards `frr-isisd`/`frr-ripd`
+  events only when FRR's live library implements the module. Complete an
+  isolated live protocol-event interaction on Linux and FreeBSD. Resolve the
   eventual package conflict with an executable IETF RIB provider, and then
   enable each additional
   FRR protocol daemon without attaching host LAN interfaces.

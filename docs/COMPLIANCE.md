@@ -483,10 +483,15 @@ The external provider also implements the strict wire codec for FRR's native
 `NOTIFY_SELECT` and modeled XML `NOTIFY` messages. It rejects datastore
 synchronization operations, non-XML formats, malformed XPath splits, embedded
 NULs, and empty event bodies. This is protocol foundation rather than completed
-event delivery. The transport/session layer can send a one-way selection and
-receive session-attributed unsolicited events without treating an idle timeout
-as a broken stream. The provider does not yet run that reader or advertise the
-installed `frr-isisd` and `frr-ripd` notification schemas.
+event delivery. The transport/session layer sends a one-way selection and
+receives session-attributed unsolicited events without treating an idle timeout
+as a broken stream. A provider-owned reader now loads `frr-isisd` and
+`frr-ripd` only when FRR's live module-set implements them, negotiates XML,
+selects only those prefixes, bounds delivery to 1,024 queued events, and
+reconnects after mgmtd failure. Dangd retains final schema, subscription, and
+NACM enforcement. Successful event generation still needs an isolated live
+RIP/IS-IS interoperability test on Linux and FreeBSD; the current services do
+not enable either daemon.
 
 At discovery, the provider reads FRR's RFC 8525 YANG Library through mgmtd and
 copies daemon-enabled features into the corresponding YANG source descriptors.
