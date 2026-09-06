@@ -41,8 +41,11 @@ stays in this file with its remaining work rewritten precisely.
   the transport/session layer supports one-way selection, safe idle waits,
   resumed unsolicited reads, and session attribution. The plugin-owned reader
   now conditionally loads, selects, bounds, and forwards `frr-isisd`/`frr-ripd`
-  events only when FRR's live library implements the module. Complete an
-  isolated live protocol-event interaction on Linux and FreeBSD. Resolve the
+  events only when FRR's live library implements the module. Live Linux RIP
+  validation found and fixed exact-selector and separate-root ownership gaps,
+  then reached FRR 10.7.1's `assure_notify_msg_cache()` assertion after ripd
+  emitted the modeled event. Re-run successful Linux/FreeBSD delivery after
+  upstream mgmtd can encode top-level notifications. Resolve the
   eventual package conflict with an executable IETF RIB provider, and then
   enable each additional
   FRR protocol daemon without attaching host LAN interfaces.

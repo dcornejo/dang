@@ -489,9 +489,17 @@ as a broken stream. A provider-owned reader now loads `frr-isisd` and
 `frr-ripd` only when FRR's live module-set implements them, negotiates XML,
 selects only those prefixes, bounds delivery to 1,024 queued events, and
 reconnects after mgmtd failure. Dangd retains final schema, subscription, and
-NACM enforcement. Successful event generation still needs an isolated live
-RIP/IS-IS interoperability test on Linux and FreeBSD; the current services do
-not enable either daemon.
+NACM enforcement. The provider now includes each protocol module's separate
+top-level configuration root in the complete transaction, reconciliation,
+drift, and operational paths.
+
+An isolated Linux RIP interaction confirmed backend registration, modeled
+configuration apply, UDP activation, and event generation without a host LAN
+interface. FRR 10.7.1 mgmtd rejects its own top-level notification as an
+unexpected data element and aborts at `assure_notify_msg_cache()`. The guarded
+native test recognizes only that exact upstream assertion as skipped. FreeBSD
+strict-warning compilation passes; successful delivery on either platform
+remains blocked until upstream mgmtd encodes the event.
 
 At discovery, the provider reads FRR's RFC 8525 YANG Library through mgmtd and
 copies daemon-enabled features into the corresponding YANG source descriptors.
