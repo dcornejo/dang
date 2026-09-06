@@ -657,7 +657,8 @@ unicast routes with active/installed status and deterministic synthetic indexes;
 it does not yet represent every kernel route kind or every RFC 8431 attribute.
 The provider implements `route-add` for its portable route subset with
 per-member success/failure accounting and optional RFC-shaped failure detail.
-The other six RPCs, both notifications, complete state fidelity, interface-only
+`route-delete` resolves prefix requests against live kernel state and deletes
+only an unambiguous observed match. The other five RPCs, both notifications, complete state fidelity, interface-only
 FreeBSD nexthops, and arbitrary RIB-name mapping remain before a substantial
 RFC 8431 claim.
 
