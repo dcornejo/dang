@@ -483,9 +483,10 @@ The external provider also implements the strict wire codec for FRR's native
 `NOTIFY_SELECT` and modeled XML `NOTIFY` messages. It rejects datastore
 synchronization operations, non-XML formats, malformed XPath splits, embedded
 NULs, and empty event bodies. This is protocol foundation rather than completed
-event delivery: the provider does not yet keep a dedicated asynchronous mgmtd
-session or advertise the installed `frr-isisd` and `frr-ripd` notification
-schemas.
+event delivery. The transport/session layer can send a one-way selection and
+receive session-attributed unsolicited events without treating an idle timeout
+as a broken stream. The provider does not yet run that reader or advertise the
+installed `frr-isisd` and `frr-ripd` notification schemas.
 
 At discovery, the provider reads FRR's RFC 8525 YANG Library through mgmtd and
 copies daemon-enabled features into the corresponding YANG source descriptors.
