@@ -21,6 +21,8 @@ and releases follow Semantic Versioning.
   lifetime enforcement remains the last reference-integrity gap.
 - Recorded datastore transaction reference reservations and narrowed remaining
   deletion-lifetime work to routes created or changed through imperative RPCs.
+- Recorded completion of reusable-nexthop lifetime enforcement for imperative
+  route RPCs, including release on successful route and RIB deletion.
 
 - Moved the RFC 8343/8344 IP-management provider, pinned `ietf-ip` model,
   platform backends, and focused tests into the separately packaged
