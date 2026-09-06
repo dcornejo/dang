@@ -94,9 +94,12 @@ stays in this file with its remaining work rewritten precisely.
   work is explicitly exempt from the normal FreeBSD plugin requirement. The
   initial architecture separates `hardware-interface-ownership` from ordinary
   VPP configuration, defaults to an empty PCI allowlist, and requires trusted
-  management-path denial plus an independent recovery watchdog. A read-only
-  inventory identified `ens18`/PCI `0000:06:12.0` as the protected SSH and
-  default-route interface on both Linux hosts; only `ens19`/PCI `0000:06:13.0`
-  is a future private-LAN candidate. Complete the programmatic discovery and
-  allowlist model, install and probe VPP APIs, then test VPP-created loopbacks
-  before designing any physical ownership transition.
+  management-path denial plus an independent recovery watchdog. The external
+  repository now has shell-free Linux inventory, a validation-only ownership
+  model, and a fail-closed evaluator for exact PCI, MAC, vendor/device, default
+  route, and live SSH evidence. Read-only validation identified `ens18`/PCI
+  `0000:06:12.0` as protected on both Linux hosts; only `ens19`/PCI
+  `0000:06:13.0` is a future private-LAN candidate. Install and probe VPP's
+  binary APIs, expose the model through a loadable provider, test VPP-created
+  loopbacks, add bridge/bond/VLAN-parent/required-route evidence and a recovery
+  watchdog, then design the reversible physical ownership transition.

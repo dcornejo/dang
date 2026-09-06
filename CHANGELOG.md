@@ -14,6 +14,11 @@ and releases follow Semantic Versioning.
   boundary: `ens18` is protected as the SSH/default-route path, `ens19` is the
   only future private-LAN candidate, and physical claims require stable PCI
   identity, explicit allowlisting, and independent recovery.
+- Recorded completion of the external VPP provider's read-only Linux inventory
+  and validation-only ownership policy. Exact PCI, MAC, and vendor/device
+  identity plus live management/default-route denial now pass on both Linux
+  hosts; binary-API discovery, plugin exposure, broader topology evidence, and
+  reversible transfer remain open.
 
 - Refreshed the RFC 8431 compliance ledger after the external RIB provider
   implemented `nh-add` and `nh-delete`; the TODO now tracks the narrower
