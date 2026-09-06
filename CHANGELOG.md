@@ -25,6 +25,9 @@ and releases follow Semantic Versioning.
   route RPCs, including release on successful route and RIB deletion.
 - Recorded live RFC 8431 nexthop identifier publication and narrowed the state
   gap to family-ambiguous interface-only objects without an observed RIB.
+- Recorded reconciliation-based reconstruction of datastore nexthop references,
+  removing dependence on pre-restart in-memory counters before registry
+  persistence is introduced.
 
 - Moved the RFC 8343/8344 IP-management provider, pinned `ietf-ip` model,
   platform backends, and focused tests into the separately packaged

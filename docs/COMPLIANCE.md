@@ -670,6 +670,9 @@ RIB are omitted because the provider cannot infer their mandatory family.
 Configuration commits, `route-add`, and prefix-selected `route-update` resolve
 identifiers through `nexthop-ref` with per-RIB isolation, while reference
 lifetime is enforced across datastore prepare, apply, rollback, and release.
+The ABI-v6 applied-configuration reconciliation callback rebuilds the exact
+datastore-owned reference set, so restored snapshots do not depend on stale
+pre-restart counters.
 Imperative route add/update operations also retain bindings, and successful
 route or RIB deletion releases them. Both
 notifications, complete state fidelity, interface-only
