@@ -106,9 +106,9 @@ stays in this file with its remaining work rewritten precisely.
   and software-interface configuration through a loadable provider. The
   external ABI-v7 provider now embeds both models, claims distinct resource
   domains, resolves live loopbacks after restart, and applies its ordered plan
-  as one compensated hardware action; provider-level create/enable/rollback
-  passes on both Linux hosts. Add operational publication and reconciliation,
-  then add
+  as one compensated hardware action; provider-level create/enable/rollback,
+  complete live loopback publication, and applied-state reconciliation pass on
+  both Linux hosts. Add
   bridge/bond/VLAN-parent/required-route evidence and a recovery watchdog, then
   design and test the reversible physical ownership transition.
 - [ ] Design and implement transparent Berkeley-socket compatibility for

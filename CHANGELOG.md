@@ -31,8 +31,10 @@ and releases follow Semantic Versioning.
   planner. ABI-v7 provider action wiring remains the next software-interface
   milestone.
 - Recorded completion of the external loadable ABI-v7 VPP provider and live
-  provider-level loopback apply/rollback validation. Operational publication,
-  reconciliation, and physical ownership safety work remain open.
+  provider-level loopback apply/rollback validation. Physical ownership safety
+  work remains open.
+- Recorded completion of live VPP loopback operational publication and
+  applied-state reconciliation with unrelated datastore content preserved.
 - Added the VPP application-socket integration requirement. A transparent
   dangd/provider boundary will use VCL `vppcom` without exposing VPP mechanics
   to NETCONF users, while explicitly keeping every management and recovery
