@@ -10,6 +10,11 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Recorded the Linux-only VPP ownership architecture and test-host safety
+  boundary: `ens18` is protected as the SSH/default-route path, `ens19` is the
+  only future private-LAN candidate, and physical claims require stable PCI
+  identity, explicit allowlisting, and independent recovery.
+
 - Refreshed the RFC 8431 compliance ledger after the external RIB provider
   implemented `nh-add` and `nh-delete`; the TODO now tracks the narrower
   persistence, operational publication, and route-reference semantics still

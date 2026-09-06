@@ -91,4 +91,12 @@ stays in this file with its remaining work rewritten precisely.
   whether routing, interface, ACL, and other domains belong in one transaction
   provider or separately packaged plugins, and validate on isolated Linux
   systems without attaching host LAN interfaces. VPP is Linux-only, so this
-  work is explicitly exempt from the normal FreeBSD plugin requirement.
+  work is explicitly exempt from the normal FreeBSD plugin requirement. The
+  initial architecture separates `hardware-interface-ownership` from ordinary
+  VPP configuration, defaults to an empty PCI allowlist, and requires trusted
+  management-path denial plus an independent recovery watchdog. A read-only
+  inventory identified `ens18`/PCI `0000:06:12.0` as the protected SSH and
+  default-route interface on both Linux hosts; only `ens19`/PCI `0000:06:13.0`
+  is a future private-LAN candidate. Complete the programmatic discovery and
+  allowlist model, install and probe VPP APIs, then test VPP-created loopbacks
+  before designing any physical ownership transition.
