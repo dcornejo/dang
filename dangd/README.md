@@ -42,7 +42,7 @@ changes behind the same transaction boundary.
 
 ## RFC 8344 IP-management plugin example
 
-The `dangd_ip_management_plugin` build target is a self-contained example
+The separately packaged `dang_plugins` `dangd_ip_management_plugin` is a self-contained example
 provider for RFC 8343 interfaces and RFC 8344 IP configuration. It discovers
 both normative models through the plugin ABI and turns committed interface,
 IPv4, and IPv6 changes into human-readable apply actions. Linux uses direct
@@ -54,7 +54,7 @@ interfaces, so this remains a partial device implementation rather than a
 complete RFC 8343/8344 claim.
 Unsupported development hosts use a logging-only backend. See the concrete
 request, privilege, and build instructions in
-[the plugin guide](../docs/DANGD_PLUGINS.md).
+[the plugin guide](../docs/DANGD_PLUGINS.md) and its provider-specific README.
 
 ## Safe hardware application ordering
 

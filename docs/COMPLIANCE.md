@@ -511,8 +511,9 @@ not advertise that unavailable runtime capability.
 
 Status: **schema support and partial Linux/FreeBSD device implementation**.
 
-The pinned normative modules compile, validate configuration, appear in YANG
-Library, and are owned by the ABI-v4 IP-management example. The example emits
+The pinned normative modules are shipped by `dang_plugins`, compile, validate
+configuration, appear in YANG Library, and are owned by its ABI-v4
+IP-management provider. The provider emits
 fine-grained reversible actions to the common hardware planner, which applies
 address work before activation and publishes running only after all actions
 succeed. It prints English apply/rollback actions. Linux uses direct,

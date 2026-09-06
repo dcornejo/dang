@@ -130,21 +130,6 @@ TEST(ConformanceTest, CompilesPinnedIetfInterfacesDependencyClosure) {
   EXPECT_FALSE(diagnostics.has_errors());
 }
 
-TEST(ConformanceTest, CompilesPinnedIetfIpDependencyClosure) {
-  const std::filesystem::path directory =
-      std::filesystem::path(YANG_TEST_SOURCE_DIR) / "third_party" / "ietf";
-  VectorDiagnosticSink diagnostics;
-  auto source =
-      LoadFixture(directory / "ietf-ip@2018-02-22.yang", diagnostics);
-  ASSERT_TRUE(source);
-  FilesystemModuleRepository repository({directory});
-  Compiler compiler(repository, diagnostics);
-  const auto result = compiler.Compile(source);
-  ASSERT_TRUE(result);
-  EXPECT_EQ(result->module->name, "ietf-ip");
-  EXPECT_FALSE(diagnostics.has_errors());
-}
-
 TEST(ConformanceTest, CompilesPinnedRfc9644DependencyClosure) {
   const std::filesystem::path directory =
       std::filesystem::path(YANG_PROJECT_SOURCE_DIR) / "dangd" / "models";

@@ -1080,6 +1080,7 @@ TEST(DangdApplicationTest, WorkerRejectsInvalidStartupPluginConfiguration) {
             std::string::npos);
 }
 
+#if defined(DANG_TEST_IP_PLUGIN_PATH)
 TEST(DangdApplicationTest, IpManagementPluginPublishesRfc8344AndPrintsApplyPlan) {
   TemporaryInputs inputs;
   auto options = Options(inputs);
@@ -1156,6 +1157,7 @@ TEST(DangdApplicationTest, IpManagementPluginPublishesRfc8344AndPrintsApplyPlan)
   EXPECT_NE(state.xml.find("eth0"), std::string::npos) << state.xml;
   EXPECT_NE(state.xml.find("oper-status>up"), std::string::npos) << state.xml;
 }
+#endif
 
 TEST(DangdApplicationTest, ReportsAndOmitsInvalidOperationalPluginData) {
   TemporaryInputs inputs;

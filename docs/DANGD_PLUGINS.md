@@ -166,13 +166,13 @@ exceptions, or compiler-specific class layouts across the ABI.
 The reference implementation is `dangd/plugins/example_plugin.cc`; CMake
 builds it as `dangd_example_plugin`.
 
-The more complete `dangd/plugins/ip_management_plugin.cc` example owns the
+The more complete `dang_plugins/plugins/ip_management` provider owns the
 normative RFC 8343 `ietf-interfaces` and RFC 8344 `ietf-ip` modules. The build
 embeds the pinned YANG sources in `dangd_ip_management_plugin`, so the shared
 library remains self-contained. It converts each interface or IP delta into a
 retained forward and reverse action plan. Its demonstration `apply` and
 `rollback` callbacks print those actions to the daemon's diagnostic stream.
-Common parsing and execution live under `dangd/plugins/ip_management`; native
+Common parsing and execution live in that external package; native
 implementations are isolated in its `linux` and `freebsd` directories. Linux
 uses direct acknowledged rtnetlink requests for enabled state, link MTU,
 IPv4/IPv6 addresses, and static neighbors. FreeBSD uses native interface ioctls

@@ -157,48 +157,6 @@ if(YANG_BUILD_DANGD)
   target_compile_options(dangd_example_plugin PRIVATE
     -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
   set_target_properties(dangd_example_plugin PROPERTIES PREFIX "")
-  file(READ tests/third_party/ietf/ietf-interfaces@2018-02-20.yang
-    DANGD_IETF_INTERFACES_YANG)
-  file(READ tests/third_party/ietf/ietf-ip@2018-02-22.yang
-    DANGD_IETF_IP_YANG)
-  configure_file(dangd/plugins/ip_management_models.h.in
-    ${CMAKE_CURRENT_BINARY_DIR}/generated/ip_management_models.h @ONLY)
-  set(DANGD_IP_PLATFORM_SOURCE
-    dangd/plugins/ip_management/unsupported/backend.cc)
-  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(DANGD_IP_PLATFORM_SOURCE dangd/plugins/ip_management/linux/backend.cc)
-  elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
-    set(DANGD_IP_PLATFORM_SOURCE dangd/plugins/ip_management/freebsd/backend.cc)
-  endif()
-  add_library(dangd_ip_management_plugin MODULE
-    dangd/plugins/ip_management_plugin.cc
-    dangd/plugins/ip_management/platform_config.cc
-    ${DANGD_IP_PLATFORM_SOURCE})
-  target_compile_features(dangd_ip_management_plugin PRIVATE cxx_std_20)
-  target_include_directories(dangd_ip_management_plugin PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/generated)
-  target_link_libraries(dangd_ip_management_plugin PRIVATE
-    nlohmann_json::nlohmann_json pugixml::pugixml)
-  target_compile_options(dangd_ip_management_plugin PRIVATE
-    -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
-  set_target_properties(dangd_ip_management_plugin PROPERTIES PREFIX "")
-  if(YANG_BUILD_TESTS)
-    # The conceptual plugin test verifies planning and XML integration without
-    # mutating or depending on interfaces of the build host. Native backends
-    # have separate privileged platform tests below.
-    add_library(dangd_test_ip_management_plugin MODULE
-      dangd/plugins/ip_management_plugin.cc
-      dangd/plugins/ip_management/platform_config.cc
-      dangd/plugins/ip_management/unsupported/backend.cc)
-    target_compile_features(dangd_test_ip_management_plugin PRIVATE cxx_std_20)
-    target_include_directories(dangd_test_ip_management_plugin PRIVATE
-      ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/generated)
-    target_link_libraries(dangd_test_ip_management_plugin PRIVATE
-      pugixml::pugixml)
-    target_compile_options(dangd_test_ip_management_plugin PRIVATE
-      -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
-    set_target_properties(dangd_test_ip_management_plugin PROPERTIES PREFIX "")
-  endif()
   if(YANG_BUILD_TESTS)
     add_library(dangd_test_plugin_support SHARED
       dangd/test_plugins/plugin_test_support.cc)
@@ -510,7 +468,7 @@ if(YANG_BUILD_DANGD)
   install(TARGETS dangd dangctl RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
   install(TARGETS dangd-plugin-worker
     RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/dangd)
-  install(TARGETS dangd_example_plugin dangd_ip_management_plugin
+  install(TARGETS dangd_example_plugin
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/dangd/plugins)
   install(FILES dangd/plugin_api.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dangd)
@@ -637,8 +595,6 @@ if(YANG_BUILD_TESTS)
     add_executable(dangd_tests dangd/application_test.cc
       dangd/hardware_transaction_test.cc dangd/plugin_manager_test.cc
       dangd/plugin_worker_protocol_test.cc dangd/plugin_worker_test.cc
-      dangd/ip_management_platform_test.cc
-      dangd/plugins/ip_management/platform_config.cc
       dangd/ssh_transport_test.cc
       dangd/tls_transport_test.cc)
     target_compile_features(dangd_tests PRIVATE cxx_std_20)
@@ -648,7 +604,6 @@ if(YANG_BUILD_TESTS)
       DANG_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
       DANG_TEST_PLUGIN_WORKER_PATH="$<TARGET_FILE:dangd-plugin-worker>"
       DANG_TEST_PLUGIN_PATH="$<TARGET_FILE:dangd_example_plugin>"
-      DANG_TEST_IP_PLUGIN_PATH="$<TARGET_FILE:dangd_test_ip_management_plugin>"
       DANG_TEST_PROVIDER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_provider_plugin>"
       DANG_TEST_CONSUMER_PLUGIN_PATH="$<TARGET_FILE:dangd_test_consumer_plugin>"
       DANG_TEST_RESOURCE_CONFLICT_PLUGIN_PATH="$<TARGET_FILE:dangd_test_resource_conflict_plugin>"
@@ -695,7 +650,7 @@ if(YANG_BUILD_TESTS)
       DANG_TEST_XPATH_ABSENCE_MUST_PLUGIN_PATH="$<TARGET_FILE:dangd_test_xpath_absence_must_plugin>"
       DANG_TEST_XPATH_ABSENCE_WHEN_PLUGIN_PATH="$<TARGET_FILE:dangd_test_xpath_absence_when_plugin>")
     add_dependencies(dangd_tests dangd-plugin-worker
-      dangd_example_plugin dangd_test_ip_management_plugin
+      dangd_example_plugin
       dangd_test_provider_plugin dangd_test_consumer_plugin
       dangd_test_resource_conflict_plugin dangd_test_resource_invalid_plugin
       dangd_test_broken_discovery_plugin dangd_test_broken_operational_plugin
@@ -724,33 +679,6 @@ if(YANG_BUILD_TESTS)
       gtest_discover_tests(dangd_tests DISCOVERY_MODE PRE_TEST)
     else()
       gtest_discover_tests(dangd_tests)
-    endif()
-    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-      add_executable(dangd_linux_ip_backend_tests
-        dangd/linux_ip_backend_test.cc
-        dangd/plugins/ip_management/linux/backend.cc
-        dangd/plugins/ip_management/platform_config.cc)
-      target_compile_features(dangd_linux_ip_backend_tests PRIVATE cxx_std_20)
-      target_include_directories(dangd_linux_ip_backend_tests PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR})
-      target_link_libraries(dangd_linux_ip_backend_tests PRIVATE
-        GTest::gtest_main pugixml::pugixml)
-      target_compile_options(dangd_linux_ip_backend_tests PRIVATE
-        -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
-      gtest_discover_tests(dangd_linux_ip_backend_tests)
-    elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
-      add_executable(dangd_freebsd_ip_backend_tests
-        dangd/freebsd_ip_backend_test.cc
-        dangd/plugins/ip_management/freebsd/backend.cc
-        dangd/plugins/ip_management/platform_config.cc)
-      target_compile_features(dangd_freebsd_ip_backend_tests PRIVATE cxx_std_20)
-      target_include_directories(dangd_freebsd_ip_backend_tests PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR})
-      target_link_libraries(dangd_freebsd_ip_backend_tests PRIVATE
-        GTest::gtest_main pugixml::pugixml)
-      target_compile_options(dangd_freebsd_ip_backend_tests PRIVATE
-        -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
-      gtest_discover_tests(dangd_freebsd_ip_backend_tests)
     endif()
   endif()
 endif()

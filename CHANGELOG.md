@@ -10,6 +10,10 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Moved the RFC 8343/8344 IP-management provider, pinned `ietf-ip` model,
+  platform backends, and focused tests into the separately packaged
+  `dang_plugins` repository. Dangd retains only its generic external-plugin
+  contract and optional host-side integration test.
 - Advanced RFC 8431 from schema-only preparation to an external ABI-v7 runtime
   provider with exclusive routing ownership and tested Linux/FreeBSD route
   apply and rollback; RPC, notification, operational, and mapping gaps remain.

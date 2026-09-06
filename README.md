@@ -28,8 +28,8 @@ before treating it as a production-ready or fully conforming implementation.
 - dynamically loaded, supervised plugins that supply models, validate changes,
   apply dependency-ordered hardware actions, compensate failures, and publish
   operational state; and
-- an RFC 8343/8344 IP-management example with native Linux and FreeBSD backend
-  directories.
+- support for external RFC 8343/8344 IP management through the separately
+  packaged `dang_plugins` provider.
 
 The [user guide](docs/USER_GUIDE.md) explains the architecture and walks through
 a complete configuration session. The [dangd guide](dangd/README.md) covers
@@ -114,7 +114,7 @@ Only then does `dangd` apply the globally ordered hardware plan. A failure
 compensates completed actions in reverse order and prevents the running
 datastore from advancing.
 
-The included IP-management plugin demonstrates RFC 8343 and RFC 8344 model
+The external `dang_plugins` IP-management provider demonstrates RFC 8343 and RFC 8344 model
 discovery, configuration parsing, native platform application, exact rollback,
 and live Linux link, address, and neighbor state. See the
 [plugin author guide](docs/DANGD_PLUGINS.md) for the ABI contract and practical
