@@ -103,7 +103,10 @@ stays in this file with its remaining work rewritten precisely.
   adapter and reversible loopback transaction pass failure-injected tests and a
   live plugin-free VPP 26.06 lifecycle on both hosts, using isolated unpacked
   packages because FD.io has no Ubuntu 26.04 repository. Expose the ownership
-  and software-interface configuration through a loadable provider, add
+  and software-interface configuration through a loadable provider. The
+  external repository now includes a stable-instance loopback model and ordered
+  snapshot planner (create before activation, deactivate before deletion), but
+  these operations still need ABI-v7 hardware-action wiring. Then add
   bridge/bond/VLAN-parent/required-route evidence and a recovery watchdog, then
   design and test the reversible physical ownership transition.
 - [ ] Design and implement transparent Berkeley-socket compatibility for

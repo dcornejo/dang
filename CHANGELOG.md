@@ -27,6 +27,9 @@ and releases follow Semantic Versioning.
   Linux hosts. The isolated VPP 26.06 runs loaded no PCI plugins and restored
   loopback absence; loadable-provider wiring and physical ownership safeguards
   remain open.
+- Recorded the external VPP stable-instance loopback model and ordered snapshot
+  planner. ABI-v7 provider action wiring remains the next software-interface
+  milestone.
 - Added the VPP application-socket integration requirement. A transparent
   dangd/provider boundary will use VCL `vppcom` without exposing VPP mechanics
   to NETCONF users, while explicitly keeping every management and recovery
