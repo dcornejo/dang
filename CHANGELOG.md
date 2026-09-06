@@ -17,6 +17,8 @@ and releases follow Semantic Versioning.
 - Narrowed the reusable-nexthop gap again after configuration commits and
   `route-add` gained per-RIB `nexthop-ref` resolution; lifetime enforcement and
   `route-update` resolution remain explicitly tracked.
+- Recorded `route-update` reusable-nexthop resolution as complete; deletion
+  lifetime enforcement remains the last reference-integrity gap.
 
 - Moved the RFC 8343/8344 IP-management provider, pinned `ietf-ip` model,
   platform backends, and focused tests into the separately packaged
