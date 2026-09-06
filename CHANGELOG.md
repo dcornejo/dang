@@ -14,6 +14,9 @@ and releases follow Semantic Versioning.
   implemented `nh-add` and `nh-delete`; the TODO now tracks the narrower
   persistence, operational publication, and route-reference semantics still
   required for reusable nexthops.
+- Narrowed the reusable-nexthop gap again after configuration commits and
+  `route-add` gained per-RIB `nexthop-ref` resolution; lifetime enforcement and
+  `route-update` resolution remain explicitly tracked.
 
 - Moved the RFC 8343/8344 IP-management provider, pinned `ietf-ip` model,
   platform backends, and focused tests into the separately packaged
