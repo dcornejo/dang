@@ -106,3 +106,17 @@ stays in this file with its remaining work rewritten precisely.
   and software-interface configuration through a loadable provider, add
   bridge/bond/VLAN-parent/required-route evidence and a recovery watchdog, then
   design and test the reversible physical ownership transition.
+- [ ] Design and implement transparent Berkeley-socket compatibility for
+  applications using VPP-owned networking. Use VCL's `vppcom` session API as
+  the underlying mechanism, but keep VPP connection setup, application
+  namespaces, worker registration, session lifecycle, and descriptor mapping
+  behind a dangd/provider abstraction so NETCONF users and ordinary plugin
+  configuration do not need VPP-specific socket knowledge. Define explicit
+  opt-in and fail-closed fallback rules: dangd's SSH, TLS, NETCONF, recovery,
+  and other management sockets must remain on the protected host stack, and a
+  missing or unhealthy VPP session must never silently redirect them. Cover
+  blocking and nonblocking I/O, `poll`/`select`/`epoll`, threads and process
+  lifecycle, error translation, restart/reconciliation, observability, package
+  integration, and rollback. Validate both direct `vppcom` use and any POSIX
+  compatibility/interposition layer against isolated VPP loopbacks before
+  permitting private-LAN traffic.

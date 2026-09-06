@@ -27,6 +27,11 @@ and releases follow Semantic Versioning.
   Linux hosts. The isolated VPP 26.06 runs loaded no PCI plugins and restored
   loopback absence; loadable-provider wiring and physical ownership safeguards
   remain open.
+- Added the VPP application-socket integration requirement. A transparent
+  dangd/provider boundary will use VCL `vppcom` without exposing VPP mechanics
+  to NETCONF users, while explicitly keeping every management and recovery
+  socket on the protected host stack and testing POSIX behavior, failures,
+  lifecycle, and rollback before private-LAN use.
 
 - Refreshed the RFC 8431 compliance ledger after the external RIB provider
   implemented `nh-add` and `nh-delete`; the TODO now tracks the narrower
