@@ -454,20 +454,21 @@ advertised. External interoperability testing remains.
 Status: **partial external-provider implementation**.
 
 The separately packaged `dang-frr` provider publishes the runtime-matched
-schema closure for `frr-routing`, `frr-zebra`, and `frr-staticd`, claims the
+schema closure for `frr-routing`, `frr-zebra`, and `frr-staticd`, plus live
+`frr-interface` and `frr-vrf` parent modules, and claims the
 exclusive `routing` resource domain, validates changes in disposable mgmtd
 candidate sessions, commits them atomically, and restores a retained
 before-image on rollback. It retrieves provider-owned top-level and augmented
-zebra state from FRR's operational datastore through native `GET_DATA` and
+protocol state from FRR's operational datastore through native `GET_DATA` and
 publishes only complete, correlated XML `TREE_DATA` replies through dangd's
-operational-provider ABI. For augments below imported interface and VRF lists,
-only identifying keys and `frr-zebra` descendants are retained; unrelated base
-state is discarded. Partial results, unexpected formats, continuation replies,
-and protocol-correlation failures fail closed. After apply, ABI-v6
-reconciliation reads both managed roots from FRR's running datastore and
-replaces only those roots in the complete dangd applied snapshot. This exposes
-FRR's accepted configuration, including deletion or normalization, while
-preserving configuration owned by other providers.
+operational-provider ABI. When the live library implements the interface and
+VRF parent modules, their complete roots are published; the zebra-only augment
+filter remains for runtimes that do not implement a parent. Partial results,
+unexpected formats, continuation replies, and protocol-correlation failures
+fail closed. After apply, ABI-v6 reconciliation reads every managed root from
+FRR's running datastore and replaces only those roots in the complete dangd
+applied snapshot. This exposes FRR's accepted configuration, including deletion
+or normalization, while preserving configuration owned by other providers.
 
 Those reconciled roots are retained as expected state. Subsequent operational
 retrievals compare fresh mgmtd running roots semantically, ignoring namespace
@@ -492,6 +493,13 @@ reconnects after mgmtd failure. Dangd retains final schema, subscription, and
 NACM enforcement. The provider now includes each protocol module's separate
 top-level configuration root in the complete transaction, reconciliation,
 drift, and operational paths.
+
+Because zebra, RIP, and IS-IS also augment keyed interface or VRF instances,
+the provider publishes live `frr-interface` and `frr-vrf` modules as
+implemented and treats their complete `lib` roots as part of the same atomic
+boundary. This closes the earlier variance where an advertised protocol's
+valid interface-level configuration was outside prepare, apply, rollback,
+reconciliation, and drift detection.
 
 An isolated Linux RIP interaction confirmed backend registration, modeled
 configuration apply, UDP activation, and event generation without a host LAN
@@ -521,11 +529,12 @@ routing-model claim. All fourteen RPCs in the installed `frr-zebra` schema now
 use a generic native mgmtd RPC request/reply path after dangd input validation
 and NACM authorization; replies return through host output validation and read
 filtering. Portable framing, correlation, format, and session behavior are
-tested on Linux and FreeBSD. Live interoperability remains unconfirmed because
-Linux mgmtd reported no active zebra backend for the RPC path and the FreeBSD
-socket refused connections. No FRR-native model notification is forwarded yet;
-notification work and protocols beyond routing, zebra, and staticd remain
-open. FRR 10.7.1 installs the complete BGP source family, but its live library
+tested on Linux and FreeBSD. Live RPC interoperability remains unconfirmed
+because Linux mgmtd reported no active zebra backend for the RPC path and the
+FreeBSD socket refused connections. The RIP notification path reaches the
+upstream mgmtd encoding assertion described above; successful delivery and
+protocols beyond the conditionally loaded RIP and IS-IS modules remain open.
+FRR 10.7.1 installs the complete BGP source family, but its live library
 omits `frr-bgp` and running bgpd registers no mgmtd backend; the provider does
 not advertise that unavailable runtime capability.
 

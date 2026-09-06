@@ -16,18 +16,21 @@ stays in this file with its remaining work rewritten precisely.
 ### Standards and models
 
 - [ ] Complete the top-priority, separately packaged FRR provider after its
-  initial Linux/FreeBSD `frr-routing`, `frr-zebra`, and `frr-staticd`
+  initial Linux/FreeBSD `frr-routing`, `frr-zebra`, `frr-staticd`,
+  `frr-interface`, and `frr-vrf`
   configuration implementation. The external plugin now publishes the
   runtime-matched native import-and-submodule schema closure, uses the
   programmatic `mgmtd` frontend
   protocol, claims ABI-v7 `routing`, validates in disposable sessions, commits
   atomically, restores the before-image on rollback, and publishes live
-  owned top-level and augmented zebra operational XML through native mgmtd
+  owned top-level and augmented protocol operational XML through native mgmtd
   `GET_DATA`. It reads the managed running roots back after apply for ABI-v6
   applied-state reconciliation and compares later running reads to detect
   out-of-band changes during operational retrieval, while a read-only watcher
   emits deduplicated ABI-v8 drift events through host schema and NACM checks.
-  The public native mgmtd RPC codec and generic `frr-zebra` dispatch are wired
+  Live parent roots participate in the same transaction so interface-level
+  zebra, RIP, and IS-IS configuration cannot escape commit or rollback. The
+  public native mgmtd RPC codec and generic `frr-zebra` dispatch are wired
   and covered by portable correlated-session tests. An active FRR 10.5.1 zebra
   validation backend registers configuration and operational paths but no
   `/frr-zebra` RPC path, and rejects `get-vrf-info` as unimplemented. Re-run
