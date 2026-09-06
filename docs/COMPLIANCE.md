@@ -479,6 +479,14 @@ also polls these roots read-only after reconciliation and emits one modeled
 the baseline. ABI v8 transports it across worker isolation before trusted-core
 schema validation, subscription filtering, and NACM enforcement.
 
+The external provider also implements the strict wire codec for FRR's native
+`NOTIFY_SELECT` and modeled XML `NOTIFY` messages. It rejects datastore
+synchronization operations, non-XML formats, malformed XPath splits, embedded
+NULs, and empty event bodies. This is protocol foundation rather than completed
+event delivery: the provider does not yet keep a dedicated asynchronous mgmtd
+session or advertise the installed `frr-isisd` and `frr-ripd` notification
+schemas.
+
 At discovery, the provider reads FRR's RFC 8525 YANG Library through mgmtd and
 copies daemon-enabled features into the corresponding YANG source descriptors.
 It rejects required-module absence and installed-source versus running-daemon
