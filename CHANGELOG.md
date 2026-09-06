@@ -19,6 +19,10 @@ and releases follow Semantic Versioning.
   identity plus live management/default-route denial now pass on both Linux
   hosts; binary-API discovery, plugin exposure, broader topology evidence, and
   reversible transfer remain open.
+- Recorded the external provider's reversible, programmatic VPP loopback
+  transaction seam and its failure-injected Linux coverage. Live generated
+  VAPI validation remains open because the Ubuntu 26.04 test hosts have no
+  matching official FD.io package repository.
 
 - Refreshed the RFC 8431 compliance ledger after the external RIB provider
   implemented `nh-add` and `nh-delete`; the TODO now tracks the narrower
