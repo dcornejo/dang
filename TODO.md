@@ -104,9 +104,11 @@ stays in this file with its remaining work rewritten precisely.
   live plugin-free VPP 26.06 lifecycle on both hosts, using isolated unpacked
   packages because FD.io has no Ubuntu 26.04 repository. Expose the ownership
   and software-interface configuration through a loadable provider. The
-  external repository now includes a stable-instance loopback model and ordered
-  snapshot planner (create before activation, deactivate before deletion), but
-  these operations still need ABI-v7 hardware-action wiring. Then add
+  external ABI-v7 provider now embeds both models, claims distinct resource
+  domains, resolves live loopbacks after restart, and applies its ordered plan
+  as one compensated hardware action; provider-level create/enable/rollback
+  passes on both Linux hosts. Add operational publication and reconciliation,
+  then add
   bridge/bond/VLAN-parent/required-route evidence and a recovery watchdog, then
   design and test the reversible physical ownership transition.
 - [ ] Design and implement transparent Berkeley-socket compatibility for
