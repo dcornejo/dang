@@ -658,7 +658,9 @@ it does not yet represent every kernel route kind or every RFC 8431 attribute.
 The provider implements `route-add` for its portable route subset with
 per-member success/failure accounting and optional RFC-shaped failure detail.
 `route-delete` resolves prefix requests against live kernel state and deletes
-only an unambiguous observed match. The other five RPCs, both notifications, complete state fidelity, interface-only
+only an unambiguous observed match. Prefix-selected `route-update` replaces a
+portable base nexthop or route attributes and restores the observed before-image
+when installation fails. The other four RPCs, both notifications, complete state fidelity, interface-only
 FreeBSD nexthops, and arbitrary RIB-name mapping remain before a substantial
 RFC 8431 claim.
 
