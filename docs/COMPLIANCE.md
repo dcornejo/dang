@@ -667,7 +667,8 @@ and remove portable base nexthops in a thread-safe, per-RIB process registry.
 That registry is not yet persistent or represented in operational state.
 Configuration commits, `route-add`, and prefix-selected `route-update` resolve
 identifiers through `nexthop-ref` with per-RIB isolation, while reference
-lifetime enforcement remains incomplete. Both
+lifetime is enforced across datastore prepare, apply, rollback, and release.
+Imperative route RPC bindings do not yet retain their referenced objects. Both
 notifications, complete state fidelity, interface-only
 FreeBSD nexthops, and arbitrary RIB-name mapping remain before a substantial
 RFC 8431 claim.

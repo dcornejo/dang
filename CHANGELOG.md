@@ -19,6 +19,8 @@ and releases follow Semantic Versioning.
   `route-update` resolution remain explicitly tracked.
 - Recorded `route-update` reusable-nexthop resolution as complete; deletion
   lifetime enforcement remains the last reference-integrity gap.
+- Recorded datastore transaction reference reservations and narrowed remaining
+  deletion-lifetime work to routes created or changed through imperative RPCs.
 
 - Moved the RFC 8343/8344 IP-management provider, pinned `ietf-ip` model,
   platform backends, and focused tests into the separately packaged
