@@ -662,7 +662,10 @@ only an unambiguous observed match. Prefix-selected `route-update` replaces a
 portable base nexthop or route attributes and restores the observed before-image
 when installation fails. `rib-add` validates Linux logical tables or existing
 FreeBSD FIBs and rejects unsupported RPF enforcement; `rib-delete` uses a
-compensated plan to empty the observed RIB. The two nexthop RPCs, both
+compensated plan to empty the observed RIB. `nh-add` and `nh-delete` allocate
+and remove portable base nexthops in a thread-safe, per-RIB process registry.
+That registry is not yet persistent or represented in operational state, and
+routes cannot yet resolve its identifiers through `nexthop-ref`. Both
 notifications, complete state fidelity, interface-only
 FreeBSD nexthops, and arbitrary RIB-name mapping remain before a substantial
 RFC 8431 claim.

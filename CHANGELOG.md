@@ -10,6 +10,11 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Refreshed the RFC 8431 compliance ledger after the external RIB provider
+  implemented `nh-add` and `nh-delete`; the TODO now tracks the narrower
+  persistence, operational publication, and route-reference semantics still
+  required for reusable nexthops.
+
 - Moved the RFC 8343/8344 IP-management provider, pinned `ietf-ip` model,
   platform backends, and focused tests into the separately packaged
   `dang_plugins` repository. Dangd retains only its generic external-plugin
