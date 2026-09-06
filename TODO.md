@@ -42,8 +42,8 @@ stays in this file with its remaining work rewritten precisely.
   FRR protocol daemon without attaching host LAN interfaces.
 - [ ] Complete RFC 8431 after the external ABI-v7 plugin wired its strict
   portable route parser, delta planner, and transaction-safe native execution
-  into one reversible `routing` action: implement all seven RPCs and both notifications,
-  publish observed operational state, resolve FreeBSD interface-only nexthops,
+  into one reversible `routing` action and native Linux/FreeBSD route observation:
+  implement all seven RPCs and both notifications, resolve FreeBSD interface-only nexthops,
   replace numeric-only RIB names with an explicit platform mapping, then
   advertise and test the module end to end.
 - [ ] Complete RFC 9642 beyond the implemented central cleartext symmetric-key

@@ -650,10 +650,13 @@ delete, and recheck a documentation-prefix route inside a Linux network
 namespace and FreeBSD VNET jail without touching host routes. Unsupported match
 and nexthop semantics fail with an attributed model path. Numeric-only RIB/FIB
 names and rejected FreeBSD interface-only nexthops are temporary platform
-mapping variances. The provider intentionally publishes incomplete operational
-data and has no RPC callback. All seven RPCs, both notifications, observed
-state, interface-only FreeBSD nexthops, and arbitrary RIB-name mapping remain
-before a substantial RFC 8431 claim.
+mapping variances. The provider publishes partial observed operational data by
+reading Linux rtnetlink or FreeBSD `NET_RT_DUMP` directly. It emits IPv4/IPv6
+unicast routes with active/installed status and deterministic synthetic indexes;
+it does not yet represent every kernel route kind or every RFC 8431 attribute.
+The provider has no RPC callback. All seven RPCs, both notifications, complete
+state fidelity, interface-only FreeBSD nexthops, and arbitrary RIB-name mapping
+remain before a substantial RFC 8431 claim.
 
 BaseX is likewise only a datastore architecture investigation. The current
 implementation remains the in-process validated datastore manager with atomic
