@@ -99,11 +99,10 @@ stays in this file with its remaining work rewritten precisely.
   model, and a fail-closed evaluator for exact PCI, MAC, vendor/device, default
   route, and live SSH evidence. Read-only validation identified `ens18`/PCI
   `0000:06:12.0` as protected on both Linux hosts; only `ens19`/PCI
-  `0000:06:13.0` is a future private-LAN candidate. A reversible, API-only
-  loopback transaction seam has failure-injected coverage, but the Ubuntu 26.04
-  hosts have no matching official FD.io package repository. Establish a
-  supported or isolated VPP 26.06 runtime, implement and probe the generated
-  C++ VAPI adapter, expose the model through a loadable provider, run live
-  loopback transactions, add bridge/bond/VLAN-parent/required-route evidence
-  and a recovery watchdog, then design the reversible physical ownership
-  transition.
+  `0000:06:13.0` is a future private-LAN candidate. The generated C++ VAPI
+  adapter and reversible loopback transaction pass failure-injected tests and a
+  live plugin-free VPP 26.06 lifecycle on both hosts, using isolated unpacked
+  packages because FD.io has no Ubuntu 26.04 repository. Expose the ownership
+  and software-interface configuration through a loadable provider, add
+  bridge/bond/VLAN-parent/required-route evidence and a recovery watchdog, then
+  design and test the reversible physical ownership transition.

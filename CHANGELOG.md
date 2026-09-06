@@ -23,6 +23,10 @@ and releases follow Semantic Versioning.
   transaction seam and its failure-injected Linux coverage. Live generated
   VAPI validation remains open because the Ubuntu 26.04 test hosts have no
   matching official FD.io package repository.
+- Recorded completion of generated C++ VAPI loopback interoperability on both
+  Linux hosts. The isolated VPP 26.06 runs loaded no PCI plugins and restored
+  loopback absence; loadable-provider wiring and physical ownership safeguards
+  remain open.
 
 - Refreshed the RFC 8431 compliance ledger after the external RIB provider
   implemented `nh-add` and `nh-delete`; the TODO now tracks the narrower
