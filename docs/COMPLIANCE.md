@@ -654,9 +654,11 @@ mapping variances. The provider publishes partial observed operational data by
 reading Linux rtnetlink or FreeBSD `NET_RT_DUMP` directly. It emits IPv4/IPv6
 unicast routes with active/installed status and deterministic synthetic indexes;
 it does not yet represent every kernel route kind or every RFC 8431 attribute.
-The provider has no RPC callback. All seven RPCs, both notifications, complete
-state fidelity, interface-only FreeBSD nexthops, and arbitrary RIB-name mapping
-remain before a substantial RFC 8431 claim.
+The provider implements `route-add` for its portable route subset with
+per-member success/failure accounting and optional RFC-shaped failure detail.
+The other six RPCs, both notifications, complete state fidelity, interface-only
+FreeBSD nexthops, and arbitrary RIB-name mapping remain before a substantial
+RFC 8431 claim.
 
 BaseX is likewise only a datastore architecture investigation. The current
 implementation remains the in-process validated datastore manager with atomic
