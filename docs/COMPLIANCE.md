@@ -501,6 +501,14 @@ boundary. This closes the earlier variance where an advertised protocol's
 valid interface-level configuration was outside prepare, apply, rollback,
 reconciliation, and drift detection.
 
+The same live-library gate now recognizes BFD, EIGRP, OSPFv2, Pathd, PIM,
+RIPng, and VRRP. Standalone daemon roots join the managed root set; augment-only
+OSPFv2 and VRRP configuration remains inside the already-owned routing or
+interface parent. Operational reads and native RPC dispatch are enabled only
+for the corresponding live module. Portable discovery and ownership tests cover
+this mechanism, but daemon-by-daemon Linux and FreeBSD interoperability remains
+open and is not claimed here.
+
 An isolated Linux RIP interaction confirmed backend registration, modeled
 configuration apply, UDP activation, and event generation without a host LAN
 interface. FRR 10.7.1 mgmtd rejects its own top-level notification as an
@@ -533,7 +541,7 @@ tested on Linux and FreeBSD. Live RPC interoperability remains unconfirmed
 because Linux mgmtd reported no active zebra backend for the RPC path and the
 FreeBSD socket refused connections. The RIP notification path reaches the
 upstream mgmtd encoding assertion described above; successful delivery and
-protocols beyond the conditionally loaded RIP and IS-IS modules remain open.
+end-to-end validation of the other conditionally loaded protocols remain open.
 FRR 10.7.1 installs the complete BGP source family, but its live library
 omits `frr-bgp` and running bgpd registers no mgmtd backend; the provider does
 not advertise that unavailable runtime capability.

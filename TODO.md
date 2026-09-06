@@ -48,10 +48,12 @@ stays in this file with its remaining work rewritten precisely.
   validation found and fixed exact-selector and separate-root ownership gaps,
   then reached FRR 10.7.1's `assure_notify_msg_cache()` assertion after ripd
   emitted the modeled event. Re-run successful Linux/FreeBSD delivery after
-  upstream mgmtd can encode top-level notifications. Resolve the
-  eventual package conflict with an executable IETF RIB provider, and then
-  enable each additional
-  FRR protocol daemon without attaching host LAN interfaces.
+  upstream mgmtd can encode top-level notifications. The runtime gate now
+  supports BFD, EIGRP, OSPFv2, Pathd, PIM, RIP, RIPng, IS-IS, and VRRP model
+  ownership, standalone roots, parent augments, operational reads, and modeled
+  RPC dispatch. Exercise each daemon end to end on Linux and FreeBSD without
+  attaching host LAN interfaces. Resolve the eventual package conflict with an
+  executable IETF RIB provider.
 - [ ] Complete RFC 8431 after the external ABI-v7 plugin wired its strict
   portable route parser, delta planner, and transaction-safe native execution
   into one reversible `routing` action and native Linux/FreeBSD route observation:
