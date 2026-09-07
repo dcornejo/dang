@@ -517,6 +517,10 @@ an absent binary, an early daemon exit, a running daemon with no mgmtd module,
 and an advertised module. It creates no interface, address, or route. This is
 discovery evidence only: a FreeBSD equivalent and per-daemon transaction,
 rollback, operational, RPC, and notification interactions remain required.
+Independent FRR 10.7.1 runs on both Ubuntu 26.04.1 hosts found all nine daemon
+binaries installed but only BFD, RIP, and RIPng registered with mgmtd. The
+provider correctly excludes EIGRP, IS-IS, OSPFv2, Pathd, PIM, and VRRP on that
+runtime despite their installed model sources and running processes.
 
 An isolated Linux RIP interaction confirmed backend registration, modeled
 configuration apply, UDP activation, and event generation without a host LAN
