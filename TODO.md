@@ -54,8 +54,11 @@ stays in this file with its remaining work rewritten precisely.
   optional daemon with mgmtd and zebra in a disposable pathspace and reports
   actual live module registration without creating interfaces, addresses, or
   routes; it passes independently on both Linux and both FreeBSD validation
-  hosts. Next,
-  exercise each advertised daemon's
+  hosts. YANG Library advertisement does not prove backend ownership: the BFD
+  behavioral test on all four hosts found that mgmtd accepts but drops a profile
+  because `bfdd` registers no backend. Post-commit readback now rejects this
+  silent no-op and leaves rollback available. Re-test BFD when upstream exposes
+  its backend, and next exercise each other advertised daemon's
   configuration, rollback, operational, RPC, and notification behavior end to
   end on both platforms without attaching host LAN interfaces.
 - [ ] Complete RFC 8431 after the external ABI-v7 plugin wired its strict

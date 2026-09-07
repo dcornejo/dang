@@ -10,6 +10,11 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Recorded the cross-platform BFD behavioral result and the external provider's
+  new post-commit verification boundary. FRR advertises `frr-bfdd` on all four
+  hosts but silently drops a profile because `bfdd` registers no mgmtd backend;
+  dang-frr now rejects that acknowledged no-op at the affected path while
+  preserving rollback, and the guarded interaction verifies restoration.
 - Recorded the external FRR provider's isolated Linux optional-daemon inventory
   and kept its scope explicit: live RFC 8525 registration is observed without
   creating network state. The same inventory is now available for FreeBSD,

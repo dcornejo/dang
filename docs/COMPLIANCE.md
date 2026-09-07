@@ -510,11 +510,12 @@ for the corresponding live module. Portable discovery and ownership tests cover
 this mechanism, but daemon-by-daemon Linux and FreeBSD interoperability remains
 open and is not claimed here.
 
-The external collection includes an opt-in, read-only Linux/FreeBSD backend inventory.
+The external collection includes an opt-in, read-only Linux/FreeBSD schema inventory.
 It starts each installed optional protocol daemon with mgmtd and zebra in a
 unique disposable pathspace, reads the live RFC 8525 library, and distinguishes
-an absent binary, an early daemon exit, a running daemon with no mgmtd module,
-and an advertised module. It creates no interface, address, or route. This is
+an absent binary, an early daemon exit, a running daemon with no advertised
+mgmtd schema, and an advertised schema. It creates no interface, address, or
+route. This is
 discovery evidence only: per-daemon transaction, rollback, operational, RPC,
 and notification interactions remain required.
 Independent FRR 10.7.1 runs on both Ubuntu 26.04.1 hosts found all nine daemon
@@ -524,6 +525,15 @@ runtime despite their installed model sources and running processes.
 Independent FreeBSD 16.0-CURRENT runs found the same three advertised modules
 among six installed optional daemons. EIGRP, IS-IS, and OSPFv2 ran without
 registering; Pathd, PIM, and VRRP binaries were absent from those packages.
+
+Schema advertisement is not backend-registration evidence. A profile-only BFD
+interaction on all four hosts found that FRR advertises `frr-bfdd` but `bfdd`
+does not register with mgmtd; mgmtd acknowledges the candidate commit while its
+running root remains empty. The provider now verifies every committed root in
+a fresh post-unlock session and rejects this silent no-op at
+`/frr-bfdd:bfdd`, retaining rollback eligibility. The native test skips only
+after the before-image is successfully restored. BFD configuration is therefore
+not claimed for these FRR runtimes.
 
 An isolated Linux RIP interaction confirmed backend registration, modeled
 configuration apply, UDP activation, and event generation without a host LAN
