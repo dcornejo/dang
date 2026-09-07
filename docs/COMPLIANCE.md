@@ -535,6 +535,14 @@ a fresh post-unlock session and rejects this silent no-op at
 after the before-image is successfully restored. BFD configuration is therefore
 not claimed for these FRR runtimes.
 
+RIP and RIPng provide real backend transaction evidence on all four hosts. In
+separate disposable pathspaces, each daemon accepts an interface-free `default`
+instance, exposes the committed XML through the running datastore, and accepts
+the retained empty before-image as rollback. The final root is verified absent.
+This establishes configuration and rollback without creating an interface,
+address, neighbor, route, or packet; operational-state, RPC, and notification
+coverage remains incomplete.
+
 An isolated Linux RIP interaction confirmed backend registration, modeled
 configuration apply, UDP activation, and event generation without a host LAN
 interface. FRR 10.7.1 mgmtd rejects its own top-level notification as an

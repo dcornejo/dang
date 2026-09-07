@@ -10,6 +10,10 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Recorded successful cross-platform RIP and RIPng configuration evidence:
+  interface-free instances commit, read back, and roll back to the exact empty
+  before-image on both Linux and both FreeBSD validation hosts without creating
+  network state or traffic.
 - Recorded the cross-platform BFD behavioral result and the external provider's
   new post-commit verification boundary. FRR advertises `frr-bfdd` on all four
   hosts but silently drops a profile because `bfdd` registers no mgmtd backend;
