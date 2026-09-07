@@ -547,6 +547,13 @@ FRR 10.7.1 installs the complete BGP source family, but its live library
 omits `frr-bgp` and running bgpd registers no mgmtd backend; the provider does
 not advertise that unavailable runtime capability.
 
+The FRR-native and RFC 8431 RIB providers cannot be installed together through
+the supported packages. Debian declares symmetric conflicts. FreeBSD packages
+share an installed routing-domain ownership marker because CPack's FreeBSD
+generator has no conflict-metadata setting, causing `pkg` to reject the file
+collision. Dangd's ABI-v7 resource-domain check remains the authoritative
+runtime safeguard for manual installations.
+
 ### RFC 8343 — interface management and RFC 8344 — IP management
 
 Status: **schema support and partial Linux/FreeBSD device implementation**.

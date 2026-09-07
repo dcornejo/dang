@@ -51,8 +51,7 @@ stays in this file with its remaining work rewritten precisely.
   supports BFD, EIGRP, OSPFv2, Pathd, PIM, RIP, RIPng, IS-IS, and VRRP model
   ownership, standalone roots, parent augments, operational reads, and modeled
   RPC dispatch. Exercise each daemon end to end on Linux and FreeBSD without
-  attaching host LAN interfaces. Resolve the eventual package conflict with an
-  executable IETF RIB provider.
+  attaching host LAN interfaces.
 - [ ] Complete RFC 8431 after the external ABI-v7 plugin wired its strict
   portable route parser, delta planner, and transaction-safe native execution
   into one reversible `routing` action and native Linux/FreeBSD route observation:

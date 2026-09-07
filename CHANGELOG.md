@@ -10,6 +10,9 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Recorded package-level exclusivity between the external FRR-native and RFC
+  8431 RIB providers on Debian and FreeBSD, while retaining runtime rejection
+  through their shared ABI-v7 `routing` resource domain.
 - Reconciled the FRR compliance account and remaining-work description with the
   external ABI-v8 provider, including exact notification selectors and the
   distinction between standalone protocol roots and augment-only modules.
