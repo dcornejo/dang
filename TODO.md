@@ -50,8 +50,12 @@ stays in this file with its remaining work rewritten precisely.
   upstream mgmtd can encode top-level notifications. The runtime gate now
   supports BFD, EIGRP, OSPFv2, Pathd, PIM, RIP, RIPng, IS-IS, and VRRP model
   ownership, standalone roots, parent augments, operational reads, and modeled
-  RPC dispatch. Exercise each daemon end to end on Linux and FreeBSD without
-  attaching host LAN interfaces.
+  RPC dispatch. A read-only Linux inventory now starts each installed optional
+  daemon with mgmtd and zebra in a disposable pathspace and reports actual live
+  module registration without creating interfaces, addresses, or routes. Add
+  the equivalent FreeBSD inventory, then exercise each advertised daemon's
+  configuration, rollback, operational, RPC, and notification behavior end to
+  end on both platforms without attaching host LAN interfaces.
 - [ ] Complete RFC 8431 after the external ABI-v7 plugin wired its strict
   portable route parser, delta planner, and transaction-safe native execution
   into one reversible `routing` action and native Linux/FreeBSD route observation:
