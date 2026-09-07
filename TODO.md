@@ -15,13 +15,13 @@ stays in this file with its remaining work rewritten precisely.
 
 ### Standards and models
 
-- [ ] Complete the top-priority, separately packaged FRR provider after its
-  initial Linux/FreeBSD `frr-routing`, `frr-zebra`, `frr-staticd`,
-  `frr-interface`, and `frr-vrf`
-  configuration implementation. The external plugin now publishes the
+- [ ] Complete the top-priority, separately packaged FRR provider. Its initial
+  Linux/FreeBSD transaction evidence covers `frr-routing`, `frr-zebra`, and
+  `frr-staticd`; portable configuration plumbing also covers live
+  `frr-interface` and `frr-vrf` parents. The external plugin now publishes the
   runtime-matched native import-and-submodule schema closure, uses the
-  programmatic `mgmtd` frontend
-  protocol, claims ABI-v7 `routing`, validates in disposable sessions, commits
+  programmatic `mgmtd` frontend protocol, exports ABI v8, claims the ABI-v7
+  `routing` resource domain, validates in disposable sessions, commits
   atomically, restores the before-image on rollback, and publishes live
   owned top-level and augmented protocol operational XML through native mgmtd
   `GET_DATA`. It reads the managed running roots back after apply for ABI-v6
@@ -38,8 +38,7 @@ stays in this file with its remaining work rewritten precisely.
   modeled RPC subtree. FRR 10.7.1 ships the complete `frr-bgp` source family,
   but its live RFC 8525 library omits `frr-bgp` and running bgpd registers no
   mgmtd backend; add BGP only after upstream exposes a native configuration and
-  operational path. Add
-  notifications from FRR protocol modules. The native codec now builds
+  operational path. The native notification codec now builds
   bounded `NOTIFY_SELECT` requests and validates modeled XML `NOTIFY` frames;
   the transport/session layer supports one-way selection, safe idle waits,
   resumed unsolicited reads, and session attribution. The plugin-owned reader
@@ -122,8 +121,8 @@ stays in this file with its remaining work rewritten precisely.
   domains, resolves live loopbacks after restart, and applies its ordered plan
   as one compensated hardware action; provider-level create/enable/rollback,
   complete live loopback publication, and applied-state reconciliation pass on
-  both Linux hosts. Add
-  bridge/bond/VLAN-parent/required-route evidence and a recovery watchdog, then
+  both Linux hosts. Add bridge/bond/VLAN-parent/required-route evidence and a
+  recovery watchdog, then
   design and test the reversible physical ownership transition.
 - [ ] Design and implement transparent Berkeley-socket compatibility for
   applications using VPP-owned networking. Use VCL's `vppcom` session API as

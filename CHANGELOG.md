@@ -10,6 +10,10 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Reconciled the FRR compliance account and remaining-work description with the
+  external ABI-v8 provider, including exact notification selectors and the
+  distinction between standalone protocol roots and augment-only modules.
+
 - Recorded the Linux-only VPP ownership architecture and test-host safety
   boundary: `ens18` is protected as the SSH/default-route path, `ens19` is the
   only future private-LAN candidate, and physical claims require stable PCI

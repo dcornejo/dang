@@ -488,11 +488,12 @@ event delivery. The transport/session layer sends a one-way selection and
 receives session-attributed unsolicited events without treating an idle timeout
 as a broken stream. A provider-owned reader now loads `frr-isisd` and
 `frr-ripd` only when FRR's live module-set implements them, negotiates XML,
-selects only those prefixes, bounds delivery to 1,024 queued events, and
-reconnects after mgmtd failure. Dangd retains final schema, subscription, and
-NACM enforcement. The provider now includes each protocol module's separate
-top-level configuration root in the complete transaction, reconciliation,
-drift, and operational paths.
+selects each modeled event by its exact schema XPath, bounds delivery to 1,024
+queued events, and reconnects after mgmtd failure. Dangd retains final schema,
+subscription, and
+NACM enforcement. The provider includes every enabled standalone protocol root
+in the complete transaction, reconciliation, drift, and operational paths;
+augment-only modules remain within their managed parent root.
 
 Because zebra, RIP, and IS-IS also augment keyed interface or VRF instances,
 the provider publishes live `frr-interface` and `frr-vrf` modules as
