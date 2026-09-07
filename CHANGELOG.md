@@ -12,8 +12,10 @@ and releases follow Semantic Versioning.
 
 - Recorded the external FRR provider's isolated Linux optional-daemon inventory
   and kept its scope explicit: live RFC 8525 registration is observed without
-  creating network state, while FreeBSD inventory and daemon-by-daemon
-  behavioral interoperability remain unfinished. Independent FRR 10.7.1 runs
+  creating network state. The same inventory is now available for FreeBSD,
+  where independent runs on both 16.0-CURRENT hosts advertised the same BFD,
+  RIP, and RIPng modules. Daemon-by-daemon behavioral interoperability remains
+  unfinished. Independent FRR 10.7.1 Linux runs
   on both Ubuntu 26.04.1 hosts advertised BFD, RIP, and RIPng and correctly
   excluded the six other installed optional daemons with no live mgmtd module.
 - Recorded package-level exclusivity between the external FRR-native and RFC
