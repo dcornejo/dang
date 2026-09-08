@@ -279,8 +279,12 @@ TEST(NetconfTransportTest, FlushesCloseSessionReplyBeforeClosingTransport) {
       "<capabilities><capability>urn:ietf:params:netconf:base:1.0"
       "</capability></capabilities></hello>]]>]]>"
       "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+      "message-id=\"get\"><get/></rpc>]]>]]>"
+      "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
       "message-id=\"9\"><close-session/></rpc>]]>]]>");
-  ASSERT_GE(stream.writes.size(), 2U);
+  ASSERT_EQ(stream.writes.size(), 2U);
+  EXPECT_NE(stream.writes.back().find("message-id=\"get\""),
+            std::string::npos);
   EXPECT_NE(stream.writes.back().find("message-id=\"9\"><ok/>"),
             std::string::npos);
   EXPECT_TRUE(stream.closed);

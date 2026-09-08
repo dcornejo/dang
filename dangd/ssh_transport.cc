@@ -44,7 +44,8 @@ struct AuthorizedIdentity {
 
 class LibsshStream final : public yang::netconf::SecureByteStream {
  public:
-  explicit LibsshStream(ssh_channel channel) : channel_(channel) {}
+  LibsshStream(ssh_session session, ssh_channel channel)
+      : session_(session), channel_(channel) {}
 
   yang::netconf::WriteStatus Write(std::string_view bytes) override {
     std::size_t offset = 0;
@@ -63,12 +64,19 @@ class LibsshStream final : public yang::netconf::SecureByteStream {
 
   void Close() override {
     if (!channel_) return;
+    // ssh_channel_write() may leave accepted bytes in the session's outgoing
+    // buffer. Flush the final NETCONF reply before EOF/close; otherwise an
+    // immediate disconnect can discard a successful close-session response
+    // under concurrent load. The session socket already has a bounded send
+    // timeout, and this adds an explicit upper bound at the libssh layer.
+    (void)ssh_blocking_flush(session_, 1000);
     ssh_channel_send_eof(channel_);
     ssh_channel_close(channel_);
     channel_ = nullptr;
   }
 
  private:
+  ssh_session session_;
   ssh_channel channel_;
 };
 
@@ -273,7 +281,7 @@ void ServeSshSession(Handle<ssh_session, ssh_free> session,
     ssh_disconnect(session.get());
     return;
   }
-  LibsshStream stream(channel.get());
+  LibsshStream stream(session.get(), channel.get());
   yang::netconf::TransportIdentity identity{
       yang::netconf::SecureTransport::kSsh, *local_username,
       authorized.external_groups, "netconf", true,
@@ -281,8 +289,12 @@ void ServeSshSession(Handle<ssh_session, ssh_free> session,
   yang::netconf::NetconfTransportAdapter adapter(
       application.server(), stream, session_id, std::move(identity));
   std::array<char, 16 * 1024> buffer{};
-  while (adapter.valid() && ssh_channel_is_open(channel.get()) &&
-         !ssh_channel_is_eof(channel.get())) {
+  // A peer EOF means that no more channel data will arrive; it does not mean
+  // libssh's receive buffer is empty. OpenSSH sends EOF immediately after its
+  // piped NETCONF input, so checking ssh_channel_is_eof() here can discard the
+  // final already-buffered RPC. Keep reading until libssh itself returns the
+  // drained end-of-stream indication.
+  while (adapter.valid() && ssh_channel_is_open(channel.get())) {
     const int count = ssh_channel_read_timeout(
         channel.get(), buffer.data(), buffer.size(), 0, 1000);
     if (count == SSH_AGAIN) {

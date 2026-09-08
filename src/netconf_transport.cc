@@ -151,7 +151,12 @@ void NetconfTransportAdapter::Flush() {
   }
 }
 void NetconfTransportAdapter::Consume(SessionOutput output) {
-  for (std::string& bytes : output.bytes_to_send) Enqueue(std::move(bytes));
+  // One receive can decode several pipelined RPCs. Preserve that response
+  // sequence in one secure-stream write so a close following a large reply
+  // cannot race across a transport boundary between separately queued frames.
+  std::string batch;
+  for (const std::string& bytes : output.bytes_to_send) batch += bytes;
+  Enqueue(std::move(batch));
   if (output.error) error_ = std::move(*output.error);
   if (output.close_transport) {
     // A successful close-session reply must reach the peer before TLS/SSH is

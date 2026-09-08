@@ -8,6 +8,14 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- Drained already-buffered SSH channel data after client EOF, emitted replies
+  decoded from one pipelined receive as one ordered transport write, and flushed
+  libssh's bounded output buffer before channel close. OpenSSH closes its
+  standard input after pipelined NETCONF requests; under concurrency the prior
+  sequence could omit the final `<close-session>` reply and close prematurely.
+
 ### Added
 
 - Recorded native FRR RIP and RIPng operational readback on the current
