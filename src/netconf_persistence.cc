@@ -24,16 +24,21 @@ namespace {
 
 constexpr int kSnapshotVersion = 1;
 
+template <typename Value>
+nlohmann::json OptionalJson(const std::optional<Value>& value) {
+  return value ? nlohmann::json(*value) : nlohmann::json(nullptr);
+}
+
 nlohmann::json ToJson(const PersistentDatastoreState& state) {
   return {{"version", kSnapshotVersion},
           {"running", state.running_xml},
           {"candidate", state.candidate_xml},
           {"startup", state.startup_xml},
-          {"rollback-running", state.rollback_running_xml},
+          {"rollback-running", OptionalJson(state.rollback_running_xml)},
           {"confirmation-expiry-unix-seconds",
-           state.confirmation_expiry_unix_seconds},
-          {"confirming-session", state.confirming_session},
-          {"persist-token", state.persist_token}};
+           OptionalJson(state.confirmation_expiry_unix_seconds)},
+          {"confirming-session", OptionalJson(state.confirming_session)},
+          {"persist-token", OptionalJson(state.persist_token)}};
 }
 
 std::optional<PersistentDatastoreState> FromJson(const nlohmann::json& json) {

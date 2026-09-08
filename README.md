@@ -47,6 +47,28 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+On Debian or Ubuntu:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y cmake ninja-build g++ libfmt-dev libpugixml-dev \
+  nlohmann-json3-dev libxml2-dev libssl-dev pkg-config libssh-dev \
+  libgtest-dev
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+On FreeBSD:
+
+```sh
+sudo pkg install cmake ninja libfmt pugixml nlohmann-json libxml2 libssh \
+  googletest pkgconf
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
 Linux and FreeBSD are supported server targets. Windows support is not a
 project goal.
 

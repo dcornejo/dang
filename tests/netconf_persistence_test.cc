@@ -63,6 +63,14 @@ TEST(NetconfPersistenceTest, SavesAndRestoresAllDatastores) {
   const std::filesystem::path path =
       std::filesystem::temp_directory_path() / "yang-netconf-snapshot-test.json";
   ASSERT_TRUE(SaveDatastoreSnapshot(path, source).ok);
+  std::ifstream snapshot(path);
+  const std::string serialized((std::istreambuf_iterator<char>(snapshot)), {});
+  EXPECT_NE(serialized.find("\"rollback-running\": null"), std::string::npos);
+  EXPECT_NE(serialized.find("\"confirmation-expiry-unix-seconds\": null"),
+            std::string::npos);
+  EXPECT_NE(serialized.find("\"confirming-session\": null"),
+            std::string::npos);
+  EXPECT_NE(serialized.find("\"persist-token\": null"), std::string::npos);
 
   DatastoreManager restored(fixture->schema, fixture->initial);
   ASSERT_TRUE(LoadDatastoreSnapshot(path, restored).ok);
