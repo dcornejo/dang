@@ -537,11 +537,13 @@ not claimed for these FRR runtimes.
 
 RIP and RIPng provide real backend transaction evidence on all four hosts. In
 separate disposable pathspaces, each daemon accepts an interface-free `default`
-instance, exposes the committed XML through the running datastore, and accepts
-the retained empty before-image as rollback. The final root is verified absent.
-This establishes configuration and rollback without creating an interface,
-address, neighbor, route, or packet; operational-state, RPC, and notification
-coverage remains incomplete.
+instance, exposes the committed XML through both the running and operational
+datastores, and accepts the retained empty before-image as rollback. The final
+root is verified absent. The stronger operational assertion also passes on the
+current isolated Debian 13 and FreeBSD 16.0-CURRENT Proxmox guests. This
+establishes configuration, basic instance operational visibility, and rollback
+without creating an interface, address, neighbor, route, or packet. Learned
+route and neighbor state, RPC, and notification coverage remain incomplete.
 
 An isolated Linux RIP interaction confirmed backend registration, modeled
 configuration apply, UDP activation, and event generation without a host LAN

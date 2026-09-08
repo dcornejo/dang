@@ -59,10 +59,11 @@ stays in this file with its remaining work rewritten precisely.
   because `bfdd` registers no backend. Post-commit readback now rejects this
   silent no-op and leaves rollback available. Re-test BFD when upstream exposes
   its backend. RIP and RIPng interface-free instance configuration, committed
-  readback, and exact rollback now pass on all four hosts. Complete their
-  applicable operational, RPC, and notification behavior, then exercise every
-  newly advertised daemon end to end on both platforms without attaching host
-  LAN interfaces.
+  readback, basic instance visibility through native operational `GET_DATA`,
+  and exact rollback now pass on Linux and FreeBSD. Complete learned-route and
+  neighbor operational state, applicable RPC and notification behavior, then
+  exercise every newly advertised daemon end to end on both platforms without
+  attaching host LAN interfaces.
 - [ ] Complete RFC 8431 after the external ABI-v7 plugin wired its strict
   portable route parser, delta planner, and transaction-safe native execution
   into one reversible `routing` action and native Linux/FreeBSD route observation:
