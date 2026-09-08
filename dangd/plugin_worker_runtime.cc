@@ -18,6 +18,11 @@
 namespace dangd {
 namespace {
 
+template <typename Value>
+nlohmann::json OptionalJson(const std::optional<Value>& value) {
+  return value ? nlohmann::json(*value) : nlohmann::json(nullptr);
+}
+
 yang::config::ValidationFinding Failure(std::string provider,
                                         std::string message,
                                         std::string path = {}) {
@@ -273,7 +278,8 @@ std::optional<yang::config::ValidationFinding> PluginWorkerRuntime::Prepare(
     changed_modules.insert(module);
     serialized.push_back({{"module", module}, {"path", change.instance_path},
                           {"kind", static_cast<int>(change.kind)},
-                          {"before", change.before}, {"after", change.after}});
+                          {"before", OptionalJson(change.before)},
+                          {"after", OptionalJson(change.after)}});
   }
   bool expanded = true;
   while (expanded) {

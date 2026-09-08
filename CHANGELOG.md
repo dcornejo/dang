@@ -10,9 +10,10 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
-- Encoded optional persistent-datastore metadata explicitly as JSON values or
-  `null`, restoring compatibility with nlohmann-json releases that do not
-  provide implicit `std::optional` serialization.
+- Encoded optional persistent-datastore metadata and plugin change before/after
+  values explicitly as JSON values or `null`, restoring compatibility with
+  nlohmann-json releases that do not provide implicit `std::optional`
+  serialization.
 - Drained already-buffered SSH channel data after client EOF, emitted replies
   decoded from one pipelined receive as one ordered transport write, and flushed
   libssh's bounded output buffer before channel close. OpenSSH closes its

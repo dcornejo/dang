@@ -22,6 +22,11 @@
 namespace dangd {
 namespace {
 
+template <typename Value>
+nlohmann::json OptionalJson(const std::optional<Value>& value) {
+  return value ? nlohmann::json(*value) : nlohmann::json(nullptr);
+}
+
 std::optional<std::string> CopyBoundedCString(const char* value,
                                               std::size_t maximum) {
   if (!value) return std::nullopt;
@@ -648,8 +653,8 @@ std::optional<yang::config::ValidationFinding> PluginManager::Prepare(
     serialized_changes.push_back({{"module", module},
                                   {"path", change.instance_path},
                                   {"kind", static_cast<int>(change.kind)},
-                                  {"before", change.before},
-                                  {"after", change.after}});
+                                  {"before", OptionalJson(change.before)},
+                                  {"after", OptionalJson(change.after)}});
   }
   bool expanded = true;
   while (expanded) {
