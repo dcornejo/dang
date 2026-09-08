@@ -14,6 +14,8 @@ and releases follow Semantic Versioning.
   values explicitly as JSON values or `null`, restoring compatibility with
   nlohmann-json releases that do not provide implicit `std::optional`
   serialization.
+- Made the operational-provider concurrency test reliable on small FreeBSD
+  guests by allowing a full scheduler time slice for callbacks to overlap.
 - Drained already-buffered SSH channel data after client EOF, emitted replies
   decoded from one pipelined receive as one ordered transport write, and flushed
   libssh's bounded output buffer before channel close. OpenSSH closes its

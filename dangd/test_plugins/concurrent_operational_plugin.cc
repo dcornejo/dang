@@ -59,8 +59,9 @@ int Operational(void*, DangOperationalDataV2* result, DangPluginErrorV1*) {
          !maximum_concurrency.compare_exchange_weak(observed, current)) {
   }
   // Keep callbacks overlapped long enough for the end-to-end stress test to
-  // prove that dangd does not accidentally serialize provider retrievals.
-  std::this_thread::sleep_for(std::chrono::milliseconds(2));
+  // prove that dangd does not accidentally serialize provider retrievals. The
+  // window accommodates coarse scheduler time slices on small FreeBSD guests.
+  std::this_thread::sleep_for(std::chrono::milliseconds(25));
   static thread_local std::string xml;
   xml = "<callback-state xmlns=\"urn:dangd:test:concurrent-operational\">"
         "<maximum-concurrency>" +
