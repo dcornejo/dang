@@ -65,6 +65,44 @@ struct ProcessResult {
 };
 
 #ifdef DANG_TEST_OPENSSH_CLIENT
+class OpenSshPrivateKey {
+ public:
+  explicit OpenSshPrivateKey(const std::filesystem::path& source) {
+    std::error_code error;
+    path_ = std::filesystem::temp_directory_path(error) /
+            ("dangd-openssh-key-" + std::to_string(getpid()));
+    if (error || !std::filesystem::copy_file(
+                     source, path_,
+                     std::filesystem::copy_options::overwrite_existing,
+                     error)) {
+      path_.clear();
+      return;
+    }
+    std::filesystem::permissions(
+        path_, std::filesystem::perms::owner_read |
+                   std::filesystem::perms::owner_write,
+        std::filesystem::perm_options::replace, error);
+    if (error) {
+      std::filesystem::remove(path_, error);
+      path_.clear();
+    }
+  }
+
+  ~OpenSshPrivateKey() {
+    std::error_code ignored;
+    if (!path_.empty()) std::filesystem::remove(path_, ignored);
+  }
+
+  OpenSshPrivateKey(const OpenSshPrivateKey&) = delete;
+  OpenSshPrivateKey& operator=(const OpenSshPrivateKey&) = delete;
+
+  const std::filesystem::path& path() const { return path_; }
+  bool valid() const { return !path_.empty(); }
+
+ private:
+  std::filesystem::path path_;
+};
+
 /** Runs the system OpenSSH client with pipes instead of a shell.
  *
  * Keeping argv explicit makes paths containing whitespace safe and ensures the
@@ -341,6 +379,8 @@ TEST(DangdSshTransportTest, IndependentOpenSshNegativeAndConcurrentMatrix) {
   ASSERT_NE(loaded.application, nullptr);
 
   const std::filesystem::path keys = source / "dangd/testdata/ssh";
+  OpenSshPrivateKey private_key(keys / "alice-key");
+  ASSERT_TRUE(private_key.valid());
   const std::uint16_t port = AvailableLoopbackPort();
   ASSERT_NE(port, 0);
   constexpr std::size_t kParallelClients = 4;
@@ -367,7 +407,7 @@ TEST(DangdSshTransportTest, IndependentOpenSshNegativeAndConcurrentMatrix) {
                WEXITSTATUS(unauthorized.status) == 0)
       << unauthorized.output;
   const ProcessResult wrong_subsystem =
-      ConnectWithOpenSsh(keys / "alice-key", port, "shell", "");
+      ConnectWithOpenSsh(private_key.path(), port, "shell", "");
   EXPECT_FALSE(WIFEXITED(wrong_subsystem.status) &&
                WEXITSTATUS(wrong_subsystem.status) == 0)
       << wrong_subsystem.output;
@@ -383,7 +423,7 @@ TEST(DangdSshTransportTest, IndependentOpenSshNegativeAndConcurrentMatrix) {
   std::vector<std::future<ProcessResult>> clients;
   for (std::size_t i = 0; i < kParallelClients; ++i) {
     clients.push_back(std::async(std::launch::async, [&] {
-      return ConnectWithOpenSsh(keys / "alice-key", port, "netconf", request);
+      return ConnectWithOpenSsh(private_key.path(), port, "netconf", request);
     }));
   }
   for (auto& client : clients) {

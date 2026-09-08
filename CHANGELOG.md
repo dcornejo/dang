@@ -16,6 +16,9 @@ and releases follow Semantic Versioning.
   serialization.
 - Made the operational-provider concurrency test reliable on small FreeBSD
   guests by allowing a full scheduler time slice for callbacks to overlap.
+- Copied the OpenSSH interoperability-test private key to an owner-only
+  temporary file so strict clients do not reject the Git-managed fixture's
+  portable file mode.
 - Drained already-buffered SSH channel data after client EOF, emitted replies
   decoded from one pipelined receive as one ordered transport write, and flushed
   libssh's bounded output buffer before channel close. OpenSSH closes its
