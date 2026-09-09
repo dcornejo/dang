@@ -756,8 +756,10 @@ rollback failures for reconciliation. Opt-in native tests install, observe,
 delete, and recheck a documentation-prefix route inside a Linux network
 namespace and FreeBSD VNET jail without touching host routes. Unsupported match
 and nexthop semantics fail with an attributed model path. Numeric-only RIB/FIB
-names and rejected FreeBSD interface-only nexthops are temporary platform
-mapping variances. The provider publishes partial observed operational data by
+names remain a temporary platform-mapping variance. FreeBSD interface-only
+nexthops now resolve exactly one usable local address in the route family via
+`getifaddrs(3)`; unnumbered and multihomed interfaces fail closed at the
+modeled nexthop path. The provider publishes partial observed operational data by
 reading Linux rtnetlink or FreeBSD `NET_RT_DUMP` directly. It emits IPv4/IPv6
 unicast routes with active/installed status and deterministic synthetic indexes;
 it does not yet represent every kernel route kind or every RFC 8431 attribute.
@@ -780,10 +782,9 @@ The ABI-v6 applied-configuration reconciliation callback rebuilds the exact
 datastore-owned reference set, so restored snapshots do not depend on stale
 pre-restart counters.
 Imperative route add/update operations also retain bindings, and successful
-route or RIB deletion releases them. Both
-notifications, complete state fidelity, interface-only
-FreeBSD nexthops, and arbitrary RIB-name mapping remain before a substantial
-RFC 8431 claim.
+route or RIB deletion releases them. Both notifications, complete state
+fidelity, interface-only family inference, and arbitrary RIB-name mapping
+remain before a substantial RFC 8431 claim.
 
 BaseX is likewise only a datastore architecture investigation. The current
 implementation remains the in-process validated datastore manager with atomic

@@ -10,6 +10,11 @@ and releases follow Semantic Versioning.
 
 ### Fixed
 
+- Recorded and closed the FreeBSD RFC 8431 interface-only nexthop variance.
+  Native address enumeration now requires one usable address in the route
+  family, while unnumbered or multihomed interfaces fail without changing the
+  FIB; live FreeBSD installation, observation, deletion, and ambiguity tests
+  pass on the isolated private interface.
 - Encoded optional persistent-datastore metadata and plugin change before/after
   values explicitly as JSON values or `null`, restoring compatibility with
   nlohmann-json releases that do not provide implicit `std::optional`

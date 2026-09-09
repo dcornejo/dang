@@ -74,9 +74,8 @@ stays in this file with its remaining work rewritten precisely.
   into one reversible `routing` action and native Linux/FreeBSD route observation:
   persist the reusable-nexthop registry, provide an explicit family source for
   interface-only entries without an observed containing RIB, implement both
-  notifications, resolve
-  FreeBSD interface-only nexthops,
-  replace numeric-only RIB names with an explicit platform mapping, then
+  notifications, replace numeric-only RIB names with an explicit platform
+  mapping, then
   advertise and test the module end to end.
 - [ ] Complete RFC 9642 beyond the implemented central cleartext symmetric-key
   slice: add asymmetric key-pair verification, genuinely hidden and encrypted
