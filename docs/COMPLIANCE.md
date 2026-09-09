@@ -554,8 +554,17 @@ neighbor fidelity evidence for RIP. With one peer held as an active advertiser,
 the other also invokes `clear-rip-route` without input, proves the learned entry
 disappears, and waits for it to be learned again. Reversing roles passes, giving
 successful native RPC backend evidence on both platforms rather than accepting
-an acknowledged no-op. Corresponding RIPng and other applicable protocol state
-and RPC behavior, plus notification coverage, remain incomplete.
+an acknowledged no-op.
+
+The corresponding guarded RIPng interaction also passes in both directions.
+Each endpoint receives a temporary ULA address only on the named sterile-LAN
+interface and advertises a temporary ULA loopback `/128`. Native operational
+data exposes the peer's link-local neighbor address and learned `/128` with
+metric 2. The clear side invokes `clear-ripng-route` without input, requires the
+entry to disappear, and then requires it to be learned again. Reversing roles
+proves this behavior on both Debian 13 and FreeBSD 16.0-CURRENT; all temporary
+addresses and isolated daemons are removed on exit. Other applicable protocol
+state and RPC behavior, plus notification coverage, remain incomplete.
 
 An isolated Linux RIP interaction confirmed backend registration, modeled
 configuration apply, UDP activation, and event generation without a host LAN

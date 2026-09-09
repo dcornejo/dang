@@ -27,6 +27,10 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Recorded successful two-peer FRR RIPng operational and RPC interoperability
+  on Debian and FreeBSD. Each platform discovers the other's link-local
+  neighbor, learns its temporary ULA `/128`, removes it through native
+  `clear-ripng-route`, and relearns it from the held peer.
 - Recorded successful FRR `clear-rip-route` interoperability on Debian and
   FreeBSD. Native mgmtd dispatch removes a learned peer route and the guarded
   two-peer test requires a subsequent RIP update to restore it.

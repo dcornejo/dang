@@ -61,10 +61,11 @@ stays in this file with its remaining work rewritten precisely.
   its backend. RIP and RIPng interface-free instance configuration, committed
   readback, basic instance visibility through native operational `GET_DATA`,
   and exact rollback now pass on Linux and FreeBSD. Two-peer native testing on
-  the sterile private LAN also proves RIP neighbor discovery and a learned
-  `/32` route in each platform's operational tree. Its `clear-rip-route` RPC
-  removes and then relearns that route with either platform acting as the clear
-  endpoint. Extend learned-state and RPC evidence to each applicable protocol,
+  the sterile private LAN also proves RIP and RIPng neighbor discovery and a
+  learned `/32` or `/128` route in each platform's operational tree. Their
+  `clear-rip-route` and `clear-ripng-route` RPCs remove and then relearn those
+  routes with either platform acting as the clear endpoint. Extend learned-state
+  and RPC evidence to each remaining applicable protocol,
   complete notification behavior, then exercise every newly advertised daemon
   end to end on both platforms without attaching production or management
   interfaces.
