@@ -550,8 +550,12 @@ loopback `/32`, discovers the other guest as a native RIP neighbor, and reports
 the peer `/32` as a learned route with protocol `rip`, metric 2, and the correct
 gateway through mgmtd operational `GET_DATA`. Both peers remove the temporary
 address and daemons on exit. This supplies Linux/FreeBSD learned-route and
-neighbor fidelity evidence for RIP; corresponding RIPng and other applicable
-protocol state, RPC, and notification coverage remain incomplete.
+neighbor fidelity evidence for RIP. With one peer held as an active advertiser,
+the other also invokes `clear-rip-route` without input, proves the learned entry
+disappears, and waits for it to be learned again. Reversing roles passes, giving
+successful native RPC backend evidence on both platforms rather than accepting
+an acknowledged no-op. Corresponding RIPng and other applicable protocol state
+and RPC behavior, plus notification coverage, remain incomplete.
 
 An isolated Linux RIP interaction confirmed backend registration, modeled
 configuration apply, UDP activation, and event generation without a host LAN
@@ -586,6 +590,9 @@ because Linux mgmtd reported no active zebra backend for the RPC path and the
 FreeBSD socket refused connections. The RIP notification path reaches the
 upstream mgmtd encoding assertion described above; successful delivery and
 end-to-end validation of the other conditionally loaded protocols remain open.
+RIP's `clear-rip-route` is the first successfully exercised live RPC: native
+mgmtd dispatch removes a learned route on both Linux and FreeBSD, and the route
+is subsequently relearned from the held peer.
 FRR 10.7.1 installs the complete BGP source family, but its live library
 omits `frr-bgp` and running bgpd registers no mgmtd backend; the provider does
 not advertise that unavailable runtime capability.

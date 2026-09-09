@@ -62,10 +62,12 @@ stays in this file with its remaining work rewritten precisely.
   readback, basic instance visibility through native operational `GET_DATA`,
   and exact rollback now pass on Linux and FreeBSD. Two-peer native testing on
   the sterile private LAN also proves RIP neighbor discovery and a learned
-  `/32` route in each platform's operational tree. Extend learned-state evidence
-  to each applicable protocol, complete RPC and notification behavior, then
-  exercise every newly advertised daemon end to end on both platforms without
-  attaching production or management interfaces.
+  `/32` route in each platform's operational tree. Its `clear-rip-route` RPC
+  removes and then relearns that route with either platform acting as the clear
+  endpoint. Extend learned-state and RPC evidence to each applicable protocol,
+  complete notification behavior, then exercise every newly advertised daemon
+  end to end on both platforms without attaching production or management
+  interfaces.
 - [ ] Complete RFC 8431 after the external ABI-v7 plugin wired its strict
   portable route parser, delta planner, and transaction-safe native execution
   into one reversible `routing` action and native Linux/FreeBSD route observation:

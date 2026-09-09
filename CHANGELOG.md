@@ -27,13 +27,16 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Recorded successful FRR `clear-rip-route` interoperability on Debian and
+  FreeBSD. Native mgmtd dispatch removes a learned peer route and the guarded
+  two-peer test requires a subsequent RIP update to restore it.
 - Recorded successful two-peer FRR RIP operational evidence on the isolated
   Debian and FreeBSD guests: each reports the other as a neighbor and exposes
   the peer's temporary `/32` as a learned native route with the correct gateway.
 - Recorded native FRR RIP and RIPng operational readback on the current
   isolated Debian 13 and FreeBSD 16.0-CURRENT guests. Each interface-free
   default instance is visible through mgmtd `GET_DATA` while committed and its
-  exact empty before-image is restored; learned-route, neighbor, RPC, and
+  exact empty before-image is restored; broader protocol state, RPC, and
   notification coverage remains open.
 - Recorded successful cross-platform RIP and RIPng configuration evidence:
   interface-free instances commit, read back, and roll back to the exact empty
