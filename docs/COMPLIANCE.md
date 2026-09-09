@@ -542,8 +542,16 @@ datastores, and accepts the retained empty before-image as rollback. The final
 root is verified absent. The stronger operational assertion also passes on the
 current isolated Debian 13 and FreeBSD 16.0-CURRENT Proxmox guests. This
 establishes configuration, basic instance operational visibility, and rollback
-without creating an interface, address, neighbor, route, or packet. Learned
-route and neighbor state, RPC, and notification coverage remain incomplete.
+without creating an interface, address, neighbor, route, or packet.
+
+A separate guarded two-peer interaction uses the sterile private LAN between
+those current guests. Each disposable RIP pathspace advertises one temporary
+loopback `/32`, discovers the other guest as a native RIP neighbor, and reports
+the peer `/32` as a learned route with protocol `rip`, metric 2, and the correct
+gateway through mgmtd operational `GET_DATA`. Both peers remove the temporary
+address and daemons on exit. This supplies Linux/FreeBSD learned-route and
+neighbor fidelity evidence for RIP; corresponding RIPng and other applicable
+protocol state, RPC, and notification coverage remain incomplete.
 
 An isolated Linux RIP interaction confirmed backend registration, modeled
 configuration apply, UDP activation, and event generation without a host LAN

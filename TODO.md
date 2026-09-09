@@ -60,10 +60,12 @@ stays in this file with its remaining work rewritten precisely.
   silent no-op and leaves rollback available. Re-test BFD when upstream exposes
   its backend. RIP and RIPng interface-free instance configuration, committed
   readback, basic instance visibility through native operational `GET_DATA`,
-  and exact rollback now pass on Linux and FreeBSD. Complete learned-route and
-  neighbor operational state, applicable RPC and notification behavior, then
+  and exact rollback now pass on Linux and FreeBSD. Two-peer native testing on
+  the sterile private LAN also proves RIP neighbor discovery and a learned
+  `/32` route in each platform's operational tree. Extend learned-state evidence
+  to each applicable protocol, complete RPC and notification behavior, then
   exercise every newly advertised daemon end to end on both platforms without
-  attaching host LAN interfaces.
+  attaching production or management interfaces.
 - [ ] Complete RFC 8431 after the external ABI-v7 plugin wired its strict
   portable route parser, delta planner, and transaction-safe native execution
   into one reversible `routing` action and native Linux/FreeBSD route observation:

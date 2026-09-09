@@ -27,6 +27,9 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Recorded successful two-peer FRR RIP operational evidence on the isolated
+  Debian and FreeBSD guests: each reports the other as a neighbor and exposes
+  the peer's temporary `/32` as a learned native route with the correct gateway.
 - Recorded native FRR RIP and RIPng operational readback on the current
   isolated Debian 13 and FreeBSD 16.0-CURRENT guests. Each interface-free
   default instance is visible through mgmtd `GET_DATA` while committed and its
