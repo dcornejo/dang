@@ -745,7 +745,7 @@ an implemented section of this ledger. Their release-gated work is tracked in
 `TODO.md`.
 
 RFC 8431 partial runtime support lives in the separate `dang_plugins`
-repository. Its ABI-v7 provider advertises the pinned schema, claims exclusive
+repository. Its ABI-v8 provider advertises the pinned schema, claims exclusive
 `routing` ownership, and
 pins and independently validates the unmodified schema family. Its runtime
 foundation strictly parses destination-prefix IPv4/IPv6 routes with portable
@@ -775,12 +775,15 @@ and remove portable base nexthops in a thread-safe, per-RIB process registry.
 The registry now restores its private atomic sidecar at startup and makes
 `nh-add`/`nh-delete` durable before acknowledgement; corrupt recovery state and
 write failures fail closed, with object mutation rolled back on write failure.
+`rib-add` also persists the modeled RIB address family. Interface-only reusable
+nexthops consume that explicit context and therefore appear in operational data
+before any native route exists; an absent or conflicting family fails as a
+modeled operation rather than being inferred from host interface state.
 Imperative route additions, deletions, updates, and whole-RIB deletions also
 make binding changes durable before acknowledgement. A failed sidecar write
 runs the inverse native route plan, restores the registry checkpoint, and
 reports any compensation failure. Its identifiers are represented in live
-operational RIB state; interface-only entries without an observed containing
-RIB are omitted because the provider cannot infer their mandatory family.
+operational RIB state.
 Configuration commits, `route-add`, and prefix-selected `route-update` resolve
 identifiers through `nexthop-ref` with per-RIB isolation, while reference
 lifetime is enforced across datastore prepare, apply, rollback, and release.
@@ -789,8 +792,8 @@ datastore-owned reference set, so restored snapshots do not depend on stale
 pre-restart counters.
 Imperative route add/update operations also retain bindings, and successful
 route or RIB deletion releases them durably. Both notifications, complete state
-fidelity, interface-only family inference, and arbitrary RIB-name mapping
-remain before a substantial RFC 8431 claim.
+fidelity, and arbitrary RIB-name mapping remain before a substantial RFC 8431
+claim.
 
 BaseX is likewise only a datastore architecture investigation. The current
 implementation remains the in-process validated datastore manager with atomic

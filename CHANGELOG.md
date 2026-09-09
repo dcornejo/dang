@@ -8,6 +8,10 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Updated the RFC 8431 compliance record and TODO after the external RIB plugin
+  made `rib-add` address-family context durable for interface-only reusable
+  nexthops, and corrected its provider ABI reference to ABI v8.
+
 ### Fixed
 
 - Recorded and closed the FreeBSD RFC 8431 interface-only nexthop variance.

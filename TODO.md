@@ -69,13 +69,12 @@ stays in this file with its remaining work rewritten precisely.
   complete notification behavior, then exercise every newly advertised daemon
   end to end on both platforms without attaching production or management
   interfaces.
-- [ ] Complete RFC 8431 after the external ABI-v7 plugin wired its strict
+- [ ] Complete RFC 8431 after the external ABI-v8 plugin wired its strict
   portable route parser, delta planner, and transaction-safe native execution
   into one reversible `routing` action and native Linux/FreeBSD route observation:
-  provide an explicit family source for
-  interface-only entries without an observed containing RIB, implement both
-  notifications, replace numeric-only RIB names with an explicit platform
-  mapping, then
+  interface-only nexthop families are now durably established by `rib-add`;
+  implement both notifications, replace numeric-only RIB names with an explicit
+  platform mapping, then
   advertise and test the module end to end.
 - [ ] Complete RFC 9642 beyond the implemented central cleartext symmetric-key
   slice: add asymmetric key-pair verification, genuinely hidden and encrypted
