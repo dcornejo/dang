@@ -759,8 +759,8 @@ and nexthop semantics fail with an attributed model path. Numeric-only RIB/FIB
 names remain a temporary platform-mapping variance. FreeBSD interface-only
 nexthops now resolve exactly one usable local address in the route family via
 `getifaddrs(3)`; unnumbered and multihomed interfaces fail closed at the
-modeled nexthop path. The provider publishes partial observed operational data by
-reading Linux rtnetlink or FreeBSD `NET_RT_DUMP` directly. It emits IPv4/IPv6
+modeled nexthop path. The provider publishes partial observed operational data
+by reading Linux rtnetlink or FreeBSD `NET_RT_DUMP` directly. It emits IPv4/IPv6
 unicast routes with active/installed status and deterministic synthetic indexes;
 it does not yet represent every kernel route kind or every RFC 8431 attribute.
 The provider implements `route-add` for its portable route subset with
@@ -775,9 +775,11 @@ and remove portable base nexthops in a thread-safe, per-RIB process registry.
 The registry now restores its private atomic sidecar at startup and makes
 `nh-add`/`nh-delete` durable before acknowledgement; corrupt recovery state and
 write failures fail closed, with object mutation rolled back on write failure.
-Imperative route-binding durability remains incomplete until a failed sidecar
-write also compensates the corresponding native route change. Its identifiers
-are represented in live operational RIB state; interface-only entries without an observed containing
+Imperative route additions, deletions, updates, and whole-RIB deletions also
+make binding changes durable before acknowledgement. A failed sidecar write
+runs the inverse native route plan, restores the registry checkpoint, and
+reports any compensation failure. Its identifiers are represented in live
+operational RIB state; interface-only entries without an observed containing
 RIB are omitted because the provider cannot infer their mandatory family.
 Configuration commits, `route-add`, and prefix-selected `route-update` resolve
 identifiers through `nexthop-ref` with per-RIB isolation, while reference
@@ -786,7 +788,7 @@ The ABI-v6 applied-configuration reconciliation callback rebuilds the exact
 datastore-owned reference set, so restored snapshots do not depend on stale
 pre-restart counters.
 Imperative route add/update operations also retain bindings, and successful
-route or RIB deletion releases them. Durable binding acknowledgement, both notifications, complete state
+route or RIB deletion releases them durably. Both notifications, complete state
 fidelity, interface-only family inference, and arbitrary RIB-name mapping
 remain before a substantial RFC 8431 claim.
 

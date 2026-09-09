@@ -72,8 +72,6 @@ stays in this file with its remaining work rewritten precisely.
 - [ ] Complete RFC 8431 after the external ABI-v7 plugin wired its strict
   portable route parser, delta planner, and transaction-safe native execution
   into one reversible `routing` action and native Linux/FreeBSD route observation:
-  extend durable reusable-nexthop acknowledgement from object add/delete to
-  imperative route-binding changes with native compensation on write failure,
   provide an explicit family source for
   interface-only entries without an observed containing RIB, implement both
   notifications, replace numeric-only RIB names with an explicit platform
