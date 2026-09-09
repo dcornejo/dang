@@ -32,6 +32,10 @@ and releases follow Semantic Versioning.
 
 ### Added
 
+- Recorded the RFC 8431 provider's fail-closed reusable-nexthop recovery and
+  durable `nh-add`/`nh-delete` acknowledgement. Atomic-write failures restore
+  the prior registry and allocation cursor; native route-binding compensation
+  remains explicitly tracked before persistence is complete.
 - Recorded successful two-peer FRR RIPng operational and RPC interoperability
   on Debian and FreeBSD. Each platform discovers the other's link-local
   neighbor, learns its temporary ULA `/128`, removes it through native

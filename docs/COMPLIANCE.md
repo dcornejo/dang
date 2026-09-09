@@ -772,8 +772,12 @@ when installation fails. `rib-add` validates Linux logical tables or existing
 FreeBSD FIBs and rejects unsupported RPF enforcement; `rib-delete` uses a
 compensated plan to empty the observed RIB. `nh-add` and `nh-delete` allocate
 and remove portable base nexthops in a thread-safe, per-RIB process registry.
-That registry is not yet persistent. Its identifiers are represented in live
-operational RIB state; interface-only entries without an observed containing
+The registry now restores its private atomic sidecar at startup and makes
+`nh-add`/`nh-delete` durable before acknowledgement; corrupt recovery state and
+write failures fail closed, with object mutation rolled back on write failure.
+Imperative route-binding durability remains incomplete until a failed sidecar
+write also compensates the corresponding native route change. Its identifiers
+are represented in live operational RIB state; interface-only entries without an observed containing
 RIB are omitted because the provider cannot infer their mandatory family.
 Configuration commits, `route-add`, and prefix-selected `route-update` resolve
 identifiers through `nexthop-ref` with per-RIB isolation, while reference
@@ -782,7 +786,7 @@ The ABI-v6 applied-configuration reconciliation callback rebuilds the exact
 datastore-owned reference set, so restored snapshots do not depend on stale
 pre-restart counters.
 Imperative route add/update operations also retain bindings, and successful
-route or RIB deletion releases them. Both notifications, complete state
+route or RIB deletion releases them. Durable binding acknowledgement, both notifications, complete state
 fidelity, interface-only family inference, and arbitrary RIB-name mapping
 remain before a substantial RFC 8431 claim.
 
