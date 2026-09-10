@@ -8,6 +8,10 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded native snapshot detection for external RFC 8431 `route-change`
+  notifications and removed that completed gap from the TODO and compliance
+  matrix.
+
 - Recorded the external RFC 8431 provider's ABI-v8 `route-change` notification
   support and narrowed the remaining notification gap to external-change
   detection and nexthop-resolution status.
