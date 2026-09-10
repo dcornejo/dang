@@ -8,6 +8,10 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded completion of RFC 8431 reusable-nexthop resolution notifications
+  and narrowed the remaining RIB work to state fidelity and platform RIB-name
+  mapping.
+
 - Recorded native snapshot detection for external RFC 8431 `route-change`
   notifications and removed that completed gap from the TODO and compliance
   matrix.

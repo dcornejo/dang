@@ -797,9 +797,12 @@ operations and after datastore applied-state reconciliation; tentative or
 compensated changes do not produce success events. Notification draining also
 compares native route snapshots after a quiet initial baseline, reporting
 external additions, removals, and property changes while managed operations
-advance the baseline to avoid duplicates. `nexthop-resolution-status-change`,
-complete state fidelity, and arbitrary RIB-name mapping remain before a
-substantial RFC 8431 claim.
+advance the baseline to avoid duplicates. The second RFC notification,
+`nexthop-resolution-status-change`, joins reusable imperative and datastore
+bindings with installed native routes and emits transitions containing the
+complete supported base nexthop. This resolution definition is deliberately
+limited to the portable reusable-nexthop subset. Complete state fidelity and
+arbitrary RIB-name mapping remain before a substantial RFC 8431 claim.
 
 BaseX is likewise only a datastore architecture investigation. The current
 implementation remains the in-process validated datastore manager with atomic
