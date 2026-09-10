@@ -8,6 +8,10 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded the external RFC 8431 provider's ABI-v8 `route-change` notification
+  support and narrowed the remaining notification gap to external-change
+  detection and nexthop-resolution status.
+
 - Updated the RFC 8431 compliance record and TODO after the external RIB plugin
   made `rib-add` address-family context durable for interface-only reusable
   nexthops, and corrected its provider ABI reference to ABI v8.

@@ -791,9 +791,12 @@ The ABI-v6 applied-configuration reconciliation callback rebuilds the exact
 datastore-owned reference set, so restored snapshots do not depend on stale
 pre-restart counters.
 Imperative route add/update operations also retain bindings, and successful
-route or RIB deletion releases them durably. Both notifications, complete state
-fidelity, and arbitrary RIB-name mapping remain before a substantial RFC 8431
-claim.
+route or RIB deletion releases them durably. The provider now uses ABI v8 to
+publish bounded `route-change` events after successful durable imperative
+operations and after datastore applied-state reconciliation; tentative or
+compensated changes do not produce success events. External route-change
+detection, `nexthop-resolution-status-change`, complete state fidelity, and
+arbitrary RIB-name mapping remain before a substantial RFC 8431 claim.
 
 BaseX is likewise only a datastore architecture investigation. The current
 implementation remains the in-process validated datastore manager with atomic

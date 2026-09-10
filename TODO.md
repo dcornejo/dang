@@ -73,7 +73,9 @@ stays in this file with its remaining work rewritten precisely.
   portable route parser, delta planner, and transaction-safe native execution
   into one reversible `routing` action and native Linux/FreeBSD route observation:
   interface-only nexthop families are now durably established by `rib-add`;
-  implement both notifications, replace numeric-only RIB names with an explicit
+  managed `route-change` delivery is implemented through ABI v8; detect external
+  route changes and implement `nexthop-resolution-status-change`, replace
+  numeric-only RIB names with an explicit
   platform mapping, then
   advertise and test the module end to end.
 - [ ] Complete RFC 9642 beyond the implemented central cleartext symmetric-key
