@@ -766,7 +766,10 @@ nexthops now resolve exactly one usable local address in the route family via
 modeled nexthop path. The provider publishes partial observed operational data
 by reading Linux rtnetlink or FreeBSD `NET_RT_DUMP` directly. It emits IPv4/IPv6
 unicast routes with active/installed status and deterministic synthetic indexes;
-it does not yet represent every kernel route kind or every RFC 8431 attribute.
+gateway-plus-interface nexthops use the RFC-defined combined address-family
+container and both IPv4 and IPv6 forms pass direct YANG operational-data
+validation. It does not yet represent every kernel route kind or every RFC
+8431 attribute.
 The provider implements `route-add` for its portable route subset with
 per-member success/failure accounting and optional RFC-shaped failure detail.
 `route-delete` resolves prefix requests against live kernel state and deletes

@@ -8,6 +8,10 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded the RFC 8431 provider's correction of schema-invalid combined
+  gateway/interface operational nexthops and its direct IPv4/IPv6 YANG data
+  validation coverage.
+
 - Recorded completion of strict RFC 8431 arbitrary RIB-name mapping across
   native transactions, RPCs, operational data, and notifications. FreeBSD now
   queries FIB 0 and every explicitly mapped FIB independently.
