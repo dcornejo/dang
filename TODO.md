@@ -74,10 +74,10 @@ stays in this file with its remaining work rewritten precisely.
   into one reversible `routing` action and native Linux/FreeBSD route observation:
   interface-only nexthop families are now durably established by `rib-add`;
   managed and externally observed `route-change` delivery plus reusable
-  nexthop resolution transitions are implemented through ABI v8; replace
-  numeric-only RIB names with an explicit
-  platform mapping, then
-  advertise and test the module end to end.
+  nexthop resolution transitions are implemented through ABI v8; explicit
+  one-to-one modeled-name mappings now cover Linux tables and FreeBSD FIBs,
+  including direct observation of every mapped FreeBSD FIB. Complete remaining
+  state fidelity, then advertise and test the module end to end.
 - [ ] Complete RFC 9642 beyond the implemented central cleartext symmetric-key
   slice: add asymmetric key-pair verification, genuinely hidden and encrypted
   key representations, encryption and zeroization beyond the private snapshot

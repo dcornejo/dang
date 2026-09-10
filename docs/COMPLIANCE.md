@@ -755,8 +755,12 @@ on failure and compensates completed changes in reverse order, retaining any
 rollback failures for reconciliation. Opt-in native tests install, observe,
 delete, and recheck a documentation-prefix route inside a Linux network
 namespace and FreeBSD VNET jail without touching host routes. Unsupported match
-and nexthop semantics fail with an attributed model path. Numeric-only RIB/FIB
-names remain a temporary platform-mapping variance. FreeBSD interface-only
+and nexthop semantics fail with an attributed model path. A strict, versioned
+one-to-one mapping translates arbitrary modeled RIB names to independent Linux
+table and FreeBSD FIB numbers; unmapped numeric names retain identity behavior.
+Operational and notification reads translate native names back to their unique
+modeled names, and FreeBSD polls FIB 0 plus each configured mapped FIB
+independently. FreeBSD interface-only
 nexthops now resolve exactly one usable local address in the route family via
 `getifaddrs(3)`; unnumbered and multihomed interfaces fail closed at the
 modeled nexthop path. The provider publishes partial observed operational data
@@ -802,7 +806,8 @@ advance the baseline to avoid duplicates. The second RFC notification,
 bindings with installed native routes and emits transitions containing the
 complete supported base nexthop. This resolution definition is deliberately
 limited to the portable reusable-nexthop subset. Complete state fidelity and
-arbitrary RIB-name mapping remain before a substantial RFC 8431 claim.
+end-to-end interoperability evidence remain before a substantial RFC 8431
+claim.
 
 BaseX is likewise only a datastore architecture investigation. The current
 implementation remains the in-process validated datastore manager with atomic

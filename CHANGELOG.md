@@ -8,6 +8,10 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded completion of strict RFC 8431 arbitrary RIB-name mapping across
+  native transactions, RPCs, operational data, and notifications. FreeBSD now
+  queries FIB 0 and every explicitly mapped FIB independently.
+
 - Recorded completion of RFC 8431 reusable-nexthop resolution notifications
   and narrowed the remaining RIB work to state fidelity and platform RIB-name
   mapping.
