@@ -772,7 +772,11 @@ validation. It does not yet represent every kernel route kind or every RFC
 8431 attribute.
 The operational `local-only` leaf is derived from Linux `RT_SCOPE_HOST` or
 FreeBSD `RTF_LOCAL`, rather than being reported as false for every native
-route.
+route. Native local, blackhole, and error-reject routes are represented with
+the RFC 8431 `receive`, `discard`, and `discard-with-error` special nexthops.
+Because portable native mutation for those kernel-owned route types is not
+implemented, route delete/update rejects them with reserved error code 0 and
+whole-RIB deletion fails before applying any partial change.
 The provider implements `route-add` for its portable route subset with
 per-member success/failure accounting and optional RFC-shaped failure detail.
 `route-delete` resolves prefix requests against live kernel state and deletes

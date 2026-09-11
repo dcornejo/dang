@@ -8,6 +8,10 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded RFC 8431 operational coverage for native receive, blackhole, and
+  error-reject routes, including fail-closed mutation behavior for these
+  kernel-owned special nexthops.
+
 - Recorded native RFC 8431 `local-only` fidelity using Linux host scope and
   FreeBSD local-route flags.
 
