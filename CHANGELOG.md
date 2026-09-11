@@ -8,6 +8,9 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded native RFC 8431 `local-only` fidelity using Linux host scope and
+  FreeBSD local-route flags.
+
 - Recorded the RFC 8431 provider's correction of schema-invalid combined
   gateway/interface operational nexthops and its direct IPv4/IPv6 YANG data
   validation coverage.

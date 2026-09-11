@@ -770,6 +770,9 @@ gateway-plus-interface nexthops use the RFC-defined combined address-family
 container and both IPv4 and IPv6 forms pass direct YANG operational-data
 validation. It does not yet represent every kernel route kind or every RFC
 8431 attribute.
+The operational `local-only` leaf is derived from Linux `RT_SCOPE_HOST` or
+FreeBSD `RTF_LOCAL`, rather than being reported as false for every native
+route.
 The provider implements `route-add` for its portable route subset with
 per-member success/failure accounting and optional RFC-shaped failure detail.
 `route-delete` resolves prefix requests against live kernel state and deletes
