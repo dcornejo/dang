@@ -750,7 +750,10 @@ repository. Its ABI-v8 provider advertises the pinned schema, claims exclusive
 pins and independently validates the unmodified schema family. Its runtime
 foundation strictly parses destination-prefix IPv4/IPv6 routes with portable
 base nexthops, computes delete-before-install replacements, and produces
-shell-free Linux and FreeBSD command vectors. Its `posix_spawnp` executor stops
+shell-free Linux and FreeBSD command vectors. Only the routing instance named
+`default` is accepted: VRF/VNET instance mapping is not implemented, and other
+names fail at the modeled instance path instead of being silently applied to
+the host default instance. Its `posix_spawnp` executor stops
 on failure and compensates completed changes in reverse order, retaining any
 rollback failures for reconciliation. Opt-in native tests install, observe,
 delete, and recheck a documentation-prefix route inside a Linux network

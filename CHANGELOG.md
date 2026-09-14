@@ -8,6 +8,10 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded fail-closed RFC 8431 routing-instance handling. Non-default names
+  are rejected until explicit Linux VRF and FreeBSD VNET mapping exists,
+  preventing silent application in the host default instance.
+
 - Recorded multipath-safe RFC 8431 external route-change tracking and
   suppression of duplicate managed events caused only by synthetic native
   route indexes.
