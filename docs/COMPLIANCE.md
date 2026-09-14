@@ -801,6 +801,10 @@ make binding changes durable before acknowledgement. A failed sidecar write
 runs the inverse native route plan, restores the registry checkpoint, and
 reports any compensation failure. Its identifiers are represented in live
 operational RIB state.
+Durable and datastore route-to-nexthop binding identities include the modeled
+`route-index`, so parallel routes sharing a RIB, family, and prefix retain
+independent references through reconciliation and restart. Version-2 sidecars
+persist this key; version-1 sidecars remain readable as index-zero bindings.
 Configuration commits, `route-add`, and prefix-selected `route-update` resolve
 identifiers through `nexthop-ref` with per-RIB isolation, while reference
 lifetime is enforced across datastore prepare, apply, rollback, and release.

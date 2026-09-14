@@ -8,6 +8,9 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded multipath-safe RFC 8431 route-to-nexthop persistence using modeled
+  route indexes and the backward-readable version-2 registry sidecar.
+
 - Recorded path-accurate RFC 8431 reusable-nexthop resolution; unrelated
   multipath entries sharing a prefix no longer cause false resolved events.
 
