@@ -24,11 +24,11 @@ jobs:
         run: >-
           sudo apt-get update && sudo apt-get install -y
           cmake ninja-build libfmt-dev libpugixml-dev nlohmann-json3-dev
-          libxml2-dev libgtest-dev
+          libxml2-dev libgtest-dev libssh
       - name: Install Homebrew dependencies
         if: runner.os == 'macOS'
         run: >-
-          brew install cmake ninja fmt pugixml nlohmann-json libxml2 googletest
+          brew install cmake ninja fmt pugixml nlohmann-json libxml2 googletest libssh
       - name: Configure
         run: cmake -S . -B build-ci -G Ninja -DCMAKE_BUILD_TYPE=Release
       - name: Build
