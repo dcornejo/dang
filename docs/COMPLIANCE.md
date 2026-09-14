@@ -759,8 +759,11 @@ rollback failures for reconciliation. Opt-in native tests install, observe,
 delete, and recheck a documentation-prefix route inside a Linux network
 namespace and FreeBSD VNET jail without touching host routes. Unsupported match
 and nexthop semantics fail with an attributed model path. A strict, versioned
-one-to-one mapping translates arbitrary modeled RIB names to independent Linux
-table and FreeBSD FIB numbers; unmapped numeric names retain identity behavior.
+family-aware mapping translates arbitrary modeled RIB names to Linux table and
+FreeBSD FIB numbers. One native dual-stack RIB may have separate IPv4 and IPv6
+modeled names, preserving the RFC list key and single-family invariant.
+Unmapped RIBs use the unambiguous built-in `ipv4-N` and `ipv6-N` names; bare
+numeric modeled names are rejected.
 Operational and notification reads translate native names back to their unique
 modeled names, and FreeBSD polls FIB 0 plus each configured mapped FIB
 independently. FreeBSD interface-only

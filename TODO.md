@@ -75,7 +75,8 @@ stays in this file with its remaining work rewritten precisely.
   interface-only nexthop families are now durably established by `rib-add`;
   managed and externally observed `route-change` delivery plus reusable
   nexthop resolution transitions are implemented through ABI v8; explicit
-  one-to-one modeled-name mappings now cover Linux tables and FreeBSD FIBs,
+  family-aware modeled-name mappings now cover dual-stack Linux tables and
+  FreeBSD FIBs without duplicate RFC list keys,
   including direct observation of every mapped FreeBSD FIB. Complete remaining
   state fidelity, then advertise and test the module end to end.
 - [ ] Complete RFC 9642 beyond the implemented central cleartext symmetric-key

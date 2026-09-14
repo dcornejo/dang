@@ -8,6 +8,10 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded family-aware RFC 8431 RIB mappings. Dual-stack native tables and
+  FIBs now receive distinct modeled names, with family-qualified built-in names
+  replacing ambiguous numeric identity fallback.
+
 - Recorded multipath-safe RFC 8431 route-to-nexthop persistence using modeled
   route indexes and the backward-readable version-2 registry sidecar.
 
