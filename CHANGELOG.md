@@ -8,6 +8,10 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded multipath-safe RFC 8431 external route-change tracking and
+  suppression of duplicate managed events caused only by synthetic native
+  route indexes.
+
 - Recorded RFC 8431 operational coverage for native receive, blackhole, and
   error-reject routes, including fail-closed mutation behavior for these
   kernel-owned special nexthops.

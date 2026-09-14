@@ -811,7 +811,11 @@ operations and after datastore applied-state reconciliation; tentative or
 compensated changes do not produce success events. Notification draining also
 compares native route snapshots after a quiet initial baseline, reporting
 external additions, removals, and property changes while managed operations
-advance the baseline to avoid duplicates. The second RFC notification,
+advance the baseline to avoid duplicates. Its identity includes gateway,
+interface, and special-nexthop data in addition to RIB, family, and prefix, so
+multiple paths for one prefix are tracked independently. Modeled versus native
+synthetic route-index differences are ignored during managed confirmation.
+The second RFC notification,
 `nexthop-resolution-status-change`, joins reusable imperative and datastore
 bindings with installed native routes and emits transitions containing the
 complete supported base nexthop. This resolution definition is deliberately
