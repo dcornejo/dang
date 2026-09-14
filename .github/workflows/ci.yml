@@ -24,7 +24,7 @@ jobs:
         run: >-
           sudo apt-get update && sudo apt-get install -y
           cmake ninja-build libfmt-dev libpugixml-dev nlohmann-json3-dev
-          libxml2-dev libgtest-dev libssh
+          libxml2-dev libgtest-dev libssh-dev
       - name: Install Homebrew dependencies
         if: runner.os == 'macOS'
         run: >-
