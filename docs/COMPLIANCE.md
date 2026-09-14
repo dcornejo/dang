@@ -764,6 +764,10 @@ FreeBSD FIB numbers. One native dual-stack RIB may have separate IPv4 and IPv6
 modeled names, preserving the RFC list key and single-family invariant.
 Unmapped RIBs use the unambiguous built-in `ipv4-N` and `ipv6-N` names; bare
 numeric modeled names are rejected.
+The provider validates every recovered RIB, nexthop, and route-binding identity
+against that contract before restoring the registry. Incompatible legacy
+numeric state fails startup with an explicit family-qualified migration error
+rather than entering service with ambiguous operational identities.
 Operational and notification reads translate native names back to their unique
 modeled names, and FreeBSD polls FIB 0 plus each configured mapped FIB
 independently. FreeBSD interface-only

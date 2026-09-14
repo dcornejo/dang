@@ -12,6 +12,10 @@ and releases follow Semantic Versioning.
   FIBs now receive distinct modeled names, with family-qualified built-in names
   replacing ambiguous numeric identity fallback.
 
+- Recorded fail-closed validation of recovered RFC 8431 registry identities;
+  incompatible numeric RIB, nexthop, and route-binding state now requires an
+  explicit family-qualified migration before the provider enters service.
+
 - Recorded multipath-safe RFC 8431 route-to-nexthop persistence using modeled
   route indexes and the backward-readable version-2 registry sidecar.
 
