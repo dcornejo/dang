@@ -8,6 +8,9 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded path-accurate RFC 8431 reusable-nexthop resolution; unrelated
+  multipath entries sharing a prefix no longer cause false resolved events.
+
 - Recorded fail-closed RFC 8431 routing-instance handling. Non-default names
   are rejected until explicit Linux VRF and FreeBSD VNET mapping exists,
   preventing silent application in the host default instance.

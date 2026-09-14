@@ -821,7 +821,10 @@ synthetic route-index differences are ignored during managed confirmation.
 The second RFC notification,
 `nexthop-resolution-status-change`, joins reusable imperative and datastore
 bindings with installed native routes and emits transitions containing the
-complete supported base nexthop. This resolution definition is deliberately
+complete supported base nexthop. Resolution requires the bound RIB, family,
+prefix, and every supplied gateway/interface component to match an installed
+path; an unrelated parallel path cannot produce a false resolved transition.
+This resolution definition is deliberately
 limited to the portable reusable-nexthop subset. Complete state fidelity and
 end-to-end interoperability evidence remain before a substantial RFC 8431
 claim.
