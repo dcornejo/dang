@@ -8,6 +8,9 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded live RFC 8431 `nh-add` mapping validation before allocation and
+  durability, preventing creation of identities that recovery would reject.
+
 - Recorded family-aware RFC 8431 RIB mappings. Dual-stack native tables and
   FIBs now receive distinct modeled names, with family-qualified built-in names
   replacing ambiguous numeric identity fallback.

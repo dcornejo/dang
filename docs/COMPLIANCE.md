@@ -796,6 +796,9 @@ when installation fails. `rib-add` validates Linux logical tables or existing
 FreeBSD FIBs and rejects unsupported RPF enforcement; `rib-delete` uses a
 compensated plan to empty the observed RIB. `nh-add` and `nh-delete` allocate
 and remove portable base nexthops in a thread-safe, per-RIB process registry.
+Live `nh-add` validates the RIB identity and nexthop family against the active
+platform mapping before allocation or persistence; an unknown or wrong-family
+name returns a modeled failure without consuming an identifier or writing data.
 The registry now restores its private atomic sidecar at startup and makes
 `nh-add`/`nh-delete` durable before acknowledgement; corrupt recovery state and
 write failures fail closed, with object mutation rolled back on write failure.
