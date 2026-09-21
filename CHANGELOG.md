@@ -8,6 +8,9 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded protection for the three Kea command hook libraries required by
+  complete lease, reservation, and supplemental-statistics retrieval.
+
 - Recorded Kea management-channel protection: complete replacements must retain
   the exact local UNIX control socket used by the dangd plugin.
 

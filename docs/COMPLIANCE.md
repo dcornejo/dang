@@ -731,7 +731,9 @@ reservations including option data. Configuration scalar translation preserves
 pinned YANG string types even for boolean-looking and numeric-looking lexical
 values. A replacement must retain the exact local UNIX control socket through
 which dangd manages each Kea daemon; removing, changing, or substituting that
-socket is rejected before native validation. Lease, host, and statistic
+socket is rejected before native validation. Replacements must also retain the
+lease-command, host-command, and supplemental-statistics hook libraries needed
+for complete operational retrieval. Lease, host, and statistic
 collection has independent page/query, item, byte, and duration bounds.
 Duplicate YANG list keys in lease, per-subnet statistic, and reservation state
 fail retrieval rather than being published under a complete-result claim.
