@@ -8,6 +8,8 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded safe fallback handling for malformed non-string Kea error text.
+
 - Recorded safe rejection of oversized Kea native result codes across
   transaction, paging, and operational reply handling.
 
