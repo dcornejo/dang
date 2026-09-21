@@ -8,6 +8,9 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded outcome-unknown Kea apply handling: a failed `config-set` target is
+  restored along with earlier targets, and compensation failures are retained.
+
 - Recorded protection for the three Kea command hook libraries required by
   complete lease, reservation, and supplemental-statistics retrieval.
 
