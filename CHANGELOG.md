@@ -8,6 +8,9 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded Kea ABI-v6 startup reconciliation of accepted subnet inventories,
+  preserving complete supplemental statistics across dangd restarts.
+
 - Recorded coherent RFC 8431 operational route status: uninstalled routes are
   now inactive rather than being serialized as active and uninstalled.
 

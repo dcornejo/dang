@@ -726,13 +726,16 @@ The separately packaged `dang_plugins` provider implements the complete
 configuration and state trees from `kea-dhcp4-server@2026-06-24` and
 `kea-dhcp6-server@2026-06-24`. It validates and applies complete native Kea
 configurations transactionally, compensates partial failure, and publishes
-ABI-v5 complete operational leases, per-subnet statistics, and host
+ABI-v6 complete operational leases, per-subnet statistics, and host
 reservations including option data. Lease, host, and statistic collection has
 independent page/query, item, byte, and duration bounds. Disposable native
 interactions exercise the provider against packaged DHCPv4 and DHCPv6 daemons
 on Linux and FreeBSD without exposing a LAN interface. These are ISC vendor
 models rather than an IETF RFC compliance claim; support is pinned to the
 embedded revisions and Kea 3.2.x control-command behavior.
+Applied-state reconciliation rebuilds the accepted DHCPv4 and DHCPv6 subnet
+inventories at startup, so complete per-subnet statistics do not depend on a
+new configuration commit after process restart.
 
 ## Roadmap-only standards and models
 
