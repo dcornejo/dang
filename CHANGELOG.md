@@ -8,6 +8,8 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded full cursor-cycle detection for Kea lease and reservation paging.
+
 - Recorded checked, non-narrowing Kea decoding for page counts, host cursors,
   lease states, and DHCPv6 lease types.
 
