@@ -8,6 +8,9 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded safe rejection of oversized Kea native result codes across
+  transaction, paging, and operational reply handling.
+
 - Recorded strict correlation of Kea supplemental-statistics replies with their
   exact configured subnet queries.
 

@@ -744,7 +744,9 @@ Duplicate YANG list keys in lease, per-subnet statistic, and reservation state
 fail retrieval rather than being published under a complete-result claim.
 Transaction control
 replies must contain exactly one Kea answer; empty or multi-answer replies fail
-without acknowledging configuration. Disposable native
+without acknowledging configuration. Oversized native result codes are rejected
+without a narrowing conversion or exception crossing the plugin boundary.
+Disposable native
 interactions exercise the provider against packaged DHCPv4 and DHCPv6 daemons
 on Linux and FreeBSD without exposing a LAN interface. These are ISC vendor
 models rather than an IETF RFC compliance claim; support is pinned to the
