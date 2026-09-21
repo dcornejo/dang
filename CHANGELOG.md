@@ -8,6 +8,9 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded checked, non-narrowing Kea decoding for page counts, host cursors,
+  lease states, and DHCPv6 lease types.
+
 - Recorded safe fallback handling for malformed non-string Kea error text.
 
 - Recorded safe rejection of oversized Kea native result codes across

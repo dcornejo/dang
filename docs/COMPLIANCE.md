@@ -747,6 +747,8 @@ replies must contain exactly one Kea answer; empty or multi-answer replies fail
 without acknowledging configuration. Oversized native result codes are rejected
 without a narrowing conversion or exception crossing the plugin boundary.
 Malformed non-string native error text is replaced with a safe diagnostic.
+Page counts, host cursors, lease states, and DHCPv6 lease types are decoded as
+checked unsigned values; negative or oversized values fail closed.
 Disposable native
 interactions exercise the provider against packaged DHCPv4 and DHCPv6 daemons
 on Linux and FreeBSD without exposing a LAN interface. These are ISC vendor
