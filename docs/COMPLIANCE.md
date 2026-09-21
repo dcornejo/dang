@@ -760,6 +760,11 @@ addresses, binary client identities, the DHCPv6 IAID, and incremented
 per-subnet assigned-lease counters in complete operational XML. These are ISC
 vendor models rather than an IETF RFC compliance claim; support is pinned to
 the embedded revisions and Kea 3.2.x control-command behavior.
+An additional bidirectional interaction uses only the secondary interfaces of
+one Linux and one FreeBSD host on an isolated VLAN. It requires Kea to record
+completed DHCPv4 and DHCPv6 lease allocations with each platform serving and
+acting as the socket-level client in turn, while rejecting default-route
+interfaces and restoring all temporary interface state afterward.
 Applied-state reconciliation rebuilds the accepted DHCPv4 and DHCPv6 subnet
 inventories at startup, so complete per-subnet statistics do not depend on a
 new configuration commit after process restart.

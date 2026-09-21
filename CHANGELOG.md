@@ -8,6 +8,10 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded bidirectional cross-host Kea validation over isolated Linux and
+  FreeBSD secondary interfaces, requiring completed native DHCPv4 and DHCPv6
+  allocations with each platform serving and acting as client in turn.
+
 - Recorded correct Kea database-object translation from modeled
   `database-type` to native `type`, with isolated tests retaining non-persistent
   memory lease databases across configuration replacement.
