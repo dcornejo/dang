@@ -727,7 +727,9 @@ configuration and state trees from `kea-dhcp4-server@2026-06-24` and
 `kea-dhcp6-server@2026-06-24`. It validates and applies complete native Kea
 configurations transactionally, compensates partial failure, and publishes
 ABI-v6 complete operational leases, per-subnet statistics, and host
-reservations including option data. Lease, host, and statistic collection has
+reservations including option data. Configuration scalar translation preserves
+pinned YANG string types even for boolean-looking and numeric-looking lexical
+values. Lease, host, and statistic collection has
 independent page/query, item, byte, and duration bounds. Transaction control
 replies must contain exactly one Kea answer; empty or multi-answer replies fail
 without acknowledging configuration. Disposable native

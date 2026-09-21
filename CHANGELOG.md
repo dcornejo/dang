@@ -8,6 +8,9 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded type-faithful Kea configuration translation for YANG strings whose
+  lexical values resemble JSON booleans or numbers.
+
 - Recorded fail-closed Kea transaction reply framing: `config-test` and
   `config-set` now require exactly one native answer.
 
