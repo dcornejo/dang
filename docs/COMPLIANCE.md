@@ -730,7 +730,10 @@ ABI-v6 complete operational leases, per-subnet statistics, and host
 reservations including option data. Configuration scalar translation preserves
 pinned YANG string types even for boolean-looking and numeric-looking lexical
 values. Lease, host, and statistic collection has
-independent page/query, item, byte, and duration bounds. Transaction control
+independent page/query, item, byte, and duration bounds.
+Duplicate YANG list keys in lease, per-subnet statistic, and reservation state
+fail retrieval rather than being published under a complete-result claim.
+Transaction control
 replies must contain exactly one Kea answer; empty or multi-answer replies fail
 without acknowledging configuration. Disposable native
 interactions exercise the provider against packaged DHCPv4 and DHCPv6 daemons

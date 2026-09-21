@@ -8,6 +8,9 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded fail-closed duplicate-key validation for complete Kea lease,
+  per-subnet statistic, and host-reservation operational lists.
+
 - Recorded type-faithful Kea configuration translation for YANG strings whose
   lexical values resemble JSON booleans or numbers.
 
