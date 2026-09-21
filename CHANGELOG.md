@@ -8,6 +8,10 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded canonical RFC 8431 RIB identity enforcement: configured aliases
+  disable alternate built-in spellings, numeric family-qualified names cannot
+  be remapped, and leading-zero suffixes are rejected to preserve readback.
+
 - Recorded live RFC 8431 `nh-add` mapping validation before allocation and
   durability, preventing creation of identities that recovery would reject.
 
