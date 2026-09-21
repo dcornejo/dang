@@ -737,7 +737,9 @@ daemon; removing, changing, or substituting that socket is rejected before
 native validation. Replacements must also retain the lease-command,
 host-command, and supplemental-statistics hook libraries needed for complete
 operational retrieval. Lease, host, and statistic collection has independent
-page/query, item, byte, and duration bounds.
+page/query, item, byte, and duration bounds. Each successful supplemental
+statistics response must contain one unambiguous row for the exact configured
+subnet ID that was queried.
 Duplicate YANG list keys in lease, per-subnet statistic, and reservation state
 fail retrieval rather than being published under a complete-result claim.
 Transaction control

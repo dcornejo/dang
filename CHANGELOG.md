@@ -8,6 +8,9 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded strict correlation of Kea supplemental-statistics replies with their
+  exact configured subnet queries.
+
 - Recorded outcome-unknown Kea apply handling: a failed `config-set` target is
   restored along with earlier targets, and compensation failures are retained.
 
