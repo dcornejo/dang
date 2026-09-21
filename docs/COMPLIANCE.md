@@ -778,7 +778,9 @@ nexthops now resolve exactly one usable local address in the route family via
 `getifaddrs(3)`; unnumbered and multihomed interfaces fail closed at the
 modeled nexthop path. The provider publishes partial observed operational data
 by reading Linux rtnetlink or FreeBSD `NET_RT_DUMP` directly. It emits IPv4/IPv6
-unicast routes with active/installed status and deterministic synthetic indexes;
+unicast routes with coherent status and deterministic synthetic indexes:
+installed observations are active and explicitly uninstalled observations are
+inactive;
 gateway-plus-interface nexthops use the RFC-defined combined address-family
 container and both IPv4 and IPv6 forms pass direct YANG operational-data
 validation. It does not yet represent every kernel route kind or every RFC
