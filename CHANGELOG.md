@@ -8,6 +8,9 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded native Kea operational validation with injected DHCPv4 and DHCPv6
+  leases, including modeled address and IAID checks.
+
 - Recorded full cursor-cycle detection for Kea lease and reservation paging.
 
 - Recorded checked, non-narrowing Kea decoding for page counts, host cursors,

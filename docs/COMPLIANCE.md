@@ -752,7 +752,9 @@ Page counts, host cursors, lease states, and DHCPv6 lease types are decoded as
 checked unsigned values; negative or oversized values fail closed.
 Disposable native
 interactions exercise the provider against packaged DHCPv4 and DHCPv6 daemons
-on Linux and FreeBSD without exposing a LAN interface. These are ISC vendor
+on Linux and FreeBSD without exposing a LAN interface. The interaction injects
+real leases through each daemon's lease-command hook and requires their modeled
+addresses plus the DHCPv6 IAID in complete operational XML. These are ISC vendor
 models rather than an IETF RFC compliance claim; support is pinned to the
 embedded revisions and Kea 3.2.x control-command behavior.
 Applied-state reconciliation rebuilds the accepted DHCPv4 and DHCPv6 subnet
