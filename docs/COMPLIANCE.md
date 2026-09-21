@@ -728,6 +728,8 @@ configuration and state trees from `kea-dhcp4-server@2026-06-24` and
 configurations transactionally, compensates partial failure, and publishes
 ABI-v6 complete operational leases, per-subnet statistics, and host
 reservations including option data. Configuration scalar translation preserves
+Kea's native database-object spelling by converting modeled `database-type` to
+`type` for lease, host, and configuration databases. It preserves
 pinned YANG string types even for boolean-looking and numeric-looking lexical
 values. A failed native `config-set` is treated as outcome-unknown: its target
 and every earlier target receive their before-images in reverse order, with any
@@ -754,9 +756,10 @@ Disposable native
 interactions exercise the provider against packaged DHCPv4 and DHCPv6 daemons
 on Linux and FreeBSD without exposing a LAN interface. The interaction injects
 real leases through each daemon's lease-command hook and requires their modeled
-addresses plus the DHCPv6 IAID in complete operational XML. These are ISC vendor
-models rather than an IETF RFC compliance claim; support is pinned to the
-embedded revisions and Kea 3.2.x control-command behavior.
+addresses, binary client identities, the DHCPv6 IAID, and incremented
+per-subnet assigned-lease counters in complete operational XML. These are ISC
+vendor models rather than an IETF RFC compliance claim; support is pinned to
+the embedded revisions and Kea 3.2.x control-command behavior.
 Applied-state reconciliation rebuilds the accepted DHCPv4 and DHCPv6 subnet
 inventories at startup, so complete per-subnet statistics do not depend on a
 new configuration commit after process restart.

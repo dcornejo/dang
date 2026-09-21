@@ -8,8 +8,13 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded correct Kea database-object translation from modeled
+  `database-type` to native `type`, with isolated tests retaining non-persistent
+  memory lease databases across configuration replacement.
+
 - Recorded native Kea operational validation with injected DHCPv4 and DHCPv6
-  leases, including modeled address and IAID checks.
+  leases, including modeled address, binary client identity, IAID, and
+  per-subnet assigned-counter checks.
 
 - Recorded full cursor-cycle detection for Kea lease and reservation paging.
 
