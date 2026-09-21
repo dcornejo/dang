@@ -8,6 +8,9 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded fail-closed Kea transaction reply framing: `config-test` and
+  `config-set` now require exactly one native answer.
+
 - Recorded Kea ABI-v6 startup reconciliation of accepted subnet inventories,
   preserving complete supplemental statistics across dangd restarts.
 

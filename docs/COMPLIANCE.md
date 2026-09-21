@@ -728,7 +728,9 @@ configuration and state trees from `kea-dhcp4-server@2026-06-24` and
 configurations transactionally, compensates partial failure, and publishes
 ABI-v6 complete operational leases, per-subnet statistics, and host
 reservations including option data. Lease, host, and statistic collection has
-independent page/query, item, byte, and duration bounds. Disposable native
+independent page/query, item, byte, and duration bounds. Transaction control
+replies must contain exactly one Kea answer; empty or multi-answer replies fail
+without acknowledging configuration. Disposable native
 interactions exercise the provider against packaged DHCPv4 and DHCPv6 daemons
 on Linux and FreeBSD without exposing a LAN interface. These are ISC vendor
 models rather than an IETF RFC compliance claim; support is pinned to the
