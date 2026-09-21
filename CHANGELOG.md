@@ -8,6 +8,9 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded Kea management-channel protection: complete replacements must retain
+  the exact local UNIX control socket used by the dangd plugin.
+
 - Recorded fail-closed duplicate-key validation for complete Kea lease,
   per-subnet statistic, and host-reservation operational lists.
 

@@ -729,8 +729,10 @@ configurations transactionally, compensates partial failure, and publishes
 ABI-v6 complete operational leases, per-subnet statistics, and host
 reservations including option data. Configuration scalar translation preserves
 pinned YANG string types even for boolean-looking and numeric-looking lexical
-values. Lease, host, and statistic collection has
-independent page/query, item, byte, and duration bounds.
+values. A replacement must retain the exact local UNIX control socket through
+which dangd manages each Kea daemon; removing, changing, or substituting that
+socket is rejected before native validation. Lease, host, and statistic
+collection has independent page/query, item, byte, and duration bounds.
 Duplicate YANG list keys in lease, per-subnet statistic, and reservation state
 fail retrieval rather than being published under a complete-result claim.
 Transaction control
