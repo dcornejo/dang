@@ -12,7 +12,8 @@ and releases follow Semantic Versioning.
   FreeBSD secondary interfaces, requiring completed native DHCPv4 and DHCPv6
   allocations with each platform serving and acting as client in turn. The
   clients now use real interface identities and validate DHCPv6 Rapid Commit
-  replies in both directions.
+  replies in both directions, including transaction, client/server identity,
+  IAID, and address-pool correlation.
 
 - Recorded correct Kea database-object translation from modeled
   `database-type` to native `type`, with isolated tests retaining non-persistent

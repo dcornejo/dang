@@ -768,7 +768,9 @@ interfaces and restoring all temporary interface state afterward. Client
 identities come from the selected interface MAC, and both role directions also
 receive and validate the DHCPv6 Rapid Commit reply. The isolated VLAN currently
 filters the nonstandard-port IPv4 return packet, so the native completed
-allocation remains the IPv4 criterion.
+allocation remains the IPv4 criterion. Visible replies are correlated to the
+request transaction and server endpoint and checked for the expected client
+and server identities, IAID, and configured address pool as applicable.
 Applied-state reconciliation rebuilds the accepted DHCPv4 and DHCPv6 subnet
 inventories at startup, so complete per-subnet statistics do not depend on a
 new configuration commit after process restart.
