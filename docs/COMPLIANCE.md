@@ -752,6 +752,10 @@ without a narrowing conversion or exception crossing the plugin boundary.
 Malformed non-string native error text is replaced with a safe diagnostic.
 Page counts, host cursors, lease states, and DHCPv6 lease types are decoded as
 checked unsigned values; negative or oversized values fail closed.
+Native lease hardware addresses, client IDs, and DUIDs accept only complete
+colon-separated hexadecimal octets or complete contiguous hexadecimal strings.
+Empty identities and leading, trailing, doubled, or missing separators fail the
+complete operational retrieval rather than being silently normalized.
 Disposable native
 interactions exercise the provider against packaged DHCPv4 and DHCPv6 daemons
 on Linux and FreeBSD without exposing a LAN interface. The interaction injects

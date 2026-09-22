@@ -8,6 +8,10 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded strict native Kea binary-identity decoding. Hardware addresses,
+  client IDs, and DUIDs now reject empty or malformed hexadecimal spellings
+  rather than silently normalizing them into another identity.
+
 - Recorded bidirectional cross-host Kea validation over isolated Linux and
   FreeBSD secondary interfaces, requiring completed native DHCPv4 and DHCPv6
   allocations with each platform serving and acting as client in turn. The
