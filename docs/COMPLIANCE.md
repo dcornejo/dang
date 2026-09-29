@@ -749,6 +749,12 @@ version commands, its family-specific paged lease and supplemental-statistics
 commands, reservation paging, and `status-get` when the accepted image loads
 the HA hook. A missing registration or malformed inventory fails at the owning
 module's configuration path before that daemon becomes authoritative.
+The provider also validates a bounded three-component native `version-get`
+identity during reconciliation and retains it with the accepted configuration.
+The `dang-kea-instance` operational tree associates that version with each
+enabled address family; the native matrix requires Linux Kea 3.0.3 and FreeBSD
+Kea 3.2.0 to publish their actual identities. Other versions are not inferred
+compatible solely from package metadata and require the same validation suite.
 Duplicate YANG list keys in lease, per-subnet statistic, and reservation state
 fail retrieval rather than being published under a complete-result claim.
 Transaction control
