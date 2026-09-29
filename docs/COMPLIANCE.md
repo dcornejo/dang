@@ -743,6 +743,12 @@ page/query, item, byte, and duration bounds. Lease and host pagination track
 all cursors and rejects non-adjacent cycles immediately. Each successful
 supplemental statistics response must contain one unambiguous row for the exact
 configured subnet ID that was queried.
+Applied-state reconciliation does not trust hook pathnames alone. Each daemon's
+native `list-commands` reply must advertise the configuration get/test/set and
+version commands, its family-specific paged lease and supplemental-statistics
+commands, reservation paging, and `status-get` when the accepted image loads
+the HA hook. A missing registration or malformed inventory fails at the owning
+module's configuration path before that daemon becomes authoritative.
 Duplicate YANG list keys in lease, per-subnet statistic, and reservation state
 fail retrieval rather than being published under a complete-result claim.
 Transaction control

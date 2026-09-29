@@ -8,6 +8,12 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded Kea applied-state capability attestation. The external provider now
+  requires each reconciled daemon's native command inventory to contain the
+  core transaction and version commands, family-specific lease/statistics
+  commands, reservation paging, and HA status when configured, preventing a
+  failed hook registration from becoming authoritative.
+
 - Prevented multiple dangd instances from sharing one configured state path.
   The application now holds a private sibling lock across its complete
   lifetime, preserves ownership through atomic snapshot replacement and
