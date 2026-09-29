@@ -8,6 +8,11 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded durable empty-RIB fidelity for the external RFC 8431 provider.
+  Successful `rib-add` registrations now remain visible in operational state
+  before their first route or reusable nexthop and after restart, with native
+  observation and registry capture serialized against imperative RPCs.
+
 - Raised the external Kea provider baseline to 3.2.0. The provider rejects
   older native daemon identities during reconciliation, and both Linux and
   FreeBSD workflows validate Kea 3.2.0.

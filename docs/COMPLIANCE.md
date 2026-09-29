@@ -869,6 +869,11 @@ write failures fail closed, with object mutation rolled back on write failure.
 nexthops consume that explicit context and therefore appear in operational data
 before any native route exists; an absent or conflicting family fails as a
 modeled operation rather than being inferred from host interface state.
+The durable RIB registration itself is now published even when it has no native
+route or reusable nexthop, and it reappears after restart. Native observation
+and registry capture use one imperative-RPC serialization epoch so an
+operational reply cannot combine a pre-mutation kernel view with post-mutation
+private state.
 Imperative route additions, deletions, updates, and whole-RIB deletions also
 make binding changes durable before acknowledgement. A failed sidecar write
 runs the inverse native route plan, restores the registry checkpoint, and
@@ -904,7 +909,8 @@ path; an unrelated parallel path cannot produce a false resolved transition.
 This resolution definition is deliberately
 limited to the portable reusable-nexthop subset. Complete state fidelity and
 end-to-end interoperability evidence remain before a substantial RFC 8431
-claim.
+claim; in particular, not every kernel route kind or RFC route attribute is
+represented.
 
 BaseX is likewise only a datastore architecture investigation. The current
 implementation remains the in-process validated datastore manager with atomic
