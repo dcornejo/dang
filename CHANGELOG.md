@@ -8,9 +8,13 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Raised the external Kea provider baseline to 3.2.0. The provider rejects
+  older native daemon identities during reconciliation, and both Linux and
+  FreeBSD workflows validate Kea 3.2.0.
+
 - Recorded native Kea implementation identity in the external provider's
   instance state. Reconciliation now validates and retains each daemon's
-  three-component `version-get` result, and Linux 3.0.3 plus FreeBSD 3.2.0
+  three-component `version-get` result, and Linux plus FreeBSD Kea 3.2.0
   workflows require that version beside its address-family identity.
 
 - Recorded Kea applied-state capability attestation. The external provider now

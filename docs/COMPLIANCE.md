@@ -752,9 +752,10 @@ module's configuration path before that daemon becomes authoritative.
 The provider also validates a bounded three-component native `version-get`
 identity during reconciliation and retains it with the accepted configuration.
 The `dang-kea-instance` operational tree associates that version with each
-enabled address family; the native matrix requires Linux Kea 3.0.3 and FreeBSD
-Kea 3.2.0 to publish their actual identities. Other versions are not inferred
-compatible solely from package metadata and require the same validation suite.
+enabled address family. Versions older than 3.2.0 are rejected during
+reconciliation; the native matrix requires Linux and FreeBSD Kea 3.2.0 to
+publish their actual identities. Newer versions are not inferred compatible
+solely from package metadata and require the same validation suite.
 Duplicate YANG list keys in lease, per-subnet statistic, and reservation state
 fail retrieval rather than being published under a complete-result claim.
 Transaction control
