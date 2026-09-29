@@ -326,6 +326,14 @@ password hashes or other secrets, and is created mode 0600. Startup refuses a
 symbolic link, non-regular file, file owned by another effective user, or file
 with any group/other permission bits.
 
+Dangd also creates a private sibling lock such as
+`appliance-state.json.lock` and holds it until the application stops. A second
+dangd instance using the same state path fails startup instead of racing an
+atomic save; a staged `SIGHUP` reload inherits the original lock. The sibling
+normally remains after shutdown so every process continues to coordinate on
+the same inode. Do not remove or replace it while dangd is running. Each
+independently managed local instance must use a unique `--state` path.
+
 Because each update atomically replaces the snapshot, an administrator may
 copy it while dangd is running and will obtain either the complete previous or
 complete current generation. Preserve private permissions on the backup:

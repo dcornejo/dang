@@ -986,6 +986,7 @@ TEST(DangdApplicationTest, ActivatesInitialAndRestoredPluginConfiguration) {
   EXPECT_NE(test_plugin::Active("provider").find("<mode>active</mode>"),
             std::string::npos);
 
+  initial.application.reset();
   test_plugin::ResetTrace();
   auto restored = Application::Load(options);
   ASSERT_NE(restored.application, nullptr)
@@ -2305,9 +2306,37 @@ TEST(DangdApplicationTest, SavesAndRestoresConfiguredStateFile) {
   EXPECT_FALSE(loaded.application->SaveState().has_value());
   ASSERT_TRUE(std::filesystem::exists(*options.state_file));
 
+  loaded.application.reset();
   auto restored = Application::Load(options);
   ASSERT_NE(restored.application, nullptr);
   EXPECT_TRUE(restored.errors.empty());
+}
+
+TEST(DangdApplicationTest, StateFileAllowsReloadButRejectsAnotherOwner) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.state_file = inputs.Path("exclusive-state.json");
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
+
+  auto collision = Application::Load(options);
+  EXPECT_EQ(collision.application, nullptr);
+  ASSERT_EQ(collision.errors.size(), 1u);
+  EXPECT_NE(collision.errors.front().find("already in use"), std::string::npos)
+      << collision.errors.front();
+
+  auto replacement = Application::Reload(options, *loaded.application);
+  ASSERT_NE(replacement.application, nullptr)
+      << testing::PrintToString(replacement.errors);
+  loaded.application.reset();
+  collision = Application::Load(options);
+  EXPECT_EQ(collision.application, nullptr);
+
+  replacement.application.reset();
+  auto restarted = Application::Load(options);
+  ASSERT_NE(restarted.application, nullptr)
+      << testing::PrintToString(restarted.errors);
 }
 
 TEST(DangdApplicationTest, LiveCommitRestoresSnapshotAndBackendOnSaveFailure) {

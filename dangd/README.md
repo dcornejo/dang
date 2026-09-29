@@ -278,10 +278,14 @@ counters remain core-owned operational state and are returned by `<get>`.
 
 The state snapshot is server-owned and may contain modeled secrets. Dangd
 creates it mode 0600 and restores only a regular, non-symlink file owned by its
-effective user with no group or other access. The backup and offline restore
-procedure is documented in the user guide. Before an application can accept a
-session, dangd activates the complete initial or restored running tree through
-the affected plugins as one dependency-ordered transaction.
+effective user with no group or other access. It also holds an exclusive lock
+on a private sibling named `FILE.lock` for the complete application lifetime;
+a second instance configured with the same state path fails startup, while an
+atomic `SIGHUP` reload inherits the existing lock. The lock file remains after
+shutdown and must not be deleted while dangd is running. The backup and offline
+restore procedure is documented in the user guide. Before an application can
+accept a session, dangd activates the complete initial or restored running tree
+through the affected plugins as one dependency-ordered transaction.
 
 Application RPCs and YANG 1.1 actions are resolved against the compiled schema
 before dispatch. `dangd` applies operation rules and `default-deny-all`; actions

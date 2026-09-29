@@ -27,6 +27,8 @@
 
 namespace dangd {
 
+class StateFileLock;
+
 /** Built-in NETCONF-only identity used for emergency NACM recovery. */
 inline constexpr std::string_view kDefaultSuperuser = "dangd-superuser";
 
@@ -111,6 +113,7 @@ class Application {
 
   Application(const Application&) = delete;
   Application& operator=(const Application&) = delete;
+  ~Application();
 
   /** Returns the unframed NETCONF RPC service owned by this application. */
   [[nodiscard]] yang::netconf::NetconfServer& server() noexcept {
@@ -150,15 +153,21 @@ class Application {
   [[nodiscard]] bool PublishYangLibraryUpdate(std::string_view content_id);
 
  private:
+  [[nodiscard]] static LoadResult LoadWithStateFileLock(
+      const ApplicationOptions& options,
+      std::shared_ptr<StateFileLock> inherited_state_file_lock);
   Application(yang::config::RuntimeSchema schema,
               yang::config::ConfigDocument configuration,
               std::optional<std::filesystem::path> state_file,
+              std::shared_ptr<StateFileLock> state_file_lock,
               yang::netconf::SnapshotSaveCheckpoint snapshot_save_checkpoint,
               yang::netconf::NacmPolicy nacm, bool managed_nacm,
               std::unique_ptr<PluginRuntime> plugins,
               std::string yang_library_xml,
               std::vector<DangdOperationalData::ModelSource> model_sources);
 
+  /** Declared first so exclusion outlives destruction of every subsystem. */
+  std::shared_ptr<StateFileLock> state_file_lock_;
   yang::config::RuntimeSchema schema_;
   std::unique_ptr<PluginRuntime> plugins_;
   yang::netconf::NacmPolicy nacm_;

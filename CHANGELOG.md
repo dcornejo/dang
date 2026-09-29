@@ -8,6 +8,13 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Prevented multiple dangd instances from sharing one configured state path.
+  The application now holds a private sibling lock across its complete
+  lifetime, preserves ownership through atomic snapshot replacement and
+  staged SIGHUP reload, and fails a colliding startup before loading plugins or
+  configuration. Tests cover exclusion, reload inheritance, release, and
+  restart.
+
 - Recorded strict native Kea binary-identity decoding. Hardware addresses,
   client IDs, and DUIDs now reject empty or malformed hexadecimal spellings
   rather than silently normalizing them into another identity.

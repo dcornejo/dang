@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cerrno>
+#include <cstring>
 #include <fstream>
 #include <iterator>
 #include <map>
@@ -15,6 +17,9 @@
 #include <system_error>
 #include <utility>
 
+#include <fcntl.h>
+#include <sys/file.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <pugixml.hpp>
@@ -30,6 +35,84 @@
 #include "yang/xml_security.h"
 
 namespace dangd {
+
+/** Process-lifetime exclusion guard for one atomically replaced state file. */
+class StateFileLock {
+ public:
+  static std::shared_ptr<StateFileLock> Acquire(
+      std::filesystem::path state_file, std::string* error) {
+    std::error_code path_error;
+    state_file = std::filesystem::weakly_canonical(state_file, path_error);
+    if (path_error) {
+      *error = "cannot resolve state file path: " + path_error.message();
+      return nullptr;
+    }
+    std::filesystem::path lock_file = state_file;
+    lock_file += ".lock";
+    const int descriptor =
+        open(lock_file.c_str(), O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW,
+             S_IRUSR | S_IWUSR);
+    if (descriptor < 0) {
+      *error = "cannot open state-file lock " + lock_file.string() + ": " +
+          std::strerror(errno);
+      return nullptr;
+    }
+    struct stat metadata {};
+    if (fstat(descriptor, &metadata) != 0) {
+      const int saved_errno = errno;
+      close(descriptor);
+      *error = "cannot inspect state-file lock " + lock_file.string() +
+          ": " + std::strerror(saved_errno);
+      return nullptr;
+    }
+    if (!S_ISREG(metadata.st_mode) || metadata.st_uid != geteuid() ||
+        (metadata.st_mode & (S_IRWXG | S_IRWXO)) != 0) {
+      close(descriptor);
+      *error = "state-file lock must be a private regular file owned by the "
+          "effective user: " + lock_file.string();
+      return nullptr;
+    }
+    if (flock(descriptor, LOCK_EX | LOCK_NB) != 0) {
+      const int saved_errno = errno;
+      close(descriptor);
+      if (saved_errno == EWOULDBLOCK || saved_errno == EAGAIN) {
+        *error = "state file is already in use by another dangd instance: " +
+            state_file.string();
+      } else {
+        *error = "cannot lock state file " + state_file.string() + ": " +
+            std::strerror(saved_errno);
+      }
+      return nullptr;
+    }
+    return std::shared_ptr<StateFileLock>(
+        new StateFileLock(std::move(state_file), descriptor));
+  }
+
+  ~StateFileLock() {
+    (void)flock(descriptor_, LOCK_UN);
+    (void)close(descriptor_);
+  }
+
+  [[nodiscard]] bool Protects(const std::filesystem::path& state_file,
+                              std::string* error) const {
+    std::error_code path_error;
+    const std::filesystem::path normalized =
+        std::filesystem::weakly_canonical(state_file, path_error);
+    if (path_error) {
+      *error = "cannot resolve state file path: " + path_error.message();
+      return false;
+    }
+    return normalized == state_file_;
+  }
+
+ private:
+  StateFileLock(std::filesystem::path state_file, int descriptor)
+      : state_file_(std::move(state_file)), descriptor_(descriptor) {}
+
+  std::filesystem::path state_file_;
+  int descriptor_;
+};
+
 namespace {
 
 std::string_view LocalName(std::string_view name) {
@@ -778,6 +861,7 @@ std::string DangdOperationalData::source_digest() const {
 Application::Application(yang::config::RuntimeSchema schema,
                          yang::config::ConfigDocument configuration,
                          std::optional<std::filesystem::path> state_file,
+                         std::shared_ptr<StateFileLock> state_file_lock,
                          yang::netconf::SnapshotSaveCheckpoint
                              snapshot_save_checkpoint,
                          yang::netconf::NacmPolicy nacm, bool managed_nacm,
@@ -785,7 +869,8 @@ Application::Application(yang::config::RuntimeSchema schema,
                          std::string yang_library_xml,
                          std::vector<DangdOperationalData::ModelSource>
                              model_sources)
-    : schema_(std::move(schema)),
+    : state_file_lock_(std::move(state_file_lock)),
+      schema_(std::move(schema)),
       plugins_(std::move(plugins)),
       nacm_(std::move(nacm)),
       notifications_(&nacm_, 1024, 16 * 1024 * 1024, &schema_),
@@ -824,6 +909,8 @@ Application::Application(yang::config::RuntimeSchema schema,
   });
   (void)notifications_.AddStream({});
 }
+
+Application::~Application() = default;
 
 std::vector<std::string> Application::DrainRecoveryAuditRecords() {
   std::lock_guard lock(recovery_audit_mutex_);
@@ -877,12 +964,37 @@ bool Application::PublishYangLibraryUpdate(std::string_view content_id) {
 }
 
 LoadResult Application::Load(const ApplicationOptions& options) {
+  return LoadWithStateFileLock(options, nullptr);
+}
+
+LoadResult Application::LoadWithStateFileLock(
+    const ApplicationOptions& options,
+    std::shared_ptr<StateFileLock> inherited_state_file_lock) {
   LoadResult result;
   if (options.model.empty())
     result.errors.push_back("a root YANG model is required");
   if (options.configuration.empty())
     result.errors.push_back("an initial XML configuration is required");
   if (!result.errors.empty()) return result;
+
+  std::shared_ptr<StateFileLock> state_file_lock;
+  if (options.state_file) {
+    std::string lock_error;
+    if (inherited_state_file_lock &&
+        inherited_state_file_lock->Protects(*options.state_file, &lock_error)) {
+      state_file_lock = std::move(inherited_state_file_lock);
+    } else {
+      if (!lock_error.empty()) {
+        result.errors.push_back(std::move(lock_error));
+        return result;
+      }
+      state_file_lock = StateFileLock::Acquire(*options.state_file, &lock_error);
+      if (!state_file_lock) {
+        result.errors.push_back(std::move(lock_error));
+        return result;
+      }
+    }
+  }
 
   const auto model_text = ReadFile(
       options.model, yang::DefaultResourceLimits().maximum_source_bytes,
@@ -1062,6 +1174,7 @@ LoadResult Application::Load(const ApplicationOptions& options) {
 
   result.application = std::unique_ptr<Application>(new Application(
       std::move(schema), std::move(*parsed.document), options.state_file,
+      std::move(state_file_lock),
       options.snapshot_save_checkpoint, std::move(nacm), managed_nacm,
       std::move(plugins), yang_library_xml, std::move(model_sources)));
   bool restored_snapshot = false;
@@ -1159,7 +1272,8 @@ LoadResult Application::Reload(const ApplicationOptions& options,
     staged.push_back(copy);
   }
   replacement.plugins = staged;
-  LoadResult result = Load(replacement);
+  LoadResult result =
+      LoadWithStateFileLock(replacement, current.state_file_lock_);
   for (const auto& path : staged) {
     std::error_code ignored;
     std::filesystem::remove(path, ignored);
