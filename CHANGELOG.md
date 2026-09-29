@@ -8,6 +8,11 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded Linux ECMP operational fidelity for the external RFC 8431 provider.
+  Native multipath routes now publish one stable, schema-valid route per base
+  nexthop instead of collapsing to an empty nexthop; weights and unresolved
+  nexthop-object IDs remain explicit compliance boundaries.
+
 - Recorded durable empty-RIB fidelity for the external RFC 8431 provider.
   Successful `rib-add` registrations now remain visible in operational state
   before their first route or reusable nexthop and after restart, with native

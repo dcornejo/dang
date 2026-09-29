@@ -843,6 +843,12 @@ gateway-plus-interface nexthops use the RFC-defined combined address-family
 container and both IPv4 and IPv6 forms pass direct YANG operational-data
 validation. It does not yet represent every kernel route kind or every RFC
 8431 attribute.
+Linux rtnetlink multipath routes are expanded into separate stable route-list
+entries for each native base nexthop, including its gateway/interface identity
+and dead-path installed state. This avoids schema-invalid empty nexthops while
+preserving parallel paths without advertising the optional RFC load-balance
+feature. Native ECMP weights are not represented, and routes supplied only as
+an unresolved Linux nexthop-object ID are omitted pending object expansion.
 The operational `local-only` leaf is derived from Linux `RT_SCOPE_HOST` or
 FreeBSD `RTF_LOCAL`, rather than being reported as false for every native
 route. Native local, blackhole, and error-reject routes are represented with

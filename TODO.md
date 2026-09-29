@@ -79,8 +79,11 @@ stays in this file with its remaining work rewritten precisely.
   FreeBSD FIBs without duplicate RFC list keys,
   including direct observation of every mapped FreeBSD FIB. Durable empty RIB
   registrations now remain visible in operational state before their first
-  route or nexthop and after restart. Complete the remaining kernel route-kind
-  and RFC attribute fidelity, then advertise and test the module end to end.
+  route or nexthop and after restart. Linux ECMP observations now preserve
+  each native base-nexthop path without emitting invalid empty nexthops;
+  weights and nexthop-object-ID expansion remain absent. Complete the remaining
+  kernel route-kind and RFC attribute fidelity, then advertise and test the
+  module end to end.
 - [ ] Complete RFC 9642 beyond the implemented central cleartext symmetric-key
   slice: add asymmetric key-pair verification, genuinely hidden and encrypted
   key representations, encryption and zeroization beyond the private snapshot
