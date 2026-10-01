@@ -7,6 +7,16 @@
 
 ### Added
 
+- Added a transport-neutral peer transaction coordinator for future pair-wide
+  configuration. It prepares every participant before mutation, applies
+  standbys before the primary, verifies all peers, durably records the commit
+  decision before confirmation, compensates pre-decision failures in reverse
+  order (including an apply with an ambiguous failure reply), releases partial
+  preparation, and resumes lost confirmations without rolling back a committed group.
+  Failure-injection tests cover preparation, apply, verification, journal,
+  cancellation, confirmation, recovery, and journal-cleanup boundaries. The
+  NETCONF transport and durable journal remain explicitly unadvertised work.
+
 - Added managed RFC 9642 central cleartext symmetric keys with standard NACM
   protection, persistence/restart coverage, retrieval, and feature reporting.
 - Added the RFC 9644 SSH client/server grouping family and its pinned dependency

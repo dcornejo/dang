@@ -1,0 +1,248 @@
+// Copyright 2026 David Cornejo
+// SPDX-License-Identifier: Apache-2.0
+
+#include "dangd/peer_transaction.h"
+
+#include <algorithm>
+#include <set>
+#include <string_view>
+#include <utility>
+
+namespace dangd {
+namespace {
+
+using Participant = PeerTransactionParticipant;
+
+std::vector<std::size_t>
+PrepareOrder(const std::vector<Participant> &participants) {
+  std::vector<std::size_t> order(participants.size());
+  for (std::size_t index = 0; index < order.size(); ++index)
+    order[index] = index;
+  std::ranges::sort(order, {},
+                    [&](std::size_t index) { return participants[index].id; });
+  return order;
+}
+
+std::vector<std::size_t>
+ApplyOrder(const std::vector<Participant> &participants) {
+  std::vector<std::size_t> order = PrepareOrder(participants);
+  std::ranges::stable_sort(order, {}, [&](std::size_t index) {
+    return participants[index].role == PeerTransactionRole::kPrimary ? 1 : 0;
+  });
+  return order;
+}
+
+std::optional<std::string>
+ValidateParticipants(const std::vector<Participant> &participants,
+                     bool require_all_callbacks) {
+  if (participants.size() < 2)
+    return "peer transaction requires at least two participants";
+  std::set<std::string> ids;
+  std::size_t primary_count = 0;
+  for (const Participant &participant : participants) {
+    if (participant.id.empty() || !ids.insert(participant.id).second)
+      return "peer transaction participant identifiers must be nonempty and "
+             "unique";
+    if (participant.role == PeerTransactionRole::kPrimary)
+      ++primary_count;
+    if (!participant.confirm || !participant.release)
+      return participant.id +
+             ": peer transaction recovery callbacks are incomplete";
+    if (require_all_callbacks &&
+        (!participant.prepare || !participant.apply_confirmed ||
+         !participant.verify || !participant.cancel)) {
+      return participant.id + ": peer transaction callbacks are incomplete";
+    }
+  }
+  if (primary_count != 1)
+    return "peer transaction requires exactly one primary participant";
+  return std::nullopt;
+}
+
+void ReleasePrepared(const std::vector<Participant> &participants,
+                     const std::vector<std::size_t> &prepared) {
+  for (auto index = prepared.rbegin(); index != prepared.rend(); ++index)
+    participants[*index].release();
+}
+
+void CancelApplied(const std::vector<Participant> &participants,
+                   const std::vector<std::size_t> &applied,
+                   PeerTransactionResult *result) {
+  for (auto index = applied.rbegin(); index != applied.rend(); ++index) {
+    if (const auto error = participants[*index].cancel()) {
+      result->rollback_failures.push_back(participants[*index].id + ": " +
+                                          *error);
+    }
+  }
+  if (!result->rollback_failures.empty())
+    result->disposition = PeerTransactionDisposition::kRollbackIncomplete;
+}
+
+std::vector<std::string>
+ParticipantIds(const std::vector<Participant> &participants,
+               const std::vector<std::size_t> &order) {
+  std::vector<std::string> ids;
+  ids.reserve(order.size());
+  for (const std::size_t index : order)
+    ids.push_back(participants[index].id);
+  return ids;
+}
+
+} // namespace
+
+PeerTransactionResult PeerTransactionCoordinator::Execute(
+    std::vector<PeerTransactionParticipant> participants,
+    PeerTransactionJournal journal) const {
+  PeerTransactionResult result;
+  if (const auto error = ValidateParticipants(participants, true)) {
+    result.message = *error;
+    return result;
+  }
+  if (!journal.record_commit_decision || !journal.record_complete) {
+    result.message = "peer transaction journal callbacks are incomplete";
+    return result;
+  }
+
+  const std::vector<std::size_t> prepare_order = PrepareOrder(participants);
+  const std::vector<std::size_t> apply_order = ApplyOrder(participants);
+  std::vector<std::size_t> prepared;
+  std::vector<std::size_t> applied;
+
+  for (const std::size_t index : prepare_order) {
+    // Preparation can fail after acquiring a remote lock. Include the
+    // attempted participant in release cleanup even when its reply is an
+    // error; release is required to be idempotent.
+    prepared.push_back(index);
+    if (const auto error = participants[index].prepare()) {
+      result.message = participants[index].id + ": prepare failed: " + *error;
+      ReleasePrepared(participants, prepared);
+      return result;
+    }
+    result.prepared.push_back(participants[index].id);
+  }
+
+  for (const std::size_t index : apply_order) {
+    // An error can be a lost reply after the confirmed commit took effect.
+    // Cancel the attempted peer as well as earlier peers while the durable
+    // group decision is still abort.
+    applied.push_back(index);
+    if (const auto error = participants[index].apply_confirmed()) {
+      result.message =
+          participants[index].id + ": confirmed apply failed: " + *error;
+      CancelApplied(participants, applied, &result);
+      ReleasePrepared(participants, prepared);
+      return result;
+    }
+    result.applied.push_back(participants[index].id);
+  }
+
+  for (const std::size_t index : apply_order) {
+    if (const auto error = participants[index].verify()) {
+      result.message = participants[index].id +
+                       ": post-apply verification failed: " + *error;
+      CancelApplied(participants, applied, &result);
+      ReleasePrepared(participants, prepared);
+      return result;
+    }
+  }
+
+  const std::vector<std::string> participant_ids =
+      ParticipantIds(participants, prepare_order);
+  if (const auto error = journal.record_commit_decision(participant_ids)) {
+    result.message = "cannot durably record peer commit decision: " + *error;
+    CancelApplied(participants, applied, &result);
+    ReleasePrepared(participants, prepared);
+    return result;
+  }
+
+  result.disposition = PeerTransactionDisposition::kCommitPending;
+  for (const std::size_t index : apply_order) {
+    if (const auto error = participants[index].confirm()) {
+      result.pending_confirmations.push_back(participants[index].id);
+      if (result.message.empty()) {
+        result.message = participants[index].id +
+                         ": commit confirmation remains pending: " + *error;
+      }
+      continue;
+    }
+    result.confirmed.push_back(participants[index].id);
+  }
+  ReleasePrepared(participants, prepared);
+
+  if (!result.pending_confirmations.empty())
+    return result;
+  if (const auto error = journal.record_complete()) {
+    result.message =
+        "peer commit completed but journal cleanup is pending: " + *error;
+    result.journal_cleanup_pending = true;
+    return result;
+  }
+  result.disposition = PeerTransactionDisposition::kCommitted;
+  result.message.clear();
+  return result;
+}
+
+PeerTransactionResult PeerTransactionCoordinator::ResumeCommit(
+    std::vector<PeerTransactionParticipant> participants,
+    std::vector<std::string> already_confirmed,
+    PeerTransactionJournal journal) const {
+  PeerTransactionResult result;
+  result.disposition = PeerTransactionDisposition::kCommitPending;
+  if (const auto error = ValidateParticipants(participants, false)) {
+    result.message = *error;
+    return result;
+  }
+  if (!journal.record_complete) {
+    result.message = "peer transaction journal completion callback is missing";
+    return result;
+  }
+
+  std::set<std::string> confirmed(already_confirmed.begin(),
+                                  already_confirmed.end());
+  if (confirmed.size() != already_confirmed.size()) {
+    result.message =
+        "peer transaction journal contains duplicate confirmations";
+    return result;
+  }
+  std::set<std::string> participant_ids;
+  for (const Participant &participant : participants)
+    participant_ids.insert(participant.id);
+  for (const std::string &id : confirmed) {
+    if (!participant_ids.contains(id)) {
+      result.message =
+          "peer transaction journal contains unknown participant " + id;
+      return result;
+    }
+  }
+  result.confirmed = std::move(already_confirmed);
+
+  for (const std::size_t index : ApplyOrder(participants)) {
+    const std::string &id = participants[index].id;
+    if (confirmed.contains(id))
+      continue;
+    if (const auto error = participants[index].confirm()) {
+      result.pending_confirmations.push_back(id);
+      if (result.message.empty())
+        result.message =
+            id + ": commit confirmation remains pending: " + *error;
+      continue;
+    }
+    result.confirmed.push_back(id);
+  }
+  for (const Participant &participant : participants)
+    participant.release();
+
+  if (!result.pending_confirmations.empty())
+    return result;
+  if (const auto error = journal.record_complete()) {
+    result.message =
+        "peer commit completed but journal cleanup is pending: " + *error;
+    result.journal_cleanup_pending = true;
+    return result;
+  }
+  result.disposition = PeerTransactionDisposition::kCommitted;
+  result.message.clear();
+  return result;
+}
+
+} // namespace dangd

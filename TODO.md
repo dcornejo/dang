@@ -98,6 +98,18 @@ stays in this file with its remaining work rewritten precisely.
 
 ### Datastore architecture
 
+- [ ] Integrate the transport-neutral peer transaction coordinator into a
+  production pair-wide commit path. The core state machine now prepares every
+  peer before mutation, applies standbys before the primary, verifies all
+  participants, records a durable commit decision before confirmation, rolls
+  back pre-decision failures in reverse order, and resumes lost confirmations
+  without contradicting that decision. Add authenticated NETCONF client
+  transport, stable peer identity, a private crash-safe journal, restart
+  recovery, provider-specific candidate translation and health verification,
+  fail-closed degraded-peer policy, NACM/observability, `dangctl` integration,
+  and Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.
+  See [`docs/PEER_TRANSACTIONS.md`](docs/PEER_TRANSACTIONS.md).
+
 - [ ] Define client-visible handling for a standards-compliant NETCONF result
   that exceeds the configured reply ceiling. Internal provider paging protects
   backends but still produces one logical `<rpc-reply>`; evaluate filtering,

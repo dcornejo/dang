@@ -101,6 +101,7 @@ install(FILES LICENSE NOTICE README.md TODO.md CHANGELOG.md docs/STANDARDS.md
   docs/NETCONF_WITH_DEFAULTS.md
   docs/NETCONF_FILTER_NACM_PERSISTENCE.md docs/XML_SECURITY.md
   docs/DANGD_PLUGINS.md
+  docs/PEER_TRANSACTIONS.md
   DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/yang)
 install(FILES examples/example.yang examples/library_example.cc
   examples/config_validation_example.cc
@@ -118,6 +119,7 @@ if(YANG_BUILD_DANGD)
     dangd/application.cc
     dangd/configuration_backend.cc
     dangd/hardware_transaction.cc
+    dangd/peer_transaction.cc
     dangd/plugin_worker_client.cc
     dangd/plugin_worker_coordinator.cc
     dangd/plugin_worker_runtime.cc
@@ -593,7 +595,8 @@ if(YANG_BUILD_TESTS)
   if(YANG_BUILD_DANGD)
     find_program(DANG_OPENSSH_CLIENT ssh)
     add_executable(dangd_tests dangd/application_test.cc
-      dangd/hardware_transaction_test.cc dangd/plugin_manager_test.cc
+      dangd/hardware_transaction_test.cc dangd/peer_transaction_test.cc
+      dangd/plugin_manager_test.cc
       dangd/plugin_worker_protocol_test.cc dangd/plugin_worker_test.cc
       dangd/ssh_transport_test.cc
       dangd/tls_transport_test.cc)

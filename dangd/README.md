@@ -151,6 +151,11 @@ a fully successful later hardware transaction. ABI v1-v3 plugins remain
 supported as one reversible transaction action per plugin; their remnant path
 is empty because the legacy callback has transaction-wide granularity.
 
+Configuration spanning independent dangd servers requires a stronger durable
+decision boundary than this local transaction. The implemented but not yet
+transport-integrated state machine and its fail-closed recovery rules are
+described in [Peer transaction coordination](../docs/PEER_TRANSACTIONS.md).
+
 ## Embedded SSH server example
 
 `dangd` embeds libssh and supports public-key-only NETCONF over SSH. The SSH
