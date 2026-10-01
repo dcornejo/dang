@@ -233,10 +233,11 @@ std::optional<PluginWorkerDiscovery> PluginWorkerClient::Discover(
         value.at("supports_operational_data").get<bool>(),
         value.at("supports_hardware_actions").get<bool>(),
         value.at("supports_applied_reconciliation").get<bool>(),
+        value.at("supports_peer_transactions").get<bool>(),
         value.at("resource_domains").get<std::vector<std::string>>()};
     if (discovery.manifest.plugin_name.empty() ||
         discovery.manifest.abi_version < DANG_PLUGIN_ABI_V1 ||
-        discovery.manifest.abi_version > DANG_PLUGIN_ABI_V8)
+        discovery.manifest.abi_version > DANG_PLUGIN_ABI_V9)
       throw Json::other_error::create(501, "invalid plugin manifest", &value);
     const auto valid_names = [](const std::vector<std::string>& values) {
       return std::ranges::none_of(values, &std::string::empty);
@@ -352,6 +353,88 @@ PluginWorkerNotificationResult PluginWorkerClient::Notifications() {
     return {{}, "malformed plugin worker notification values"};
   }
   return result;
+}
+
+PluginWorkerPeerCandidatesResult PluginWorkerClient::PeerCandidates() {
+  ExchangeResult exchanged =
+      Exchange(Json{{"operation", "peer-candidates"}}.dump());
+  if (!exchanged.response)
+    return {{}, std::nullopt, exchanged.error};
+  const Json& response = *exchanged.response;
+  if (!response.value("ok", false) || !response.contains("accepted") ||
+      !response["accepted"].is_boolean()) {
+    Terminate();
+    return {{}, std::nullopt,
+            "invalid plugin worker peer-candidates response"};
+  }
+  try {
+    if (!response["accepted"].get<bool>())
+      return {{}, ParseFinding(response.at("finding")), std::nullopt};
+    const Json& serialized = response.at("candidates");
+    if (!serialized.is_array())
+      throw Json::other_error::create(501, "invalid peer candidates",
+                                      &serialized);
+    PluginWorkerPeerCandidatesResult result;
+    const auto& limits = yang::DefaultResourceLimits();
+    for (const Json& value : serialized) {
+      PluginPeerCandidate candidate{
+          value.at("provider").get<std::string>(),
+          value.at("group_id").get<std::string>(),
+          value.at("participant_id").get<std::string>(),
+          value.at("role").get<std::uint32_t>(),
+          value.at("confirmed_timeout_seconds").get<std::uint32_t>(),
+          value.at("module_name").get<std::string>(),
+          value.at("configuration_xml").get<std::string>(),
+          value.at("verification_context_json").get<std::string>()};
+      const Json context = Json::parse(candidate.verification_context_json,
+                                       nullptr, false);
+      if (candidate.provider.empty() || candidate.group_id.empty() ||
+          candidate.participant_id.empty() || candidate.module_name.empty() ||
+          candidate.confirmed_timeout_seconds == 0 ||
+          (candidate.role != DANG_PEER_PRIMARY_V1 &&
+           candidate.role != DANG_PEER_STANDBY_V1) ||
+          candidate.provider.size() > limits.maximum_xpath_bytes ||
+          candidate.group_id.size() > limits.maximum_xpath_bytes ||
+          candidate.participant_id.size() > limits.maximum_xpath_bytes ||
+          candidate.module_name.size() > limits.maximum_xpath_bytes ||
+          candidate.configuration_xml.size() > limits.maximum_snapshot_bytes ||
+          candidate.verification_context_json.size() >
+              limits.maximum_snapshot_bytes || context.is_discarded())
+        throw Json::other_error::create(501, "invalid peer candidate", &value);
+      result.candidates.push_back(std::move(candidate));
+    }
+    return result;
+  } catch (const Json::exception&) {
+    Terminate();
+    return {{}, std::nullopt,
+            "malformed plugin worker peer-candidate values"};
+  }
+}
+
+PluginWorkerTransactionResult PluginWorkerClient::VerifyPeer(
+    const PluginPeerVerification& verification) {
+  const auto& limits = yang::DefaultResourceLimits();
+  if (verification.provider.empty() || verification.group_id.empty() ||
+      verification.participant_id.empty() ||
+      verification.provider.size() > limits.maximum_xpath_bytes ||
+      verification.group_id.size() > limits.maximum_xpath_bytes ||
+      verification.participant_id.size() > limits.maximum_xpath_bytes ||
+      verification.verification_context_json.size() >
+          limits.maximum_snapshot_bytes ||
+      verification.running_reply_xml.size() > limits.maximum_snapshot_bytes ||
+      verification.operational_reply_xml.size() >
+          limits.maximum_snapshot_bytes)
+    return {std::nullopt, "invalid peer verification request"};
+  return Transaction(
+      Json{{"operation", "verify-peer"},
+           {"provider", verification.provider},
+           {"group_id", verification.group_id},
+           {"participant_id", verification.participant_id},
+           {"verification_context_json",
+            verification.verification_context_json},
+           {"running_reply_xml", verification.running_reply_xml},
+           {"operational_reply_xml", verification.operational_reply_xml}}
+          .dump());
 }
 
 PluginWorkerTransactionResult PluginWorkerClient::Transaction(

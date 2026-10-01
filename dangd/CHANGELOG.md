@@ -7,6 +7,17 @@
 
 ### Added
 
+- Added plugin ABI v9 for transport-neutral peer transaction planning and
+  verification. Plugins return complete module-scoped images for stable peer
+  identities plus opaque verifier context; dangd copies the contract through
+  supervised workers, rejects unowned modules, and routes authenticated
+  running/operational replies back to the contributing verifier without
+  exposing endpoints, credentials, or sessions.
+- Added generic multi-plugin peer candidate composition. It rejects overlapping
+  module ownership, cross-module fragments, inconsistent roles/timeouts,
+  incomplete participant module sets, invalid final candidates, and groups
+  without at least two participants and exactly one primary.
+
 - Added a transport-neutral peer transaction coordinator for future pair-wide
   configuration. It prepares every participant before mutation, applies
   standbys before the primary, verifies all peers, durably records the commit

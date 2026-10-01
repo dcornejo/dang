@@ -65,7 +65,9 @@ struct PluginWorkerRuntime::Entry {
              other.supports_hardware_actions ==
                  manifest.supports_hardware_actions &&
              other.supports_applied_reconciliation ==
-                 manifest.supports_applied_reconciliation;
+                 manifest.supports_applied_reconciliation &&
+             other.supports_peer_transactions ==
+                 manifest.supports_peer_transactions;
     };
     const auto same_source = [](const PluginYangSource& left,
                                 const PluginYangSource& right) {
@@ -217,6 +219,69 @@ std::vector<PluginNotification> PluginWorkerRuntime::Notifications() {
                   std::make_move_iterator(result.notifications.end()));
   }
   return events;
+}
+
+std::vector<PluginPeerCandidate> PluginWorkerRuntime::PeerCandidates(
+    std::optional<yang::config::ValidationFinding>* error) {
+  std::lock_guard lock(worker_mutex_);
+  if (error) error->reset();
+  std::vector<PluginPeerCandidate> candidates;
+  for (const std::size_t index : affected_) {
+    Entry& entry = *entries_[index];
+    if (!entry.manifest.supports_peer_transactions) continue;
+    if (!entry.client->healthy()) {
+      if (error)
+        *error = Failure(entry.manifest.plugin_name,
+                         "plugin worker lost its prepared transaction");
+      return {};
+    }
+    PluginWorkerPeerCandidatesResult result = entry.client->PeerCandidates();
+    if (!result.ok()) {
+      if (error)
+        *error = result.finding.value_or(Failure(
+            entry.manifest.plugin_name,
+            result.worker_error.value_or("plugin peer planning failed")));
+      return {};
+    }
+    for (const PluginPeerCandidate& candidate : result.candidates) {
+      if (candidate.provider != entry.manifest.plugin_name ||
+          std::ranges::find(entry.manifest.modules, candidate.module_name) ==
+              entry.manifest.modules.end()) {
+        if (error)
+          *error = Failure(entry.manifest.plugin_name,
+                           "worker returned an unowned peer candidate module");
+        return {};
+      }
+    }
+    candidates.insert(candidates.end(),
+                      std::make_move_iterator(result.candidates.begin()),
+                      std::make_move_iterator(result.candidates.end()));
+  }
+  return candidates;
+}
+
+std::optional<yang::config::ValidationFinding>
+PluginWorkerRuntime::VerifyPeer(
+    const PluginPeerVerification& verification) {
+  std::lock_guard lock(worker_mutex_);
+  const auto found = std::ranges::find_if(
+      affected_, [&](std::size_t index) {
+        return entries_[index]->manifest.plugin_name == verification.provider;
+      });
+  if (found == affected_.end())
+    return Failure(verification.provider,
+                   "peer verifier is not an affected plugin");
+  Entry& entry = *entries_[*found];
+  if (!entry.manifest.supports_peer_transactions)
+    return Failure(verification.provider, "peer verifier is unavailable");
+  if (!entry.client->healthy())
+    return Failure(verification.provider,
+                   "plugin worker lost its prepared transaction");
+  PluginWorkerTransactionResult result = entry.client->VerifyPeer(verification);
+  if (result.finding) return result.finding;
+  if (result.worker_error)
+    return Failure(verification.provider, *result.worker_error);
+  return std::nullopt;
 }
 
 std::string PluginWorkerRuntime::ReconciliationData(

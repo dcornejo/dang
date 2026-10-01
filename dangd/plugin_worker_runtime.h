@@ -35,6 +35,10 @@ class PluginWorkerRuntime final : public PluginRuntime {
   [[nodiscard]] std::vector<PluginOperationalFragment> OperationalData()
       const override;
   [[nodiscard]] std::vector<PluginNotification> Notifications() override;
+  [[nodiscard]] std::vector<PluginPeerCandidate> PeerCandidates(
+      std::optional<yang::config::ValidationFinding>* error) override;
+  [[nodiscard]] std::optional<yang::config::ValidationFinding> VerifyPeer(
+      const PluginPeerVerification& verification) override;
   [[nodiscard]] std::string ReconciliationData(
       std::span<const OperationalProviderFailure> failures = {}) const override;
   [[nodiscard]] std::optional<yang::config::ValidationFinding> Prepare(

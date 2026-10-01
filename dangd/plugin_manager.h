@@ -40,8 +40,31 @@ struct PluginManifest {
   bool supports_operational_data = false;
   bool supports_hardware_actions = false;
   bool supports_applied_reconciliation = false;
+  bool supports_peer_transactions = false;
   /** Exclusive non-schema resources, for example the host routing plane. */
   std::vector<std::string> resource_domains;
+};
+
+/** Host-owned ABI-v9 module image and verification policy contribution. */
+struct PluginPeerCandidate {
+  std::string provider;
+  std::string group_id;
+  std::string participant_id;
+  std::uint32_t role = DANG_PEER_STANDBY_V1;
+  std::uint32_t confirmed_timeout_seconds = 0;
+  std::string module_name;
+  std::string configuration_xml;
+  std::string verification_context_json;
+};
+
+/** Authenticated peer readback routed to exactly one contributing plugin. */
+struct PluginPeerVerification {
+  std::string provider;
+  std::string group_id;
+  std::string participant_id;
+  std::string verification_context_json;
+  std::string running_reply_xml;
+  std::string operational_reply_xml;
 };
 
 /** One ABI-v3 operational callback result, including provider attribution. */
@@ -125,6 +148,12 @@ class PluginRuntime : public yang::netconf::OperationProvider {
   [[nodiscard]] virtual std::vector<PluginNotification> Notifications() {
     return {};
   }
+  /** Copies peer candidates from affected, already validated preparations. */
+  [[nodiscard]] virtual std::vector<PluginPeerCandidate> PeerCandidates(
+      std::optional<yang::config::ValidationFinding>* error) = 0;
+  /** Applies one plugin's verifier to authenticated peer readback. */
+  [[nodiscard]] virtual std::optional<yang::config::ValidationFinding>
+  VerifyPeer(const PluginPeerVerification& verification) = 0;
   [[nodiscard]] virtual std::string ReconciliationData(
       std::span<const OperationalProviderFailure> provider_failures = {})
       const = 0;
@@ -162,6 +191,10 @@ class PluginManager : public PluginRuntime {
   [[nodiscard]] std::vector<PluginOperationalFragment> OperationalData()
       const override;
   [[nodiscard]] std::vector<PluginNotification> Notifications() override;
+  [[nodiscard]] std::vector<PluginPeerCandidate> PeerCandidates(
+      std::optional<yang::config::ValidationFinding>* error) override;
+  [[nodiscard]] std::optional<yang::config::ValidationFinding> VerifyPeer(
+      const PluginPeerVerification& verification) override;
   /** Returns modeled state for hardware changes that could not be rolled back. */
   [[nodiscard]] std::string ReconciliationData(
       std::span<const OperationalProviderFailure> provider_failures = {})

@@ -91,6 +91,11 @@ struct PluginManager::State {
                              DangPluginErrorV1*) = nullptr;
     int (*next_notification)(void*, DangNotificationV1*, DangPluginErrorV1*) =
         nullptr;
+    size_t (*peer_candidate_count)(void*, void*) = nullptr;
+    int (*peer_candidate_at)(void*, void*, size_t, DangPeerCandidateV1*,
+                             DangPluginErrorV1*) = nullptr;
+    int (*verify_peer)(void*, void*, const DangPeerVerificationV1*,
+                       DangPluginErrorV1*) = nullptr;
     std::string name;
     std::vector<std::string> modules;
     std::vector<std::string> dependencies;
@@ -146,6 +151,12 @@ bool PluginManager::Load(const std::filesystem::path& path,
     return false;
   }
   dlerror();
+  auto initialize_v9 = reinterpret_cast<DangPluginInitV9>(
+      dlsym(library, "dang_plugin_init_v9"));
+  const char* v9_error = dlerror();
+  const DangPluginV9* api_v9 =
+      v9_error == nullptr && initialize_v9 ? initialize_v9() : nullptr;
+  dlerror();
   auto initialize_v8 = reinterpret_cast<DangPluginInitV8>(
       dlsym(library, "dang_plugin_init_v8"));
   const char* v8_error = dlerror();
@@ -191,7 +202,8 @@ bool PluginManager::Load(const std::filesystem::path& path,
   auto initialize = reinterpret_cast<DangPluginInitV1>(
       dlsym(library, "dang_plugin_init_v1"));
   const char* v1_error = dlerror();
-  if (api_v8 == nullptr && api_v7 == nullptr && api_v6 == nullptr && api_v5 == nullptr &&
+  if (api_v9 == nullptr && api_v8 == nullptr && api_v7 == nullptr &&
+      api_v6 == nullptr && api_v5 == nullptr &&
       api_v4 == nullptr && api_v3 == nullptr && api_v2 == nullptr &&
       v1_error != nullptr) {
     errors->push_back("plugin " + path.string() +
@@ -200,7 +212,8 @@ bool PluginManager::Load(const std::filesystem::path& path,
     return false;
   }
   const DangPluginV1* api =
-      api_v8   ? &api_v8->v7.v6.v5.v4.v3.v2.v1
+      api_v9   ? &api_v9->v8.v7.v6.v5.v4.v3.v2.v1
+      : api_v8 ? &api_v8->v7.v6.v5.v4.v3.v2.v1
       : api_v7 ? &api_v7->v6.v5.v4.v3.v2.v1
       : api_v6 ? &api_v6->v5.v4.v3.v2.v1
       : api_v5 ? &api_v5->v4.v3.v2.v1
@@ -209,7 +222,8 @@ bool PluginManager::Load(const std::filesystem::path& path,
       : api_v2 ? &api_v2->v1
                : (initialize ? initialize() : nullptr);
   if (!api || api->abi_version !=
-                  (api_v8 ? DANG_PLUGIN_ABI_V8
+                  (api_v9 ? DANG_PLUGIN_ABI_V9
+                          : api_v8 ? DANG_PLUGIN_ABI_V8
                           : api_v7 ? DANG_PLUGIN_ABI_V7
                           : api_v6 ? DANG_PLUGIN_ABI_V6
                           : api_v5 ? DANG_PLUGIN_ABI_V5
@@ -225,7 +239,9 @@ bool PluginManager::Load(const std::filesystem::path& path,
     dlclose(library);
     return false;
   }
-  const DangPluginV7* resource_api = api_v8 ? &api_v8->v7 : api_v7;
+  const DangPluginV8* notification_api = api_v9 ? &api_v9->v8 : api_v8;
+  const DangPluginV7* resource_api =
+      notification_api ? &notification_api->v7 : api_v7;
   const DangPluginV6* reconcile_api = resource_api ? &resource_api->v6 : api_v6;
   const DangPluginV5* complete_api = reconcile_api ? &reconcile_api->v5 : api_v5;
   const DangPluginV4* action_api = complete_api ? &complete_api->v4 : api_v4;
@@ -262,9 +278,17 @@ bool PluginManager::Load(const std::filesystem::path& path,
     dlclose(library);
     return false;
   }
-  if (api_v8 && !api_v8->next_notification) {
+  if (notification_api && !notification_api->next_notification) {
     errors->push_back("plugin " + std::string(api->plugin_name) +
                       " does not implement ABI v8 notification draining");
+    if (api->destroy) api->destroy(api->context);
+    dlclose(library);
+    return false;
+  }
+  if (api_v9 && (!api_v9->peer_candidate_count ||
+                 !api_v9->peer_candidate_at || !api_v9->verify_peer)) {
+    errors->push_back("plugin " + std::string(api->plugin_name) +
+                      " does not implement the complete ABI v9 peer contract");
     if (api->destroy) api->destroy(api->context);
     dlclose(library);
     return false;
@@ -280,7 +304,8 @@ bool PluginManager::Load(const std::filesystem::path& path,
   State::Plugin plugin;
   plugin.library = library;
   plugin.api = api;
-  plugin.invoke = api_v8   ? api_v8->v7.v6.v5.v4.v3.v2.invoke
+  plugin.invoke = api_v9   ? api_v9->v8.v7.v6.v5.v4.v3.v2.invoke
+                  : api_v8 ? api_v8->v7.v6.v5.v4.v3.v2.invoke
                   : api_v7 ? api_v7->v6.v5.v4.v3.v2.invoke
                   : api_v6 ? api_v6->v5.v4.v3.v2.invoke
                   : api_v5 ? api_v5->v4.v3.v2.invoke
@@ -289,7 +314,8 @@ bool PluginManager::Load(const std::filesystem::path& path,
                   : api_v2 ? api_v2->invoke
                            : nullptr;
   plugin.operational =
-      api_v8   ? api_v8->v7.v6.v5.v4.v3.get_operational_data
+      api_v9   ? api_v9->v8.v7.v6.v5.v4.v3.get_operational_data
+      : api_v8 ? api_v8->v7.v6.v5.v4.v3.get_operational_data
       : api_v7 ? api_v7->v6.v5.v4.v3.get_operational_data
       : api_v6 ? api_v6->v5.v4.v3.get_operational_data
       : api_v5 ? api_v5->v4.v3.get_operational_data
@@ -300,7 +326,13 @@ bool PluginManager::Load(const std::filesystem::path& path,
       complete_api ? complete_api->get_operational_data_v2 : nullptr;
   plugin.reconcile_applied =
       reconcile_api ? reconcile_api->reconcile_applied_configuration : nullptr;
-  plugin.next_notification = api_v8 ? api_v8->next_notification : nullptr;
+  plugin.next_notification =
+      notification_api ? notification_api->next_notification : nullptr;
+  if (api_v9) {
+    plugin.peer_candidate_count = api_v9->peer_candidate_count;
+    plugin.peer_candidate_at = api_v9->peer_candidate_at;
+    plugin.verify_peer = api_v9->verify_peer;
+  }
   if (action_api) {
     plugin.hardware_action_count = action_api->hardware_action_count;
     plugin.hardware_action_at = action_api->hardware_action_at;
@@ -424,6 +456,7 @@ bool PluginManager::Load(const std::filesystem::path& path,
        plugin.operational_v2 != nullptr || plugin.operational != nullptr,
        plugin.hardware_action_count != nullptr,
        plugin.reconcile_applied != nullptr,
+       plugin.peer_candidate_count != nullptr,
        plugin.resource_domains});
   state_->plugins.push_back(std::move(plugin));
   return true;
@@ -533,6 +566,92 @@ std::vector<PluginNotification> PluginManager::Notifications() {
     }
   }
   return result;
+}
+
+std::vector<PluginPeerCandidate> PluginManager::PeerCandidates(
+    std::optional<yang::config::ValidationFinding>* result_error) {
+  constexpr std::size_t kMaximumCandidatesPerPlugin = 64;
+  if (result_error) result_error->reset();
+  const auto& limits = yang::DefaultResourceLimits();
+  std::vector<PluginPeerCandidate> result;
+  for (const std::size_t plugin_index : state_->order) {
+    State::Plugin& plugin = state_->plugins[plugin_index];
+    if (!plugin.peer_candidate_count) continue;
+    const std::size_t count =
+        plugin.peer_candidate_count(plugin.api->context, plugin.prepared);
+    if (count > kMaximumCandidatesPerPlugin) {
+      if (result_error)
+        *result_error = PluginFinding(
+            plugin.name, {}, "peer candidate count exceeds the resource limit");
+      return {};
+    }
+    for (std::size_t index = 0; index < count; ++index) {
+      DangPeerCandidateV1 candidate{};
+      DangPluginErrorV1 error{};
+      if (!plugin.peer_candidate_at(plugin.api->context, plugin.prepared,
+                                    index, &candidate, &error)) {
+        if (result_error)
+          *result_error =
+              PluginFinding(plugin.name, error, "peer planning failed");
+        return {};
+      }
+      auto group = CopyBoundedCString(candidate.group_id,
+                                      limits.maximum_xpath_bytes);
+      auto participant = CopyBoundedCString(candidate.participant_id,
+                                            limits.maximum_xpath_bytes);
+      auto module = CopyBoundedCString(candidate.module_name,
+                                       limits.maximum_xpath_bytes);
+      auto configuration = CopyBoundedCString(candidate.configuration_xml,
+                                              limits.maximum_snapshot_bytes);
+      auto context = candidate.verification_context_json
+          ? CopyBoundedCString(candidate.verification_context_json,
+                               limits.maximum_snapshot_bytes)
+          : std::optional<std::string>("{}");
+      const bool owned = module &&
+          std::ranges::find(plugin.modules, *module) != plugin.modules.end();
+      const auto parsed_context = context
+          ? nlohmann::json::parse(*context, nullptr, false)
+          : nlohmann::json();
+      if (!group || group->empty() || !participant || participant->empty() ||
+          !module || module->empty() || !configuration || !context ||
+          parsed_context.is_discarded() || !owned ||
+          (candidate.role != DANG_PEER_PRIMARY_V1 &&
+           candidate.role != DANG_PEER_STANDBY_V1) ||
+          candidate.confirmed_timeout_seconds == 0) {
+        if (result_error)
+          *result_error = PluginFinding(
+              plugin.name, {}, "plugin returned an invalid peer candidate");
+        return {};
+      }
+      result.push_back(
+          {plugin.name, std::move(*group), std::move(*participant),
+           candidate.role, candidate.confirmed_timeout_seconds,
+           std::move(*module), std::move(*configuration),
+           std::move(*context)});
+    }
+  }
+  return result;
+}
+
+std::optional<yang::config::ValidationFinding> PluginManager::VerifyPeer(
+    const PluginPeerVerification& verification) {
+  const auto found = std::ranges::find_if(
+      state_->plugins, [&](const State::Plugin& plugin) {
+        return plugin.name == verification.provider && plugin.affected;
+      });
+  if (found == state_->plugins.end() || !found->verify_peer)
+    return PluginFinding(verification.provider, {},
+                         "peer verifier is unavailable");
+  const DangPeerVerificationV1 request{
+      verification.group_id.c_str(), verification.participant_id.c_str(),
+      verification.verification_context_json.c_str(),
+      verification.running_reply_xml.c_str(),
+      verification.operational_reply_xml.c_str()};
+  DangPluginErrorV1 error{};
+  if (!found->verify_peer(found->api->context, found->prepared, &request,
+                          &error))
+    return PluginFinding(found->name, error, "peer verification failed");
+  return std::nullopt;
 }
 
 std::string PluginManager::ReconciliationData(

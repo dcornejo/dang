@@ -144,25 +144,58 @@ int NextNotification(void*, DangNotificationV1* event, DangPluginErrorV1*) {
   return 1;
 }
 
-DangPluginV8 MakePlugin() {
-  DangPluginV8 plugin{};
-  plugin.v7.v6.v5.v4.v3.v2.v1 =
-      {DANG_PLUGIN_ABI_V8, "test-provider", nullptr, SourceCount, SourceAt,
+size_t PeerCandidateCount(void*, void*) { return 2; }
+
+int PeerCandidateAt(void*, void*, size_t index, DangPeerCandidateV1* candidate,
+                    DangPluginErrorV1*) {
+  if (!candidate || index > 1) return 0;
+  constexpr const char* kConfiguration =
+      "<config xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
+      "<provider-settings xmlns=\"urn:dangd:test:provider\">"
+      "<mode>normal</mode></provider-settings></config>";
+  *candidate = {"test-group", index == 0 ? "primary" : "standby",
+                index == 0 ? DANG_PEER_PRIMARY_V1 : DANG_PEER_STANDBY_V1,
+                60, "dangd-test-provider", kConfiguration,
+                "{\"expected_status\":\"ready\"}"};
+  return 1;
+}
+
+int VerifyPeer(void*, void*, const DangPeerVerificationV1* verification,
+               DangPluginErrorV1* error) {
+  if (!verification ||
+      std::string_view(verification->verification_context_json) !=
+          "{\"expected_status\":\"ready\"}" ||
+      std::string_view(verification->operational_reply_xml).find("ready") ==
+          std::string_view::npos) {
+    if (error) error->message = "peer did not report ready";
+    return 0;
+  }
+  return 1;
+}
+
+DangPluginV9 MakePlugin() {
+  DangPluginV9 plugin{};
+  plugin.v8.v7.v6.v5.v4.v3.v2.v1 =
+      {DANG_PLUGIN_ABI_V9, "test-provider", nullptr, SourceCount, SourceAt,
        nullptr, nullptr, Prepare, Validate, Apply, Rollback, Release, nullptr};
-  plugin.v7.v6.v5.v4.v3.v2.invoke = Invoke;
-  plugin.v7.v6.v5.v4.hardware_action_count = HardwareActionCount;
-  plugin.v7.v6.v5.v4.hardware_action_at = HardwareActionAt;
-  plugin.v7.v6.v5.v4.apply_hardware_action = ApplyHardwareAction;
-  plugin.v7.v6.v5.v4.rollback_hardware_action = RollbackHardwareAction;
-  plugin.v7.v6.v5.get_operational_data_v2 = OperationalV2;
-  plugin.v7.v6.reconcile_applied_configuration = ReconcileApplied;
-  plugin.v7.resource_domain_count = ResourceDomainCount;
-  plugin.v7.resource_domain_at = ResourceDomainAt;
-  plugin.next_notification = NextNotification;
+  plugin.v8.v7.v6.v5.v4.v3.v2.invoke = Invoke;
+  plugin.v8.v7.v6.v5.v4.hardware_action_count = HardwareActionCount;
+  plugin.v8.v7.v6.v5.v4.hardware_action_at = HardwareActionAt;
+  plugin.v8.v7.v6.v5.v4.apply_hardware_action = ApplyHardwareAction;
+  plugin.v8.v7.v6.v5.v4.rollback_hardware_action = RollbackHardwareAction;
+  plugin.v8.v7.v6.v5.get_operational_data_v2 = OperationalV2;
+  plugin.v8.v7.v6.reconcile_applied_configuration = ReconcileApplied;
+  plugin.v8.v7.resource_domain_count = ResourceDomainCount;
+  plugin.v8.v7.resource_domain_at = ResourceDomainAt;
+  plugin.v8.next_notification = NextNotification;
+  plugin.peer_candidate_count = PeerCandidateCount;
+  plugin.peer_candidate_at = PeerCandidateAt;
+  plugin.verify_peer = VerifyPeer;
   return plugin;
 }
-const DangPluginV8 kPlugin = MakePlugin();
+const DangPluginV9 kPlugin = MakePlugin();
 
 }  // namespace
 
-extern "C" const DangPluginV8* dang_plugin_init_v8() { return &kPlugin; }
+extern "C" const DangPluginV9* dang_plugin_init_v9() { return &kPlugin; }
+extern "C" const DangPluginV8* dang_plugin_init_v8() { return &kPlugin.v8; }

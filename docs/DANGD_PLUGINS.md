@@ -116,7 +116,8 @@ flowchart LR
   v6[ABI v6<br/>actual applied-state reconciliation]
   v7[ABI v7<br/>exclusive resource domains]
   v8[ABI v8<br/>modeled event notifications]
-  v1 --> v2 --> v3 --> v4 --> v5 --> v6 --> v7 --> v8
+  v9[ABI v9<br/>peer candidates and verification]
+  v1 --> v2 --> v3 --> v4 --> v5 --> v6 --> v7 --> v8 --> v9
 ```
 
 ## Responsibilities
@@ -145,6 +146,25 @@ during a transaction.
 NACM is deliberately not a plugin. `ietf-netconf-acm` configuration is stored
 in the normal datastores, while `dangd` compiles and enforces the active policy
 inside the trusted core.
+
+ABI v9 keeps peer topology policy in plugins without giving a plugin transport
+authority. After ordinary `prepare` and `validate`, an affected plugin may
+return complete module-scoped candidates keyed by stable group and participant
+identifiers. Every participant in a group must receive the same module set.
+Dangd rejects duplicate module contributions, mixed roles or timeouts,
+cross-module XML, incomplete participant coverage, invalid composed data,
+groups smaller than two, and groups without exactly one primary. Only after
+this generic composition succeeds may the core resolve participant identifiers
+through its endpoint/trust configuration and open sessions.
+
+Several plugins may contribute to one group. Each plugin supplies the complete
+image only for modules it owns; dangd combines the non-overlapping images and
+validates the resulting candidate against the full schema. The plugin's opaque
+JSON verification context is returned only to that same plugin along with
+authenticated running and operational replies. Endpoint addresses,
+credentials, TLS objects, RPC sequencing, durable decisions, and recovery are
+never exposed through the ABI. A plugin must not include dangd-private headers
+or rely on an undocumented daemon behavior.
 
 ## Build and entry point
 

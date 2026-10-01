@@ -176,6 +176,40 @@ TEST(PluginWorkerClientTest, CopiesDiscoveryAndOperationalResults) {
   EXPECT_TRUE(client->healthy());
 }
 
+TEST(PluginWorkerClientTest, CopiesAndVerifiesPeerTransactionContract) {
+  std::vector<std::string> errors;
+  auto client = StartClient(DANG_TEST_PROVIDER_PLUGIN_PATH, 5s, &errors);
+  ASSERT_NE(client, nullptr) << testing::PrintToString(errors);
+  std::string discovery_error;
+  const auto discovery = client->Discover(&discovery_error);
+  ASSERT_TRUE(discovery.has_value()) << discovery_error;
+  EXPECT_EQ(discovery->manifest.abi_version, DANG_PLUGIN_ABI_V9);
+  EXPECT_TRUE(discovery->manifest.supports_peer_transactions);
+  ASSERT_TRUE(client->Prepare("<config/>", "<config/>", "[]").ok());
+  ASSERT_TRUE(client->Validate().ok());
+  const auto planned = client->PeerCandidates();
+  ASSERT_TRUE(planned.ok()) << planned.worker_error.value_or("");
+  ASSERT_EQ(planned.candidates.size(), 2u);
+  EXPECT_EQ(planned.candidates.front().group_id, "test-group");
+  EXPECT_EQ(planned.candidates.front().module_name, "dangd-test-provider");
+  EXPECT_EQ(planned.candidates.front().role, DANG_PEER_PRIMARY_V1);
+  PluginPeerVerification verification{
+      .provider = "test-provider",
+      .group_id = "test-group",
+      .participant_id = "primary",
+      .verification_context_json = "{\"expected_status\":\"ready\"}",
+      .running_reply_xml = "<rpc-reply><data/></rpc-reply>",
+      .operational_reply_xml = "<rpc-reply><data>ready</data></rpc-reply>"};
+  EXPECT_TRUE(client->VerifyPeer(verification).ok());
+  verification.operational_reply_xml = "<rpc-reply><data/></rpc-reply>";
+  const auto rejected = client->VerifyPeer(verification);
+  ASSERT_FALSE(rejected.ok());
+  ASSERT_TRUE(rejected.finding.has_value());
+  EXPECT_NE(rejected.finding->message.find("did not report ready"),
+            std::string::npos);
+  EXPECT_FALSE(client->Abort().has_value());
+}
+
 TEST(PluginWorkerClientTest, TerminatesAndReapsTimedOutWorker) {
   std::vector<std::string> errors;
   auto client = StartClient(DANG_TEST_HANGING_OPERATIONAL_PLUGIN_PATH, 50ms,

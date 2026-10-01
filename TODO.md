@@ -118,9 +118,11 @@ stays in this file with its remaining work rewritten precisely.
   supplies a strict verifier for authenticated running and operational
   replies, including full managed-image comparison, configured HA identity
   binding, stable states, exact scopes, reachability, interruption, and
-  freshness; wire that verifier
-  into the production controller and construct each member's complete
-  candidate. Add a total transaction deadline beyond the implemented per-I/O
+  freshness. ABI v9 now carries complete module-scoped candidates and opaque
+  verifier context through supervised workers, and the core composes several
+  plugins' non-overlapping contributions with full-schema validation. Complete
+  the external Kea provider's candidate generation, then wire the generic plan
+  into the production controller. Add a total transaction deadline beyond the implemented per-I/O
   timeouts, fail-closed degraded-peer policy, NACM/observability, `dangctl`
   integration,
   and Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.

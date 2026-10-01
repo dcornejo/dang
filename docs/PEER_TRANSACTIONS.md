@@ -11,10 +11,31 @@ processes atomic, and ordinary sequential NETCONF commits cannot distinguish a
 lost reply from a failed mutation.
 
 `PeerTransactionCoordinator` provides the transport-neutral state machine for
-this boundary. The authenticated participant transport and automatic startup
-recovery are implemented, but dangd does not advertise pair-wide commit support
-yet. Provider translation, policy, observability, and an operator-facing entry
-point remain required before the feature can be enabled.
+this boundary. ABI v9 now provides the generic plugin planning and verification
+contract, including isolated-worker transport, while the authenticated
+participant transport and automatic startup recovery are also implemented.
+Dangd does not advertise pair-wide commit support yet because the final
+datastore commit entry point, endpoint resolution, policy, and observability
+are not connected.
+
+## Plugin planning contract
+
+Plugins never open peer connections. For each affected prepared transaction,
+ABI v9 returns a set of stable group/participant identities, participant roles,
+confirmed-commit timeouts, complete module-scoped `<config>` images, and opaque
+JSON verification contexts. Dangd generically composes contributions from
+several plugins. It requires the same complete module set on every participant,
+one owner for each module image, consistent roles/timeouts, at least two peers,
+and exactly one primary. Every fragment is checked against its claimed module;
+the combined candidate is then validated against the full schema so cross-
+module dependencies are evaluated only with the complete changed tree.
+
+After authenticated readback, dangd routes the running and operational replies
+to each contributing plugin's verifier together with only that plugin's opaque
+context. The core retains exclusive ownership of endpoint mappings, trust,
+credentials, sessions, NETCONF ordering, journaling, and recovery. This is the
+only supported seam: plugins may not depend on daemon-private APIs or require
+module-specific logic in dangd.
 
 ## Required participant operations
 
@@ -157,8 +178,8 @@ pair-wide management still requires:
 
 - provider-specific translation into complete per-peer candidates and a
   post-apply health check. The external Kea provider now implements the strict
-  dual-view verifier, but candidate construction and production invocation are
-  not connected;
+  dual-view verifier. Its ABI-v9 candidate construction remains to be completed,
+  and the generic production invocation is not connected;
 - policy for unreachable or degraded peers, defaulting to rejection;
 - a total transaction deadline beyond the implemented per-I/O timeouts,
   observability, NACM rules, packaging, and Linux/FreeBSD interoperability

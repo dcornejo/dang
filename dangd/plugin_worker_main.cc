@@ -28,6 +28,9 @@ std::size_t MaximumMessageBytes() {
   return yang::DefaultResourceLimits().maximum_snapshot_bytes;
 }
 
+Json Finding(std::optional<yang::config::ValidationFinding> finding,
+             std::string_view stage);
+
 bool Send(int descriptor, const Json& response) {
   std::string error;
   return dangd::WriteWorkerFrame(
@@ -49,7 +52,9 @@ Json Discovery(const dangd::PluginManager& manager) {
          {"supports_operational_data", manifest.supports_operational_data},
          {"supports_hardware_actions", manifest.supports_hardware_actions},
          {"supports_applied_reconciliation",
-          manifest.supports_applied_reconciliation}});
+          manifest.supports_applied_reconciliation},
+         {"supports_peer_transactions",
+          manifest.supports_peer_transactions}});
   }
   Json sources = Json::array();
   for (const dangd::PluginYangSource& source : manager.yang_sources()) {
@@ -99,6 +104,28 @@ Json Notifications(dangd::PluginManager& manager) {
   return {{"ok", true}, {"stage", "notifications"}, {"events", events}};
 }
 
+Json PeerCandidates(dangd::PluginManager& manager) {
+  std::optional<yang::config::ValidationFinding> finding;
+  const auto candidates = manager.PeerCandidates(&finding);
+  if (finding) return Finding(std::move(finding), "peer-candidates");
+  Json serialized = Json::array();
+  for (const auto& candidate : candidates)
+    serialized.push_back(
+        {{"provider", candidate.provider},
+         {"group_id", candidate.group_id},
+         {"participant_id", candidate.participant_id},
+         {"role", candidate.role},
+         {"confirmed_timeout_seconds", candidate.confirmed_timeout_seconds},
+         {"module_name", candidate.module_name},
+         {"configuration_xml", candidate.configuration_xml},
+         {"verification_context_json",
+          candidate.verification_context_json}});
+  return {{"ok", true},
+          {"stage", "peer-candidates"},
+          {"accepted", true},
+          {"candidates", std::move(serialized)}};
+}
+
 Json Finding(std::optional<yang::config::ValidationFinding> finding,
              std::string_view stage) {
   if (!finding)
@@ -146,6 +173,26 @@ int Run(int descriptor, const std::filesystem::path& plugin_path) {
       if (!Send(descriptor, Operational(manager))) return 1;
     } else if (operation == "notifications") {
       if (!Send(descriptor, Notifications(manager))) return 1;
+    } else if (operation == "peer-candidates") {
+      if (!Send(descriptor, PeerCandidates(manager))) return 1;
+    } else if (operation == "verify-peer") {
+      try {
+        dangd::PluginPeerVerification verification{
+            parsed.at("provider").get<std::string>(),
+            parsed.at("group_id").get<std::string>(),
+            parsed.at("participant_id").get<std::string>(),
+            parsed.at("verification_context_json").get<std::string>(),
+            parsed.at("running_reply_xml").get<std::string>(),
+            parsed.at("operational_reply_xml").get<std::string>()};
+        if (!Send(descriptor,
+                  Finding(manager.VerifyPeer(verification), "verify-peer")))
+          return 1;
+      } catch (const Json::exception&) {
+        if (!Send(descriptor, {{"ok", false},
+                               {"stage", "protocol"},
+                               {"error", "invalid peer verification request"}}))
+          return 1;
+      }
     } else if (operation == "prepare") {
       try {
         if (!Send(descriptor,

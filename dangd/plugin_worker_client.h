@@ -34,6 +34,16 @@ struct PluginWorkerNotificationResult {
   std::optional<std::string> worker_error;
 };
 
+/** Copied ABI-v9 peer candidates or a plugin/worker failure. */
+struct PluginWorkerPeerCandidatesResult {
+  std::vector<PluginPeerCandidate> candidates;
+  std::optional<yang::config::ValidationFinding> finding;
+  std::optional<std::string> worker_error;
+  [[nodiscard]] bool ok() const noexcept {
+    return !finding && !worker_error;
+  }
+};
+
 /** Plugin rejection or worker failure for one transaction phase. */
 struct PluginWorkerTransactionResult {
   std::optional<yang::config::ValidationFinding> finding;
@@ -105,6 +115,11 @@ class PluginWorkerClient {
   [[nodiscard]] PluginWorkerOperationalResult OperationalData();
   /** Drains one bounded notification batch inside the worker. */
   [[nodiscard]] PluginWorkerNotificationResult Notifications();
+  /** Copies peer plans from the worker's retained preparation. */
+  [[nodiscard]] PluginWorkerPeerCandidatesResult PeerCandidates();
+  /** Runs the retained preparation's verifier over authenticated readback. */
+  [[nodiscard]] PluginWorkerTransactionResult VerifyPeer(
+      const PluginPeerVerification& verification);
   /** Retains plugin-owned preparation for a copied transaction. */
   [[nodiscard]] PluginWorkerTransactionResult Prepare(
       std::string before_xml, std::string proposed_xml,

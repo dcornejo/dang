@@ -8,6 +8,11 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Added the ABI-v9 public peer-transaction contract and supervised-worker
+  transport. Dangd now composes complete, non-overlapping module images from
+  several plugins for each stable participant and validates the final candidate
+  without adding any plugin-specific awareness to the daemon core.
+
 - Recorded Linux ECMP operational fidelity for the external RFC 8431 provider.
   Native multipath routes now publish one stable, schema-valid route per base
   nexthop instead of collapsing to an empty nexthop; weights and unresolved

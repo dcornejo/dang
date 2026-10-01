@@ -256,6 +256,64 @@ typedef struct DangPluginV8 {
 /** Type of the optional exported `dang_plugin_init_v8` entry point. */
 typedef const DangPluginV8* (*DangPluginInitV8)(void);
 
+#define DANG_PLUGIN_ABI_V9 9u
+
+/** Role of one stable participant in a coordinated peer transaction. */
+typedef enum DangPeerTransactionRoleV1 {
+  DANG_PEER_PRIMARY_V1 = 1,
+  DANG_PEER_STANDBY_V1 = 2
+} DangPeerTransactionRoleV1;
+
+/**
+ * One complete module-scoped candidate contributed for one peer.
+ *
+ * `configuration_xml` is a NETCONF `<config>` document containing every
+ * configured top-level node owned by `module_name`, including none when the
+ * complete module image is empty. Dangd composes non-overlapping module images
+ * from every affected plugin; plugins must not include another module's data.
+ */
+typedef struct DangPeerCandidateV1 {
+  const char* group_id;
+  const char* participant_id;
+  uint32_t role;
+  uint32_t confirmed_timeout_seconds;
+  const char* module_name;
+  const char* configuration_xml;
+  /** Opaque plugin data echoed only to this plugin's verifier. */
+  const char* verification_context_json;
+} DangPeerCandidateV1;
+
+/** Authenticated readback supplied to a plugin after peer commit application. */
+typedef struct DangPeerVerificationV1 {
+  const char* group_id;
+  const char* participant_id;
+  const char* verification_context_json;
+  const char* running_reply_xml;
+  const char* operational_reply_xml;
+} DangPeerVerificationV1;
+
+/**
+ * ABI v9 adds transport-neutral peer planning and verification.
+ *
+ * Planning callbacks inspect the already prepared transaction. Returned
+ * strings are borrowed and copied before the callback returns. The verifier
+ * receives authenticated replies but no endpoint, credential, session, or
+ * transport object; those remain exclusively owned by dangd.
+ */
+typedef struct DangPluginV9 {
+  DangPluginV8 v8;
+  size_t (*peer_candidate_count)(void* context, void* prepared);
+  int (*peer_candidate_at)(void* context, void* prepared, size_t index,
+                           DangPeerCandidateV1* candidate,
+                           DangPluginErrorV1* error);
+  int (*verify_peer)(void* context, void* prepared,
+                     const DangPeerVerificationV1* verification,
+                     DangPluginErrorV1* error);
+} DangPluginV9;
+
+/** Type of the optional exported `dang_plugin_init_v9` entry point. */
+typedef const DangPluginV9* (*DangPluginInitV9)(void);
+
 #ifdef __cplusplus
 }
 #endif
