@@ -109,9 +109,10 @@ stays in this file with its remaining work rewritten precisely.
   versioned `--peer-recovery` file now validates stable participant-to-endpoint
   and trust mappings at startup and reload. Startup and reload now use those
   mappings to resume durable pending confirmations and proceed only after the
-  journal is complete. Implement the remaining prepare,
-  apply, verify, cancel, and release transport operations, add provider-specific
-  candidate translation and health verification,
+  journal is complete. A reusable authenticated session now preserves locks and
+  framing across correlated RPCs. Build the remaining prepare, apply, verify,
+  cancel, and release adapters on that session, add provider-specific candidate
+  translation and health verification,
   a total transaction deadline beyond the implemented per-I/O timeouts,
   fail-closed degraded-peer policy, NACM/observability, `dangctl` integration,
   and Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.

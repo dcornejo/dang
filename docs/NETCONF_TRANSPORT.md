@@ -104,6 +104,16 @@ used verbatim as the NETCONF/NACM username. The default is `cn`. The chosen
 field must contain exactly one safe value; ambiguity or absence fails closed.
 Values of other SAN types do not participate in the selected mapping.
 
+Outbound peer management uses `TlsRpcSession`, a blocking, resource-bounded
+mutual-TLS NETCONF client session. It verifies the server chain and selects DNS
+SAN matching for a named host or IP SAN matching for a numeric IPv4/IPv6
+address. Required NETCONF capabilities are checked from the safe parsed server
+hello before any RPC is sent. The session retains base:1.0 framing across
+multiple requests, rejects delimiter injection, validates each reply as
+untrusted XML, and requires the exact request `message-id`. Individual socket
+and TLS I/O waits and message sizes are bounded; DNS resolution and a total
+wall-clock session deadline remain host integration boundaries.
+
 `--username-map AUTHENTICATED=LOCAL` applies an exact mapping after certificate
 field selection. Repeat it for several identities. Without
 `--require-username-map`, an identity with no rule is used unchanged; with that

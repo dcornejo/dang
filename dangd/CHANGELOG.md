@@ -60,6 +60,14 @@
   from replaying or rewriting the same recovery record. A live two-peer
   mutual-TLS test covers end-to-end automatic recovery and journal cleanup.
 
+- Added a reusable authenticated NETCONF/TLS client session for the remaining
+  peer transaction phases. It verifies required capabilities before the first
+  RPC, retains base:1.0 framing state, validates and correlates every reply,
+  and closes idempotently. Live coverage performs candidate lock, edit,
+  validate, unlock, and close-session on one connection. Shared client identity
+  verification now uses DNS SAN matching for names and IP SAN matching for
+  numeric addresses without the deprecated OpenSSL hostname API.
+
 - Added managed RFC 9642 central cleartext symmetric keys with standard NACM
   protection, persistence/restart coverage, retrieval, and feature reporting.
 - Added the RFC 9644 SSH client/server grouping family and its pinned dependency

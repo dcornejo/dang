@@ -3,6 +3,7 @@
 
 #include "dangd/tls_transport.h"
 
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <sstream>
@@ -106,7 +107,7 @@ TEST(DangdTlsTransportTest, ExchangesAuthenticatedNetconfRpcOverMutualTls) {
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
   TlsClientOptions client_options{
-      .host = "localhost",
+      .host = "127.0.0.1",
       .port = port,
       .certificate = certificates / "alice-cert.pem",
       .private_key = certificates / "alice-key.pem",
@@ -142,6 +143,81 @@ TEST(DangdTlsTransportTest, ExchangesAuthenticatedNetconfRpcOverMutualTls) {
   EXPECT_NE(output.str().find("<hostname>edge-2</hostname>"),
             std::string::npos);
   EXPECT_NE(output.str().find("message-id=\"4\"><ok/>"),
+            std::string::npos);
+}
+
+TEST(DangdTlsTransportTest, ReusesAuthenticatedSessionAcrossCandidateRpcs) {
+  const std::filesystem::path source = DANG_TEST_SOURCE_DIR;
+  ApplicationOptions application_options{
+      .model = source / "dangd/examples/appliance.yang",
+      .search_paths = {source / "dangd/models"},
+      .configuration = source / "dangd/examples/config.xml",
+      .nacm_configuration = source / "dangd/examples/nacm.xml"};
+  auto loaded = Application::Load(application_options);
+  ASSERT_NE(loaded.application, nullptr);
+
+  const std::filesystem::path certificates = source / "dangd/testdata/tls";
+  const std::uint16_t port = AvailableLoopbackPort();
+  ASSERT_NE(port, 0);
+  TlsServerOptions server_options{
+      .address = "127.0.0.1",
+      .port = port,
+      .certificate = certificates / "server-cert.pem",
+      .private_key = certificates / "server-key.pem",
+      .trust_anchor = certificates / "ca-cert.pem",
+      .maximum_connections = 1};
+  std::ostringstream server_diagnostics;
+  int server_result = -1;
+  std::thread server([&] {
+    server_result = RunTlsServer(*loaded.application, server_options,
+                                 server_diagnostics);
+  });
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  TlsClientOptions client_options{
+      .host = "localhost",
+      .port = port,
+      .certificate = certificates / "alice-cert.pem",
+      .private_key = certificates / "alice-key.pem",
+      .trust_anchor = certificates / "ca-cert.pem"};
+  constexpr std::array<std::string_view, 2> capabilities = {
+      "urn:ietf:params:netconf:capability:candidate:1.0",
+      "urn:ietf:params:netconf:capability:validate:1.1"};
+  std::string error;
+  auto session = TlsRpcSession::Connect(client_options, &error, capabilities);
+  ASSERT_TRUE(session) << error;
+  const auto rpc = [&](std::string_view body, std::string_view message_id) {
+    return session->Execute(
+        "<rpc xmlns='urn:ietf:params:xml:ns:netconf:base:1.0' message-id='" +
+            std::string(message_id) + "'>" + std::string(body) + "</rpc>",
+        &error);
+  };
+  EXPECT_TRUE(rpc("<lock><target><candidate/></target></lock>", "lock"))
+      << error;
+  EXPECT_TRUE(rpc(R"xml(
+    <edit-config><target><candidate/></target><config>
+      <system xmlns="urn:example:appliance">
+        <hostname>session-peer</hostname>
+      </system>
+    </config></edit-config>)xml",
+                  "edit"))
+      << error;
+  EXPECT_TRUE(rpc("<validate><source><candidate/></source></validate>",
+                  "validate"))
+      << error;
+  EXPECT_TRUE(rpc("<unlock><target><candidate/></target></unlock>", "unlock"))
+      << error;
+  EXPECT_TRUE(rpc("<close-session/>", "close")) << error;
+  session->Close();
+  EXPECT_FALSE(rpc("<get/>", "after-close"));
+  EXPECT_NE(error.find("session is closed"), std::string::npos) << error;
+  server.join();
+
+  EXPECT_EQ(server_result, 0) << server_diagnostics.str();
+  EXPECT_NE(loaded.application->datastores()
+                .Read(yang::netconf::Datastore::kCandidate)
+                .ToXml()
+                .find("session-peer"),
             std::string::npos);
 }
 

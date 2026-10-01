@@ -109,6 +109,13 @@ is bounded and messages have byte ceilings; hostname resolution and a total
 wall-clock transaction deadline remain integration boundaries. The adapter
 invokes no command-line client.
 
+The same transport now exposes a reusable authenticated session for transaction
+work that must retain server-side state. Required capabilities are verified
+before any RPC, base:1.0 framing state is retained across requests, and every
+reply is independently bounded, namespace-validated, and correlated by
+`message-id`. The session has live lock/edit/validate/unlock/close coverage;
+the coordinator callbacks that construct those operations are still pending.
+
 `--peer-recovery FILE` supplies the stable target mapping as a private,
 versioned JSON document. Each entry binds an exact journal participant ID to a
 host, port, client certificate, private key, trust anchor, and optional per-I/O
@@ -134,7 +141,8 @@ The coordinator is not reachable from NETCONF or `dangctl` yet. Production
 pair-wide management still requires:
 
 - transport adapters for prepare, apply, verify, cancel, and release (only
-  recovery confirmation is currently implemented);
+  recovery confirmation and the reusable session primitive are currently
+  implemented);
 - provider-specific translation into complete per-peer candidates and a
   post-apply health check;
 - policy for unreachable or degraded peers, defaulting to rejection;

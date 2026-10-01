@@ -15,6 +15,7 @@
 #include <ranges>
 #include <string_view>
 
+#include <arpa/inet.h>
 #include <fcntl.h>
 #include <netdb.h>
 #include <poll.h>
@@ -79,6 +80,26 @@ bool ConfigureCredentials(SSL_CTX* context,
   if (SSL_CTX_load_verify_locations(context, trust_anchor.string().c_str(),
                                     nullptr) != 1) {
     *error = LastTlsError("cannot load TLS trust anchor");
+    return false;
+  }
+  return true;
+}
+
+bool ConfigurePeerIdentity(SSL* tls, const std::string& host,
+                           std::string* error) {
+  std::array<unsigned char, sizeof(in6_addr)> address{};
+  const bool numeric = inet_pton(AF_INET, host.c_str(), address.data()) == 1 ||
+                       inet_pton(AF_INET6, host.c_str(), address.data()) == 1;
+  X509_VERIFY_PARAM* verification = SSL_get0_param(tls);
+  if (verification == nullptr ||
+      (numeric ? X509_VERIFY_PARAM_set1_ip_asc(verification, host.c_str())
+               : X509_VERIFY_PARAM_set1_host(verification, host.data(),
+                                             host.size())) != 1) {
+    *error = "cannot configure TLS peer identity verification";
+    return false;
+  }
+  if (!numeric && SSL_set_tlsext_host_name(tls, host.c_str()) != 1) {
+    *error = LastTlsError("cannot configure TLS server name");
     return false;
   }
   return true;
@@ -640,51 +661,73 @@ int RunReloadableTlsServer(
   return result;
 }
 
-std::optional<TlsRpcExchange> ExchangeTlsRpc(const TlsClientOptions& options,
-                                             std::string_view rpc,
-                                             std::string* error,
-                                             std::span<const std::string_view>
-                                                 required_server_capabilities) {
-  if (error == nullptr) return std::nullopt;
-  error->clear();
-  if (rpc.find("]]>]]>") != std::string_view::npos) {
-    *error = "NETCONF RPC contains a framing delimiter";
-    return std::nullopt;
-  }
-  if (!ValidateNetconfDocument(rpc, "rpc", error))
-    return std::nullopt;
+struct TlsRpcSession::Impl {
+  Impl(Context client_context, Session client_tls, int client_socket,
+       std::string hello)
+      : context(std::move(client_context)),
+        tls(std::move(client_tls)),
+        socket_fd(client_socket),
+        server_hello(std::move(hello)) {}
 
+  Context context{nullptr, SSL_CTX_free};
+  Session tls{nullptr, SSL_free};
+  int socket_fd = -1;
+  std::string pending;
+  std::string server_hello;
+};
+
+TlsRpcSession::TlsRpcSession(std::unique_ptr<Impl> implementation)
+    : implementation_(std::move(implementation)) {}
+
+TlsRpcSession::~TlsRpcSession() { Close(); }
+
+TlsRpcSession::TlsRpcSession(TlsRpcSession&&) noexcept = default;
+
+TlsRpcSession& TlsRpcSession::operator=(TlsRpcSession&& other) noexcept {
+  if (this == &other) return *this;
+  Close();
+  implementation_ = std::move(other.implementation_);
+  return *this;
+}
+
+std::unique_ptr<TlsRpcSession> TlsRpcSession::Connect(
+    const TlsClientOptions& options, std::string* error,
+    std::span<const std::string_view> required_server_capabilities) {
+  if (error == nullptr) return nullptr;
+  error->clear();
   Context context(SSL_CTX_new(TLS_client_method()), SSL_CTX_free);
   if (!context) {
     *error = LastTlsError("cannot create TLS client context");
-    return std::nullopt;
+    return nullptr;
   }
   SSL_CTX_set_min_proto_version(context.get(), TLS1_2_VERSION);
   SSL_CTX_set_verify(context.get(), SSL_VERIFY_PEER, nullptr);
   if (!ConfigureCredentials(context.get(), options.certificate,
                             options.private_key, options.trust_anchor, error))
-    return std::nullopt;
+    return nullptr;
   const int socket_fd = ConnectSocket(options.host, options.port,
                                       options.timeout_milliseconds, error);
-  if (socket_fd < 0) return std::nullopt;
+  if (socket_fd < 0) return nullptr;
   Session tls(SSL_new(context.get()), SSL_free);
   if (!tls) {
     close(socket_fd);
     *error = "cannot create TLS client session";
-    return std::nullopt;
+    return nullptr;
   }
-  SSL_set_fd(tls.get(), socket_fd);
-  SSL_set_tlsext_host_name(tls.get(), options.host.c_str());
-  SSL_set1_host(tls.get(), options.host.c_str());
+  if (SSL_set_fd(tls.get(), socket_fd) != 1) {
+    *error = LastTlsError("cannot attach TLS client socket");
+    close(socket_fd);
+    return nullptr;
+  }
+  if (!ConfigurePeerIdentity(tls.get(), options.host, error)) {
+    close(socket_fd);
+    return nullptr;
+  }
   if (SSL_connect(tls.get()) != 1) {
     *error = LastTlsError("TLS handshake failed");
     close(socket_fd);
-    return std::nullopt;
+    return nullptr;
   }
-  const auto close_connection = [&] {
-    SSL_shutdown(tls.get());
-    close(socket_fd);
-  };
 
   std::string pending;
   auto server_hello = ReadBase10Message(tls.get(), &pending, error);
@@ -693,39 +736,93 @@ std::optional<TlsRpcExchange> ExchangeTlsRpc(const TlsClientOptions& options,
           *server_hello,
           "urn:ietf:params:netconf:base:1.0")) {
     if (error->empty()) *error = "NETCONF server does not advertise base 1.0";
-    close_connection();
-    return std::nullopt;
+    SSL_shutdown(tls.get());
+    close(socket_fd);
+    return nullptr;
   }
   for (const std::string_view capability : required_server_capabilities) {
     if (HelloHasCapability(*server_hello, capability)) continue;
     *error = "NETCONF server does not advertise required capability " +
              std::string(capability);
-    close_connection();
-    return std::nullopt;
+    SSL_shutdown(tls.get());
+    close(socket_fd);
+    return nullptr;
   }
   constexpr std::string_view client_hello =
       "<hello xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
       "<capabilities><capability>urn:ietf:params:netconf:base:1.0"
       "</capability></capabilities></hello>]]>]]>";
-  if (!WriteTls(tls.get(), client_hello, error) ||
-      !WriteTls(tls.get(), std::string(rpc) + "]]>]]>", error)) {
-    close_connection();
+  if (!WriteTls(tls.get(), client_hello, error)) {
+    SSL_shutdown(tls.get());
+    close(socket_fd);
+    return nullptr;
+  }
+  auto implementation = std::make_unique<Impl>(
+      std::move(context), std::move(tls), socket_fd, std::move(*server_hello));
+  implementation->pending = std::move(pending);
+  return std::unique_ptr<TlsRpcSession>(
+      new TlsRpcSession(std::move(implementation)));
+}
+
+std::optional<std::string> TlsRpcSession::Execute(std::string_view rpc,
+                                                  std::string* error) {
+  if (error == nullptr) return std::nullopt;
+  error->clear();
+  if (!implementation_ || !implementation_->tls) {
+    *error = "NETCONF TLS session is closed";
     return std::nullopt;
   }
-  auto reply = ReadBase10Message(tls.get(), &pending, error);
+  if (rpc.find("]]>]]>") != std::string_view::npos) {
+    *error = "NETCONF RPC contains a framing delimiter";
+    return std::nullopt;
+  }
+  if (!ValidateNetconfDocument(rpc, "rpc", error)) return std::nullopt;
+  if (!WriteTls(implementation_->tls.get(),
+                std::string(rpc) + "]]>]]>", error)) {
+    Close();
+    return std::nullopt;
+  }
+  auto reply = ReadBase10Message(implementation_->tls.get(),
+                                 &implementation_->pending, error);
   if (!reply || !ValidateNetconfDocument(*reply, "rpc-reply", error)) {
-    close_connection();
+    Close();
     return std::nullopt;
   }
   const auto request_id = RpcMessageId(rpc);
   const auto reply_id = RpcMessageId(*reply);
   if (!request_id || !reply_id || *request_id != *reply_id) {
     *error = "NETCONF reply message-id does not match the request";
-    close_connection();
+    Close();
     return std::nullopt;
   }
-  close_connection();
-  return TlsRpcExchange{.server_hello = std::move(*server_hello),
+  return reply;
+}
+
+const std::string& TlsRpcSession::server_hello() const noexcept {
+  static const std::string empty;
+  return implementation_ ? implementation_->server_hello : empty;
+}
+
+void TlsRpcSession::Close() noexcept {
+  if (!implementation_) return;
+  if (implementation_->tls) SSL_shutdown(implementation_->tls.get());
+  if (implementation_->socket_fd >= 0) {
+    close(implementation_->socket_fd);
+    implementation_->socket_fd = -1;
+  }
+  implementation_->tls.reset();
+}
+
+std::optional<TlsRpcExchange> ExchangeTlsRpc(
+    const TlsClientOptions& options, std::string_view rpc, std::string* error,
+    std::span<const std::string_view> required_server_capabilities) {
+  auto session =
+      TlsRpcSession::Connect(options, error, required_server_capabilities);
+  if (!session) return std::nullopt;
+  const std::string server_hello = session->server_hello();
+  auto reply = session->Execute(rpc, error);
+  if (!reply) return std::nullopt;
+  return TlsRpcExchange{.server_hello = server_hello,
                         .reply = std::move(*reply)};
 }
 
@@ -755,9 +852,17 @@ int RunTlsClient(const TlsClientOptions& options, std::istream& input,
     close(socket_fd);
     return 1;
   }
-  SSL_set_fd(tls.get(), socket_fd);
-  SSL_set_tlsext_host_name(tls.get(), options.host.c_str());
-  SSL_set1_host(tls.get(), options.host.c_str());
+  if (SSL_set_fd(tls.get(), socket_fd) != 1) {
+    diagnostics << "dangctl: "
+                << LastTlsError("cannot attach TLS client socket") << '\n';
+    close(socket_fd);
+    return 1;
+  }
+  if (!ConfigurePeerIdentity(tls.get(), options.host, &error)) {
+    diagnostics << "dangctl: " << error << '\n';
+    close(socket_fd);
+    return 1;
+  }
   if (SSL_connect(tls.get()) != 1) {
     diagnostics << "dangctl: " << LastTlsError("TLS handshake failed") << '\n';
     close(socket_fd);

@@ -58,6 +58,38 @@ struct TlsRpcExchange {
   std::string reply;
 };
 
+/** Authenticated base:1.0 NETCONF session supporting correlated RPCs. */
+class TlsRpcSession {
+ public:
+  ~TlsRpcSession();
+  TlsRpcSession(TlsRpcSession&&) noexcept;
+  TlsRpcSession& operator=(TlsRpcSession&&) noexcept;
+  TlsRpcSession(const TlsRpcSession&) = delete;
+  TlsRpcSession& operator=(const TlsRpcSession&) = delete;
+
+  /**
+   * Connects, verifies mutual TLS and hostname identity, and exchanges hello.
+   *
+   * Every required capability is checked before any RPC can be transmitted.
+   */
+  [[nodiscard]] static std::unique_ptr<TlsRpcSession> Connect(
+      const TlsClientOptions& options, std::string* error,
+      std::span<const std::string_view> required_server_capabilities = {});
+
+  /** Sends one safe RPC and returns its validated, correlated reply. */
+  [[nodiscard]] std::optional<std::string> Execute(std::string_view rpc,
+                                                   std::string* error);
+  /** Returns the validated server hello retained for the session lifetime. */
+  [[nodiscard]] const std::string& server_hello() const noexcept;
+  /** Closes the TLS transport. Calling this repeatedly is harmless. */
+  void Close() noexcept;
+
+ private:
+  struct Impl;
+  explicit TlsRpcSession(std::unique_ptr<Impl> implementation);
+  std::unique_ptr<Impl> implementation_;
+};
+
 /** Maps exactly one safe certificate subject common name to a NACM username. */
 [[nodiscard]] std::optional<std::string> CertificateSubjectUsername(
     const X509_NAME* subject);
