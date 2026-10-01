@@ -78,6 +78,12 @@
   running rollback and harmless repetition. Persistent identifiers containing
   XML metacharacters are serialized safely without invoking shell commands.
 
+- Recorded the external Kea provider's strict peer-verification seam. It now
+  consumes this adapter's authenticated running and operational replies and
+  checks the complete managed images, configured HA identities, stable states,
+  exact scopes, reachability, interruption state, and peer freshness. Kea
+  candidate construction and production controller wiring remain unadvertised.
+
 - Added managed RFC 9642 central cleartext symmetric keys with standard NACM
   protection, persistence/restart coverage, retrieval, and feature reporting.
 - Added the RFC 9644 SSH client/server grouping family and its pinned dependency

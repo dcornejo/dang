@@ -156,7 +156,9 @@ The coordinator is not reachable from NETCONF or `dangctl` yet. Production
 pair-wide management still requires:
 
 - provider-specific translation into complete per-peer candidates and a
-  post-apply health check;
+  post-apply health check. The external Kea provider now implements the strict
+  dual-view verifier, but candidate construction and production invocation are
+  not connected;
 - policy for unreachable or degraded peers, defaulting to rejection;
 - a total transaction deadline beyond the implemented per-I/O timeouts,
   observability, NACM rules, packaging, and Linux/FreeBSD interoperability

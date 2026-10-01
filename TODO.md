@@ -112,12 +112,17 @@ stays in this file with its remaining work rewritten precisely.
   journal is complete. The stateful mutual-TLS participant now maps prepare to
   candidate lock, complete replacement, and validation; maps apply to a
   persistent confirmed commit; supplies authenticated running and operational
-  readback to a health callback; and implements confirmation, reconnecting idempotent
-  cancellation, unlock, and close. Live two-peer commit and live rollback tests
-  cover the complete adapter. Add provider-specific candidate translation and
-  service-health verification,
-  a total transaction deadline beyond the implemented per-I/O timeouts,
-  fail-closed degraded-peer policy, NACM/observability, `dangctl` integration,
+  readback to a health callback; and implements confirmation, reconnecting
+  idempotent cancellation, unlock, and close. Live two-peer commit and live
+  rollback tests cover the complete adapter. The external Kea provider now
+  supplies a strict verifier for authenticated running and operational
+  replies, including full managed-image comparison, configured HA identity
+  binding, stable states, exact scopes, reachability, interruption, and
+  freshness; wire that verifier
+  into the production controller and construct each member's complete
+  candidate. Add a total transaction deadline beyond the implemented per-I/O
+  timeouts, fail-closed degraded-peer policy, NACM/observability, `dangctl`
+  integration,
   and Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.
   See [`docs/PEER_TRANSACTIONS.md`](docs/PEER_TRANSACTIONS.md).
 
