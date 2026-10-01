@@ -86,6 +86,8 @@ struct ApplicationOptions {
   std::optional<std::filesystem::path> state_file;
   /** Private unresolved peer-transaction journal inspected at startup. */
   std::optional<std::filesystem::path> peer_transaction_journal;
+  /** Private stable mutual-TLS peer endpoint configuration. */
+  std::optional<std::filesystem::path> peer_recovery_configuration;
   /** Optional durable-save checkpoint for fault injection and supervision. */
   yang::netconf::SnapshotSaveCheckpoint snapshot_save_checkpoint;
   /** Optional RFC 8341 NACM XML configuration loaded at startup. */

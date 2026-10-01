@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "dangd/application.h"
+#include "dangd/peer_recovery_config.h"
 #include "dangd/peer_transaction_journal.h"
 #include "dangd/plugin_worker_runtime.h"
 
@@ -120,21 +121,43 @@ std::string AuditField(std::string_view value);
 
 bool RejectPendingPeerTransaction(const ApplicationOptions& options,
                                   std::vector<std::string>* errors) {
+  if (options.peer_recovery_configuration &&
+      !options.peer_transaction_journal) {
+    errors->push_back(
+        "peer recovery configuration requires a peer transaction journal");
+    return true;
+  }
   if (!options.peer_transaction_journal) return false;
-  if (options.state_file) {
-    std::error_code state_error;
-    const auto state_path =
-        std::filesystem::weakly_canonical(*options.state_file, state_error);
-    std::error_code journal_error;
-    const auto journal_path = std::filesystem::weakly_canonical(
-        *options.peer_transaction_journal, journal_error);
-    if (state_error || journal_error) {
+
+  std::vector<std::filesystem::path> persistence_paths = {
+      *options.peer_transaction_journal};
+  if (options.state_file) persistence_paths.push_back(*options.state_file);
+  if (options.peer_recovery_configuration)
+    persistence_paths.push_back(*options.peer_recovery_configuration);
+  std::set<std::filesystem::path> normalized_paths;
+  for (const std::filesystem::path& path : persistence_paths) {
+    std::error_code path_error;
+    const auto normalized =
+        std::filesystem::weakly_canonical(path, path_error);
+    if (path_error) {
       errors->push_back("cannot resolve configured persistence paths");
       return true;
     }
-    if (state_path == journal_path) {
+    if (!normalized_paths.insert(normalized).second) {
       errors->push_back(
-          "datastore state and peer transaction journal paths must differ");
+          "datastore state, peer journal, and peer recovery paths must differ");
+      return true;
+    }
+  }
+
+  std::optional<std::vector<PeerRecoveryTarget>> recovery_targets;
+  if (options.peer_recovery_configuration) {
+    std::string recovery_error;
+    recovery_targets = LoadPeerRecoveryConfig(
+        *options.peer_recovery_configuration, &recovery_error);
+    if (!recovery_targets) {
+      errors->push_back("cannot load peer recovery configuration: " +
+                        recovery_error);
       return true;
     }
   }
@@ -156,6 +179,19 @@ bool RejectPendingPeerTransaction(const ApplicationOptions& options,
   if (!journal) {
     errors->push_back("cannot load peer transaction journal: " + load_error);
     return true;
+  }
+  if (recovery_targets) {
+    std::set<std::string> configured;
+    for (const PeerRecoveryTarget& target : *recovery_targets)
+      configured.insert(target.id);
+    for (const PeerJournalParticipant& participant :
+         journal->state().participants) {
+      if (!configured.contains(participant.id)) {
+        errors->push_back("peer recovery configuration has no target for " +
+                          AuditField(participant.id));
+        return true;
+      }
+    }
   }
   std::vector<std::string> pending;
   std::size_t confirmed = 0;

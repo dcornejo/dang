@@ -2416,6 +2416,61 @@ TEST(DangdApplicationTest, RejectsUnsafePeerJournalConfiguration) {
             std::string::npos);
 }
 
+TEST(DangdApplicationTest, ValidatesStablePeerRecoveryTargetMapping) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.peer_recovery_configuration = inputs.Write(
+      "peer-recovery.json",
+      R"json({"version":1,"peers":[
+        {"id":"other","host":"other.example","port":6513,
+         "certificate":"client.pem","private-key":"client.key",
+         "trust-anchor":"ca.pem"}
+      ]})json");
+#if defined(__unix__) || defined(__APPLE__)
+  ASSERT_EQ(chmod(options.peer_recovery_configuration->c_str(),
+                  S_IRUSR | S_IWUSR),
+            0);
+#endif
+
+  auto without_journal = Application::Load(options);
+  EXPECT_EQ(without_journal.application, nullptr);
+  ASSERT_EQ(without_journal.errors.size(), 1u);
+  EXPECT_NE(without_journal.errors.front().find("requires a peer transaction"),
+            std::string::npos);
+
+  options.peer_transaction_journal = inputs.Path("peer-transaction.json");
+  auto ready = Application::Load(options);
+  ASSERT_NE(ready.application, nullptr)
+      << testing::PrintToString(ready.errors);
+  ready.application.reset();
+
+  PeerJournalState state{
+      .transaction_id = "change-43",
+      .proposal_digest = "sha256:not-logged",
+      .participants = {{.id = "primary",
+                        .role = PeerTransactionRole::kPrimary,
+                        .persistent_commit_id = "primary-token"},
+                       {.id = "standby",
+                        .role = PeerTransactionRole::kStandby,
+                        .persistent_commit_id = "standby-token"}},
+  };
+  std::string journal_error;
+  auto journal = PeerTransactionFileJournal::Create(
+      *options.peer_transaction_journal, std::move(state), &journal_error);
+  ASSERT_TRUE(journal) << journal_error;
+  ASSERT_EQ(journal->Callbacks()
+                .record_commit_decision({"primary", "standby"})
+                .status,
+            PeerTransactionDecisionStatus::kCommitted);
+
+  auto missing = Application::Load(options);
+  EXPECT_EQ(missing.application, nullptr);
+  ASSERT_EQ(missing.errors.size(), 1u);
+  EXPECT_NE(missing.errors.front().find("no target for primary"),
+            std::string::npos);
+  EXPECT_EQ(missing.errors.front().find("primary-token"), std::string::npos);
+}
+
 TEST(DangdApplicationTest, LiveCommitRestoresSnapshotAndBackendOnSaveFailure) {
   const yang::netconf::SnapshotSaveStage stages[] = {
       yang::netconf::SnapshotSaveStage::kTemporaryWritten,

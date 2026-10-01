@@ -109,21 +109,27 @@ is bounded and messages have byte ceilings; hostname resolution and a total
 wall-clock transaction deadline remain integration boundaries. The adapter
 invokes no command-line client.
 
-This building block is deliberately not connected to startup yet. Dangd has no
-configuration for stable peer endpoints, trust material, or the mapping from a
-journal participant to its endpoint. Consequently an unresolved journal still
-fails startup and reload closed instead of attempting an unauthenticated or
-guessed recovery target.
+`--peer-recovery FILE` supplies the stable target mapping as a private,
+versioned JSON document. Each entry binds an exact journal participant ID to a
+host, port, client certificate, private key, trust anchor, and optional per-I/O
+timeout. Relative credential paths resolve against the configuration file.
+Startup and reload validate the complete file even when the journal is absent,
+and reject an unresolved journal if any participant lacks a target. The state,
+journal, and recovery configuration paths must all differ.
+
+The validated mapping is deliberately not used to mutate a peer yet. An
+unresolved journal still fails startup and reload closed until lifecycle replay
+is connected, rather than treating configuration alone as proof that automatic
+recovery is safe.
 
 ## Remaining integration
 
 The coordinator is not reachable from NETCONF or `dangctl` yet. Production
 pair-wide management still requires:
 
-- configured peer endpoints, trust material, and stable identity checks for
-  the implemented authenticated NETCONF/TLS client;
-- lifecycle integration that maps journal participants to those endpoints and
-  resumes a durable commit decision before accepting a conflicting transaction;
+- lifecycle integration that uses the validated participant endpoint mapping
+  to resume a durable commit decision before accepting a conflicting
+  transaction;
 - transport adapters for prepare, apply, verify, cancel, and release (only
   recovery confirmation is currently implemented);
 - provider-specific translation into complete per-peer candidates and a

@@ -300,9 +300,10 @@ contains an unsafe, malformed, or unresolved journal, startup and `SIGHUP`
 reload fail closed before accepting the replacement application. Diagnostics
 name the transaction and pending peers but do not expose proposal digests or
 persistent confirmed-commit tokens. An authenticated mutual-TLS confirmation
-adapter exists, but peer endpoint and credential configuration and automatic
-lifecycle recovery are not yet wired. Configuring this option is therefore a
-safety gate rather than enabling pair-wide commits.
+adapter and private `--peer-recovery FILE` endpoint mapping exist, but automatic
+lifecycle recovery is not yet wired. Configuring these options is therefore a
+safety gate rather than enabling pair-wide commits. See the user guide for the
+versioned JSON format.
 
 Application RPCs and YANG 1.1 actions are resolved against the compiled schema
 before dispatch. `dangd` applies operation rules and `default-deny-all`; actions

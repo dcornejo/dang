@@ -44,6 +44,14 @@
   metacharacters. Configured peer endpoints and automatic lifecycle recovery
   remain future integration work.
 
+- Added `--peer-recovery FILE` and a private, versioned JSON configuration for
+  stable journal-participant-to-NETCONF/TLS endpoint mappings. Startup and
+  reload reject non-owned, non-0600, symlinked, oversized, malformed,
+  duplicate, unknown-field, or out-of-range configurations and require every
+  journal participant to have an exact target. Relative certificate, key, and
+  trust-anchor paths resolve against the configuration directory. Automatic
+  journal replay is not enabled by this parsing and validation increment.
+
 - Added managed RFC 9642 central cleartext symmetric keys with standard NACM
   protection, persistence/restart coverage, retrieval, and feature reporting.
 - Added the RFC 9644 SSH client/server grouping family and its pinned dependency

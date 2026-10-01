@@ -33,7 +33,7 @@ std::filesystem::path ExecutablePath(const char* argument) {
 void Usage() {
   std::cerr
       << "usage: dangd --model FILE --config FILE [--search DIR] [--state FILE]"
-         " [--peer-journal FILE]"
+         " [--peer-journal FILE --peer-recovery FILE]"
          " [--nacm FILE] [--recovery-user USER]... [--no-default-superuser]"
          " [--plugin FILE]..."
          " [--plugin-worker FILE]"
@@ -85,6 +85,9 @@ int main(int argc, char* argv[]) {
       options.state_file = std::filesystem::path(argv[++index]);
     } else if (argument == "--peer-journal" && index + 1 < argc) {
       options.peer_transaction_journal = std::filesystem::path(argv[++index]);
+    } else if (argument == "--peer-recovery" && index + 1 < argc) {
+      options.peer_recovery_configuration =
+          std::filesystem::path(argv[++index]);
     } else if (argument == "--nacm" && index + 1 < argc) {
       options.nacm_configuration = std::filesystem::path(argv[++index]);
     } else if (argument == "--recovery-user" && index + 1 < argc) {
@@ -222,6 +225,8 @@ int main(int argc, char* argv[]) {
     }
   }
   if (options.model.empty() || options.configuration.empty() ||
+      (options.peer_recovery_configuration &&
+       !options.peer_transaction_journal) ||
       (!options.plugins.empty() && !options.plugin_worker_executable) ||
       (stream_mode && username.empty()) ||
       (ssh_mode &&

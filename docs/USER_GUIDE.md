@@ -355,20 +355,56 @@ schemas or software versions.
 ### 8.1 Reserve peer-transaction recovery state
 
 Future pair-wide transactions use a separate private journal. Reserve and
-inspect its path with `--peer-journal`; it must not be the `--state` path:
+inspect its path with `--peer-journal`; it must not be the `--state` path.
+Stable recovery targets are supplied in a separate private JSON file:
+
+```json
+{
+  "version": 1,
+  "peers": [
+    {
+      "id": "kea-primary",
+      "host": "kea-primary.example.net",
+      "port": 6513,
+      "certificate": "recovery-client.pem",
+      "private-key": "recovery-client.key",
+      "trust-anchor": "peer-ca.pem",
+      "timeout-ms": 10000
+    },
+    {
+      "id": "kea-standby",
+      "host": "kea-standby.example.net",
+      "port": 6513,
+      "certificate": "recovery-client.pem",
+      "private-key": "recovery-client.key",
+      "trust-anchor": "peer-ca.pem"
+    }
+  ]
+}
+```
+
+Install it mode 0600, owned by the dangd service identity. Relative credential
+paths are resolved from the JSON file's directory. IDs must exactly match the
+journal participants; hosts are verified against the peer certificate. Unknown
+fields, duplicate IDs, invalid ports, and timeouts outside 1 through 600000
+milliseconds fail closed. The state, journal, and recovery files must be three
+different paths.
 
 ```sh
+install -m 600 peer-recovery.json /etc/dangd/peer-recovery.json
 ./build/dangd --model appliance.yang --config config.xml \
   --state appliance-state.json \
-  --peer-journal appliance-peer-transaction.json --check
+  --peer-journal appliance-peer-transaction.json \
+  --peer-recovery /etc/dangd/peer-recovery.json --check
 ```
 
 The journal normally does not exist. If a durable group COMMIT remains after a
 crash, startup fails closed and reports the transaction identity, confirmation
 count, and pending peer identities. It does not print the proposal digest or
 persistent confirmed-commit tokens. Preserve the file for recovery; do not
-delete it merely to make the daemon start. Automated authenticated recovery is
-not implemented yet, and this option does not enable pair-wide commits.
+delete it merely to make the daemon start. The endpoint mapping and
+confirmation transport are implemented and validated, but automated lifecycle
+replay is not yet connected; these options do not enable pair-wide commits.
 
 ### Store a central symmetric key
 

@@ -105,10 +105,11 @@ stays in this file with its remaining work rewritten precisely.
   back pre-decision failures in reverse order, and resumes lost confirmations
   without contradicting that decision. A bounded programmatic mutual-TLS
   client now performs authenticated persistent-commit confirmation with
-  hostname, capability, namespace, and reply-correlation checks. Add stable
-  peer endpoint and trust configuration, map journal participants to those
-  endpoints, extend the implemented fail-closed journal startup inspection
-  into authenticated automatic recovery, implement the remaining prepare,
+  hostname, capability, namespace, and reply-correlation checks. A private
+  versioned `--peer-recovery` file now validates stable participant-to-endpoint
+  and trust mappings at startup and reload. Use those validated mappings to
+  extend the implemented fail-closed journal startup inspection into
+  authenticated automatic recovery, implement the remaining prepare,
   apply, verify, cancel, and release transport operations, add provider-specific
   candidate translation and health verification,
   a total transaction deadline beyond the implemented per-I/O timeouts,
