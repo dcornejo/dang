@@ -576,7 +576,7 @@ std::vector<PluginPeerCandidate> PluginManager::PeerCandidates(
   std::vector<PluginPeerCandidate> result;
   for (const std::size_t plugin_index : state_->order) {
     State::Plugin& plugin = state_->plugins[plugin_index];
-    if (!plugin.peer_candidate_count) continue;
+    if (!plugin.affected || !plugin.peer_candidate_count) continue;
     const std::size_t count =
         plugin.peer_candidate_count(plugin.api->context, plugin.prepared);
     if (count > kMaximumCandidatesPerPlugin) {

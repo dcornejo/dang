@@ -1683,6 +1683,32 @@ TEST(DangdApplicationTest, AppliesDependentPluginsInDependencyOrder) {
                 "consumer.release", "provider.release"}));
 }
 
+TEST(DangdApplicationTest, RejectsInvalidComposedPeerPlanBeforeApplyingPlugin) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_PROVIDER_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  test_plugin::ResetTrace();
+
+  ASSERT_NE(SetProviderMode(*loaded.application, "peer-plan-invalid")
+                .xml.find("<ok/>"),
+            std::string::npos);
+  const auto commit = Commit(*loaded.application);
+  EXPECT_NE(commit.xml.find("invalid stable identity"), std::string::npos)
+      << commit.xml;
+  EXPECT_EQ(test_plugin::Trace(),
+            (std::vector<std::string>{"provider.prepare",
+                                      "provider.validate",
+                                      "provider.release"}));
+  EXPECT_TRUE(test_plugin::Active("provider").empty());
+  EXPECT_EQ(loaded.application->datastores()
+                .Read(yang::netconf::Datastore::kRunning)
+                .ToXml()
+                .find("peer-plan-invalid"),
+            std::string::npos);
+}
+
 TEST(DangdApplicationTest, DispatchesPluginOwnedSchemaRpc) {
   TemporaryInputs inputs;
   auto options = Options(inputs);

@@ -13,6 +13,13 @@ and releases follow Semantic Versioning.
   several plugins for each stable participant and validates the final candidate
   without adding any plugin-specific awareness to the daemon core.
 
+- Connected ABI-v9 collection and composition to normal backend preparation.
+  Only affected plugins are queried; callback or schema-composition failures
+  abort every retained preparation before hardware apply, while valid composed
+  groups remain bound to the prepared transaction for the future generic
+  coordinator invocation. An application-level regression proves invalid
+  plans cannot mutate hardware or running configuration.
+
 - Updated the peer-transaction integration status after the external Kea
   provider adopted ABI v9 for complete two-member hot-standby images and
   authenticated readback verification. The remaining core work stays generic:

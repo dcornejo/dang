@@ -146,14 +146,19 @@ int NextNotification(void*, DangNotificationV1* event, DangPluginErrorV1*) {
 
 size_t PeerCandidateCount(void*, void*) { return 2; }
 
-int PeerCandidateAt(void*, void*, size_t index, DangPeerCandidateV1* candidate,
-                    DangPluginErrorV1*) {
+int PeerCandidateAt(void*, void* opaque, size_t index,
+                    DangPeerCandidateV1* candidate, DangPluginErrorV1*) {
   if (!candidate || index > 1) return 0;
   constexpr const char* kConfiguration =
       "<config xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
       "<provider-settings xmlns=\"urn:dangd:test:provider\">"
       "<mode>normal</mode></provider-settings></config>";
-  *candidate = {"test-group", index == 0 ? "primary" : "standby",
+  const auto* prepared = static_cast<const Prepared*>(opaque);
+  const bool invalid = prepared &&
+      prepared->proposed.find("<mode>peer-plan-invalid</mode>") !=
+          std::string::npos;
+  *candidate = {invalid ? "invalid/group" : "test-group",
+                index == 0 ? "primary" : "standby",
                 index == 0 ? DANG_PEER_PRIMARY_V1 : DANG_PEER_STANDBY_V1,
                 60, "dangd-test-provider", kConfiguration,
                 "{\"expected_status\":\"ready\"}"};

@@ -122,9 +122,10 @@ stays in this file with its remaining work rewritten precisely.
   module images and routes authenticated readback through its opaque verifier
   context. ABI v9 carries those transport-neutral contributions through
   supervised workers, and the core composes several plugins' non-overlapping
-  images with full-schema validation. Wire the generic composed plan into the
-  production controller. Add a total transaction deadline beyond the
-  implemented per-I/O timeouts, fail-closed degraded-peer policy,
+  images with full-schema validation during normal backend preparation,
+  aborting before mutation on any planning failure. Execute the retained plan
+  through the generic production controller. Add a total transaction deadline
+  beyond the implemented per-I/O timeouts, fail-closed degraded-peer policy,
   NACM/observability, `dangctl` integration,
   and Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.
   See [`docs/PEER_TRANSACTIONS.md`](docs/PEER_TRANSACTIONS.md).

@@ -113,9 +113,24 @@ EnglishConfigurationBackend::PrepareReplacement(
     const yang::config::ConfigDocument& after,
     std::span<const yang::config::ChangeEvent> changes) {
   prepared_nacm_.reset();
+  prepared_peer_groups_.clear();
   if (plugins_) {
     if (auto error = plugins_->Prepare(schema, before, after, changes))
       return error;
+    std::optional<yang::config::ValidationFinding> candidate_error;
+    std::vector<PluginPeerCandidate> candidates =
+        plugins_->PeerCandidates(&candidate_error);
+    if (candidate_error) {
+      plugins_->Abort();
+      return candidate_error;
+    }
+    ComposePeerTransactionResult composed =
+        ComposePeerTransactionPlan(schema, candidates);
+    if (composed.error) {
+      plugins_->Abort();
+      return composed.error;
+    }
+    prepared_peer_groups_ = std::move(composed.groups);
   }
   if (managed_nacm_) {
     const std::string xml = ManagedNacmXml(after);
@@ -139,6 +154,7 @@ EnglishConfigurationBackend::PrepareReplacement(
       finding.netconf_error_tag = "invalid-value";
       finding.netconf_error_app_tag = "invalid-nacm-policy";
       if (plugins_) plugins_->Abort();
+      prepared_peer_groups_.clear();
       return finding;
     }
     if (nacm_) loaded.policy->PreserveRuntimeStateFrom(*nacm_);
@@ -155,6 +171,7 @@ EnglishConfigurationBackend::Replace(
     std::span<const yang::config::ChangeEvent> changes) {
   if (plugins_) {
     PluginApplyResult applied = plugins_->Apply(schema, after);
+    prepared_peer_groups_.clear();
     if (applied.error) return applied.error;
     if (applied.applied) {
       std::lock_guard lock(mutex_);
@@ -178,6 +195,7 @@ EnglishConfigurationBackend::Replace(
 void EnglishConfigurationBackend::AbortPreparedReplacement() noexcept {
   if (plugins_) plugins_->Abort();
   prepared_nacm_.reset();
+  prepared_peer_groups_.clear();
 }
 
 yang::config::ConfigDocument EnglishConfigurationBackend::Working() const {

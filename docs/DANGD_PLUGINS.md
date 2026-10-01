@@ -157,6 +157,13 @@ groups smaller than two, and groups without exactly one primary. Only after
 this generic composition succeeds may the core resolve participant identifiers
 through its endpoint/trust configuration and open sessions.
 
+The running backend performs that generic collection and composition as part
+of normal commit preparation. It queries only affected plugins, aborts all
+retained preparations if candidate retrieval or composition fails, and reaches
+no hardware apply in that case. Remote execution remains disabled until the
+generic endpoint mapping, durable coordinator invocation, NACM policy, and
+operator-visible failure reporting are connected.
+
 Several plugins may contribute to one group. Each plugin supplies the complete
 image only for modules it owns; dangd combines the non-overlapping images and
 validates the resulting candidate against the full schema. The plugin's opaque

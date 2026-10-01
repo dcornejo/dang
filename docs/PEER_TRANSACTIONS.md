@@ -29,6 +29,12 @@ one owner for each module image, consistent roles/timeouts, at least two peers,
 and exactly one primary. Every fragment is checked against its claimed module;
 the combined candidate is then validated against the full schema so cross-
 module dependencies are evaluated only with the complete changed tree.
+The ordinary backend preparation path performs this collection and composition
+immediately after every affected plugin has prepared and validated. A callback
+failure or invalid composed plan aborts all retained plugin state before any
+local or remote mutation. Validated groups remain attached to that preparation
+for the future coordinator invocation; they are discarded on abort or after
+the current local apply path completes.
 
 After authenticated readback, dangd routes the running and operational replies
 to each contributing plugin's verifier together with only that plugin's opaque
@@ -174,7 +180,8 @@ the same decision concurrently.
 ## Remaining integration
 
 The coordinator is not reachable from NETCONF or `dangctl` yet. Production
-pair-wide management still requires:
+preflight already collects and validates composed plans, but pair-wide
+management still requires:
 
 - generic production invocation of composed ABI-v9 plans. The external Kea
   provider now supplies complete two-member hot-standby module images plus a

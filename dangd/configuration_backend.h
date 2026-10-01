@@ -13,6 +13,7 @@
 #include "yang/nacm.h"
 
 #include "dangd/plugin_manager.h"
+#include "dangd/peer_transaction_plan.h"
 
 namespace dangd {
 
@@ -61,6 +62,8 @@ class EnglishConfigurationBackend final
   yang::netconf::NacmPolicy* nacm_ = nullptr;
   bool managed_nacm_ = false;
   std::optional<yang::netconf::NacmPolicy> prepared_nacm_;
+  /** Schema-validated generic peer plan retained with plugin preparations. */
+  std::vector<ComposedPeerTransactionGroup> prepared_peer_groups_;
   std::string working_xml_;
   yang::config::ConfigDocument working_;
   std::vector<std::string> deltas_;
