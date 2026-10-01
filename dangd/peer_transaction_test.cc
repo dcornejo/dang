@@ -42,7 +42,8 @@ PeerTransactionParticipant Peer(std::string id, PeerTransactionRole role,
 }
 
 PeerTransactionJournal Journal(FakePeerState *state, bool fail_decision = false,
-                               bool fail_complete = false) {
+                               bool fail_complete = false,
+                               std::string fail_confirmation = {}) {
   return {
       .record_commit_decision =
           [state, fail_decision](const std::vector<std::string> &ids) {
@@ -51,6 +52,16 @@ PeerTransactionJournal Journal(FakePeerState *state, bool fail_decision = false,
               event += " " + id;
             state->events.push_back(std::move(event));
             if (fail_decision)
+              return PeerTransactionDecisionResult{
+                  .status = PeerTransactionDecisionStatus::kNotCommitted,
+                  .error = "journal unavailable"};
+            return PeerTransactionDecisionResult{
+                .status = PeerTransactionDecisionStatus::kCommitted};
+          },
+      .record_confirmation =
+          [state, fail_confirmation](const std::string &id) {
+            state->events.push_back("ack " + id);
+            if (id == fail_confirmation)
               return std::optional<std::string>("journal unavailable");
             return std::optional<std::string>{};
           },
@@ -80,13 +91,13 @@ TEST(PeerTransactionCoordinatorTest,
   EXPECT_EQ(result.prepared, (std::vector<std::string>{"primary", "standby"}));
   EXPECT_EQ(result.applied, (std::vector<std::string>{"standby", "primary"}));
   EXPECT_EQ(result.confirmed, (std::vector<std::string>{"standby", "primary"}));
-  EXPECT_EQ(
-      state.events,
-      (std::vector<std::string>{
-          "prepare primary", "prepare standby", "apply standby",
-          "apply primary", "verify standby", "verify primary",
-          "decision primary standby", "confirm standby", "confirm primary",
-          "release standby", "release primary", "complete"}));
+  EXPECT_EQ(state.events,
+            (std::vector<std::string>{
+                "prepare primary", "prepare standby", "apply standby",
+                "apply primary", "verify standby", "verify primary",
+                "decision primary standby", "confirm standby", "ack standby",
+                "confirm primary", "ack primary", "release standby",
+                "release primary", "complete"}));
 }
 
 TEST(PeerTransactionCoordinatorTest, PrepareFailurePreventsEveryMutation) {
@@ -183,6 +194,41 @@ TEST(PeerTransactionCoordinatorTest,
   EXPECT_EQ(result.disposition, PeerTransactionDisposition::kCommitPending);
   EXPECT_TRUE(result.pending_confirmations.empty());
   EXPECT_TRUE(result.journal_cleanup_pending);
+}
+
+TEST(PeerTransactionCoordinatorTest,
+     ConfirmationRemainsPendingUntilAcknowledgementIsDurable) {
+  FakePeerState state;
+  const PeerTransactionResult result = PeerTransactionCoordinator().Execute(
+      Pair(&state), Journal(&state, false, false, "standby"));
+  EXPECT_EQ(result.disposition, PeerTransactionDisposition::kCommitPending);
+  EXPECT_EQ(result.confirmed, (std::vector<std::string>{"primary"}));
+  EXPECT_EQ(result.pending_confirmations,
+            (std::vector<std::string>{"standby"}));
+  EXPECT_EQ(std::ranges::find(state.events, "cancel standby"),
+            state.events.end());
+}
+
+TEST(PeerTransactionCoordinatorTest,
+     UnknownDecisionOutcomeNeverConfirmsOrRollsBack) {
+  FakePeerState state;
+  PeerTransactionJournal journal = Journal(&state);
+  journal.record_commit_decision = [&state](const std::vector<std::string> &) {
+    state.events.push_back("decision unknown");
+    return PeerTransactionDecisionResult{
+        .status = PeerTransactionDecisionStatus::kOutcomeUnknown,
+        .error = "directory synchronization failed"};
+  };
+  const PeerTransactionResult result =
+      PeerTransactionCoordinator().Execute(Pair(&state), std::move(journal));
+  EXPECT_EQ(result.disposition, PeerTransactionDisposition::kCommitPending);
+  EXPECT_TRUE(result.decision_outcome_unknown);
+  EXPECT_EQ(result.pending_confirmations,
+            (std::vector<std::string>{"primary", "standby"}));
+  EXPECT_EQ(std::ranges::find(state.events, "confirm standby"),
+            state.events.end());
+  EXPECT_EQ(std::ranges::find(state.events, "cancel standby"),
+            state.events.end());
 }
 
 TEST(PeerTransactionCoordinatorTest, RejectsInvalidPairIdentity) {

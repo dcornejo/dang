@@ -15,7 +15,17 @@
   preparation, and resumes lost confirmations without rolling back a committed group.
   Failure-injection tests cover preparation, apply, verification, journal,
   cancellation, confirmation, recovery, and journal-cleanup boundaries. The
-  NETCONF transport and durable journal remain explicitly unadvertised work.
+  NETCONF transport and application-lifecycle integration remain explicitly
+  unadvertised work.
+
+- Added a private, versioned peer-transaction recovery journal containing the
+  transaction identity, proposal digest, stable peer roles, persistent commit
+  tokens, and durable confirmation acknowledgements. Atomic 0600 replacement,
+  file ownership/type checks, bounded parsing, parent-directory synchronization,
+  and fault injection cover crash recovery. Decision writes distinguish a
+  definite pre-decision failure from an outcome that became uncertain after
+  replacement; the latter confirms or rolls back nothing until recovery can
+  inspect the journal.
 
 - Added managed RFC 9642 central cleartext symmetric keys with standard NACM
   protection, persistence/restart coverage, retrieval, and feature reporting.

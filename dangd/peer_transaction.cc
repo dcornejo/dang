@@ -98,7 +98,8 @@ PeerTransactionResult PeerTransactionCoordinator::Execute(
     result.message = *error;
     return result;
   }
-  if (!journal.record_commit_decision || !journal.record_complete) {
+  if (!journal.record_commit_decision || !journal.record_confirmation ||
+      !journal.record_complete) {
     result.message = "peer transaction journal callbacks are incomplete";
     return result;
   }
@@ -148,9 +149,21 @@ PeerTransactionResult PeerTransactionCoordinator::Execute(
 
   const std::vector<std::string> participant_ids =
       ParticipantIds(participants, prepare_order);
-  if (const auto error = journal.record_commit_decision(participant_ids)) {
-    result.message = "cannot durably record peer commit decision: " + *error;
+  const PeerTransactionDecisionResult decision =
+      journal.record_commit_decision(participant_ids);
+  if (decision.status == PeerTransactionDecisionStatus::kNotCommitted) {
+    result.message =
+        "cannot durably record peer commit decision: " + decision.error;
     CancelApplied(participants, applied, &result);
+    ReleasePrepared(participants, prepared);
+    return result;
+  }
+  if (decision.status == PeerTransactionDecisionStatus::kOutcomeUnknown) {
+    result.disposition = PeerTransactionDisposition::kCommitPending;
+    result.decision_outcome_unknown = true;
+    result.message =
+        "peer commit decision outcome is unknown: " + decision.error;
+    result.pending_confirmations = participant_ids;
     ReleasePrepared(participants, prepared);
     return result;
   }
@@ -162,6 +175,17 @@ PeerTransactionResult PeerTransactionCoordinator::Execute(
       if (result.message.empty()) {
         result.message = participants[index].id +
                          ": commit confirmation remains pending: " + *error;
+      }
+      continue;
+    }
+    if (const auto error =
+            journal.record_confirmation(participants[index].id)) {
+      result.pending_confirmations.push_back(participants[index].id);
+      if (result.message.empty()) {
+        result.message = participants[index].id +
+                         ": confirmation succeeded but its acknowledgement "
+                         "is not durable: " +
+                         *error;
       }
       continue;
     }
@@ -192,8 +216,9 @@ PeerTransactionResult PeerTransactionCoordinator::ResumeCommit(
     result.message = *error;
     return result;
   }
-  if (!journal.record_complete) {
-    result.message = "peer transaction journal completion callback is missing";
+  if (!journal.record_confirmation || !journal.record_complete) {
+    result.message =
+        "peer transaction recovery journal callbacks are incomplete";
     return result;
   }
 
@@ -225,6 +250,16 @@ PeerTransactionResult PeerTransactionCoordinator::ResumeCommit(
       if (result.message.empty())
         result.message =
             id + ": commit confirmation remains pending: " + *error;
+      continue;
+    }
+    if (const auto error = journal.record_confirmation(id)) {
+      result.pending_confirmations.push_back(id);
+      if (result.message.empty()) {
+        result.message = id +
+                         ": confirmation succeeded but its acknowledgement "
+                         "is not durable: " +
+                         *error;
+      }
       continue;
     }
     result.confirmed.push_back(id);

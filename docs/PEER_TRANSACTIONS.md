@@ -66,8 +66,9 @@ decision, the transaction also rolls back.
 
 After `COMMIT` is durable, cancellation is forbidden. A missing or failed
 confirmation becomes `commit-pending`; recovery replays confirmation only for
-the peers not already acknowledged. If every peer confirms but the final
-journal update fails, the result remains pending solely for journal cleanup.
+the peers not already durably acknowledged. Each acknowledgement is atomically
+recorded before it is reported as confirmed. If every peer confirms but the
+final journal update fails, the result remains pending solely for journal cleanup.
 This separation prevents a lost confirmation reply from causing one process to
 roll back after the group has already chosen commit.
 
@@ -77,14 +78,29 @@ single primary to preserve service where the provider supports that ordering.
 The coordinator rejects duplicate identities and groups without exactly one
 primary.
 
+`PeerTransactionFileJournal` implements the private recovery record. Its
+versioned JSON contains a bounded transaction identity and proposal digest plus
+each peer's stable identity, role, persistent confirmed-commit token, and
+confirmation state. It uses mode-0600 temporary files, file and directory
+synchronization, atomic replacement, bounded parsing, and owner/type checks.
+It refuses to replace an unresolved journal. Completion removes the record and
+synchronizes the parent directory.
+
+A failure before atomic replacement proves that COMMIT was not recorded and
+permits reverse cancellation. A failure after replacement makes the decision
+outcome unknown: the coordinator performs neither confirmation nor rollback
+and leaves every peer pending. Startup recovery must inspect the journal before
+choosing the next action. This conservative state prevents a storage error from
+turning into contradictory decisions across a crash.
+
 ## Remaining integration
 
 The coordinator is not reachable from NETCONF or `dangctl` yet. Production
 pair-wide management still requires:
 
 - authenticated NETCONF client sessions with pinned peer identities;
-- a private, crash-safe journal containing the proposal digest, peer set,
-  persistent confirmed-commit identifiers, decision, and acknowledgements;
+- wiring the implemented private journal into application lifecycle and
+  operator diagnostics;
 - restart recovery that resumes a durable commit decision before accepting a
   conflicting transaction;
 - provider-specific translation into complete per-peer candidates and a

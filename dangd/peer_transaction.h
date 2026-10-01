@@ -45,12 +45,29 @@ struct PeerTransactionParticipant {
   std::function<void()> release;
 };
 
-/** Durable decision boundary supplied by the eventual journal backend. */
+/** Durability classification for an attempted group COMMIT record. */
+enum class PeerTransactionDecisionStatus {
+  kNotCommitted,
+  kCommitted,
+  kOutcomeUnknown,
+};
+
+/** Result of crossing the durable group decision boundary. */
+struct PeerTransactionDecisionResult {
+  PeerTransactionDecisionStatus status =
+      PeerTransactionDecisionStatus::kNotCommitted;
+  std::string error;
+};
+
+/** Durable decision boundary supplied by the journal backend. */
 struct PeerTransactionJournal {
   /** Makes the group commit decision crash-safe before returning success. */
-  std::function<std::optional<std::string>(
+  std::function<PeerTransactionDecisionResult(
       const std::vector<std::string> &participant_ids)>
       record_commit_decision;
+  /** Durably records one acknowledged participant confirmation. */
+  std::function<std::optional<std::string>(const std::string &participant_id)>
+      record_confirmation;
   /** Marks recovery complete after every participant is confirmed. */
   std::function<std::optional<std::string>()> record_complete;
 };
@@ -81,6 +98,8 @@ struct PeerTransactionResult {
   std::vector<std::string> rollback_failures;
   /** True when only the journal's final completion record remains. */
   bool journal_cleanup_pending = false;
+  /** True when storage cannot prove whether COMMIT crossed durability. */
+  bool decision_outcome_unknown = false;
 
   /** Returns true only when all peers and journal state are complete. */
   [[nodiscard]] bool ok() const noexcept {
