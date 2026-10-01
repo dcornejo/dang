@@ -104,9 +104,9 @@ stays in this file with its remaining work rewritten precisely.
   participants, records a durable commit decision before confirmation, rolls
   back pre-decision failures in reverse order, and resumes lost confirmations
   without contradicting that decision. Add authenticated NETCONF client
-  transport, stable peer identity, wire the implemented private crash-safe
-  journal into startup recovery, provider-specific candidate translation and
-  health verification,
+  transport, stable peer identity, extend the implemented fail-closed journal
+  startup inspection into authenticated automatic recovery, provider-specific
+  candidate translation and health verification,
   fail-closed degraded-peer policy, NACM/observability, `dangctl` integration,
   and Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.
   See [`docs/PEER_TRANSACTIONS.md`](docs/PEER_TRANSACTIONS.md).

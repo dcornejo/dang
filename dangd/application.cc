@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "dangd/application.h"
+#include "dangd/peer_transaction_journal.h"
 #include "dangd/plugin_worker_runtime.h"
 
 #include <algorithm>
@@ -114,6 +115,73 @@ class StateFileLock {
 };
 
 namespace {
+
+std::string AuditField(std::string_view value);
+
+bool RejectPendingPeerTransaction(const ApplicationOptions& options,
+                                  std::vector<std::string>* errors) {
+  if (!options.peer_transaction_journal) return false;
+  if (options.state_file) {
+    std::error_code state_error;
+    const auto state_path =
+        std::filesystem::weakly_canonical(*options.state_file, state_error);
+    std::error_code journal_error;
+    const auto journal_path = std::filesystem::weakly_canonical(
+        *options.peer_transaction_journal, journal_error);
+    if (state_error || journal_error) {
+      errors->push_back("cannot resolve configured persistence paths");
+      return true;
+    }
+    if (state_path == journal_path) {
+      errors->push_back(
+          "datastore state and peer transaction journal paths must differ");
+      return true;
+    }
+  }
+
+  std::error_code status_error;
+  const auto status = std::filesystem::symlink_status(
+      *options.peer_transaction_journal, status_error);
+  if (status_error == std::errc::no_such_file_or_directory) return false;
+  if (status_error) {
+    errors->push_back("cannot inspect peer transaction journal: " +
+                      status_error.message());
+    return true;
+  }
+  if (!std::filesystem::exists(status)) return false;
+
+  std::string load_error;
+  auto journal = PeerTransactionFileJournal::Load(
+      *options.peer_transaction_journal, &load_error);
+  if (!journal) {
+    errors->push_back("cannot load peer transaction journal: " + load_error);
+    return true;
+  }
+  std::vector<std::string> pending;
+  std::size_t confirmed = 0;
+  for (const PeerJournalParticipant& participant :
+       journal->state().participants) {
+    if (participant.confirmed) {
+      ++confirmed;
+    } else {
+      pending.push_back(participant.id);
+    }
+  }
+  std::ostringstream message;
+  message << "unresolved peer transaction "
+          << AuditField(journal->state().transaction_id)
+          << " requires recovery before startup (" << confirmed << '/'
+          << journal->state().participants.size()
+          << " confirmations durable; pending peers:";
+  if (pending.empty()) {
+    message << " none";
+  } else {
+    for (const std::string& id : pending) message << ' ' << AuditField(id);
+  }
+  message << ')';
+  errors->push_back(message.str());
+  return true;
+}
 
 std::string_view LocalName(std::string_view name) {
   const std::size_t colon = name.find(':');
@@ -976,6 +1044,7 @@ LoadResult Application::LoadWithStateFileLock(
   if (options.configuration.empty())
     result.errors.push_back("an initial XML configuration is required");
   if (!result.errors.empty()) return result;
+  if (RejectPendingPeerTransaction(options, &result.errors)) return result;
 
   std::shared_ptr<StateFileLock> state_file_lock;
   if (options.state_file) {

@@ -292,6 +292,15 @@ restore procedure is documented in the user guide. Before an application can
 accept a session, dangd activates the complete initial or restored running tree
 through the affected plugins as one dependency-ordered transaction.
 
+`--peer-journal FILE` reserves a separate private recovery path for future
+pair-wide transactions. If the path is absent, startup continues. If it
+contains an unsafe, malformed, or unresolved journal, startup and `SIGHUP`
+reload fail closed before accepting the replacement application. Diagnostics
+name the transaction and pending peers but do not expose proposal digests or
+persistent confirmed-commit tokens. Automatic remote recovery is not yet
+implemented, so configuring this option is a safety gate rather than enabling
+pair-wide commits.
+
 Application RPCs and YANG 1.1 actions are resolved against the compiled schema
 before dispatch. `dangd` applies operation rules and `default-deny-all`; actions
 also require read access to every data ancestor. Only then is the request sent

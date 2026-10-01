@@ -93,16 +93,23 @@ and leaves every peer pending. Startup recovery must inspect the journal before
 choosing the next action. This conservative state prevents a storage error from
 turning into contradictory decisions across a crash.
 
+When `--peer-journal FILE` is configured, application startup and staged
+`SIGHUP` reload inspect that path before serving requests. An absent file means
+there is no durable COMMIT to recover. An unsafe, malformed, or unresolved file
+fails startup; the diagnostic names the transaction, durable confirmation
+count, and pending peer identities without exposing the proposal digest or
+persistent commit tokens. The journal path must differ from `--state`.
+Automatic confirmation recovery is not yet possible because authenticated
+outbound peer sessions and configured peer identities are still missing.
+
 ## Remaining integration
 
 The coordinator is not reachable from NETCONF or `dangctl` yet. Production
 pair-wide management still requires:
 
 - authenticated NETCONF client sessions with pinned peer identities;
-- wiring the implemented private journal into application lifecycle and
-  operator diagnostics;
-- restart recovery that resumes a durable commit decision before accepting a
-  conflicting transaction;
+- authenticated restart recovery that resumes a durable commit decision before
+  accepting a conflicting transaction;
 - provider-specific translation into complete per-peer candidates and a
   post-apply health check;
 - policy for unreachable or degraded peers, defaulting to rejection;

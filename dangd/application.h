@@ -84,6 +84,8 @@ struct ApplicationOptions {
   std::filesystem::path configuration;
   /** Optional atomic datastore snapshot restored and updated by the host. */
   std::optional<std::filesystem::path> state_file;
+  /** Private unresolved peer-transaction journal inspected at startup. */
+  std::optional<std::filesystem::path> peer_transaction_journal;
   /** Optional durable-save checkpoint for fault injection and supervision. */
   yang::netconf::SnapshotSaveCheckpoint snapshot_save_checkpoint;
   /** Optional RFC 8341 NACM XML configuration loaded at startup. */

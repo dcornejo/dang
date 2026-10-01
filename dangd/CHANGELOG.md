@@ -27,6 +27,13 @@
   replacement; the latter confirms or rolls back nothing until recovery can
   inspect the journal.
 
+- Added `--peer-journal FILE` startup inspection. Dangd accepts an absent
+  configured journal, rejects malformed or unsafe files, forbids sharing the
+  datastore snapshot path, and fails closed with a token-free transaction and
+  pending-peer summary when a durable group decision requires recovery. This
+  prevents ordinary service or `SIGHUP` reload from bypassing unresolved peer
+  state while authenticated automatic recovery is still under development.
+
 - Added managed RFC 9642 central cleartext symmetric keys with standard NACM
   protection, persistence/restart coverage, retrieval, and feature reporting.
 - Added the RFC 9644 SSH client/server grouping family and its pinned dependency

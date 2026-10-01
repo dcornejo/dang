@@ -352,6 +352,24 @@ or if a plugin rejects or cannot apply the restored configuration. Do not edit
 snapshot JSON manually; use NETCONF to migrate configuration between different
 schemas or software versions.
 
+### 8.1 Reserve peer-transaction recovery state
+
+Future pair-wide transactions use a separate private journal. Reserve and
+inspect its path with `--peer-journal`; it must not be the `--state` path:
+
+```sh
+./build/dangd --model appliance.yang --config config.xml \
+  --state appliance-state.json \
+  --peer-journal appliance-peer-transaction.json --check
+```
+
+The journal normally does not exist. If a durable group COMMIT remains after a
+crash, startup fails closed and reports the transaction identity, confirmation
+count, and pending peer identities. It does not print the proposal digest or
+persistent confirmed-commit tokens. Preserve the file for recovery; do not
+delete it merely to make the daemon start. Automated authenticated recovery is
+not implemented yet, and this option does not enable pair-wide commits.
+
 ### Store a central symmetric key
 
 The built-in RFC 9642 slice accepts central cleartext symmetric keys. A recovery

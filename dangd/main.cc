@@ -33,6 +33,7 @@ std::filesystem::path ExecutablePath(const char* argument) {
 void Usage() {
   std::cerr
       << "usage: dangd --model FILE --config FILE [--search DIR] [--state FILE]"
+         " [--peer-journal FILE]"
          " [--nacm FILE] [--recovery-user USER]... [--no-default-superuser]"
          " [--plugin FILE]..."
          " [--plugin-worker FILE]"
@@ -82,6 +83,8 @@ int main(int argc, char* argv[]) {
       options.search_paths.emplace_back(argv[++index]);
     } else if (argument == "--state" && index + 1 < argc) {
       options.state_file = std::filesystem::path(argv[++index]);
+    } else if (argument == "--peer-journal" && index + 1 < argc) {
+      options.peer_transaction_journal = std::filesystem::path(argv[++index]);
     } else if (argument == "--nacm" && index + 1 < argc) {
       options.nacm_configuration = std::filesystem::path(argv[++index]);
     } else if (argument == "--recovery-user" && index + 1 < argc) {

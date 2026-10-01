@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "dangd/application.h"
+#include "dangd/peer_transaction_journal.h"
 #include "dangd/test_plugins/plugin_test_support.h"
 #include "yang/xml_security.h"
 
@@ -18,6 +19,10 @@
 #include <vector>
 
 #include <dlfcn.h>
+
+#if defined(__unix__) || defined(__APPLE__)
+#include <sys/stat.h>
+#endif
 
 #include <gtest/gtest.h>
 
@@ -2337,6 +2342,78 @@ TEST(DangdApplicationTest, StateFileAllowsReloadButRejectsAnotherOwner) {
   auto restarted = Application::Load(options);
   ASSERT_NE(restarted.application, nullptr)
       << testing::PrintToString(restarted.errors);
+}
+
+TEST(DangdApplicationTest, FailsClosedOnUnresolvedPeerTransactionJournal) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.peer_transaction_journal = inputs.Path("peer-transaction.json");
+  auto clean = Application::Load(options);
+  ASSERT_NE(clean.application, nullptr) << testing::PrintToString(clean.errors);
+
+  PeerJournalState state{
+      .transaction_id = "change\n42",
+      .proposal_digest = "sha256:not-logged",
+      .participants = {{.id = "primary",
+                        .role = PeerTransactionRole::kPrimary,
+                        .persistent_commit_id = "secret-primary-token"},
+                       {.id = "standby",
+                        .role = PeerTransactionRole::kStandby,
+                        .persistent_commit_id = "secret-standby-token"}},
+  };
+  std::string journal_error;
+  auto journal = PeerTransactionFileJournal::Create(
+      *options.peer_transaction_journal, std::move(state), &journal_error);
+  ASSERT_TRUE(journal) << journal_error;
+  ASSERT_EQ(journal->Callbacks()
+                .record_commit_decision({"primary", "standby"})
+                .status,
+            PeerTransactionDecisionStatus::kCommitted);
+
+  auto reload = Application::Reload(options, *clean.application);
+  EXPECT_EQ(reload.application, nullptr);
+  ASSERT_EQ(reload.errors.size(), 1u);
+  EXPECT_NE(reload.errors.front().find("change%0A42"), std::string::npos);
+  EXPECT_EQ(reload.errors.front().find('\n'), std::string::npos);
+  clean.application.reset();
+
+  auto blocked = Application::Load(options);
+  EXPECT_EQ(blocked.application, nullptr);
+  ASSERT_EQ(blocked.errors.size(), 1u);
+  EXPECT_NE(blocked.errors.front().find("change%0A42"), std::string::npos);
+  EXPECT_EQ(blocked.errors.front().find('\n'), std::string::npos);
+  EXPECT_NE(blocked.errors.front().find("0/2 confirmations durable"),
+            std::string::npos);
+  EXPECT_NE(blocked.errors.front().find("primary standby"), std::string::npos);
+  EXPECT_EQ(blocked.errors.front().find("secret-primary-token"),
+            std::string::npos);
+  EXPECT_EQ(blocked.errors.front().find("not-logged"), std::string::npos);
+}
+
+TEST(DangdApplicationTest, RejectsUnsafePeerJournalConfiguration) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.state_file = inputs.Path("shared.json");
+  options.peer_transaction_journal = options.state_file;
+  auto collision = Application::Load(options);
+  EXPECT_EQ(collision.application, nullptr);
+  ASSERT_EQ(collision.errors.size(), 1u);
+  EXPECT_NE(collision.errors.front().find("paths must differ"),
+            std::string::npos);
+
+  options.state_file.reset();
+  options.peer_transaction_journal = inputs.Write("bad-peer.json", "not-json");
+#if defined(__unix__) || defined(__APPLE__)
+  ASSERT_EQ(chmod(options.peer_transaction_journal->c_str(),
+                  S_IRUSR | S_IWUSR),
+            0);
+#endif
+  auto malformed = Application::Load(options);
+  EXPECT_EQ(malformed.application, nullptr);
+  ASSERT_EQ(malformed.errors.size(), 1u);
+  EXPECT_NE(malformed.errors.front().find(
+                "cannot load peer transaction journal"),
+            std::string::npos);
 }
 
 TEST(DangdApplicationTest, LiveCommitRestoresSnapshotAndBackendOnSaveFailure) {
