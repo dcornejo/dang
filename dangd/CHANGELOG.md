@@ -15,8 +15,8 @@
   preparation, and resumes lost confirmations without rolling back a committed group.
   Failure-injection tests cover preparation, apply, verification, journal,
   cancellation, confirmation, recovery, and journal-cleanup boundaries. The
-  NETCONF transport and application-lifecycle integration remain explicitly
-  unadvertised work.
+  production provider and operator entry point remain explicitly unadvertised
+  work.
 
 - Added a private, versioned peer-transaction recovery journal containing the
   transaction identity, proposal digest, stable peer roles, persistent commit
@@ -41,8 +41,7 @@
   reply `message-id`, requires the advertised protocol capabilities, escapes
   persistent tokens through the XML API, and invokes no shell command. Live
   mutual-TLS coverage confirms a pending commit using a token containing XML
-  metacharacters. Configured peer endpoints and automatic lifecycle recovery
-  remain future integration work.
+  metacharacters.
 
 - Added `--peer-recovery FILE` and a private, versioned JSON configuration for
   stable journal-participant-to-NETCONF/TLS endpoint mappings. Startup and
@@ -67,6 +66,17 @@
   validate, unlock, and close-session on one connection. Shared client identity
   verification now uses DNS SAN matching for names and IP SAN matching for
   numeric addresses without the deprecated OpenSSL hostname API.
+
+- Added the complete stateful mutual-TLS peer transaction participant. It
+  requires candidate, validate, and persistent confirmed-commit capabilities;
+  locks and atomically replaces the complete candidate; validates it; applies
+  a bounded persistent confirmed commit; supplies authenticated running
+  readback to a provider health callback; and confirms or reconnects to cancel
+  before releasing the lock and session. An attempted apply is cancelled even
+  when its reply was lost. Live two-server coverage completes a durable group
+  commit and removes its journal, while live cancellation coverage proves exact
+  running rollback and harmless repetition. Persistent identifiers containing
+  XML metacharacters are serialized safely without invoking shell commands.
 
 - Added managed RFC 9642 central cleartext symmetric keys with standard NACM
   protection, persistence/restart coverage, retrieval, and feature reporting.

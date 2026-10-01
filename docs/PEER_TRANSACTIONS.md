@@ -11,10 +11,10 @@ processes atomic, and ordinary sequential NETCONF commits cannot distinguish a
 lost reply from a failed mutation.
 
 `PeerTransactionCoordinator` provides the transport-neutral state machine for
-this boundary. It does not advertise pair-wide commit support yet. Network
-full participant transport, configured peer identities, automatic startup
-recovery, policy, and operator-facing configuration remain required before the
-feature can be enabled.
+this boundary. The authenticated participant transport and automatic startup
+recovery are implemented, but dangd does not advertise pair-wide commit support
+yet. Provider translation, policy, observability, and an operator-facing entry
+point remain required before the feature can be enabled.
 
 ## Required participant operations
 
@@ -109,12 +109,26 @@ is bounded and messages have byte ceilings; hostname resolution and a total
 wall-clock transaction deadline remain integration boundaries. The adapter
 invokes no command-line client.
 
-The same transport now exposes a reusable authenticated session for transaction
-work that must retain server-side state. Required capabilities are verified
-before any RPC, base:1.0 framing state is retained across requests, and every
-reply is independently bounded, namespace-validated, and correlated by
-`message-id`. The session has live lock/edit/validate/unlock/close coverage;
-the coordinator callbacks that construct those operations are still pending.
+`MakeTlsTransactionParticipant` maps the complete coordinator contract onto a
+single reusable authenticated session. Before sending any RPC it requires the
+candidate 1.0, validate 1.1, and confirmed-commit 1.1 capabilities. Preparation
+locks candidate, uses `<copy-config>` with a complete safe `<config>` image,
+and validates candidate. Apply starts a bounded persistent confirmed commit.
+Verification retrieves running and passes the authenticated reply to a
+provider-supplied configuration and service-health callback. Confirmation uses
+the persistent token; pre-decision cancellation also uses that token and
+reconnects when an ambiguous transport failure closed the original session.
+Cancellation treats an already absent pending commit as the required rolled-
+back state. Release attempts candidate unlock and close-session, then closes
+the TLS resources idempotently. Persistent tokens are built with the XML API,
+including tokens containing XML metacharacters.
+
+The adapter has live coverage for successful two-peer durable coordination on
+two independent mutual-TLS servers. That test proves complete candidate
+replacement, authenticated running readback, journal decision and
+acknowledgements, permanent confirmation, cleanup, and final running state. A
+separate live failure-path test proves confirmed-commit cancellation restores
+the previous running configuration and that repeated cancellation is harmless.
 
 `--peer-recovery FILE` supplies the stable target mapping as a private,
 versioned JSON document. Each entry binds an exact journal participant ID to a
@@ -140,9 +154,6 @@ the same decision concurrently.
 The coordinator is not reachable from NETCONF or `dangctl` yet. Production
 pair-wide management still requires:
 
-- transport adapters for prepare, apply, verify, cancel, and release (only
-  recovery confirmation and the reusable session primitive are currently
-  implemented);
 - provider-specific translation into complete per-peer candidates and a
   post-apply health check;
 - policy for unreachable or degraded peers, defaulting to rejection;

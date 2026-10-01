@@ -109,10 +109,13 @@ stays in this file with its remaining work rewritten precisely.
   versioned `--peer-recovery` file now validates stable participant-to-endpoint
   and trust mappings at startup and reload. Startup and reload now use those
   mappings to resume durable pending confirmations and proceed only after the
-  journal is complete. A reusable authenticated session now preserves locks and
-  framing across correlated RPCs. Build the remaining prepare, apply, verify,
-  cancel, and release adapters on that session, add provider-specific candidate
-  translation and health verification,
+  journal is complete. The stateful mutual-TLS participant now maps prepare to
+  candidate lock, complete replacement, and validation; maps apply to a
+  persistent confirmed commit; supplies authenticated running readback to a
+  health callback; and implements confirmation, reconnecting idempotent
+  cancellation, unlock, and close. Live two-peer commit and live rollback tests
+  cover the complete adapter. Add provider-specific candidate translation and
+  service-health verification,
   a total transaction deadline beyond the implemented per-I/O timeouts,
   fail-closed degraded-peer policy, NACM/observability, `dangctl` integration,
   and Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.

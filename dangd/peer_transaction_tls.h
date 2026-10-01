@@ -4,8 +4,11 @@
 #ifndef DANGD_PEER_TRANSACTION_TLS_H_
 #define DANGD_PEER_TRANSACTION_TLS_H_
 
+#include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "dangd/peer_transaction.h"
 #include "dangd/peer_transaction_journal.h"
@@ -13,15 +16,39 @@
 
 namespace dangd {
 
+/** Complete transport plan for one participant in a new peer transaction. */
+struct TlsPeerTransactionOptions {
+  /** Stable identity stored in the durable group journal. */
+  std::string id;
+  /** Service role used by the coordinator's continuity-preserving order. */
+  PeerTransactionRole role = PeerTransactionRole::kStandby;
+  /** Authenticated peer endpoint and credentials. */
+  TlsClientOptions transport;
+  /** Complete NETCONF `<config>` image copied into the remote candidate. */
+  std::string candidate_configuration;
+  /** Unique RFC 6241 persistent confirmed-commit token. */
+  std::string persistent_commit_id;
+  /** Remote rollback deadline used by the confirmed commit. */
+  std::uint32_t confirmed_timeout_seconds = 60;
+  /** Validates the authenticated running `<get-config>` reply and pair health.
+   */
+  std::function<std::optional<std::string>(std::string_view)> verify_reply;
+};
+
+/** Builds all coordinator callbacks over one stateful mutual-TLS session. */
+[[nodiscard]] PeerTransactionParticipant
+MakeTlsTransactionParticipant(TlsPeerTransactionOptions options);
+
 /** Confirms one RFC 6241 persistent commit over authenticated NETCONF/TLS. */
-[[nodiscard]] std::optional<std::string> ConfirmPersistentCommitOverTls(
-    const TlsClientOptions& options, const std::string& persistent_commit_id);
+[[nodiscard]] std::optional<std::string>
+ConfirmPersistentCommitOverTls(const TlsClientOptions &options,
+                               const std::string &persistent_commit_id);
 
 /** Builds the confirmation-only participant used by restart recovery. */
-[[nodiscard]] PeerTransactionParticipant MakeTlsRecoveryParticipant(
-    const PeerJournalParticipant& journal_participant,
-    TlsClientOptions options);
+[[nodiscard]] PeerTransactionParticipant
+MakeTlsRecoveryParticipant(const PeerJournalParticipant &journal_participant,
+                           TlsClientOptions options);
 
-}  // namespace dangd
+} // namespace dangd
 
-#endif  // DANGD_PEER_TRANSACTION_TLS_H_
+#endif // DANGD_PEER_TRANSACTION_TLS_H_

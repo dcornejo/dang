@@ -17,6 +17,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include "dangd/application.h"
 
@@ -25,18 +26,19 @@ namespace {
 
 std::uint16_t AvailableLoopbackPort() {
   const int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-  if (socket_fd < 0) return 0;
+  if (socket_fd < 0)
+    return 0;
   sockaddr_in address{};
   address.sin_family = AF_INET;
   address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
   address.sin_port = 0;
-  if (bind(socket_fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) !=
-      0) {
+  if (bind(socket_fd, reinterpret_cast<sockaddr *>(&address),
+           sizeof(address)) != 0) {
     close(socket_fd);
     return 0;
   }
   socklen_t length = sizeof(address);
-  if (getsockname(socket_fd, reinterpret_cast<sockaddr*>(&address), &length) !=
+  if (getsockname(socket_fd, reinterpret_cast<sockaddr *>(&address), &length) !=
       0) {
     close(socket_fd);
     return 0;
@@ -151,6 +153,203 @@ TEST(PeerTransactionTlsTest, RejectsZeroSocketTimeoutBeforeConnecting) {
 }
 
 TEST(PeerTransactionTlsTest,
+     ExecutesDurableTwoPeerTransactionOverStatefulTlsSessions) {
+  const std::filesystem::path source = DANG_TEST_SOURCE_DIR;
+  const std::filesystem::path certificates = source / "dangd/testdata/tls";
+  const std::filesystem::path temporary =
+      std::filesystem::temp_directory_path() /
+      ("dang-peer-live-transaction-" + std::to_string(getpid()));
+  std::error_code cleanup_error;
+  std::filesystem::remove_all(temporary, cleanup_error);
+  ASSERT_TRUE(std::filesystem::create_directory(temporary));
+
+  const ApplicationOptions application_options{
+      .model = source / "dangd/examples/appliance.yang",
+      .search_paths = {source / "dangd/models"},
+      .configuration = source / "dangd/examples/config.xml",
+      .nacm_configuration = source / "dangd/examples/nacm.xml"};
+  auto primary = Application::Load(application_options);
+  auto standby = Application::Load(application_options);
+  ASSERT_NE(primary.application, nullptr);
+  ASSERT_NE(standby.application, nullptr);
+
+  const std::uint16_t primary_port = AvailableLoopbackPort();
+  const std::uint16_t standby_port = AvailableLoopbackPort();
+  ASSERT_NE(primary_port, 0);
+  ASSERT_NE(standby_port, 0);
+  ASSERT_NE(primary_port, standby_port);
+  const auto server_options = [&](std::uint16_t port) {
+    return TlsServerOptions{.address = "127.0.0.1",
+                            .port = port,
+                            .certificate = certificates / "server-cert.pem",
+                            .private_key = certificates / "server-key.pem",
+                            .trust_anchor = certificates / "ca-cert.pem",
+                            .maximum_connections = 1};
+  };
+  std::ostringstream primary_diagnostics;
+  std::ostringstream standby_diagnostics;
+  int primary_result = -1;
+  int standby_result = -1;
+  std::thread primary_server([&] {
+    primary_result =
+        RunTlsServer(*primary.application, server_options(primary_port),
+                     primary_diagnostics);
+  });
+  std::thread standby_server([&] {
+    standby_result =
+        RunTlsServer(*standby.application, server_options(standby_port),
+                     standby_diagnostics);
+  });
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  const auto participant = [&](std::string id, PeerTransactionRole role,
+                               std::uint16_t port, std::string hostname,
+                               std::string token) {
+    const std::string expected = ">" + hostname + "</";
+    return MakeTlsTransactionParticipant(
+        {.id = std::move(id),
+         .role = role,
+         .transport = {.host = "localhost",
+                       .port = port,
+                       .certificate = certificates / "alice-cert.pem",
+                       .private_key = certificates / "alice-key.pem",
+                       .trust_anchor = certificates / "ca-cert.pem"},
+         .candidate_configuration =
+             "<config xmlns='urn:ietf:params:xml:ns:netconf:base:1.0'>"
+             "<system xmlns='urn:example:appliance'><hostname>" +
+             hostname + "</hostname></system></config>",
+         .persistent_commit_id = std::move(token),
+         .confirmed_timeout_seconds = 60,
+         .verify_reply =
+             [expected](std::string_view reply) -> std::optional<std::string> {
+           if (reply.find(expected) == std::string_view::npos)
+             return "authenticated running readback has the wrong hostname";
+           return std::nullopt;
+         }});
+  };
+  std::vector<PeerTransactionParticipant> peers;
+  peers.push_back(participant("primary", PeerTransactionRole::kPrimary,
+                              primary_port, "primary-live", "primary<&"));
+  peers.push_back(participant("standby", PeerTransactionRole::kStandby,
+                              standby_port, "standby-live", "standby<&"));
+
+  std::string error;
+  const std::filesystem::path journal_path = temporary / "journal.json";
+  auto journal = PeerTransactionFileJournal::Create(
+      journal_path,
+      {.transaction_id = "live-transaction",
+       .proposal_digest = "sha256:test",
+       .participants = {{.id = "primary",
+                         .role = PeerTransactionRole::kPrimary,
+                         .persistent_commit_id = "primary<&"},
+                        {.id = "standby",
+                         .role = PeerTransactionRole::kStandby,
+                         .persistent_commit_id = "standby<&"}}},
+      &error);
+  ASSERT_TRUE(journal) << error;
+  const PeerTransactionResult result = PeerTransactionCoordinator().Execute(
+      std::move(peers), journal->Callbacks());
+
+  primary_server.join();
+  standby_server.join();
+  EXPECT_TRUE(result.ok()) << result.message;
+  EXPECT_FALSE(std::filesystem::exists(journal_path));
+  EXPECT_EQ(primary_result, 0) << primary_diagnostics.str();
+  EXPECT_EQ(standby_result, 0) << standby_diagnostics.str();
+  EXPECT_NE(primary.application->datastores()
+                .Read(yang::netconf::Datastore::kRunning)
+                .ToXml()
+                .find("primary-live"),
+            std::string::npos);
+  EXPECT_NE(standby.application->datastores()
+                .Read(yang::netconf::Datastore::kRunning)
+                .ToXml()
+                .find("standby-live"),
+            std::string::npos);
+  std::filesystem::remove_all(temporary, cleanup_error);
+}
+
+TEST(PeerTransactionTlsTest,
+     CancelsAppliedCommitIdempotentlyAndRestoresRunningConfiguration) {
+  const std::filesystem::path source = DANG_TEST_SOURCE_DIR;
+  const std::filesystem::path certificates = source / "dangd/testdata/tls";
+  const ApplicationOptions application_options{
+      .model = source / "dangd/examples/appliance.yang",
+      .search_paths = {source / "dangd/models"},
+      .configuration = source / "dangd/examples/config.xml",
+      .nacm_configuration = source / "dangd/examples/nacm.xml"};
+  auto loaded = Application::Load(application_options);
+  ASSERT_NE(loaded.application, nullptr);
+  const std::uint16_t port = AvailableLoopbackPort();
+  ASSERT_NE(port, 0);
+  std::ostringstream diagnostics;
+  int server_result = -1;
+  std::thread server([&] {
+    server_result =
+        RunTlsServer(*loaded.application,
+                     {.address = "127.0.0.1",
+                      .port = port,
+                      .certificate = certificates / "server-cert.pem",
+                      .private_key = certificates / "server-key.pem",
+                      .trust_anchor = certificates / "ca-cert.pem",
+                      .maximum_connections = 1},
+                     diagnostics);
+  });
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  PeerTransactionParticipant peer = MakeTlsTransactionParticipant(
+      {.id = "cancel-peer",
+       .role = PeerTransactionRole::kPrimary,
+       .transport = {.host = "localhost",
+                     .port = port,
+                     .certificate = certificates / "alice-cert.pem",
+                     .private_key = certificates / "alice-key.pem",
+                     .trust_anchor = certificates / "ca-cert.pem"},
+       .candidate_configuration = R"xml(
+        <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+          <system xmlns="urn:example:appliance">
+            <hostname>temporary-peer</hostname>
+          </system>
+        </config>)xml",
+       .persistent_commit_id = "cancel-token<&",
+       .confirmed_timeout_seconds = 60,
+       .verify_reply = [](std::string_view) { return std::nullopt; }});
+  const auto prepared = peer.prepare();
+  const auto applied = prepared ? std::optional<std::string>{"not attempted"}
+                                : peer.apply_confirmed();
+  const auto cancelled =
+      applied ? std::optional<std::string>{"not attempted"} : peer.cancel();
+  const auto cancelled_again =
+      cancelled ? std::optional<std::string>{"not attempted"} : peer.cancel();
+  peer.release();
+  server.join();
+
+  EXPECT_FALSE(prepared) << (prepared ? *prepared : "");
+  EXPECT_FALSE(applied) << (applied ? *applied : "");
+  EXPECT_FALSE(cancelled) << (cancelled ? *cancelled : "");
+  EXPECT_FALSE(cancelled_again) << (cancelled_again ? *cancelled_again : "");
+  EXPECT_EQ(server_result, 0) << diagnostics.str();
+  const std::string running = loaded.application->datastores()
+                                  .Read(yang::netconf::Datastore::kRunning)
+                                  .ToXml();
+  EXPECT_NE(running.find("edge-1"), std::string::npos);
+  EXPECT_EQ(running.find("temporary-peer"), std::string::npos);
+}
+
+TEST(PeerTransactionTlsTest, RejectsInvalidCandidateBeforeConnecting) {
+  PeerTransactionParticipant peer = MakeTlsTransactionParticipant(
+      {.id = "invalid-peer",
+       .role = PeerTransactionRole::kPrimary,
+       .candidate_configuration = "<config><broken></config>",
+       .persistent_commit_id = "invalid-token",
+       .verify_reply = [](std::string_view) { return std::nullopt; }});
+  const auto error = peer.prepare();
+  ASSERT_TRUE(error);
+  EXPECT_NE(error->find("well-formed"), std::string::npos) << *error;
+  peer.release();
+}
+
+TEST(PeerTransactionTlsTest,
      ApplicationStartupAutomaticallyRecoversEveryMappedPeer) {
   const std::filesystem::path source = DANG_TEST_SOURCE_DIR;
   const std::filesystem::path certificates = source / "dangd/testdata/tls";
@@ -208,7 +407,7 @@ TEST(PeerTransactionTlsTest,
                             .trust_anchor = certificates / "ca-cert.pem"};
   };
   std::string error;
-  const auto arm = [&](const TlsClientOptions& target, std::string_view token) {
+  const auto arm = [&](const TlsClientOptions &target, std::string_view token) {
     return ExchangeTlsRpc(
         target,
         "<rpc xmlns='urn:ietf:params:xml:ns:netconf:base:1.0' "
@@ -278,5 +477,5 @@ TEST(PeerTransactionTlsTest,
   std::filesystem::remove_all(temporary, cleanup_error);
 }
 
-}  // namespace
-}  // namespace dangd
+} // namespace
+} // namespace dangd

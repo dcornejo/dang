@@ -153,10 +153,11 @@ is empty because the legacy callback has transaction-wide granularity.
 
 Configuration spanning independent dangd servers requires a stronger durable
 decision boundary than this local transaction. The implemented state machine,
-fail-closed recovery rules, and confirmation-only mutual-TLS recovery adapter
-are described in
-[Peer transaction coordination](../docs/PEER_TRANSACTIONS.md). Configured peer
-endpoints and lifecycle integration are not yet implemented.
+fail-closed recovery rules, automatic lifecycle recovery, and complete
+stateful mutual-TLS participant adapter are described in
+[Peer transaction coordination](../docs/PEER_TRANSACTIONS.md). The production
+pair-wide entry point and provider-specific candidate and health translation
+are not yet implemented, so pair-wide atomicity is not advertised.
 
 ## Embedded SSH server example
 

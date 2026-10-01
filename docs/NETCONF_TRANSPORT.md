@@ -114,6 +114,13 @@ untrusted XML, and requires the exact request `message-id`. Individual socket
 and TLS I/O waits and message sizes are bounded; DNS resolution and a total
 wall-clock session deadline remain host integration boundaries.
 
+The peer transaction adapter retains one such session from candidate lock
+through complete candidate replacement, validation, persistent confirmed
+commit, authenticated running readback, confirmation or cancellation, unlock,
+and close-session. If an apply reply is lost and the transport closes, the
+pre-decision cancellation path reconnects with the same authenticated endpoint
+and persistent token so the coordinator can still establish rollback.
+
 `--username-map AUTHENTICATED=LOCAL` applies an exact mapping after certificate
 field selection. Repeat it for several identities. Without
 `--require-username-map`, an identity with no rule is used unchanged; with that
