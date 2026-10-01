@@ -34,6 +34,16 @@
   prevents ordinary service or `SIGHUP` reload from bypassing unresolved peer
   state while authenticated automatic recovery is still under development.
 
+- Added a bounded, programmatic one-RPC NETCONF/TLS client and a recovery
+  adapter that confirms an RFC 6241 persistent confirmed commit from a journal
+  participant. The client verifies mutual-TLS credentials and the server
+  hostname, validates untrusted XML and NETCONF namespaces, correlates the
+  reply `message-id`, requires the advertised protocol capabilities, escapes
+  persistent tokens through the XML API, and invokes no shell command. Live
+  mutual-TLS coverage confirms a pending commit using a token containing XML
+  metacharacters. Configured peer endpoints and automatic lifecycle recovery
+  remain future integration work.
+
 - Added managed RFC 9642 central cleartext symmetric keys with standard NACM
   protection, persistence/restart coverage, retrieval, and feature reporting.
 - Added the RFC 9644 SSH client/server grouping family and its pinned dependency

@@ -12,9 +12,9 @@ lost reply from a failed mutation.
 
 `PeerTransactionCoordinator` provides the transport-neutral state machine for
 this boundary. It does not advertise pair-wide commit support yet. Network
-transport, authentication, durable journal storage, startup recovery, policy,
-and operator-facing configuration remain required before the feature can be
-enabled.
+full participant transport, configured peer identities, automatic startup
+recovery, policy, and operator-facing configuration remain required before the
+feature can be enabled.
 
 ## Required participant operations
 
@@ -99,22 +99,39 @@ there is no durable COMMIT to recover. An unsafe, malformed, or unresolved file
 fails startup; the diagnostic names the transaction, durable confirmation
 count, and pending peer identities without exposing the proposal digest or
 persistent commit tokens. The journal path must differ from `--state`.
-Automatic confirmation recovery is not yet possible because authenticated
-outbound peer sessions and configured peer identities are still missing.
+The recovery layer now has a programmatic confirmation-only NETCONF/TLS
+adapter. It opens a fresh mutual-TLS session, verifies the peer certificate and
+hostname, requires NETCONF base 1.0 and persistent confirmed-commit 1.1,
+validates bounded untrusted XML, correlates the reply `message-id`, and accepts
+only an unambiguous `<ok/>`. Persistent tokens are serialized with the XML API
+and are never included in diagnostics. Each socket connection and TLS I/O wait
+is bounded and messages have byte ceilings; hostname resolution and a total
+wall-clock transaction deadline remain integration boundaries. The adapter
+invokes no command-line client.
+
+This building block is deliberately not connected to startup yet. Dangd has no
+configuration for stable peer endpoints, trust material, or the mapping from a
+journal participant to its endpoint. Consequently an unresolved journal still
+fails startup and reload closed instead of attempting an unauthenticated or
+guessed recovery target.
 
 ## Remaining integration
 
 The coordinator is not reachable from NETCONF or `dangctl` yet. Production
 pair-wide management still requires:
 
-- authenticated NETCONF client sessions with pinned peer identities;
-- authenticated restart recovery that resumes a durable commit decision before
-  accepting a conflicting transaction;
+- configured peer endpoints, trust material, and stable identity checks for
+  the implemented authenticated NETCONF/TLS client;
+- lifecycle integration that maps journal participants to those endpoints and
+  resumes a durable commit decision before accepting a conflicting transaction;
+- transport adapters for prepare, apply, verify, cancel, and release (only
+  recovery confirmation is currently implemented);
 - provider-specific translation into complete per-peer candidates and a
   post-apply health check;
 - policy for unreachable or degraded peers, defaulting to rejection;
-- bounded timeouts, observability, NACM rules, packaging, and Linux/FreeBSD
-  interoperability tests; and
+- a total transaction deadline beyond the implemented per-I/O timeouts,
+  observability, NACM rules, packaging, and Linux/FreeBSD interoperability
+  tests; and
 - CLI support that submits the logical change through dangd rather than
   bypassing NETCONF validation, authorization, ordering, and rollback.
 

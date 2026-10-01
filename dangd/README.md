@@ -152,9 +152,11 @@ supported as one reversible transaction action per plugin; their remnant path
 is empty because the legacy callback has transaction-wide granularity.
 
 Configuration spanning independent dangd servers requires a stronger durable
-decision boundary than this local transaction. The implemented but not yet
-transport-integrated state machine and its fail-closed recovery rules are
-described in [Peer transaction coordination](../docs/PEER_TRANSACTIONS.md).
+decision boundary than this local transaction. The implemented state machine,
+fail-closed recovery rules, and confirmation-only mutual-TLS recovery adapter
+are described in
+[Peer transaction coordination](../docs/PEER_TRANSACTIONS.md). Configured peer
+endpoints and lifecycle integration are not yet implemented.
 
 ## Embedded SSH server example
 
@@ -297,9 +299,10 @@ pair-wide transactions. If the path is absent, startup continues. If it
 contains an unsafe, malformed, or unresolved journal, startup and `SIGHUP`
 reload fail closed before accepting the replacement application. Diagnostics
 name the transaction and pending peers but do not expose proposal digests or
-persistent confirmed-commit tokens. Automatic remote recovery is not yet
-implemented, so configuring this option is a safety gate rather than enabling
-pair-wide commits.
+persistent confirmed-commit tokens. An authenticated mutual-TLS confirmation
+adapter exists, but peer endpoint and credential configuration and automatic
+lifecycle recovery are not yet wired. Configuring this option is therefore a
+safety gate rather than enabling pair-wide commits.
 
 Application RPCs and YANG 1.1 actions are resolved against the compiled schema
 before dispatch. `dangd` applies operation rules and `default-deny-all`; actions

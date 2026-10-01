@@ -10,7 +10,9 @@
 #include <iosfwd>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <openssl/types.h>
@@ -46,6 +48,14 @@ struct TlsClientOptions {
   std::filesystem::path certificate;
   std::filesystem::path private_key;
   std::filesystem::path trust_anchor;
+  /** Bounds each socket connect, TLS I/O, write, and reply-read wait. */
+  std::uint32_t timeout_milliseconds = 10'000;
+};
+
+/** Authenticated server hello and reply returned by one NETCONF RPC. */
+struct TlsRpcExchange {
+  std::string server_hello;
+  std::string reply;
 };
 
 /** Maps exactly one safe certificate subject common name to a NACM username. */
@@ -81,6 +91,16 @@ struct TlsClientOptions {
 [[nodiscard]] int RunTlsClient(const TlsClientOptions& options,
                                std::istream& input, std::ostream& output,
                                std::ostream& diagnostics);
+
+/**
+ * Executes one byte-bounded NETCONF RPC over a fresh mutual-TLS session.
+ *
+ * The server certificate and hostname are verified, both protocol documents
+ * are parsed as untrusted XML, and the socket is closed before return.
+ */
+[[nodiscard]] std::optional<TlsRpcExchange> ExchangeTlsRpc(
+    const TlsClientOptions& options, std::string_view rpc, std::string* error,
+    std::span<const std::string_view> required_server_capabilities = {});
 
 }  // namespace dangd
 

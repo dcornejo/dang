@@ -103,10 +103,15 @@ stays in this file with its remaining work rewritten precisely.
   peer before mutation, applies standbys before the primary, verifies all
   participants, records a durable commit decision before confirmation, rolls
   back pre-decision failures in reverse order, and resumes lost confirmations
-  without contradicting that decision. Add authenticated NETCONF client
-  transport, stable peer identity, extend the implemented fail-closed journal
-  startup inspection into authenticated automatic recovery, provider-specific
+  without contradicting that decision. A bounded programmatic mutual-TLS
+  client now performs authenticated persistent-commit confirmation with
+  hostname, capability, namespace, and reply-correlation checks. Add stable
+  peer endpoint and trust configuration, map journal participants to those
+  endpoints, extend the implemented fail-closed journal startup inspection
+  into authenticated automatic recovery, implement the remaining prepare,
+  apply, verify, cancel, and release transport operations, add provider-specific
   candidate translation and health verification,
+  a total transaction deadline beyond the implemented per-I/O timeouts,
   fail-closed degraded-peer policy, NACM/observability, `dangctl` integration,
   and Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.
   See [`docs/PEER_TRANSACTIONS.md`](docs/PEER_TRANSACTIONS.md).

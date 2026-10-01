@@ -9,14 +9,17 @@
 #include <cctype>
 #include <csignal>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <ranges>
 #include <string_view>
 
+#include <fcntl.h>
 #include <netdb.h>
 #include <poll.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include <openssl/err.h>
@@ -26,6 +29,8 @@
 
 #include "dangd/application.h"
 #include "yang/netconf_transport.h"
+#include "yang/resource_limits.h"
+#include "yang/xml_security.h"
 
 namespace dangd {
 namespace {
@@ -80,7 +85,11 @@ bool ConfigureCredentials(SSL_CTX* context,
 }
 
 int ConnectSocket(std::string_view host, std::uint16_t port,
-                  std::string* error) {
+                  std::uint32_t timeout_milliseconds, std::string* error) {
+  if (timeout_milliseconds == 0) {
+    *error = "TLS client timeout must be positive";
+    return -1;
+  }
   addrinfo hints{};
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
@@ -101,9 +110,47 @@ int ConnectSocket(std::string_view host, std::uint16_t port,
     const int socket_fd =
         socket(address->ai_family, address->ai_socktype, address->ai_protocol);
     if (socket_fd < 0) continue;
-    if (connect(socket_fd, address->ai_addr, address->ai_addrlen) == 0)
-      return socket_fd;
-    close(socket_fd);
+    const int flags = fcntl(socket_fd, F_GETFL, 0);
+    if (flags < 0 || fcntl(socket_fd, F_SETFL, flags | O_NONBLOCK) != 0) {
+      close(socket_fd);
+      continue;
+    }
+    int connected = connect(socket_fd, address->ai_addr, address->ai_addrlen);
+    if (connected != 0 && errno == EINPROGRESS) {
+      pollfd descriptor{socket_fd, POLLOUT, 0};
+      const std::uint32_t bounded = std::min<std::uint32_t>(
+          timeout_milliseconds,
+          static_cast<std::uint32_t>(std::numeric_limits<int>::max()));
+      connected = poll(&descriptor, 1, static_cast<int>(bounded));
+      int socket_error = 0;
+      socklen_t error_size = sizeof(socket_error);
+      if (connected <= 0 ||
+          getsockopt(socket_fd, SOL_SOCKET, SO_ERROR, &socket_error,
+                     &error_size) != 0 ||
+          socket_error != 0) {
+        close(socket_fd);
+        continue;
+      }
+    } else if (connected != 0) {
+      close(socket_fd);
+      continue;
+    }
+    if (fcntl(socket_fd, F_SETFL, flags) != 0) {
+      close(socket_fd);
+      continue;
+    }
+    timeval timeout{
+        .tv_sec = static_cast<time_t>(timeout_milliseconds / 1000),
+        .tv_usec = static_cast<suseconds_t>(
+            (timeout_milliseconds % 1000) * 1000)};
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
+                   sizeof(timeout)) != 0 ||
+        setsockopt(socket_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout,
+                   sizeof(timeout)) != 0) {
+      close(socket_fd);
+      continue;
+    }
+    return socket_fd;
   }
   *error = std::string("cannot connect to TLS server: ") +
            std::strerror(errno);
@@ -181,12 +228,18 @@ bool WriteTls(SSL* tls, std::string_view bytes, std::string* error) {
 }
 
 std::optional<std::string> ReadBase10Message(SSL* tls, std::string* pending,
-                                             std::string* error) {
+                                             std::string* error,
+                                             std::size_t maximum_message_size =
+                                                 16 * 1024 * 1024) {
   constexpr std::string_view delimiter = "]]>]]>";
   std::array<char, 16 * 1024> buffer{};
   while (true) {
     const std::size_t end = pending->find(delimiter);
     if (end != std::string::npos) {
+      if (end > maximum_message_size) {
+        *error = "NETCONF message exceeds the byte limit";
+        return std::nullopt;
+      }
       std::string message = pending->substr(0, end);
       pending->erase(0, end + delimiter.size());
       return message;
@@ -197,7 +250,80 @@ std::optional<std::string> ReadBase10Message(SSL* tls, std::string* pending,
       return std::nullopt;
     }
     pending->append(buffer.data(), count);
+    if (pending->size() > maximum_message_size + delimiter.size() - 1) {
+      *error = "NETCONF message exceeds the byte limit";
+      return std::nullopt;
+    }
   }
+}
+
+std::string_view XmlLocalName(std::string_view name) {
+  const std::size_t separator = name.find(':');
+  return separator == std::string_view::npos ? name
+                                              : name.substr(separator + 1);
+}
+
+std::string XmlNamespace(pugi::xml_node node) {
+  const std::string_view name = node.name();
+  const std::size_t separator = name.find(':');
+  const std::string attribute =
+      separator == std::string_view::npos
+          ? "xmlns"
+          : "xmlns:" + std::string(name.substr(0, separator));
+  for (pugi::xml_node current = node; current; current = current.parent()) {
+    const pugi::xml_attribute declaration = current.attribute(attribute.c_str());
+    if (declaration) return declaration.as_string();
+  }
+  return {};
+}
+
+bool ValidateNetconfDocument(std::string_view xml, std::string_view root_name,
+                             std::string* error) {
+  if (xml.size() > yang::DefaultResourceLimits().maximum_xml_bytes) {
+    *error = "NETCONF XML exceeds the byte limit";
+    return false;
+  }
+  pugi::xml_document parsed;
+  const auto status = yang::ParseUntrustedXml(xml, &parsed);
+  if (!status.ok) {
+    *error = "NETCONF document is not safe well-formed XML";
+    return false;
+  }
+  const pugi::xml_node root = parsed.document_element();
+  if (!root || XmlLocalName(root.name()) != root_name ||
+      XmlNamespace(root) != "urn:ietf:params:xml:ns:netconf:base:1.0") {
+    *error = "NETCONF document has the wrong root element or namespace";
+    return false;
+  }
+  return true;
+}
+
+std::optional<std::string> RpcMessageId(std::string_view xml) {
+  pugi::xml_document parsed;
+  if (!yang::ParseUntrustedXml(xml, &parsed).ok) return std::nullopt;
+  const pugi::xml_attribute id =
+      parsed.document_element().attribute("message-id");
+  if (!id || std::string_view(id.value()).empty()) return std::nullopt;
+  return id.value();
+}
+
+bool HelloHasCapability(std::string_view xml, std::string_view capability) {
+  pugi::xml_document parsed;
+  if (!yang::ParseUntrustedXml(xml, &parsed).ok) return false;
+  for (const pugi::xml_node child : parsed.document_element().children()) {
+    if (XmlLocalName(child.name()) != "capabilities" ||
+        XmlNamespace(child) !=
+            "urn:ietf:params:xml:ns:netconf:base:1.0")
+      continue;
+    for (const pugi::xml_node value : child.children()) {
+      if (XmlLocalName(value.name()) == "capability" &&
+          XmlNamespace(value) ==
+              "urn:ietf:params:xml:ns:netconf:base:1.0" &&
+          std::string_view(value.text().as_string()) == capability)
+        return true;
+    }
+  }
+  return false;
 }
 
 class OpenSslStream final : public yang::netconf::SecureByteStream {
@@ -514,6 +640,95 @@ int RunReloadableTlsServer(
   return result;
 }
 
+std::optional<TlsRpcExchange> ExchangeTlsRpc(const TlsClientOptions& options,
+                                             std::string_view rpc,
+                                             std::string* error,
+                                             std::span<const std::string_view>
+                                                 required_server_capabilities) {
+  if (error == nullptr) return std::nullopt;
+  error->clear();
+  if (rpc.find("]]>]]>") != std::string_view::npos) {
+    *error = "NETCONF RPC contains a framing delimiter";
+    return std::nullopt;
+  }
+  if (!ValidateNetconfDocument(rpc, "rpc", error))
+    return std::nullopt;
+
+  Context context(SSL_CTX_new(TLS_client_method()), SSL_CTX_free);
+  if (!context) {
+    *error = LastTlsError("cannot create TLS client context");
+    return std::nullopt;
+  }
+  SSL_CTX_set_min_proto_version(context.get(), TLS1_2_VERSION);
+  SSL_CTX_set_verify(context.get(), SSL_VERIFY_PEER, nullptr);
+  if (!ConfigureCredentials(context.get(), options.certificate,
+                            options.private_key, options.trust_anchor, error))
+    return std::nullopt;
+  const int socket_fd = ConnectSocket(options.host, options.port,
+                                      options.timeout_milliseconds, error);
+  if (socket_fd < 0) return std::nullopt;
+  Session tls(SSL_new(context.get()), SSL_free);
+  if (!tls) {
+    close(socket_fd);
+    *error = "cannot create TLS client session";
+    return std::nullopt;
+  }
+  SSL_set_fd(tls.get(), socket_fd);
+  SSL_set_tlsext_host_name(tls.get(), options.host.c_str());
+  SSL_set1_host(tls.get(), options.host.c_str());
+  if (SSL_connect(tls.get()) != 1) {
+    *error = LastTlsError("TLS handshake failed");
+    close(socket_fd);
+    return std::nullopt;
+  }
+  const auto close_connection = [&] {
+    SSL_shutdown(tls.get());
+    close(socket_fd);
+  };
+
+  std::string pending;
+  auto server_hello = ReadBase10Message(tls.get(), &pending, error);
+  if (!server_hello || !ValidateNetconfDocument(*server_hello, "hello", error) ||
+      !HelloHasCapability(
+          *server_hello,
+          "urn:ietf:params:netconf:base:1.0")) {
+    if (error->empty()) *error = "NETCONF server does not advertise base 1.0";
+    close_connection();
+    return std::nullopt;
+  }
+  for (const std::string_view capability : required_server_capabilities) {
+    if (HelloHasCapability(*server_hello, capability)) continue;
+    *error = "NETCONF server does not advertise required capability " +
+             std::string(capability);
+    close_connection();
+    return std::nullopt;
+  }
+  constexpr std::string_view client_hello =
+      "<hello xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
+      "<capabilities><capability>urn:ietf:params:netconf:base:1.0"
+      "</capability></capabilities></hello>]]>]]>";
+  if (!WriteTls(tls.get(), client_hello, error) ||
+      !WriteTls(tls.get(), std::string(rpc) + "]]>]]>", error)) {
+    close_connection();
+    return std::nullopt;
+  }
+  auto reply = ReadBase10Message(tls.get(), &pending, error);
+  if (!reply || !ValidateNetconfDocument(*reply, "rpc-reply", error)) {
+    close_connection();
+    return std::nullopt;
+  }
+  const auto request_id = RpcMessageId(rpc);
+  const auto reply_id = RpcMessageId(*reply);
+  if (!request_id || !reply_id || *request_id != *reply_id) {
+    *error = "NETCONF reply message-id does not match the request";
+    close_connection();
+    return std::nullopt;
+  }
+  close_connection();
+  return TlsRpcExchange{.server_hello = std::move(*server_hello),
+                        .reply = std::move(*reply)};
+}
+
 int RunTlsClient(const TlsClientOptions& options, std::istream& input,
                  std::ostream& output, std::ostream& diagnostics) {
   Context context(SSL_CTX_new(TLS_client_method()), SSL_CTX_free);
@@ -529,7 +744,8 @@ int RunTlsClient(const TlsClientOptions& options, std::istream& input,
     diagnostics << "dangctl: " << error << '\n';
     return 1;
   }
-  const int socket_fd = ConnectSocket(options.host, options.port, &error);
+  const int socket_fd = ConnectSocket(options.host, options.port,
+                                      options.timeout_milliseconds, &error);
   if (socket_fd < 0) {
     diagnostics << "dangctl: " << error << '\n';
     return 1;

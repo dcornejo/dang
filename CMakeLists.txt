@@ -121,6 +121,7 @@ if(YANG_BUILD_DANGD)
     dangd/hardware_transaction.cc
     dangd/peer_transaction.cc
     dangd/peer_transaction_journal.cc
+    dangd/peer_transaction_tls.cc
     dangd/plugin_worker_client.cc
     dangd/plugin_worker_coordinator.cc
     dangd/plugin_worker_runtime.cc
@@ -598,6 +599,7 @@ if(YANG_BUILD_TESTS)
     add_executable(dangd_tests dangd/application_test.cc
       dangd/hardware_transaction_test.cc dangd/peer_transaction_test.cc
       dangd/peer_transaction_journal_test.cc
+      dangd/peer_transaction_tls_test.cc
       dangd/plugin_manager_test.cc
       dangd/plugin_worker_protocol_test.cc dangd/plugin_worker_test.cc
       dangd/ssh_transport_test.cc
