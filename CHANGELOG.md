@@ -13,6 +13,12 @@ and releases follow Semantic Versioning.
   several plugins for each stable participant and validates the final candidate
   without adding any plugin-specific awareness to the daemon core.
 
+- Updated the peer-transaction integration status after the external Kea
+  provider adopted ABI v9 for complete two-member hot-standby images and
+  authenticated readback verification. The remaining core work stays generic:
+  invoke composed plans from the production commit path and add the associated
+  policy, observability, authorization, deadline, and interoperability layers.
+
 - Recorded Linux ECMP operational fidelity for the external RFC 8431 provider.
   Native multipath routes now publish one stable, schema-valid route per base
   nexthop instead of collapsing to an empty nexthop; weights and unresolved

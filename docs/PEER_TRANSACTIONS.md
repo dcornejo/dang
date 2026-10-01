@@ -176,10 +176,11 @@ the same decision concurrently.
 The coordinator is not reachable from NETCONF or `dangctl` yet. Production
 pair-wide management still requires:
 
-- provider-specific translation into complete per-peer candidates and a
-  post-apply health check. The external Kea provider now implements the strict
-  dual-view verifier. Its ABI-v9 candidate construction remains to be completed,
-  and the generic production invocation is not connected;
+- generic production invocation of composed ABI-v9 plans. The external Kea
+  provider now supplies complete two-member hot-standby module images plus a
+  strict dual-view verifier, while the core validates and composes those
+  transport-neutral contributions. The normal NETCONF commit path does not yet
+  invoke the resulting plan;
 - policy for unreachable or degraded peers, defaulting to rejection;
 - a total transaction deadline beyond the implemented per-I/O timeouts,
   observability, NACM rules, packaging, and Linux/FreeBSD interoperability
