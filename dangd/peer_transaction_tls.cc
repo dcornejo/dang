@@ -180,7 +180,7 @@ ValidateOptions(const TlsPeerTransactionOptions &options,
     return "persistent commit identity is invalid";
   if (options.confirmed_timeout_seconds == 0)
     return "confirmed commit timeout must be nonzero";
-  if (!options.verify_reply)
+  if (!options.verify_replies)
     return "verification callback is missing";
   if (!yang::ParseUntrustedXml(options.candidate_configuration, candidate).ok)
     return "candidate configuration is not safe well-formed XML";
@@ -309,16 +309,26 @@ MakeTlsTransactionParticipant(TlsPeerTransactionOptions options) {
         if (!state->applied || !state->session)
           return "participant has no applied confirmed commit";
         std::string error;
-        const auto reply = state->session->Execute(
+        const auto running = state->session->Execute(
             Rpc(state->NextMessageId("verify"),
                 "<get-config><source><running/></source></get-config>"),
             &error);
-        if (!reply)
+        if (!running)
           return error;
-        if (ReplyIsOk(*reply) || RpcErrorTag(*reply))
+        if (ReplyIsOk(*running) || RpcErrorTag(*running))
           return "peer rejected running configuration read" +
-                 (RpcErrorTag(*reply) ? " (" + *RpcErrorTag(*reply) + ")" : "");
-        return state->options.verify_reply(*reply);
+                 (RpcErrorTag(*running) ? " (" + *RpcErrorTag(*running) + ")"
+                                        : "");
+        const auto operational = state->session->Execute(
+            Rpc(state->NextMessageId("health"), "<get/>"), &error);
+        if (!operational)
+          return error;
+        if (ReplyIsOk(*operational) || RpcErrorTag(*operational))
+          return "peer rejected operational health read" +
+                 (RpcErrorTag(*operational)
+                      ? " (" + *RpcErrorTag(*operational) + ")"
+                      : "");
+        return state->options.verify_replies(*running, *operational);
       },
       .confirm = [state]() -> std::optional<std::string> {
         if (state->confirmed)

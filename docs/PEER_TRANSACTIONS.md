@@ -114,8 +114,9 @@ single reusable authenticated session. Before sending any RPC it requires the
 candidate 1.0, validate 1.1, and confirmed-commit 1.1 capabilities. Preparation
 locks candidate, uses `<copy-config>` with a complete safe `<config>` image,
 and validates candidate. Apply starts a bounded persistent confirmed commit.
-Verification retrieves running and passes the authenticated reply to a
-provider-supplied configuration and service-health callback. Confirmation uses
+Verification retrieves both authoritative running configuration and the
+combined configuration/operational view, then passes both authenticated replies
+to a provider-supplied configuration and service-health callback. Confirmation uses
 the persistent token; pre-decision cancellation also uses that token and
 reconnects when an ambiguous transport failure closed the original session.
 Cancellation treats an already absent pending commit as the required rolled-
@@ -125,8 +126,8 @@ including tokens containing XML metacharacters.
 
 The adapter has live coverage for successful two-peer durable coordination on
 two independent mutual-TLS servers. That test proves complete candidate
-replacement, authenticated running readback, journal decision and
-acknowledgements, permanent confirmation, cleanup, and final running state. A
+replacement, authenticated running and operational readback, journal decision
+and acknowledgements, permanent confirmation, cleanup, and final running state. A
 separate live failure-path test proves confirmed-commit cancellation restores
 the previous running configuration and that repeated cancellation is harmless.
 

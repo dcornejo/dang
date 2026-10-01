@@ -111,8 +111,8 @@ stays in this file with its remaining work rewritten precisely.
   mappings to resume durable pending confirmations and proceed only after the
   journal is complete. The stateful mutual-TLS participant now maps prepare to
   candidate lock, complete replacement, and validation; maps apply to a
-  persistent confirmed commit; supplies authenticated running readback to a
-  health callback; and implements confirmation, reconnecting idempotent
+  persistent confirmed commit; supplies authenticated running and operational
+  readback to a health callback; and implements confirmation, reconnecting idempotent
   cancellation, unlock, and close. Live two-peer commit and live rollback tests
   cover the complete adapter. Add provider-specific candidate translation and
   service-health verification,

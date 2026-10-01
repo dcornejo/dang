@@ -70,8 +70,8 @@
 - Added the complete stateful mutual-TLS peer transaction participant. It
   requires candidate, validate, and persistent confirmed-commit capabilities;
   locks and atomically replaces the complete candidate; validates it; applies
-  a bounded persistent confirmed commit; supplies authenticated running
-  readback to a provider health callback; and confirms or reconnects to cancel
+  a bounded persistent confirmed commit; supplies authenticated running and
+  operational readback to a provider health callback; and confirms or reconnects to cancel
   before releasing the lock and session. An attempted apply is cancelled even
   when its reply was lost. Live two-server coverage completes a durable group
   commit and removes its journal, while live cancellation coverage proves exact

@@ -30,9 +30,9 @@ struct TlsPeerTransactionOptions {
   std::string persistent_commit_id;
   /** Remote rollback deadline used by the confirmed commit. */
   std::uint32_t confirmed_timeout_seconds = 60;
-  /** Validates the authenticated running `<get-config>` reply and pair health.
-   */
-  std::function<std::optional<std::string>(std::string_view)> verify_reply;
+  /** Validates authenticated running `<get-config>` and operational `<get>`. */
+  std::function<std::optional<std::string>(std::string_view, std::string_view)>
+      verify_replies;
 };
 
 /** Builds all coordinator callbacks over one stateful mutual-TLS session. */

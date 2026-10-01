@@ -220,10 +220,13 @@ TEST(PeerTransactionTlsTest,
              hostname + "</hostname></system></config>",
          .persistent_commit_id = std::move(token),
          .confirmed_timeout_seconds = 60,
-         .verify_reply =
-             [expected](std::string_view reply) -> std::optional<std::string> {
-           if (reply.find(expected) == std::string_view::npos)
+         .verify_replies = [expected](std::string_view running,
+                                      std::string_view operational)
+             -> std::optional<std::string> {
+           if (running.find(expected) == std::string_view::npos)
              return "authenticated running readback has the wrong hostname";
+           if (operational.find(expected) == std::string_view::npos)
+             return "authenticated operational readback has the wrong hostname";
            return std::nullopt;
          }});
   };
@@ -313,7 +316,9 @@ TEST(PeerTransactionTlsTest,
         </config>)xml",
        .persistent_commit_id = "cancel-token<&",
        .confirmed_timeout_seconds = 60,
-       .verify_reply = [](std::string_view) { return std::nullopt; }});
+       .verify_replies = [](std::string_view, std::string_view) {
+         return std::nullopt;
+       }});
   const auto prepared = peer.prepare();
   const auto applied = prepared ? std::optional<std::string>{"not attempted"}
                                 : peer.apply_confirmed();
@@ -342,7 +347,9 @@ TEST(PeerTransactionTlsTest, RejectsInvalidCandidateBeforeConnecting) {
        .role = PeerTransactionRole::kPrimary,
        .candidate_configuration = "<config><broken></config>",
        .persistent_commit_id = "invalid-token",
-       .verify_reply = [](std::string_view) { return std::nullopt; }});
+       .verify_replies = [](std::string_view, std::string_view) {
+         return std::nullopt;
+       }});
   const auto error = peer.prepare();
   ASSERT_TRUE(error);
   EXPECT_NE(error->find("well-formed"), std::string::npos) << *error;
