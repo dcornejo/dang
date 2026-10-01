@@ -107,9 +107,9 @@ stays in this file with its remaining work rewritten precisely.
   client now performs authenticated persistent-commit confirmation with
   hostname, capability, namespace, and reply-correlation checks. A private
   versioned `--peer-recovery` file now validates stable participant-to-endpoint
-  and trust mappings at startup and reload. Use those validated mappings to
-  extend the implemented fail-closed journal startup inspection into
-  authenticated automatic recovery, implement the remaining prepare,
+  and trust mappings at startup and reload. Startup and reload now use those
+  mappings to resume durable pending confirmations and proceed only after the
+  journal is complete. Implement the remaining prepare,
   apply, verify, cancel, and release transport operations, add provider-specific
   candidate translation and health verification,
   a total transaction deadline beyond the implemented per-I/O timeouts,

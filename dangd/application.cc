@@ -3,6 +3,7 @@
 
 #include "dangd/application.h"
 #include "dangd/peer_recovery_config.h"
+#include "dangd/peer_transaction_tls.h"
 #include "dangd/peer_transaction_journal.h"
 #include "dangd/plugin_worker_runtime.h"
 
@@ -42,11 +43,13 @@ namespace dangd {
 class StateFileLock {
  public:
   static std::shared_ptr<StateFileLock> Acquire(
-      std::filesystem::path state_file, std::string* error) {
+      std::filesystem::path state_file, std::string* error,
+      std::string_view description = "state file") {
     std::error_code path_error;
     state_file = std::filesystem::weakly_canonical(state_file, path_error);
     if (path_error) {
-      *error = "cannot resolve state file path: " + path_error.message();
+      *error = "cannot resolve " + std::string(description) + " path: " +
+               path_error.message();
       return nullptr;
     }
     std::filesystem::path lock_file = state_file;
@@ -55,34 +58,37 @@ class StateFileLock {
         open(lock_file.c_str(), O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW,
              S_IRUSR | S_IWUSR);
     if (descriptor < 0) {
-      *error = "cannot open state-file lock " + lock_file.string() + ": " +
-          std::strerror(errno);
+      *error = "cannot open " + std::string(description) + " lock " +
+               lock_file.string() + ": " + std::strerror(errno);
       return nullptr;
     }
     struct stat metadata {};
     if (fstat(descriptor, &metadata) != 0) {
       const int saved_errno = errno;
       close(descriptor);
-      *error = "cannot inspect state-file lock " + lock_file.string() +
-          ": " + std::strerror(saved_errno);
+      *error = "cannot inspect " + std::string(description) + " lock " +
+               lock_file.string() + ": " + std::strerror(saved_errno);
       return nullptr;
     }
     if (!S_ISREG(metadata.st_mode) || metadata.st_uid != geteuid() ||
         (metadata.st_mode & (S_IRWXG | S_IRWXO)) != 0) {
       close(descriptor);
-      *error = "state-file lock must be a private regular file owned by the "
-          "effective user: " + lock_file.string();
+      *error = std::string(description) +
+               " lock must be a private regular file owned by the effective "
+               "user: " +
+               lock_file.string();
       return nullptr;
     }
     if (flock(descriptor, LOCK_EX | LOCK_NB) != 0) {
       const int saved_errno = errno;
       close(descriptor);
       if (saved_errno == EWOULDBLOCK || saved_errno == EAGAIN) {
-        *error = "state file is already in use by another dangd instance: " +
-            state_file.string();
+        *error = std::string(description) +
+                 " is already in use by another dangd instance: " +
+                 state_file.string();
       } else {
-        *error = "cannot lock state file " + state_file.string() + ": " +
-            std::strerror(saved_errno);
+        *error = "cannot lock " + std::string(description) + " " +
+                 state_file.string() + ": " + std::strerror(saved_errno);
       }
       return nullptr;
     }
@@ -119,8 +125,8 @@ namespace {
 
 std::string AuditField(std::string_view value);
 
-bool RejectPendingPeerTransaction(const ApplicationOptions& options,
-                                  std::vector<std::string>* errors) {
+bool RecoverOrRejectPendingPeerTransaction(const ApplicationOptions& options,
+                                           std::vector<std::string>* errors) {
   if (options.peer_recovery_configuration &&
       !options.peer_transaction_journal) {
     errors->push_back(
@@ -173,6 +179,15 @@ bool RejectPendingPeerTransaction(const ApplicationOptions& options,
   }
   if (!std::filesystem::exists(status)) return false;
 
+  std::string recovery_lock_error;
+  const auto recovery_lock = StateFileLock::Acquire(
+      *options.peer_transaction_journal, &recovery_lock_error,
+      "peer transaction journal");
+  if (!recovery_lock) {
+    errors->push_back(std::move(recovery_lock_error));
+    return true;
+  }
+
   std::string load_error;
   auto journal = PeerTransactionFileJournal::Load(
       *options.peer_transaction_journal, &load_error);
@@ -180,10 +195,10 @@ bool RejectPendingPeerTransaction(const ApplicationOptions& options,
     errors->push_back("cannot load peer transaction journal: " + load_error);
     return true;
   }
+  std::map<std::string, TlsClientOptions> configured;
   if (recovery_targets) {
-    std::set<std::string> configured;
     for (const PeerRecoveryTarget& target : *recovery_targets)
-      configured.insert(target.id);
+      configured.emplace(target.id, target.transport);
     for (const PeerJournalParticipant& participant :
          journal->state().participants) {
       if (!configured.contains(participant.id)) {
@@ -192,6 +207,34 @@ bool RejectPendingPeerTransaction(const ApplicationOptions& options,
         return true;
       }
     }
+  }
+
+  if (recovery_targets) {
+    std::vector<PeerTransactionParticipant> participants;
+    std::vector<std::string> confirmed;
+    participants.reserve(journal->state().participants.size());
+    for (const PeerJournalParticipant& participant :
+         journal->state().participants) {
+      participants.push_back(
+          MakeTlsRecoveryParticipant(participant, configured.at(participant.id)));
+      if (participant.confirmed) confirmed.push_back(participant.id);
+    }
+    const PeerTransactionResult recovered =
+        PeerTransactionCoordinator().ResumeCommit(
+            std::move(participants), std::move(confirmed), journal->Callbacks());
+    if (recovered.ok()) return false;
+
+    std::ostringstream message;
+    message << "peer transaction recovery did not complete";
+    if (!recovered.message.empty()) message << ": " << recovered.message;
+    if (!recovered.pending_confirmations.empty()) {
+      message << " (pending peers:";
+      for (const std::string& id : recovered.pending_confirmations)
+        message << ' ' << AuditField(id);
+      message << ')';
+    }
+    errors->push_back(message.str());
+    return true;
   }
   std::vector<std::string> pending;
   std::size_t confirmed = 0;
@@ -1080,7 +1123,8 @@ LoadResult Application::LoadWithStateFileLock(
   if (options.configuration.empty())
     result.errors.push_back("an initial XML configuration is required");
   if (!result.errors.empty()) return result;
-  if (RejectPendingPeerTransaction(options, &result.errors)) return result;
+  if (RecoverOrRejectPendingPeerTransaction(options, &result.errors))
+    return result;
 
   std::shared_ptr<StateFileLock> state_file_lock;
   if (options.state_file) {

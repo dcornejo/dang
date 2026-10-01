@@ -49,8 +49,16 @@
   reload reject non-owned, non-0600, symlinked, oversized, malformed,
   duplicate, unknown-field, or out-of-range configurations and require every
   journal participant to have an exact target. Relative certificate, key, and
-  trust-anchor paths resolve against the configuration directory. Automatic
-  journal replay is not enabled by this parsing and validation increment.
+  trust-anchor paths resolve against the configuration directory.
+
+- Connected durable COMMIT journal recovery to the validated target mapping.
+  Startup and reload now retry only pending persistent confirmations, durably
+  acknowledge each successful peer, remove and synchronize the completed
+  journal, and proceed only after recovery is complete. Any unavailable or
+  rejecting peer preserves the reduced journal and blocks the replacement
+  application. An exclusive private sibling lock prevents concurrent daemons
+  from replaying or rewriting the same recovery record. A live two-peer
+  mutual-TLS test covers end-to-end automatic recovery and journal cleanup.
 
 - Added managed RFC 9642 central cleartext symmetric keys with standard NACM
   protection, persistence/restart coverage, retrieval, and feature reporting.

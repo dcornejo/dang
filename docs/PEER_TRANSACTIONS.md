@@ -117,19 +117,22 @@ Startup and reload validate the complete file even when the journal is absent,
 and reject an unresolved journal if any participant lacks a target. The state,
 journal, and recovery configuration paths must all differ.
 
-The validated mapping is deliberately not used to mutate a peer yet. An
-unresolved journal still fails startup and reload closed until lifecycle replay
-is connected, rather than treating configuration alone as proof that automatic
-recovery is safe.
+When both files are valid, startup and staged reload automatically resume the
+durable COMMIT decision. Already acknowledged peers are skipped. Each pending
+peer is confirmed through the authenticated adapter and its acknowledgement is
+atomically saved before the next lifecycle step. The journal is removed and
+its directory synchronized only after every peer is durable. Recovery failure
+blocks the replacement application and preserves the reduced pending set for a
+later retry; it never converts COMMIT into cancellation.
+An exclusive mode-0600 sibling lock is held across journal load, network replay,
+acknowledgement writes, and cleanup so competing daemon processes cannot recover
+the same decision concurrently.
 
 ## Remaining integration
 
 The coordinator is not reachable from NETCONF or `dangctl` yet. Production
 pair-wide management still requires:
 
-- lifecycle integration that uses the validated participant endpoint mapping
-  to resume a durable commit decision before accepting a conflicting
-  transaction;
 - transport adapters for prepare, apply, verify, cancel, and release (only
   recovery confirmation is currently implemented);
 - provider-specific translation into complete per-peer candidates and a

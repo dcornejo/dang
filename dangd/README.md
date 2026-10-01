@@ -299,11 +299,13 @@ pair-wide transactions. If the path is absent, startup continues. If it
 contains an unsafe, malformed, or unresolved journal, startup and `SIGHUP`
 reload fail closed before accepting the replacement application. Diagnostics
 name the transaction and pending peers but do not expose proposal digests or
-persistent confirmed-commit tokens. An authenticated mutual-TLS confirmation
-adapter and private `--peer-recovery FILE` endpoint mapping exist, but automatic
-lifecycle recovery is not yet wired. Configuring these options is therefore a
-safety gate rather than enabling pair-wide commits. See the user guide for the
-versioned JSON format.
+persistent confirmed-commit tokens. With a valid private `--peer-recovery FILE`
+mapping, startup and reload automatically confirm pending peers, durably record
+each acknowledgement, and continue only after removing the completed journal.
+Without a complete mapping or while any peer remains unavailable, startup stays
+fail-closed. These options recover an existing durable decision; they do not
+yet enable initiating pair-wide commits. See the user guide for the versioned
+JSON format.
 
 Application RPCs and YANG 1.1 actions are resolved against the compiled schema
 before dispatch. `dangd` applies operation rules and `default-deny-all`; actions

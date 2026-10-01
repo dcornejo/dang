@@ -402,9 +402,15 @@ The journal normally does not exist. If a durable group COMMIT remains after a
 crash, startup fails closed and reports the transaction identity, confirmation
 count, and pending peer identities. It does not print the proposal digest or
 persistent confirmed-commit tokens. Preserve the file for recovery; do not
-delete it merely to make the daemon start. The endpoint mapping and
-confirmation transport are implemented and validated, but automated lifecycle
-replay is not yet connected; these options do not enable pair-wide commits.
+delete it merely to make the daemon start. With a complete target mapping,
+startup and reload retry only the pending confirmations, durably record each
+acknowledgement, and remove the journal before serving requests. If a peer is
+unavailable or rejects confirmation, startup remains blocked and the reduced
+pending set is preserved for the next retry. This recovery path completes a
+decision that was already durably COMMIT; it never rolls peers back. These
+operations hold an exclusive private `JOURNAL.lock` sibling; do not remove that
+lock while dangd is running or recovering. These options still do not initiate
+or enable new pair-wide commits.
 
 ### Store a central symmetric key
 
