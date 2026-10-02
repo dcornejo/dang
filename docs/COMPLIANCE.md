@@ -119,18 +119,20 @@ also carry an opaque backend recovery kind, transaction identity, and proposal
 digest. The marker is durable before backend finalization and is durably
 cleared afterward; a failure retains it, and automatic backend activation of a
 marked restore is rejected until the host resolves it. Plugins have no access
-to this metadata. The peer recovery path does not yet cross-check that marker
-against its journal, so this lifecycle does not yet provide a crash-recoverable
-distributed transaction; the remaining boundary is documented in
-`PEER_TRANSACTIONS.md`.
+to this metadata. Startup requires exact marker/journal identity and digest
+agreement, advances matching PREPARED state to COMMIT, completes confirmation,
+and durably clears the marker before backend activation. Mismatched or orphaned
+records fail closed. Production invocation and multi-group atomicity remain as
+documented in `PEER_TRANSACTIONS.md`.
 
 The private peer recovery journal now records PREPARED before remote mutation.
 On restart, PREPARED drives idempotent cancellation of every possibly applied
 persistent confirmed commit, while COMMIT drives confirmation only. This closes
-the unjournaled remote-apply crash window. The local datastore snapshot can now
-carry the matching transaction identity and proposal digest, but startup does
-not yet compare the two records; pair-wide atomicity therefore remains
-unadvertised.
+the unjournaled remote-apply crash window. The local datastore snapshot now
+carries the matching transaction identity and proposal digest, and startup
+compares both records before selecting the decision. Pair-wide atomicity remains
+unadvertised until the production backend invokes this lifecycle and the
+multi-group policy is complete.
 
 Dangd also has a host-configured authenticated participant context for its
 generic multi-server transaction machinery. A configured peer-controller

@@ -125,10 +125,10 @@ namespace {
 
 std::string AuditField(std::string_view value);
 
-bool RecoverOrRejectPendingPeerTransaction(const ApplicationOptions& options,
-                                           std::vector<std::string>* errors,
-                                           std::vector<PeerRecoveryTarget>*
-                                               configured_targets) {
+bool ConfigurePeerRecovery(const ApplicationOptions& options,
+                           std::vector<std::string>* errors,
+                           std::vector<PeerRecoveryTarget>*
+                               configured_targets) {
   configured_targets->clear();
   if (options.peer_recovery_configuration &&
       !options.peer_transaction_journal) {
@@ -170,17 +170,48 @@ bool RecoverOrRejectPendingPeerTransaction(const ApplicationOptions& options,
     }
     *configured_targets = std::move(*recovery_targets);
   }
+  return false;
+}
+
+bool RecoverOrRejectPendingPeerTransaction(
+    const ApplicationOptions& options,
+    const std::vector<PeerRecoveryTarget>& configured_targets,
+    const std::optional<yang::netconf::BackendRecoveryState>& recovery_state,
+    bool* recovery_state_resolved, std::vector<std::string>* errors) {
+  *recovery_state_resolved = false;
+  if (!options.peer_transaction_journal) {
+    if (recovery_state) {
+      errors->push_back(
+          "backend recovery state has no configured peer transaction journal");
+      return true;
+    }
+    return false;
+  }
 
   std::error_code status_error;
   const auto status = std::filesystem::symlink_status(
       *options.peer_transaction_journal, status_error);
-  if (status_error == std::errc::no_such_file_or_directory) return false;
+  if (status_error == std::errc::no_such_file_or_directory) {
+    if (recovery_state) {
+      errors->push_back(
+          "backend recovery state has no matching peer transaction journal");
+      return true;
+    }
+    return false;
+  }
   if (status_error) {
     errors->push_back("cannot inspect peer transaction journal: " +
                       status_error.message());
     return true;
   }
-  if (!std::filesystem::exists(status)) return false;
+  if (!std::filesystem::exists(status)) {
+    if (recovery_state) {
+      errors->push_back(
+          "backend recovery state has no matching peer transaction journal");
+      return true;
+    }
+    return false;
+  }
 
   std::string recovery_lock_error;
   const auto recovery_lock = StateFileLock::Acquire(
@@ -198,9 +229,18 @@ bool RecoverOrRejectPendingPeerTransaction(const ApplicationOptions& options,
     errors->push_back("cannot load peer transaction journal: " + load_error);
     return true;
   }
+  if (recovery_state) {
+    if (recovery_state->kind != "peer-transaction-v1" ||
+        recovery_state->transaction_id != journal->state().transaction_id ||
+        recovery_state->proposal_digest != journal->state().proposal_digest) {
+      errors->push_back(
+          "backend recovery state does not match the peer transaction journal");
+      return true;
+    }
+  }
   std::map<std::string, TlsClientOptions> configured;
-  if (!configured_targets->empty()) {
-    for (const PeerRecoveryTarget& target : *configured_targets)
+  if (!configured_targets.empty()) {
+    for (const PeerRecoveryTarget& target : configured_targets)
       configured.emplace(PeerRecoveryTargetId(target), target.transport);
     for (const PeerJournalParticipant& participant :
          journal->state().participants) {
@@ -212,7 +252,7 @@ bool RecoverOrRejectPendingPeerTransaction(const ApplicationOptions& options,
     }
   }
 
-  if (!configured_targets->empty()) {
+  if (!configured_targets.empty()) {
     std::vector<PeerTransactionParticipant> participants;
     std::vector<std::string> confirmed;
     participants.reserve(journal->state().participants.size());
@@ -222,8 +262,24 @@ bool RecoverOrRejectPendingPeerTransaction(const ApplicationOptions& options,
           MakeTlsRecoveryParticipant(participant, configured.at(participant.id)));
       if (participant.confirmed) confirmed.push_back(participant.id);
     }
-    const bool recovering_commit =
+    bool recovering_commit =
         journal->state().decision == PeerJournalDecision::kCommit;
+    if (!recovering_commit && recovery_state) {
+      std::vector<std::string> participant_ids;
+      participant_ids.reserve(journal->state().participants.size());
+      for (const PeerJournalParticipant& participant :
+           journal->state().participants)
+        participant_ids.push_back(participant.id);
+      const PeerTransactionDecisionResult decision =
+          journal->Callbacks().record_commit_decision(participant_ids);
+      if (decision.status != PeerTransactionDecisionStatus::kCommitted) {
+        errors->push_back(
+            "cannot durably select COMMIT for the matching backend recovery "
+            "state: " + decision.error);
+        return true;
+      }
+      recovering_commit = true;
+    }
     const PeerTransactionResult recovered = recovering_commit
         ? PeerTransactionCoordinator().ResumeCommit(
               std::move(participants), std::move(confirmed),
@@ -233,8 +289,10 @@ bool RecoverOrRejectPendingPeerTransaction(const ApplicationOptions& options,
     if (recovered.ok() ||
         (!recovering_commit &&
          recovered.disposition == PeerTransactionDisposition::kAborted &&
-         recovered.message.empty()))
+         recovered.message.empty())) {
+      *recovery_state_resolved = recovery_state.has_value();
       return false;
+    }
 
     std::ostringstream message;
     message << "peer transaction "
@@ -1162,8 +1220,7 @@ LoadResult Application::LoadWithStateFileLock(
     result.errors.push_back("an initial XML configuration is required");
   if (!result.errors.empty()) return result;
   std::vector<PeerRecoveryTarget> peer_targets;
-  if (RecoverOrRejectPendingPeerTransaction(options, &result.errors,
-                                            &peer_targets))
+  if (ConfigurePeerRecovery(options, &result.errors, &peer_targets))
     return result;
 
   std::shared_ptr<StateFileLock> state_file_lock;
@@ -1379,7 +1436,7 @@ LoadResult Application::LoadWithStateFileLock(
       std::move(schema), std::move(*parsed.document), options.state_file,
       std::move(state_file_lock),
       options.snapshot_save_checkpoint, std::move(nacm), managed_nacm,
-      std::move(plugins), std::move(peer_targets),
+      std::move(plugins), peer_targets,
       options.peer_controller_users, yang_library_xml,
       std::move(model_sources)));
   bool restored_snapshot = false;
@@ -1401,6 +1458,32 @@ LoadResult Application::LoadWithStateFileLock(
         result.application.reset();
       } else {
         restored_snapshot = true;
+      }
+    }
+  }
+  if (result.application) {
+    const auto recovery_state =
+        result.application->datastores_.ExportPersistentState()
+            .backend_recovery;
+    bool recovery_state_resolved = false;
+    if (RecoverOrRejectPendingPeerTransaction(
+            options, peer_targets, recovery_state, &recovery_state_resolved,
+            &result.errors)) {
+      result.application.reset();
+    } else if (recovery_state_resolved) {
+      const auto cleared =
+          result.application->datastores_.ClearBackendRecoveryState(
+              *recovery_state);
+      if (!cleared.ok) {
+        result.errors.push_back(
+            "cannot clear resolved backend recovery state");
+        result.application.reset();
+      } else if (const auto persistence_error =
+                     result.application->SaveState()) {
+        result.errors.push_back(
+            "cannot persist resolved backend recovery state: " +
+            *persistence_error);
+        result.application.reset();
       }
     }
   }

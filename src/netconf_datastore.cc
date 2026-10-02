@@ -665,6 +665,19 @@ PersistentDatastoreState DatastoreManager::ExportPersistentState() const {
   return PersistentStateLocked();
 }
 
+TransactionResult DatastoreManager::ClearBackendRecoveryState(
+    const BackendRecoveryState& resolved) {
+  std::lock_guard lock(mutex_);
+  if (!backend_recovery_ || *backend_recovery_ != resolved) {
+    return Failure(config::ValidationCode::kInvalidValue,
+                   "backend recovery state does not match the resolved "
+                   "transaction",
+                   "operation-failed");
+  }
+  backend_recovery_.reset();
+  return {true, {}, {}};
+}
+
 TransactionResult DatastoreManager::RestorePersistentState(
     const PersistentDatastoreState& state, RestoreBackend backend) {
   if (state.backend_recovery &&

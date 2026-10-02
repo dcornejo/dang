@@ -19,6 +19,7 @@
 #include <vector>
 
 #include <dlfcn.h>
+#include <nlohmann/json.hpp>
 
 #if defined(__unix__) || defined(__APPLE__)
 #include <sys/stat.h>
@@ -2591,6 +2592,59 @@ TEST(DangdApplicationTest,
   EXPECT_EQ(blocked.errors.front().find("secret-primary-token"),
             std::string::npos);
   EXPECT_EQ(blocked.errors.front().find("not-logged"), std::string::npos);
+}
+
+TEST(DangdApplicationTest, RejectsOrphanedAndMismatchedBackendRecoveryState) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.state_file = inputs.Path("state-with-recovery.json");
+  options.peer_transaction_journal = inputs.Path("peer-recovery.json");
+  auto seeded = Application::Load(options);
+  ASSERT_NE(seeded.application, nullptr)
+      << testing::PrintToString(seeded.errors);
+  seeded.application.reset();
+
+  nlohmann::json snapshot;
+  {
+    std::ifstream input(*options.state_file);
+    input >> snapshot;
+  }
+  snapshot["backend-recovery"] = {
+      {"kind", "peer-transaction-v1"},
+      {"transaction-id", "snapshot-transaction"},
+      {"proposal-digest", "sha256:snapshot"}};
+  {
+    std::ofstream output(*options.state_file, std::ios::trunc);
+    output << snapshot.dump(2) << '\n';
+  }
+
+  auto orphaned = Application::Load(options);
+  EXPECT_EQ(orphaned.application, nullptr);
+  ASSERT_EQ(orphaned.errors.size(), 1U);
+  EXPECT_NE(orphaned.errors.front().find("no matching peer transaction"),
+            std::string::npos);
+
+  PeerJournalState journal_state{
+      .transaction_id = "different-transaction",
+      .proposal_digest = "sha256:different",
+      .participants = {{.id = "primary",
+                        .role = PeerTransactionRole::kPrimary,
+                        .persistent_commit_id = "primary-token"},
+                       {.id = "standby",
+                        .role = PeerTransactionRole::kStandby,
+                        .persistent_commit_id = "standby-token"}}};
+  std::string journal_error;
+  auto journal = PeerTransactionFileJournal::Create(
+      *options.peer_transaction_journal, std::move(journal_state),
+      &journal_error);
+  ASSERT_TRUE(journal) << journal_error;
+  journal.reset();
+
+  auto mismatched = Application::Load(options);
+  EXPECT_EQ(mismatched.application, nullptr);
+  ASSERT_EQ(mismatched.errors.size(), 1U);
+  EXPECT_NE(mismatched.errors.front().find("does not match"),
+            std::string::npos);
 }
 
 TEST(DangdApplicationTest, RejectsUnsafePeerJournalConfiguration) {

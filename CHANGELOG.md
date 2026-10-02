@@ -15,6 +15,12 @@ and releases follow Semantic Versioning.
   record, marked snapshots require explicit host reconciliation before backend
   activation, and version-1 snapshots remain readable.
 
+- Coupled startup peer recovery to the restored datastore marker. Exact
+  transaction and proposal-digest matches advance PREPARED journals to COMMIT,
+  complete pending confirmations, and clear the marker durably before backend
+  activation. Mismatched, unknown, and orphaned records fail closed; unmarked
+  legacy COMMIT recovery and conservative PREPARED cancellation remain intact.
+
 - Added the ABI-v9 public peer-transaction contract and supervised-worker
   transport. Dangd now composes complete, non-overlapping module images from
   several plugins for each stable participant and validates the final candidate

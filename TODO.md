@@ -142,9 +142,11 @@ stays in this file with its remaining work rewritten precisely.
   contract now brackets backend finalization with a version-2 snapshot recovery
   marker containing an opaque kind, transaction identity, and proposal digest;
   it retains that marker if finalization or the durable clear fails and refuses
-  automatic backend activation until the host resolves it. Before connecting
-  the controller, make peer recovery cross-check that marker against the
-  PREPARED journal and add atomic multi-group journaling or an explicit
+  automatic backend activation until the host resolves it. Startup now loads
+  the validated snapshot first, requires exact marker/journal identity and
+  digest agreement, advances matching PREPARED state to COMMIT, confirms it,
+  durably clears the marker, and rejects mismatched or orphaned records. Before
+  connecting the controller, add atomic multi-group journaling or an explicit
   fail-closed one-group limit. Add a total transaction deadline
   beyond the implemented per-I/O timeouts, fail-closed degraded-peer policy,
   NACM/observability, `dangctl` integration,

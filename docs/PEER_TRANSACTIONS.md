@@ -242,11 +242,18 @@ backend until its host has reconciled the record. Version-1 snapshots remain
 readable as unmarked state. Plugins cannot see or modify this host metadata.
 
 This supplies the ordering and persistence seam the controller needs, but it is
-not yet crash-safe distributed execution. Pair-wide management still requires:
+not yet crash-safe distributed execution. Startup now restores and validates
+the snapshot before peer recovery. A matching `peer-transaction-v1` marker and
+PREPARED journal are advanced durably to COMMIT and confirmed; matching COMMIT
+state resumes confirmation. Only after successful peer recovery is the marker
+cleared and saved, before backend activation. Mismatched identities or digests,
+unknown marker kinds, and markers without a journal block startup without
+exposing transaction secrets. An unmarked PREPARED journal retains conservative
+cancellation behavior, while unmarked COMMIT remains authoritative for
+version-1 snapshot compatibility.
 
-- host recovery that requires the snapshot marker and PREPARED journal to have
-  the same transaction identity and proposal digest before selecting COMMIT,
-  and that fails closed on mismatched or orphaned records;
+Pair-wide management still requires:
+
 - either one atomic journal covering every affected peer group or an explicit
   fail-closed single-group limit. Sequentially committing groups would violate
   the atomicity of one NETCONF commit;

@@ -229,6 +229,9 @@ class DatastoreManager {
   [[nodiscard]] TransactionResult RestorePersistentState(
       const PersistentDatastoreState& state,
       RestoreBackend backend = RestoreBackend::kApply);
+  /** Clears exactly the host-reconciled recovery record, without backend I/O. */
+  [[nodiscard]] TransactionResult ClearBackendRecoveryState(
+      const BackendRecoveryState& resolved);
   /** Installs the durability participant used by subsequent mutations. */
   void SetPersistentStateCommitter(PersistentStateCommitter committer);
 

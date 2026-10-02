@@ -441,11 +441,6 @@ TEST(PeerTransactionTlsTest,
   auto journal = PeerTransactionFileJournal::Create(journal_path,
                                                     std::move(state), &error);
   ASSERT_TRUE(journal) << error;
-  ASSERT_EQ(journal->Callbacks()
-                .record_commit_decision(
-                    {"kea-ha-a/primary", "kea-ha-a/standby"})
-                .status,
-            PeerTransactionDecisionStatus::kCommitted);
   journal.reset();
 
   const std::filesystem::path recovery_path = temporary / "recovery.json";
@@ -468,13 +463,41 @@ TEST(PeerTransactionTlsTest,
   recovery_output.close();
   ASSERT_EQ(chmod(recovery_path.c_str(), S_IRUSR | S_IWUSR), 0);
 
+  const std::filesystem::path state_path = temporary / "state.json";
+  ApplicationOptions seed_options = remote_options;
+  seed_options.state_file = state_path;
+  auto seed = Application::Load(seed_options);
+  ASSERT_NE(seed.application, nullptr)
+      << testing::PrintToString(seed.errors);
+  seed.application.reset();
+  nlohmann::json snapshot;
+  {
+    std::ifstream input(state_path);
+    input >> snapshot;
+  }
+  snapshot["backend-recovery"] = {
+      {"kind", "peer-transaction-v1"},
+      {"transaction-id", "automatic-recovery"},
+      {"proposal-digest", "sha256:test"}};
+  {
+    std::ofstream output(state_path, std::ios::trunc);
+    output << snapshot.dump(2) << '\n';
+  }
+
   ApplicationOptions local_options = remote_options;
+  local_options.state_file = state_path;
   local_options.peer_transaction_journal = journal_path;
   local_options.peer_recovery_configuration = recovery_path;
   auto recovered = Application::Load(local_options);
   EXPECT_NE(recovered.application, nullptr)
       << testing::PrintToString(recovered.errors);
   EXPECT_FALSE(std::filesystem::exists(journal_path));
+  nlohmann::json recovered_snapshot;
+  {
+    std::ifstream input(state_path);
+    input >> recovered_snapshot;
+  }
+  EXPECT_TRUE(recovered_snapshot["backend-recovery"].is_null());
 
   if (!recovered.application) {
     (void)ConfirmPersistentCommitOverTls(primary_client, "primary-token");
