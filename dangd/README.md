@@ -15,7 +15,8 @@ The server:
 - replaces a backend working configuration whenever NETCONF replaces the
   running datastore and reports the schema-aware changes in plain English;
 - optionally restores an atomic datastore snapshot and makes each live
-  persistent mutation durable before reporting NETCONF success;
+  persistent mutation durable before finalizing its backend replacement and
+  reporting NETCONF success;
 - provides `--check` startup validation;
 - serves authenticated NETCONF over embedded SSH or mutual TLS;
 - provides an RFC 6242 stdin/stdout session for supervised integration tests;
@@ -312,13 +313,15 @@ composed plugin plan unless every exact group/participant pair has a mapped
 core-owned endpoint, before any plugin or peer mutation. The generic controller
 can now bind one validated group to authenticated TLS participants, plugin
 verifiers, cryptographic persistent tokens, and the crash-safe journal. It is
-not invoked by NETCONF until local snapshot durability can be ordered with the
-distributed decision. Participant servers can now designate dedicated,
-transport-authenticated controller identities with repeatable
-`--peer-controller-user USER`; their local changes retain validation, NACM,
-plugin execution, rollback, and persistence while suppressing recursive peer
-discovery. See the user guide for the security expectations and versioned JSON
-format.
+not invoked by NETCONF. The generic backend contract now finalizes a
+replacement only after local snapshot durability, but the distributed decision
+still needs a crash-recoverable pending marker and multi-group atomicity before
+that controller can safely use the phase. Participant servers can now
+designate dedicated, transport-authenticated controller identities with
+repeatable `--peer-controller-user USER`; their local changes retain
+validation, NACM, plugin execution, rollback, and persistence while suppressing
+recursive peer discovery. See the user guide for the security expectations and
+versioned JSON format.
 
 Application RPCs and YANG 1.1 actions are resolved against the compiled schema
 before dispatch. `dangd` applies operation rules and `default-deny-all`; actions

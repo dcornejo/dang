@@ -219,12 +219,17 @@ the same decision concurrently.
 
 The controller is not reachable from NETCONF or `dangctl` yet. Production
 preflight already collects, validates, and resolves every composed participant
-to a core-owned authenticated endpoint, but pair-wide management still
-requires:
+to a core-owned authenticated endpoint. The datastore/backend contract now
+separates replacement from finalization: ordinary commits invoke finalization
+only after the local snapshot is durable, persistence failure aborts retained
+reversible work before compensating the live state, and startup finalizes an
+already-durable restored snapshot. This is the ordering seam the controller
+needs, but it is not yet crash-safe distributed execution. Pair-wide management
+still requires:
 
-- an expanded backend/persistence lifecycle that cannot permanently confirm
-  peers before the controller's own datastore snapshot is durable, and cannot
-  report the local snapshot durable while the group decision can still abort;
+- a durable pending marker or equivalent journal coupling that recovers a
+  crash between local snapshot publication, the distributed COMMIT decision,
+  and backend finalization without contradicting either durable record;
 - either one atomic journal covering every affected peer group or an explicit
   fail-closed single-group limit. Sequentially committing groups would violate
   the atomicity of one NETCONF commit;

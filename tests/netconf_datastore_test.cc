@@ -23,23 +23,41 @@ struct FixtureData {
 
 class RecordingBackend final : public RunningConfigBackend {
  public:
+  std::optional<config::ValidationFinding> PrepareReplacement(
+      const config::RuntimeSchema&, const config::ConfigDocument&,
+      const config::ConfigDocument&,
+      std::span<const config::ChangeEvent>,
+      BackendTransactionContext) override {
+    lifecycle.push_back("prepare");
+    return std::nullopt;
+  }
   std::optional<config::ValidationFinding> Replace(
       const config::RuntimeSchema&,
       const config::ConfigDocument& before,
       const config::ConfigDocument& after,
       std::span<const config::ChangeEvent> observed,
       BackendTransactionContext context) override {
+    lifecycle.push_back("replace");
     before_xml = before.ToXml();
     working_xml = after.ToXml();
     changes.assign(observed.begin(), observed.end());
     contexts.push_back(context);
     return std::nullopt;
   }
+  std::optional<config::ValidationFinding>
+  CommitPreparedReplacement() override {
+    lifecycle.push_back("commit");
+    return std::nullopt;
+  }
+  void AbortPreparedReplacement() noexcept override {
+    lifecycle.push_back("abort");
+  }
 
   std::string before_xml;
   std::string working_xml;
   std::vector<config::ChangeEvent> changes;
   std::vector<BackendTransactionContext> contexts;
+  std::vector<std::string> lifecycle;
 };
 
 class RejectingBackend final : public RunningConfigBackend {
@@ -184,6 +202,37 @@ TEST(NetconfDatastoreTest, PersistenceFailureRollsBackLiveCommit) {
             std::string::npos);
   EXPECT_EQ(stores.Read(Datastore::kCandidate).ToXml(), candidate_before);
   EXPECT_NE(backend.working_xml.find(">old</"), std::string::npos);
+  EXPECT_EQ(backend.lifecycle,
+            (std::vector<std::string>{"prepare", "replace", "abort",
+                                      "prepare", "replace", "commit"}));
+}
+
+TEST(NetconfDatastoreTest, FinalizesBackendOnlyAfterStateIsDurable) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  RecordingBackend backend;
+  DatastoreManager stores(fixture->schema, fixture->initial, std::nullopt,
+                          &backend);
+  ASSERT_TRUE(stores.EditConfig(
+      {"one", Datastore::kCandidate,
+       {HostnameEdit(fixture->schema, "durable")}}).ok);
+  stores.SetPersistentStateCommitter(
+      [&](const PersistentDatastoreState& before,
+          const PersistentDatastoreState& after)
+          -> std::optional<config::ValidationFinding> {
+        EXPECT_EQ(backend.lifecycle,
+                  (std::vector<std::string>{"prepare", "replace"}));
+        EXPECT_NE(before.running_xml.find(">old</"), std::string::npos);
+        EXPECT_NE(after.running_xml.find(">durable</"), std::string::npos);
+        backend.lifecycle.push_back("persist");
+        return std::nullopt;
+      });
+
+  ASSERT_TRUE(stores.Commit("one").ok);
+  EXPECT_EQ(backend.lifecycle,
+            (std::vector<std::string>{"prepare", "replace", "persist",
+                                      "commit"}));
 }
 
 TEST(NetconfDatastoreTest, PublishesExactCommitChangesToRunningBackend) {
@@ -205,6 +254,8 @@ TEST(NetconfDatastoreTest, PublishesExactCommitChangesToRunningBackend) {
   EXPECT_EQ(backend.changes.front().after, "new");
   EXPECT_NE(backend.before_xml.find(">old</"), std::string::npos);
   EXPECT_NE(backend.working_xml.find(">new</"), std::string::npos);
+  EXPECT_EQ(backend.lifecycle,
+            (std::vector<std::string>{"prepare", "replace", "commit"}));
 }
 
 TEST(NetconfDatastoreTest,
@@ -237,6 +288,8 @@ TEST(NetconfDatastoreTest,
   ASSERT_TRUE(restored.RestorePersistentState(expired).ok);
   ASSERT_FALSE(restored_backend.contexts.empty());
   EXPECT_TRUE(restored_backend.contexts.back().externally_coordinated);
+  EXPECT_EQ(restored_backend.lifecycle,
+            (std::vector<std::string>{"prepare", "replace", "commit"}));
   EXPECT_NE(restored.Read(Datastore::kRunning).ToXml().find(">old</"),
             std::string::npos);
 

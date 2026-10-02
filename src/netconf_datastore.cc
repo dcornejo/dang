@@ -45,6 +45,7 @@ TransactionResult DatastoreManager::ReplaceRunning(
       backend_->AbortPreparedReplacement();
       return {false, {std::move(*error)}, {}};
     }
+    backend_replacement_pending_ = true;
   }
   running_ = std::move(replacement);
   return {true, {}, std::move(changes)};
@@ -113,19 +114,39 @@ std::optional<config::ValidationFinding> DatastoreManager::RestoreLocked(
 TransactionResult DatastoreManager::FinishMutation(
     const StateSnapshot& before, TransactionResult result,
     BackendTransactionContext context) {
-  if (!persistent_state_committer_) return result;
   const PersistentDatastoreState after = PersistentStateLocked();
-
   const PersistentDatastoreState prior = PersistentStateOf(before);
-  if (prior == after) return result;
-  if (auto persistence_error = persistent_state_committer_(prior, after)) {
-    if (auto rollback_error = RestoreLocked(before, context)) {
-      persistence_error->message += "; live rollback also failed: " +
-                                    rollback_error->message;
+  if (persistent_state_committer_ && prior != after) {
+    if (auto persistence_error = persistent_state_committer_(prior, after)) {
+      if (backend_replacement_pending_ && backend_ != nullptr) {
+        backend_->AbortPreparedReplacement();
+        backend_replacement_pending_ = false;
+      }
+      if (auto rollback_error = RestoreLocked(before, context)) {
+        persistence_error->message += "; live rollback also failed: " +
+                                      rollback_error->message;
+      }
+      if (auto finalize_error = CommitBackendReplacement()) {
+        persistence_error->message += "; rollback finalization also failed: " +
+                                      finalize_error->message;
+      }
+      return {false, {std::move(*persistence_error)}, {}};
     }
-    return {false, {std::move(*persistence_error)}, {}};
+  }
+  if (auto finalize_error = CommitBackendReplacement()) {
+    result.ok = false;
+    result.errors.push_back(std::move(*finalize_error));
+    result.changes.clear();
   }
   return result;
+}
+
+std::optional<config::ValidationFinding>
+DatastoreManager::CommitBackendReplacement() {
+  if (!backend_replacement_pending_ || backend_ == nullptr)
+    return std::nullopt;
+  backend_replacement_pending_ = false;
+  return backend_->CommitPreparedReplacement();
 }
 
 void DatastoreManager::SetPersistentStateCommitter(
@@ -670,6 +691,8 @@ TransactionResult DatastoreManager::RestorePersistentState(
         ReplaceRunning(std::move(restored_running), std::move(changes),
                        activation_context);
     if (!replaced.ok) return replaced;
+    if (auto error = CommitBackendReplacement())
+      return {false, {std::move(*error)}, {}};
   } else {
     running_ = std::move(restored_running);
   }

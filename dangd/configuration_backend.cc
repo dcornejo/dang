@@ -104,6 +104,7 @@ EnglishConfigurationBackend::Initialize(
     AbortPreparedReplacement();
     return error;
   }
+  if (auto error = CommitPreparedReplacement()) return error;
   // Startup activation is not a user configuration edit.
   std::lock_guard lock(mutex_);
   deltas_.clear();

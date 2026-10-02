@@ -164,12 +164,15 @@ no hardware apply in that case. The core now resolves every composed identity
 through its private endpoint map, and the generic transaction controller can
 bind one group to TLS participants, plugin verifiers, secure tokens, and the
 durable journal. Remote execution remains disabled until the NETCONF commit
-lifecycle can order local persistence with the distributed decision, with NACM
-policy and operator-visible reporting. The core now supplies an authenticated
+lifecycle couples its new post-persistence finalization phase to a
+crash-recoverable pending marker and the distributed decision, with NACM policy
+and operator-visible reporting. The core now supplies an authenticated
 participant context that suppresses nested peer discovery for explicitly
 configured controller identities. Plugins neither receive nor inspect that
 context: they run their ordinary local prepare, validate, apply, and rollback
 contract, while dangd alone decides whether to compose a new distributed plan.
+The finalization phase is likewise a private core/backend contract, not a new
+plugin callback or a plugin-specific daemon facility.
 
 Several plugins may contribute to one group. Each plugin supplies the complete
 image only for modules it owns; dangd combines the non-overlapping images and

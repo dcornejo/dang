@@ -7,6 +7,12 @@
 
 ### Added
 
+- Added a generic post-persistence backend finalization phase. A successful
+  running replacement is finalized only after the datastore snapshot is
+  durable; a failed save first aborts retained reversible work, then restores
+  and finalizes the prior running state. Startup activation finalizes the
+  already-durable restored snapshot through the same backend contract.
+
 - Added repeatable `--peer-controller-user USER` host policy for authenticated
   participant operations. These sessions retain NACM, schema validation,
   plugin prepare/apply, locks, confirmed-commit rollback, and persistence while

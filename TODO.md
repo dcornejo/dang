@@ -134,10 +134,12 @@ stays in this file with its remaining work rewritten precisely.
   invokes the tested state machine. A repeatable host-owned peer-controller
   identity now marks authenticated participant operations as already
   coordinated, suppresses only nested peer discovery, and durably preserves
-  that context for confirmed-commit rollback. Connect the controller only
-  after adding a backend/persistence lifecycle that orders the local durable
-  snapshot with the distributed decision, and atomic multi-group journaling or
-  an explicit fail-closed one-group limit. Add a total transaction deadline
+  that context for confirmed-commit rollback. The generic backend lifecycle
+  now separates successful replacement from post-persistence finalization and
+  aborts retained work before persistence compensation. Before connecting the
+  controller, couple that phase to a crash-recoverable pending marker and the
+  distributed decision, and add atomic multi-group journaling or an explicit
+  fail-closed one-group limit. Add a total transaction deadline
   beyond the implemented per-I/O timeouts, fail-closed degraded-peer policy,
   NACM/observability, `dangctl` integration,
   and Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.

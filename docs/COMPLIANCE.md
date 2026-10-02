@@ -111,7 +111,12 @@ datastores and confirmed-commit recovery state. POSIX snapshots are private
 regular files owned by the effective service user; symlinks and group/other
 access fail closed. Initial and restored running configuration is activated
 through affected plugins before the application is made available to a
-transport; activation failure makes startup fail closed.
+transport; activation failure makes startup fail closed. For a live mutation,
+the generic backend finalization notification follows successful snapshot
+publication. A failed publication aborts retained reversible work before the
+prior live configuration is restored and finalized. This lifecycle seam does
+not by itself provide a crash-recoverable distributed transaction; that
+remaining boundary is documented in `PEER_TRANSACTIONS.md`.
 
 Dangd also has a host-configured authenticated participant context for its
 generic multi-server transaction machinery. A configured peer-controller

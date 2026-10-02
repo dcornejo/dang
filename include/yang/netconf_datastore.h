@@ -107,6 +107,20 @@ class RunningConfigBackend {
       const config::ConfigDocument& after,
       std::span<const config::ChangeEvent> changes,
       BackendTransactionContext context = {}) = 0;
+  /**
+   * Finalizes a successful replacement after its datastore state is durable.
+   * A backend may retain reversible external work until this notification.
+   * An error means the replacement is durable but still requires recovery.
+   */
+  [[nodiscard]] virtual std::optional<config::ValidationFinding>
+  CommitPreparedReplacement() {
+    return std::nullopt;
+  }
+  /**
+   * Cancels retained preparation or reversible replacement work.
+   * After a successful Replace(), this is followed by a compensating Replace()
+   * when datastore persistence fails.
+   */
   virtual void AbortPreparedReplacement() noexcept {}
 };
 
@@ -222,6 +236,8 @@ class DatastoreManager {
       BackendTransactionContext context = {});
   [[nodiscard]] std::optional<config::ValidationFinding> RestoreLocked(
       const StateSnapshot& snapshot, BackendTransactionContext context = {});
+  [[nodiscard]] std::optional<config::ValidationFinding>
+  CommitBackendReplacement();
 
   const config::RuntimeSchema& schema_;
   mutable std::mutex mutex_;
@@ -234,6 +250,7 @@ class DatastoreManager {
   std::optional<std::string> confirming_session_;
   std::optional<std::string> persist_token_;
   BackendTransactionContext rollback_context_;
+  bool backend_replacement_pending_ = false;
   RunningConfigBackend* backend_ = nullptr;
   PersistentStateCommitter persistent_state_committer_;
 };
