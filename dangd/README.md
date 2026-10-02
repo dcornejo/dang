@@ -156,8 +156,9 @@ decision boundary than this local transaction. The implemented state machine,
 fail-closed recovery rules, automatic lifecycle recovery, and complete
 stateful mutual-TLS participant adapter are described in
 [Peer transaction coordination](../docs/PEER_TRANSACTIONS.md). The production
-pair-wide entry point and provider-specific candidate and health translation
-are not yet implemented, so pair-wide atomicity is not advertised.
+pair-wide entry point is not yet connected; the external Kea provider now
+supplies generic candidates and health verification, and the core can
+materialize one group for execution. Pair-wide atomicity is not advertised.
 
 ## Embedded SSH server example
 
@@ -308,8 +309,12 @@ Without a complete mapping or while any peer remains unavailable, startup stays
 fail-closed. These options recover an existing durable decision; they do not
 yet enable initiating pair-wide commits. Normal commit preflight also rejects a
 composed plugin plan unless every exact group/participant pair has a mapped
-core-owned endpoint, before any plugin or peer mutation. See the user guide for
-the versioned JSON format.
+core-owned endpoint, before any plugin or peer mutation. The generic controller
+can now bind one validated group to authenticated TLS participants, plugin
+verifiers, cryptographic persistent tokens, and the crash-safe journal. It is
+not invoked by NETCONF until participant commits can suppress recursive
+planning and local snapshot durability can be ordered with the distributed
+decision. See the user guide for the versioned JSON format.
 
 Application RPCs and YANG 1.1 actions are resolved against the compiled schema
 before dispatch. `dangd` applies operation rules and `default-deny-all`; actions

@@ -120,6 +120,7 @@ if(YANG_BUILD_DANGD)
     dangd/configuration_backend.cc
     dangd/hardware_transaction.cc
     dangd/peer_transaction.cc
+    dangd/peer_transaction_controller.cc
     dangd/peer_transaction_plan.cc
     dangd/peer_transaction_journal.cc
     dangd/peer_recovery_config.cc
@@ -600,6 +601,7 @@ if(YANG_BUILD_TESTS)
     find_program(DANG_OPENSSH_CLIENT ssh)
     add_executable(dangd_tests dangd/application_test.cc
       dangd/hardware_transaction_test.cc dangd/peer_transaction_test.cc
+      dangd/peer_transaction_controller_test.cc
       dangd/peer_transaction_plan_test.cc
       dangd/peer_transaction_journal_test.cc
       dangd/peer_recovery_config_test.cc

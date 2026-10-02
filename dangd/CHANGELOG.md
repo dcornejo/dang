@@ -21,6 +21,12 @@
   backend preparation. Every exact group/participant identity must resolve
   before mutation; a missing endpoint aborts all plugin preparation and leaves
   running configuration and hardware unchanged.
+- Added the generic single-group peer transaction controller. It resolves all
+  targets before session construction, creates independent 256-bit persistent
+  commit tokens, binds authenticated readback to the contributing plugin
+  verifiers, creates the crash-safe journal, and invokes the transport-neutral
+  coordinator. Injectable test factories cover success, verifier rollback,
+  missing targets, duplicate tokens, and the production random-token shape.
 
 - Added a transport-neutral peer transaction coordinator for future pair-wide
   configuration. It prepares every participant before mutation, applies

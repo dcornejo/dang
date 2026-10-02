@@ -128,8 +128,14 @@ stays in this file with its remaining work rewritten precisely.
   aborting before mutation on any planning failure. Every composed participant
   must now resolve to its exact core-owned authenticated endpoint during the
   same preflight; missing mappings abort all plugin state before mutation.
-  Execute the retained plan
-  through the generic production controller. Add a total transaction deadline
+  The generic production controller now converts one group into authenticated
+  TLS participants, routes readback to the retained plugin verifiers, creates
+  cryptographically random persistent tokens and the crash-safe journal, and
+  invokes the tested state machine. Connect it only after adding an authorized
+  participant-commit context that suppresses recursive peer planning, a
+  backend/persistence lifecycle that orders the local durable snapshot with
+  the distributed decision, and atomic multi-group journaling or an explicit
+  fail-closed one-group limit. Add a total transaction deadline
   beyond the implemented per-I/O timeouts, fail-closed degraded-peer policy,
   NACM/observability, `dangctl` integration,
   and Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.

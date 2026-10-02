@@ -160,9 +160,12 @@ through its endpoint/trust configuration and open sessions.
 The running backend performs that generic collection and composition as part
 of normal commit preparation. It queries only affected plugins, aborts all
 retained preparations if candidate retrieval or composition fails, and reaches
-no hardware apply in that case. Remote execution remains disabled until the
-generic endpoint mapping, durable coordinator invocation, NACM policy, and
-operator-visible failure reporting are connected.
+no hardware apply in that case. The core now resolves every composed identity
+through its private endpoint map, and the generic transaction controller can
+bind one group to TLS participants, plugin verifiers, secure tokens, and the
+durable journal. Remote execution remains disabled until the NETCONF commit
+lifecycle can prevent recursive peer planning and order local persistence with
+the distributed decision, with NACM policy and operator-visible reporting.
 
 Several plugins may contribute to one group. Each plugin supplies the complete
 image only for modules it owns; dangd combines the non-overlapping images and

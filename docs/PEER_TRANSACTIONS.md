@@ -15,8 +15,8 @@ this boundary. ABI v9 now provides the generic plugin planning and verification
 contract, including isolated-worker transport, while the authenticated
 participant transport and automatic startup recovery are also implemented.
 Dangd does not advertise pair-wide commit support yet because the final
-datastore commit entry point, endpoint resolution, policy, and observability
-are not connected.
+datastore commit lifecycle, recursive-planning guard, multi-group policy, and
+observability are not connected.
 
 ## Plugin planning contract
 
@@ -179,6 +179,17 @@ running configuration and hardware unchanged. Entries for other inactive peer
 groups are allowed. Plugins never receive endpoint or credential data and
 cannot use an undocumented dangd facility to discover it.
 
+`PeerTransactionController` now materializes one validated group into the
+complete generic execution. It resolves the exact core-owned targets before
+constructing any session, creates independent 256-bit persistent commit tokens
+with OpenSSL's private random generator, binds each authenticated readback to
+only the contributing plugin verifiers and their opaque contexts, creates the
+crash-safe journal, and invokes `PeerTransactionCoordinator`. Target or token
+failure occurs before participant construction. Its participant and token
+factories are injectable only to make ordering, rollback, verifier routing, and
+journal behavior deterministic in tests; production defaults use the stateful
+mutual-TLS adapter and cryptographic tokens.
+
 When both files are valid, startup and staged reload automatically resume the
 durable COMMIT decision. Already acknowledged peers are skipped. Each pending
 peer is confirmed through the authenticated adapter and its acknowledgement is
@@ -192,16 +203,28 @@ the same decision concurrently.
 
 ## Remaining integration
 
-The coordinator is not reachable from NETCONF or `dangctl` yet. Production
+The controller is not reachable from NETCONF or `dangctl` yet. Production
 preflight already collects, validates, and resolves every composed participant
-to a core-owned authenticated endpoint, but pair-wide
-management still requires:
+to a core-owned authenticated endpoint, but pair-wide management still
+requires:
 
-- generic production invocation of composed ABI-v9 plans. The external Kea
+- a core participant-commit context that prevents a controller-issued commit
+  from recursively creating another peer plan. This context must be explicitly
+  authenticated and authorized; accepting a caller-controlled bypass flag
+  would weaken pair-wide safety;
+- an expanded backend/persistence lifecycle that cannot permanently confirm
+  peers before the controller's own datastore snapshot is durable, and cannot
+  report the local snapshot durable while the group decision can still abort;
+- either one atomic journal covering every affected peer group or an explicit
+  fail-closed single-group limit. Sequentially committing groups would violate
+  the atomicity of one NETCONF commit;
+- generic production invocation of composed ABI-v9 plans through that safe
+  lifecycle. The external Kea
   provider now supplies complete two-member hot-standby module images plus a
   strict dual-view verifier, while the core validates and composes those
-  transport-neutral contributions. The normal NETCONF commit path does not yet
-  invoke the resulting plan;
+  transport-neutral contributions, and `PeerTransactionController` now binds
+  one such group to TLS participants, verifiers, tokens, and its journal. The
+  normal NETCONF commit path does not yet invoke the resulting controller;
 - policy for unreachable or degraded peers, defaulting to rejection;
 - a total transaction deadline beyond the implemented per-I/O timeouts,
   observability, NACM rules, packaging, and Linux/FreeBSD interoperability
