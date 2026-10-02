@@ -5,6 +5,7 @@
 #define DANGD_PEER_IDENTITY_H_
 
 #include <algorithm>
+#include <string>
 #include <string_view>
 
 namespace dangd {
@@ -18,6 +19,12 @@ namespace dangd {
            (byte >= '0' && byte <= '9') || byte == '.' || byte == '_' ||
            byte == '-';
   });
+}
+
+/** Joins two already validated components into the host-owned stable key. */
+[[nodiscard]] inline std::string PeerIdentity(
+    std::string_view group_id, std::string_view participant_id) {
+  return std::string(group_id) + "/" + std::string(participant_id);
 }
 
 }  // namespace dangd

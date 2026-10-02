@@ -183,7 +183,7 @@ std::optional<std::vector<PeerRecoveryTarget>> LoadPeerRecoveryConfig(
 }
 
 std::string PeerRecoveryTargetId(const PeerRecoveryTarget& target) {
-  return target.group_id + "/" + target.participant_id;
+  return PeerIdentity(target.group_id, target.participant_id);
 }
 
 }  // namespace dangd

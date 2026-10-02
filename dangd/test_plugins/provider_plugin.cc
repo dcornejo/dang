@@ -144,7 +144,13 @@ int NextNotification(void*, DangNotificationV1* event, DangPluginErrorV1*) {
   return 1;
 }
 
-size_t PeerCandidateCount(void*, void*) { return 2; }
+size_t PeerCandidateCount(void*, void* opaque) {
+  const auto* prepared = static_cast<const Prepared*>(opaque);
+  return prepared && prepared->proposed.find("<mode>peer-plan-") !=
+                         std::string::npos
+             ? 2
+             : 0;
+}
 
 int PeerCandidateAt(void*, void* opaque, size_t index,
                     DangPeerCandidateV1* candidate, DangPluginErrorV1*) {

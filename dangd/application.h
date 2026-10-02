@@ -167,6 +167,7 @@ class Application {
               yang::netconf::SnapshotSaveCheckpoint snapshot_save_checkpoint,
               yang::netconf::NacmPolicy nacm, bool managed_nacm,
               std::unique_ptr<PluginRuntime> plugins,
+              std::vector<PeerRecoveryTarget> peer_targets,
               std::string yang_library_xml,
               std::vector<DangdOperationalData::ModelSource> model_sources);
 

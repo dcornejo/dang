@@ -172,6 +172,13 @@ and reject an unresolved journal if any paired identity lacks a target. Version
 ambiguous when several peer groups exist. The state, journal, and recovery
 configuration paths must all differ.
 
+Normal backend preparation resolves every participant in every composed plan
+against this core-owned map before permitting any mutation. A missing target
+returns `peer-target-missing`, aborts all plugin preparations, and leaves both
+running configuration and hardware unchanged. Entries for other inactive peer
+groups are allowed. Plugins never receive endpoint or credential data and
+cannot use an undocumented dangd facility to discover it.
+
 When both files are valid, startup and staged reload automatically resume the
 durable COMMIT decision. Already acknowledged peers are skipped. Each pending
 peer is confirmed through the authenticated adapter and its acknowledgement is
@@ -186,7 +193,8 @@ the same decision concurrently.
 ## Remaining integration
 
 The coordinator is not reachable from NETCONF or `dangctl` yet. Production
-preflight already collects and validates composed plans, but pair-wide
+preflight already collects, validates, and resolves every composed participant
+to a core-owned authenticated endpoint, but pair-wide
 management still requires:
 
 - generic production invocation of composed ABI-v9 plans. The external Kea

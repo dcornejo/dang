@@ -126,7 +126,10 @@ namespace {
 std::string AuditField(std::string_view value);
 
 bool RecoverOrRejectPendingPeerTransaction(const ApplicationOptions& options,
-                                           std::vector<std::string>* errors) {
+                                           std::vector<std::string>* errors,
+                                           std::vector<PeerRecoveryTarget>*
+                                               configured_targets) {
+  configured_targets->clear();
   if (options.peer_recovery_configuration &&
       !options.peer_transaction_journal) {
     errors->push_back(
@@ -156,16 +159,16 @@ bool RecoverOrRejectPendingPeerTransaction(const ApplicationOptions& options,
     }
   }
 
-  std::optional<std::vector<PeerRecoveryTarget>> recovery_targets;
   if (options.peer_recovery_configuration) {
     std::string recovery_error;
-    recovery_targets = LoadPeerRecoveryConfig(
+    auto recovery_targets = LoadPeerRecoveryConfig(
         *options.peer_recovery_configuration, &recovery_error);
     if (!recovery_targets) {
       errors->push_back("cannot load peer recovery configuration: " +
                         recovery_error);
       return true;
     }
+    *configured_targets = std::move(*recovery_targets);
   }
 
   std::error_code status_error;
@@ -196,8 +199,8 @@ bool RecoverOrRejectPendingPeerTransaction(const ApplicationOptions& options,
     return true;
   }
   std::map<std::string, TlsClientOptions> configured;
-  if (recovery_targets) {
-    for (const PeerRecoveryTarget& target : *recovery_targets)
+  if (!configured_targets->empty()) {
+    for (const PeerRecoveryTarget& target : *configured_targets)
       configured.emplace(PeerRecoveryTargetId(target), target.transport);
     for (const PeerJournalParticipant& participant :
          journal->state().participants) {
@@ -209,7 +212,7 @@ bool RecoverOrRejectPendingPeerTransaction(const ApplicationOptions& options,
     }
   }
 
-  if (recovery_targets) {
+  if (!configured_targets->empty()) {
     std::vector<PeerTransactionParticipant> participants;
     std::vector<std::string> confirmed;
     participants.reserve(journal->state().participants.size());
@@ -1013,6 +1016,7 @@ Application::Application(yang::config::RuntimeSchema schema,
                              snapshot_save_checkpoint,
                          yang::netconf::NacmPolicy nacm, bool managed_nacm,
                          std::unique_ptr<PluginRuntime> plugins,
+                         std::vector<PeerRecoveryTarget> peer_targets,
                          std::string yang_library_xml,
                          std::vector<DangdOperationalData::ModelSource>
                              model_sources)
@@ -1023,7 +1027,8 @@ Application::Application(yang::config::RuntimeSchema schema,
       notifications_(&nacm_, 1024, 16 * 1024 * 1024, &schema_),
       operational_(std::move(yang_library_xml), std::move(model_sources),
                    &nacm_, plugins_.get(), &schema_),
-      backend_(configuration, plugins_.get(), &nacm_, managed_nacm),
+      backend_(configuration, plugins_.get(), &nacm_, managed_nacm,
+               std::move(peer_targets)),
       datastores_(schema_, std::move(configuration), std::nullopt, &backend_),
       server_(datastores_, &nacm_, nullptr, &notifications_, std::nullopt,
               &operational_, plugins_.get()),
@@ -1123,7 +1128,9 @@ LoadResult Application::LoadWithStateFileLock(
   if (options.configuration.empty())
     result.errors.push_back("an initial XML configuration is required");
   if (!result.errors.empty()) return result;
-  if (RecoverOrRejectPendingPeerTransaction(options, &result.errors))
+  std::vector<PeerRecoveryTarget> peer_targets;
+  if (RecoverOrRejectPendingPeerTransaction(options, &result.errors,
+                                            &peer_targets))
     return result;
 
   std::shared_ptr<StateFileLock> state_file_lock;
@@ -1325,7 +1332,8 @@ LoadResult Application::LoadWithStateFileLock(
       std::move(schema), std::move(*parsed.document), options.state_file,
       std::move(state_file_lock),
       options.snapshot_save_checkpoint, std::move(nacm), managed_nacm,
-      std::move(plugins), yang_library_xml, std::move(model_sources)));
+      std::move(plugins), std::move(peer_targets), yang_library_xml,
+      std::move(model_sources)));
   bool restored_snapshot = false;
   if (options.state_file && !options.configuration_override) {
     std::error_code exists_error;

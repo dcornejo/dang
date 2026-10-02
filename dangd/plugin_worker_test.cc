@@ -185,7 +185,13 @@ TEST(PluginWorkerClientTest, CopiesAndVerifiesPeerTransactionContract) {
   ASSERT_TRUE(discovery.has_value()) << discovery_error;
   EXPECT_EQ(discovery->manifest.abi_version, DANG_PLUGIN_ABI_V9);
   EXPECT_TRUE(discovery->manifest.supports_peer_transactions);
-  ASSERT_TRUE(client->Prepare("<config/>", "<config/>", "[]").ok());
+  ASSERT_TRUE(client
+                  ->Prepare("<config/>",
+                            "<config><provider-settings>"
+                            "<mode>peer-plan-valid</mode>"
+                            "</provider-settings></config>",
+                            "[]")
+                  .ok());
   ASSERT_TRUE(client->Validate().ok());
   const auto planned = client->PeerCandidates();
   ASSERT_TRUE(planned.ok()) << planned.worker_error.value_or("");

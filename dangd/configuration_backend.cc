@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "dangd/configuration_backend.h"
+#include "dangd/peer_identity.h"
 #include "yang/xml_security.h"
 
 #include <sstream>
@@ -129,6 +130,23 @@ EnglishConfigurationBackend::PrepareReplacement(
     if (composed.error) {
       plugins_->Abort();
       return composed.error;
+    }
+    for (const ComposedPeerTransactionGroup& group : composed.groups) {
+      for (const PeerPlanParticipant& participant : group.participants) {
+        const std::string identity =
+            PeerIdentity(group.group_id, participant.participant_id);
+        if (peer_targets_.contains(identity)) continue;
+        yang::config::ValidationFinding finding;
+        finding.code = yang::config::ValidationCode::kInvalidValue;
+        finding.state = yang::config::FindingState::kInvalid;
+        finding.message =
+            "peer transaction target " + identity + " is not configured";
+        finding.module_name = "dangd";
+        finding.netconf_error_tag = "operation-failed";
+        finding.netconf_error_app_tag = "peer-target-missing";
+        plugins_->Abort();
+        return finding;
+      }
     }
     prepared_peer_groups_ = std::move(composed.groups);
   }

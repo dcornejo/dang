@@ -1709,6 +1709,67 @@ TEST(DangdApplicationTest, RejectsInvalidComposedPeerPlanBeforeApplyingPlugin) {
             std::string::npos);
 }
 
+TEST(DangdApplicationTest,
+     RequiresEveryComposedPeerParticipantToHaveAConfiguredEndpoint) {
+  TemporaryInputs missing_inputs;
+  auto missing_options = Options(missing_inputs);
+  missing_options.plugins = {DANG_TEST_PROVIDER_PLUGIN_PATH};
+  auto missing = Application::Load(missing_options);
+  ASSERT_NE(missing.application, nullptr)
+      << testing::PrintToString(missing.errors);
+  test_plugin::ResetTrace();
+
+  ASSERT_NE(SetProviderMode(*missing.application, "peer-plan-valid")
+                .xml.find("<ok/>"),
+            std::string::npos);
+  const auto rejected = Commit(*missing.application);
+  EXPECT_NE(rejected.xml.find("peer-target-missing"), std::string::npos)
+      << rejected.xml;
+  EXPECT_NE(rejected.xml.find("test-group/primary"), std::string::npos)
+      << rejected.xml;
+  EXPECT_EQ(test_plugin::Trace(),
+            (std::vector<std::string>{"provider.prepare",
+                                      "provider.validate",
+                                      "provider.release"}));
+  EXPECT_TRUE(test_plugin::Active("provider").empty());
+
+  TemporaryInputs configured_inputs;
+  auto configured_options = Options(configured_inputs);
+  configured_options.plugins = {DANG_TEST_PROVIDER_PLUGIN_PATH};
+  configured_options.peer_transaction_journal =
+      configured_inputs.Path("peer-journal.json");
+  configured_options.peer_recovery_configuration = configured_inputs.Write(
+      "peer-recovery.json", R"json({"version":2,"peers":[
+        {"group-id":"test-group","participant-id":"primary",
+         "host":"primary.example","port":6513,
+         "certificate":"client.pem","private-key":"client.key",
+         "trust-anchor":"ca.pem"},
+        {"group-id":"test-group","participant-id":"standby",
+         "host":"standby.example","port":6513,
+         "certificate":"client.pem","private-key":"client.key",
+         "trust-anchor":"ca.pem"}
+      ]})json");
+#if defined(__unix__) || defined(__APPLE__)
+  ASSERT_EQ(chmod(configured_options.peer_recovery_configuration->c_str(),
+                  S_IRUSR | S_IWUSR),
+            0);
+#endif
+  auto configured = Application::Load(configured_options);
+  ASSERT_NE(configured.application, nullptr)
+      << testing::PrintToString(configured.errors);
+  test_plugin::ResetTrace();
+
+  ASSERT_NE(SetProviderMode(*configured.application, "peer-plan-valid")
+                .xml.find("<ok/>"),
+            std::string::npos);
+  const auto accepted = Commit(*configured.application);
+  EXPECT_NE(accepted.xml.find("<ok/>"), std::string::npos) << accepted.xml;
+  EXPECT_EQ(test_plugin::Trace(),
+            (std::vector<std::string>{"provider.prepare",
+                                      "provider.validate", "provider.apply",
+                                      "provider.release"}));
+}
+
 TEST(DangdApplicationTest, DispatchesPluginOwnedSchemaRpc) {
   TemporaryInputs inputs;
   auto options = Options(inputs);

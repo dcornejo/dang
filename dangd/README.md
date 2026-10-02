@@ -306,8 +306,10 @@ startup and reload automatically confirm pending peers, durably record
 each acknowledgement, and continue only after removing the completed journal.
 Without a complete mapping or while any peer remains unavailable, startup stays
 fail-closed. These options recover an existing durable decision; they do not
-yet enable initiating pair-wide commits. See the user guide for the versioned
-JSON format.
+yet enable initiating pair-wide commits. Normal commit preflight also rejects a
+composed plugin plan unless every exact group/participant pair has a mapped
+core-owned endpoint, before any plugin or peer mutation. See the user guide for
+the versioned JSON format.
 
 Application RPCs and YANG 1.1 actions are resolved against the compiled schema
 before dispatch. `dangd` applies operation rules and `default-deny-all`; actions

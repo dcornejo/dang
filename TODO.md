@@ -125,7 +125,10 @@ stays in this file with its remaining work rewritten precisely.
   context. ABI v9 carries those transport-neutral contributions through
   supervised workers, and the core composes several plugins' non-overlapping
   images with full-schema validation during normal backend preparation,
-  aborting before mutation on any planning failure. Execute the retained plan
+  aborting before mutation on any planning failure. Every composed participant
+  must now resolve to its exact core-owned authenticated endpoint during the
+  same preflight; missing mappings abort all plugin state before mutation.
+  Execute the retained plan
   through the generic production controller. Add a total transaction deadline
   beyond the implemented per-I/O timeouts, fail-closed degraded-peer policy,
   NACM/observability, `dangctl` integration,

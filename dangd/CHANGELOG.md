@@ -17,6 +17,10 @@
   module ownership, cross-module fragments, inconsistent roles/timeouts,
   incomplete participant module sets, invalid final candidates, and groups
   without at least two participants and exactly one primary.
+- Connected composed plans to the core-owned peer target inventory during
+  backend preparation. Every exact group/participant identity must resolve
+  before mutation; a missing endpoint aborts all plugin preparation and leaves
+  running configuration and hardware unchanged.
 
 - Added a transport-neutral peer transaction coordinator for future pair-wide
   configuration. It prepares every participant before mutation, applies

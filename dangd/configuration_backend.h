@@ -4,6 +4,7 @@
 #ifndef DANGD_CONFIGURATION_BACKEND_H_
 #define DANGD_CONFIGURATION_BACKEND_H_
 
+#include <map>
 #include <mutex>
 #include <string>
 #include <utility>
@@ -13,6 +14,7 @@
 #include "yang/nacm.h"
 
 #include "dangd/plugin_manager.h"
+#include "dangd/peer_recovery_config.h"
 #include "dangd/peer_transaction_plan.h"
 
 namespace dangd {
@@ -25,9 +27,13 @@ class EnglishConfigurationBackend final
   EnglishConfigurationBackend(yang::config::ConfigDocument initial,
                               PluginRuntime* plugins,
                               yang::netconf::NacmPolicy* nacm,
-                              bool managed_nacm)
+                              bool managed_nacm,
+                              std::vector<PeerRecoveryTarget> peer_targets = {})
       : plugins_(plugins), nacm_(nacm), managed_nacm_(managed_nacm),
-        working_xml_(initial.ToXml()), working_(std::move(initial)) {}
+        working_xml_(initial.ToXml()), working_(std::move(initial)) {
+    for (PeerRecoveryTarget& target : peer_targets)
+      peer_targets_.emplace(PeerRecoveryTargetId(target), std::move(target));
+  }
 
   /** Activates one complete startup tree as a single plugin transaction. */
   [[nodiscard]] std::optional<yang::config::ValidationFinding> Initialize(
@@ -64,6 +70,8 @@ class EnglishConfigurationBackend final
   std::optional<yang::netconf::NacmPolicy> prepared_nacm_;
   /** Schema-validated generic peer plan retained with plugin preparations. */
   std::vector<ComposedPeerTransactionGroup> prepared_peer_groups_;
+  /** Core-owned authenticated endpoints keyed by generic contract identity. */
+  std::map<std::string, PeerRecoveryTarget, std::less<>> peer_targets_;
   std::string working_xml_;
   yang::config::ConfigDocument working_;
   std::vector<std::string> deltas_;
