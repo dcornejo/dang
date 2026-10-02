@@ -138,11 +138,14 @@ stays in this file with its remaining work rewritten precisely.
   now separates successful replacement from post-persistence finalization and
   aborts retained work before persistence compensation. The version-2 peer
   journal now records PREPARED before network mutation and startup can safely
-  resume either cancellation or COMMIT confirmation. Before connecting the
-  controller, bind that PREPARED identity and proposal digest into the durable
-  datastore snapshot so recovery can choose the decision from both records,
-  and add atomic multi-group journaling or an explicit fail-closed one-group
-  limit. Add a total transaction deadline
+  resume either cancellation or COMMIT confirmation. The generic datastore
+  contract now brackets backend finalization with a version-2 snapshot recovery
+  marker containing an opaque kind, transaction identity, and proposal digest;
+  it retains that marker if finalization or the durable clear fails and refuses
+  automatic backend activation until the host resolves it. Before connecting
+  the controller, make peer recovery cross-check that marker against the
+  PREPARED journal and add atomic multi-group journaling or an explicit
+  fail-closed one-group limit. Add a total transaction deadline
   beyond the implemented per-I/O timeouts, fail-closed degraded-peer policy,
   NACM/observability, `dangctl` integration,
   and Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.

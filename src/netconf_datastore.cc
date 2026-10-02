@@ -20,6 +20,12 @@ TransactionResult Failure(config::ValidationCode code, std::string message,
   return {false, {std::move(finding)}, {}};
 }
 
+bool ValidBackendRecoveryState(const BackendRecoveryState& state) {
+  return !state.kind.empty() && state.kind.size() <= 256 &&
+         !state.transaction_id.empty() && state.transaction_id.size() <= 256 &&
+         !state.proposal_digest.empty() && state.proposal_digest.size() <= 256;
+}
+
 }  // namespace
 
 DatastoreManager::DatastoreManager(
@@ -33,11 +39,26 @@ TransactionResult DatastoreManager::ReplaceRunning(
     config::ConfigDocument replacement,
     std::vector<config::ChangeEvent> changes,
     BackendTransactionContext context) {
+  if (backend_recovery_) {
+    return Failure(config::ValidationCode::kInvalidValue,
+                   "an unresolved backend recovery transaction blocks "
+                   "running configuration replacement",
+                   "operation-failed");
+  }
   if (backend_ != nullptr) {
     if (auto error = backend_->PrepareReplacement(
             schema_, running_, replacement, changes, context)) {
       backend_->AbortPreparedReplacement();
       return {false, {std::move(*error)}, {}};
+    }
+    const auto prepared_recovery =
+        backend_->PreparedReplacementRecoveryState();
+    if (prepared_recovery &&
+        !ValidBackendRecoveryState(*prepared_recovery)) {
+      backend_->AbortPreparedReplacement();
+      return Failure(config::ValidationCode::kInvalidValue,
+                     "backend returned invalid recovery state",
+                     "operation-failed");
     }
     if (auto error =
             backend_->Replace(schema_, running_, replacement, changes,
@@ -46,6 +67,7 @@ TransactionResult DatastoreManager::ReplaceRunning(
       return {false, {std::move(*error)}, {}};
     }
     backend_replacement_pending_ = true;
+    backend_recovery_ = prepared_recovery;
   }
   running_ = std::move(replacement);
   return {true, {}, std::move(changes)};
@@ -54,7 +76,7 @@ TransactionResult DatastoreManager::ReplaceRunning(
 DatastoreManager::StateSnapshot DatastoreManager::SnapshotLocked() const {
   return {running_, candidate_, startup_, rollback_running_,
           confirmation_deadline_, confirming_session_, persist_token_,
-          rollback_context_};
+          rollback_context_, backend_recovery_};
 }
 
 PersistentDatastoreState DatastoreManager::PersistentStateLocked() const {
@@ -80,6 +102,7 @@ PersistentDatastoreState DatastoreManager::PersistentStateOf(
   state.persist_token = snapshot.persist_token;
   state.rollback_externally_coordinated =
       snapshot.rollback_context.externally_coordinated;
+  state.backend_recovery = snapshot.backend_recovery;
   return state;
 }
 
@@ -108,12 +131,14 @@ std::optional<config::ValidationFinding> DatastoreManager::RestoreLocked(
   confirming_session_ = snapshot.confirming_session;
   persist_token_ = snapshot.persist_token;
   rollback_context_ = snapshot.rollback_context;
+  backend_recovery_ = snapshot.backend_recovery;
   return std::nullopt;
 }
 
 TransactionResult DatastoreManager::FinishMutation(
     const StateSnapshot& before, TransactionResult result,
     BackendTransactionContext context) {
+  const bool finalizing_backend = backend_replacement_pending_;
   const PersistentDatastoreState after = PersistentStateLocked();
   const PersistentDatastoreState prior = PersistentStateOf(before);
   if (persistent_state_committer_ && prior != after) {
@@ -122,6 +147,9 @@ TransactionResult DatastoreManager::FinishMutation(
         backend_->AbortPreparedReplacement();
         backend_replacement_pending_ = false;
       }
+      // RestoreLocked may need to invoke the backend. Reinstate the recovery
+      // state that preceded this mutation before starting compensation.
+      backend_recovery_ = before.backend_recovery;
       if (auto rollback_error = RestoreLocked(before, context)) {
         persistence_error->message += "; live rollback also failed: " +
                                       rollback_error->message;
@@ -137,6 +165,24 @@ TransactionResult DatastoreManager::FinishMutation(
     result.ok = false;
     result.errors.push_back(std::move(*finalize_error));
     result.changes.clear();
+    return result;
+  }
+  if (finalizing_backend && backend_recovery_) {
+    const PersistentDatastoreState marked = PersistentStateLocked();
+    backend_recovery_.reset();
+    const PersistentDatastoreState cleared = PersistentStateLocked();
+    if (persistent_state_committer_) {
+      if (auto persistence_error =
+              persistent_state_committer_(marked, cleared)) {
+        backend_recovery_ = marked.backend_recovery;
+        persistence_error->message =
+            "backend completed but its recovery marker could not be cleared: " +
+            persistence_error->message;
+        result.ok = false;
+        result.errors.push_back(std::move(*persistence_error));
+        result.changes.clear();
+      }
+    }
   }
   return result;
 }
@@ -621,6 +667,18 @@ PersistentDatastoreState DatastoreManager::ExportPersistentState() const {
 
 TransactionResult DatastoreManager::RestorePersistentState(
     const PersistentDatastoreState& state, RestoreBackend backend) {
+  if (state.backend_recovery &&
+      !ValidBackendRecoveryState(*state.backend_recovery)) {
+    return Failure(config::ValidationCode::kInvalidValue,
+                   "persistent backend recovery state is invalid",
+                   "operation-failed");
+  }
+  if (state.backend_recovery && backend == RestoreBackend::kApply) {
+    return Failure(config::ValidationCode::kInvalidValue,
+                   "persistent backend recovery must be resolved before "
+                   "backend activation",
+                   "operation-failed");
+  }
   const auto parse = [&](std::string_view xml)
       -> std::optional<config::ConfigDocument> {
     if (xml.empty()) return config::ConfigDocument();
@@ -666,6 +724,7 @@ TransactionResult DatastoreManager::RestorePersistentState(
   persist_token_ = state.persist_token;
   rollback_context_.externally_coordinated =
       state.rollback_externally_coordinated;
+  backend_recovery_ = state.backend_recovery;
   const BackendTransactionContext activation_context = rollback_context_;
   confirmation_deadline_.reset();
   if (state.confirmation_expiry_unix_seconds) {

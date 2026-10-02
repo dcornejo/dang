@@ -233,13 +233,20 @@ to a core-owned authenticated endpoint. The datastore/backend contract now
 separates replacement from finalization: ordinary commits invoke finalization
 only after the local snapshot is durable, persistence failure aborts retained
 reversible work before compensating the live state, and startup finalizes an
-already-durable restored snapshot. This is the ordering seam the controller
-needs, but it is not yet crash-safe distributed execution. Pair-wide management
-still requires:
+already-durable restored snapshot. A backend may now provide an opaque recovery
+kind, transaction identity, and proposal digest after preparation. Snapshot
+version 2 durably publishes that marker with the new running tree before
+finalization, then durably clears it after finalization. A failed finalization
+or clear retains the marker, and generic restore refuses to activate a marked
+backend until its host has reconciled the record. Version-1 snapshots remain
+readable as unmarked state. Plugins cannot see or modify this host metadata.
 
-- a durable pending marker or equivalent journal coupling that recovers a
-  crash between local snapshot publication, the distributed COMMIT decision,
-  and backend finalization without contradicting either durable record;
+This supplies the ordering and persistence seam the controller needs, but it is
+not yet crash-safe distributed execution. Pair-wide management still requires:
+
+- host recovery that requires the snapshot marker and PREPARED journal to have
+  the same transaction identity and proposal digest before selecting COMMIT,
+  and that fails closed on mismatched or orphaned records;
 - either one atomic journal covering every affected peer group or an explicit
   fail-closed single-group limit. Sequentially committing groups would violate
   the atomicity of one NETCONF commit;

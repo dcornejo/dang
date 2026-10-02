@@ -71,6 +71,21 @@ struct ConfirmedCommitOptions {
   std::optional<std::string> persist;
 };
 
+/**
+ * Opaque recovery identity supplied by a running-configuration backend.
+ *
+ * The datastore persists this value without interpreting it.  The host may
+ * use it to correlate the published configuration with an external journal
+ * after a process or machine failure.  Plugins never read or write this
+ * metadata directly.
+ */
+struct BackendRecoveryState {
+  std::string kind;
+  std::string transaction_id;
+  std::string proposal_digest;
+  bool operator==(const BackendRecoveryState&) const = default;
+};
+
 /** Serializable datastore and confirmed-commit recovery state. */
 struct PersistentDatastoreState {
   std::string running_xml;
@@ -82,6 +97,8 @@ struct PersistentDatastoreState {
   std::optional<std::string> persist_token;
   /** Context required if a pending confirmed commit must be rolled back. */
   bool rollback_externally_coordinated = false;
+  /** Backend-owned correlation record for an unfinished durable transition. */
+  std::optional<BackendRecoveryState> backend_recovery;
   bool operator==(const PersistentDatastoreState&) const = default;
 };
 
@@ -107,6 +124,15 @@ class RunningConfigBackend {
       const config::ConfigDocument& after,
       std::span<const config::ChangeEvent> changes,
       BackendTransactionContext context = {}) = 0;
+  /**
+   * Returns recovery metadata created by the most recent successful
+   * PrepareReplacement(). A non-null value is validated before Replace() and
+   * persisted with the new running tree before CommitPreparedReplacement().
+   */
+  [[nodiscard]] virtual std::optional<BackendRecoveryState>
+  PreparedReplacementRecoveryState() const {
+    return std::nullopt;
+  }
   /**
    * Finalizes a successful replacement after its datastore state is durable.
    * A backend may retain reversible external work until this notification.
@@ -216,6 +242,7 @@ class DatastoreManager {
     std::optional<std::string> confirming_session;
     std::optional<std::string> persist_token;
     BackendTransactionContext rollback_context;
+    std::optional<BackendRecoveryState> backend_recovery;
   };
   [[nodiscard]] config::ConfigDocument& Mutable(Datastore datastore);
   [[nodiscard]] const config::ConfigDocument& Get(Datastore datastore) const;
@@ -250,6 +277,7 @@ class DatastoreManager {
   std::optional<std::string> confirming_session_;
   std::optional<std::string> persist_token_;
   BackendTransactionContext rollback_context_;
+  std::optional<BackendRecoveryState> backend_recovery_;
   bool backend_replacement_pending_ = false;
   RunningConfigBackend* backend_ = nullptr;
   PersistentStateCommitter persistent_state_committer_;

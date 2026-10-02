@@ -22,7 +22,7 @@
 namespace yang::netconf {
 namespace {
 
-constexpr int kSnapshotVersion = 1;
+constexpr int kSnapshotVersion = 2;
 
 template <typename Value>
 nlohmann::json OptionalJson(const std::optional<Value>& value) {
@@ -30,6 +30,13 @@ nlohmann::json OptionalJson(const std::optional<Value>& value) {
 }
 
 nlohmann::json ToJson(const PersistentDatastoreState& state) {
+  nlohmann::json backend_recovery = nullptr;
+  if (state.backend_recovery) {
+    backend_recovery = {
+        {"kind", state.backend_recovery->kind},
+        {"transaction-id", state.backend_recovery->transaction_id},
+        {"proposal-digest", state.backend_recovery->proposal_digest}};
+  }
   return {{"version", kSnapshotVersion},
           {"running", state.running_xml},
           {"candidate", state.candidate_xml},
@@ -40,11 +47,14 @@ nlohmann::json ToJson(const PersistentDatastoreState& state) {
           {"confirming-session", OptionalJson(state.confirming_session)},
           {"persist-token", OptionalJson(state.persist_token)},
           {"rollback-externally-coordinated",
-           state.rollback_externally_coordinated}};
+           state.rollback_externally_coordinated},
+          {"backend-recovery", std::move(backend_recovery)}};
 }
 
 std::optional<PersistentDatastoreState> FromJson(const nlohmann::json& json) {
-  if (!json.is_object() || json.value("version", 0) != kSnapshotVersion ||
+  if (!json.is_object() ||
+      (json.value("version", 0) != 1 &&
+       json.value("version", 0) != kSnapshotVersion) ||
       !json.contains("running") || !json.contains("candidate") ||
       !json.contains("startup")) return std::nullopt;
   try {
@@ -67,6 +77,20 @@ std::optional<PersistentDatastoreState> FromJson(const nlohmann::json& json) {
     if (json.contains("rollback-externally-coordinated")) {
       state.rollback_externally_coordinated =
           json.at("rollback-externally-coordinated").get<bool>();
+    }
+    if (json.value("version", 0) >= 2 &&
+        json.contains("backend-recovery") &&
+        !json.at("backend-recovery").is_null()) {
+      const auto& recovery = json.at("backend-recovery");
+      BackendRecoveryState parsed{
+          .kind = recovery.at("kind").get<std::string>(),
+          .transaction_id = recovery.at("transaction-id").get<std::string>(),
+          .proposal_digest =
+              recovery.at("proposal-digest").get<std::string>()};
+      if (parsed.kind.empty() || parsed.transaction_id.empty() ||
+          parsed.proposal_digest.empty())
+        return std::nullopt;
+      state.backend_recovery = std::move(parsed);
     }
     return state;
   } catch (const nlohmann::json::exception&) {

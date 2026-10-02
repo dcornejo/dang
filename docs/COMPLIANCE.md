@@ -114,16 +114,23 @@ through affected plugins before the application is made available to a
 transport; activation failure makes startup fail closed. For a live mutation,
 the generic backend finalization notification follows successful snapshot
 publication. A failed publication aborts retained reversible work before the
-prior live configuration is restored and finalized. This lifecycle seam does
-not by itself provide a crash-recoverable distributed transaction; that
-remaining boundary is documented in `PEER_TRANSACTIONS.md`.
+prior live configuration is restored and finalized. Snapshot version 2 can
+also carry an opaque backend recovery kind, transaction identity, and proposal
+digest. The marker is durable before backend finalization and is durably
+cleared afterward; a failure retains it, and automatic backend activation of a
+marked restore is rejected until the host resolves it. Plugins have no access
+to this metadata. The peer recovery path does not yet cross-check that marker
+against its journal, so this lifecycle does not yet provide a crash-recoverable
+distributed transaction; the remaining boundary is documented in
+`PEER_TRANSACTIONS.md`.
 
 The private peer recovery journal now records PREPARED before remote mutation.
 On restart, PREPARED drives idempotent cancellation of every possibly applied
 persistent confirmed commit, while COMMIT drives confirmation only. This closes
-the unjournaled remote-apply crash window, but the local datastore snapshot does
-not yet carry the matching transaction identity and proposal digest; pair-wide
-atomicity therefore remains unadvertised.
+the unjournaled remote-apply crash window. The local datastore snapshot can now
+carry the matching transaction identity and proposal digest, but startup does
+not yet compare the two records; pair-wide atomicity therefore remains
+unadvertised.
 
 Dangd also has a host-configured authenticated participant context for its
 generic multi-server transaction machinery. A configured peer-controller

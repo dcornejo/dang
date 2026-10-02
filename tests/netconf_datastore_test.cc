@@ -52,12 +52,17 @@ class RecordingBackend final : public RunningConfigBackend {
   void AbortPreparedReplacement() noexcept override {
     lifecycle.push_back("abort");
   }
+  std::optional<BackendRecoveryState> PreparedReplacementRecoveryState()
+      const override {
+    return recovery_state;
+  }
 
   std::string before_xml;
   std::string working_xml;
   std::vector<config::ChangeEvent> changes;
   std::vector<BackendTransactionContext> contexts;
   std::vector<std::string> lifecycle;
+  std::optional<BackendRecoveryState> recovery_state;
 };
 
 class RejectingBackend final : public RunningConfigBackend {
@@ -233,6 +238,108 @@ TEST(NetconfDatastoreTest, FinalizesBackendOnlyAfterStateIsDurable) {
   EXPECT_EQ(backend.lifecycle,
             (std::vector<std::string>{"prepare", "replace", "persist",
                                       "commit"}));
+}
+
+TEST(NetconfDatastoreTest, DurablyBracketsBackendFinalizationWithRecoveryState) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  RecordingBackend backend;
+  backend.recovery_state = BackendRecoveryState{
+      .kind = "peer-transaction-v1",
+      .transaction_id = "tx-42",
+      .proposal_digest = "sha256:example"};
+  DatastoreManager stores(fixture->schema, fixture->initial, std::nullopt,
+                          &backend);
+  ASSERT_TRUE(stores.EditConfig(
+      {"one", Datastore::kCandidate,
+       {HostnameEdit(fixture->schema, "durable")}}).ok);
+  int persistence_calls = 0;
+  stores.SetPersistentStateCommitter(
+      [&](const PersistentDatastoreState& before,
+          const PersistentDatastoreState& after)
+          -> std::optional<config::ValidationFinding> {
+        ++persistence_calls;
+        if (persistence_calls == 1) {
+          EXPECT_FALSE(before.backend_recovery);
+          EXPECT_TRUE(after.backend_recovery);
+          if (after.backend_recovery)
+            EXPECT_EQ(after.backend_recovery->transaction_id, "tx-42");
+          EXPECT_EQ(backend.lifecycle,
+                    (std::vector<std::string>{"prepare", "replace"}));
+          backend.lifecycle.push_back("persist-marker");
+        } else {
+          EXPECT_TRUE(before.backend_recovery);
+          EXPECT_FALSE(after.backend_recovery);
+          EXPECT_EQ(backend.lifecycle,
+                    (std::vector<std::string>{"prepare", "replace",
+                                              "persist-marker", "commit"}));
+          backend.lifecycle.push_back("clear-marker");
+        }
+        return std::nullopt;
+      });
+
+  ASSERT_TRUE(stores.Commit("one").ok);
+  EXPECT_EQ(persistence_calls, 2);
+  EXPECT_FALSE(stores.ExportPersistentState().backend_recovery);
+  EXPECT_EQ(backend.lifecycle,
+            (std::vector<std::string>{"prepare", "replace", "persist-marker",
+                                      "commit", "clear-marker"}));
+}
+
+TEST(NetconfDatastoreTest, RetainsRecoveryStateWhenDurableClearFails) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  RecordingBackend backend;
+  backend.recovery_state = BackendRecoveryState{
+      .kind = "peer-transaction-v1",
+      .transaction_id = "tx-uncleared",
+      .proposal_digest = "sha256:example"};
+  DatastoreManager stores(fixture->schema, fixture->initial, std::nullopt,
+                          &backend);
+  ASSERT_TRUE(stores.EditConfig(
+      {"one", Datastore::kCandidate,
+       {HostnameEdit(fixture->schema, "durable")}}).ok);
+  int persistence_calls = 0;
+  stores.SetPersistentStateCommitter(
+      [&](const PersistentDatastoreState&,
+          const PersistentDatastoreState&)
+          -> std::optional<config::ValidationFinding> {
+        if (++persistence_calls != 2) return std::nullopt;
+        config::ValidationFinding finding;
+        finding.code = config::ValidationCode::kInvalidValue;
+        finding.state = config::FindingState::kInvalid;
+        finding.netconf_error_tag = "operation-failed";
+        finding.message = "injected marker-clear failure";
+        return finding;
+      });
+
+  const TransactionResult committed = stores.Commit("one");
+  ASSERT_FALSE(committed.ok);
+  ASSERT_EQ(committed.errors.size(), 1U);
+  EXPECT_NE(committed.errors.front().message.find("could not be cleared"),
+            std::string::npos);
+  ASSERT_TRUE(stores.ExportPersistentState().backend_recovery);
+  EXPECT_EQ(stores.ExportPersistentState().backend_recovery->transaction_id,
+            "tx-uncleared");
+  EXPECT_NE(stores.Read(Datastore::kRunning).ToXml().find(">durable</"),
+            std::string::npos);
+  EXPECT_EQ(backend.lifecycle,
+            (std::vector<std::string>{"prepare", "replace", "commit"}));
+
+  ASSERT_TRUE(stores.EditConfig(
+      {"one", Datastore::kCandidate,
+       {HostnameEdit(fixture->schema, "must-not-replace")}}).ok);
+  const TransactionResult blocked = stores.Commit("one");
+  ASSERT_FALSE(blocked.ok);
+  ASSERT_EQ(blocked.errors.size(), 1U);
+  EXPECT_NE(blocked.errors.front().message.find("unresolved backend recovery"),
+            std::string::npos);
+  EXPECT_EQ(backend.lifecycle,
+            (std::vector<std::string>{"prepare", "replace", "commit"}));
+  EXPECT_EQ(stores.ExportPersistentState().backend_recovery->transaction_id,
+            "tx-uncleared");
 }
 
 TEST(NetconfDatastoreTest, PublishesExactCommitChangesToRunningBackend) {

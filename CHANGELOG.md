@@ -8,6 +8,13 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Added a plugin-neutral durable backend-recovery contract. Snapshot version 2
+  records an opaque recovery kind, transaction identity, and proposal digest
+  with the new running configuration before backend finalization, then clears
+  it durably afterward. Failed finalization or marker clearing retains the
+  record, marked snapshots require explicit host reconciliation before backend
+  activation, and version-1 snapshots remain readable.
+
 - Added the ABI-v9 public peer-transaction contract and supervised-worker
   transport. Dangd now composes complete, non-overlapping module images from
   several plugins for each stable participant and validates the final candidate

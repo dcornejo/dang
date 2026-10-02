@@ -73,6 +73,9 @@ TEST(NetconfPersistenceTest, SavesAndRestoresAllDatastores) {
   EXPECT_NE(serialized.find("\"persist-token\": null"), std::string::npos);
   EXPECT_NE(serialized.find("\"rollback-externally-coordinated\": false"),
             std::string::npos);
+  EXPECT_NE(serialized.find("\"backend-recovery\": null"),
+            std::string::npos);
+  EXPECT_NE(serialized.find("\"version\": 2"), std::string::npos);
 
   DatastoreManager restored(fixture->schema, fixture->initial);
   ASSERT_TRUE(LoadDatastoreSnapshot(path, restored).ok);
@@ -82,6 +85,51 @@ TEST(NetconfPersistenceTest, SavesAndRestoresAllDatastores) {
             std::string::npos);
   std::error_code ignored;
   std::filesystem::remove(path, ignored);
+}
+
+TEST(NetconfPersistenceTest, RoundTripsOpaqueBackendRecoveryState) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildPersistenceFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager source(fixture->schema, fixture->initial);
+  PersistentDatastoreState state = source.ExportPersistentState();
+  state.backend_recovery = BackendRecoveryState{
+      .kind = "peer-transaction-v1",
+      .transaction_id = "tx-persisted",
+      .proposal_digest = "sha256:digest"};
+  ASSERT_TRUE(source.RestorePersistentState(
+      state, DatastoreManager::RestoreBackend::kDefer).ok);
+  const std::filesystem::path path = std::filesystem::temp_directory_path() /
+      "yang-netconf-backend-recovery-test.json";
+  ASSERT_TRUE(SaveDatastoreSnapshot(path, source).ok);
+
+  DatastoreManager restored(fixture->schema, fixture->initial);
+  EXPECT_FALSE(LoadDatastoreSnapshot(path, restored).ok);
+  ASSERT_TRUE(LoadDatastoreSnapshot(
+      path, restored, DatastoreManager::RestoreBackend::kDefer).ok);
+  ASSERT_TRUE(restored.ExportPersistentState().backend_recovery);
+  EXPECT_EQ(*restored.ExportPersistentState().backend_recovery,
+            *state.backend_recovery);
+  std::error_code ignored;
+  std::filesystem::remove(path, ignored);
+}
+
+TEST(NetconfPersistenceTest, RejectsMalformedBackendRecoveryState) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildPersistenceFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  EXPECT_FALSE(LoadDatastoreSnapshotJson(R"json({
+    "version": 2,
+    "running": "<value xmlns=\"urn:persist\">old</value>",
+    "candidate": "<value xmlns=\"urn:persist\">old</value>",
+    "startup": "<value xmlns=\"urn:persist\">old</value>",
+    "backend-recovery": {
+      "kind": "peer-transaction-v1",
+      "transaction-id": "",
+      "proposal-digest": "sha256:digest"
+    }
+  })json", stores, DatastoreManager::RestoreBackend::kDefer).ok);
 }
 
 TEST(NetconfPersistenceTest, RoundTripsExternalConfirmedCommitContext) {
@@ -203,6 +251,20 @@ TEST(NetconfPersistenceTest, RestoresSnapshotFromMemoryWithoutFilesystemIo) {
   EXPECT_NE(stores.Read(Datastore::kRunning).ToXml().find("memory"),
             std::string::npos);
   EXPECT_FALSE(LoadDatastoreSnapshotJson("not-json", stores).ok);
+}
+
+TEST(NetconfPersistenceTest, ReadsVersionOneSnapshotsWithoutRecoveryState) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildPersistenceFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  ASSERT_TRUE(LoadDatastoreSnapshotJson(R"json({
+    "version": 1,
+    "running": "<value xmlns=\"urn:persist\">legacy</value>",
+    "candidate": "<value xmlns=\"urn:persist\">legacy</value>",
+    "startup": "<value xmlns=\"urn:persist\">legacy</value>"
+  })json", stores).ok);
+  EXPECT_FALSE(stores.ExportPersistentState().backend_recovery);
 }
 
 TEST(NetconfPersistenceTest, AtomicSnapshotSurvivesEveryInterruptedSaveStage) {
