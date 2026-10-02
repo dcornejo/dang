@@ -418,21 +418,24 @@ several distinct controller identities are required. A controller identity
 cannot also be a NACM recovery user. Duplicate, padded, control-containing,
 malformed UTF-8, or oversized identities fail startup.
 
-The journal normally does not exist. If a durable group COMMIT remains after a
-crash, startup fails closed and reports the transaction identity, confirmation
-count, and pending peer identities. It does not print the proposal digest or
-persistent confirmed-commit tokens. Preserve the file for recovery; do not
-delete it merely to make the daemon start. With a complete target mapping,
-startup and reload retry only the pending confirmations, durably record each
-acknowledgement, and remove the journal before serving requests. If a peer is
-unavailable or rejects confirmation, startup remains blocked and the reduced
-pending set is preserved for the next retry. This recovery path completes a
-decision that was already durably COMMIT; it never rolls peers back. These
-operations hold an exclusive private `JOURNAL.lock` sibling; do not remove that
-lock while dangd is running or recovering. These options still do not initiate
-new pair-wide commits. The authenticated participant context prevents recursive
-planning, but local/distributed durability ordering and multi-group atomicity
-remain unfinished.
+The journal normally does not exist. Version 2 first records PREPARED before
+any remote mutation, then atomically changes it to COMMIT before permanent
+confirmation. After a crash, startup fails closed and reports the transaction
+identity, recovery direction, confirmation count, and pending peer identities.
+It does not print the proposal digest or persistent confirmed-commit tokens.
+Preserve the file for recovery; do not delete it merely to make the daemon
+start. With a complete target mapping, startup and reload cancel every
+participant in PREPARED because a lost reply can hide a successful confirmed
+commit. For COMMIT they retry only pending confirmations and durably record
+each acknowledgement. The journal is removed before serving requests only
+after cancellation or confirmation recovery completes. If a peer is
+unavailable or rejects the required operation, startup remains blocked and the
+record is preserved for the next retry. These operations hold an exclusive
+private `JOURNAL.lock` sibling; do not remove that lock while dangd is running
+or recovering. These options still do not initiate new pair-wide commits. The
+authenticated participant context prevents recursive planning, but the durable
+datastore snapshot is not yet bound to the prepared journal and multi-group
+atomicity remains unfinished.
 
 ### Store a central symmetric key
 

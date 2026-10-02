@@ -46,13 +46,15 @@ std::string Namespace(pugi::xml_node node) {
   return {};
 }
 
-std::string ConfirmationRpc(const std::string &persistent_commit_id) {
+std::string RecoveryRpc(std::string_view operation,
+                        const std::string &persistent_commit_id) {
   pugi::xml_document document;
   pugi::xml_node rpc = document.append_child("rpc");
   rpc.append_attribute("xmlns") = "urn:ietf:params:xml:ns:netconf:base:1.0";
   rpc.append_attribute("message-id") = "dangd-peer-recovery";
-  pugi::xml_node commit = rpc.append_child("commit");
-  commit.append_child("persist-id").text() = persistent_commit_id.c_str();
+  pugi::xml_node request =
+      rpc.append_child(std::string(operation).c_str());
+  request.append_child("persist-id").text() = persistent_commit_id.c_str();
   std::ostringstream output;
   document.print(output, "", pugi::format_raw);
   return output.str();
@@ -371,9 +373,9 @@ ConfirmPersistentCommitOverTls(const TlsClientOptions &options,
   std::string error;
   constexpr std::array<std::string_view, 1> required_capabilities = {
       kConfirmedCommitCapability};
-  const auto exchanged =
-      ExchangeTlsRpc(options, ConfirmationRpc(persistent_commit_id), &error,
-                     required_capabilities);
+  const auto exchanged = ExchangeTlsRpc(
+      options, RecoveryRpc("commit", persistent_commit_id), &error,
+      required_capabilities);
   if (!exchanged)
     return error;
   if (!ReplyIsOk(exchanged->reply))
@@ -381,11 +383,32 @@ ConfirmPersistentCommitOverTls(const TlsClientOptions &options,
   return std::nullopt;
 }
 
+std::optional<std::string>
+CancelPersistentCommitOverTls(const TlsClientOptions &options,
+                              const std::string &persistent_commit_id) {
+  if (persistent_commit_id.empty() || persistent_commit_id.size() > 256 ||
+      persistent_commit_id.find('\0') != std::string::npos)
+    return "persistent commit identity is invalid";
+  std::string error;
+  constexpr std::array<std::string_view, 1> required_capabilities = {
+      kConfirmedCommitCapability};
+  const auto exchanged = ExchangeTlsRpc(
+      options, RecoveryRpc("cancel-commit", persistent_commit_id), &error,
+      required_capabilities);
+  if (!exchanged)
+    return error;
+  if (ReplyIsOk(exchanged->reply) ||
+      RpcErrorTag(exchanged->reply) == "invalid-value")
+    return std::nullopt;
+  return "peer rejected persistent commit cancellation";
+}
+
 PeerTransactionParticipant
 MakeTlsRecoveryParticipant(const PeerJournalParticipant &journal_participant,
                            TlsClientOptions options) {
   const std::string persistent_commit_id =
       journal_participant.persistent_commit_id;
+  const TlsClientOptions cancel_options = options;
   return {
       .id = journal_participant.id,
       .role = journal_participant.role,
@@ -394,6 +417,9 @@ MakeTlsRecoveryParticipant(const PeerJournalParticipant &journal_participant,
             return ConfirmPersistentCommitOverTls(options,
                                                   persistent_commit_id);
           },
+      .cancel = [options = std::move(cancel_options), persistent_commit_id] {
+        return CancelPersistentCommitOverTls(options, persistent_commit_id);
+      },
       .release = [] {},
   };
 }

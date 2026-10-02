@@ -13,6 +13,14 @@
   and finalizes the prior running state. Startup activation finalizes the
   already-durable restored snapshot through the same backend contract.
 
+- Extended the peer journal with a durable PREPARED state written before any
+  network mutation. Proven pre-decision aborts remove it only after every
+  possibly applied persistent commit has been cancelled; incomplete
+  cancellation remains recoverable. Startup and reload now distinguish
+  PREPARED cancellation recovery from COMMIT confirmation recovery, with live
+  mutual-TLS coverage in both directions. Version-1 COMMIT journals remain
+  readable while new journals use version 2.
+
 - Added repeatable `--peer-controller-user USER` host policy for authenticated
   participant operations. These sessions retain NACM, schema validation,
   plugin prepare/apply, locks, confirmed-commit rollback, and persistence while
@@ -54,29 +62,28 @@
   work.
 
 - Added a private, versioned peer-transaction recovery journal containing the
-  transaction identity, proposal digest, stable peer roles, persistent commit
-  tokens, and durable confirmation acknowledgements. Atomic 0600 replacement,
-  file ownership/type checks, bounded parsing, parent-directory synchronization,
-  and fault injection cover crash recovery. Decision writes distinguish a
-  definite pre-decision failure from an outcome that became uncertain after
-  replacement; the latter confirms or rolls back nothing until recovery can
-  inspect the journal.
+  PREPARED/COMMIT state, transaction identity, proposal digest, stable peer
+  roles, persistent commit tokens, and durable confirmation acknowledgements.
+  Atomic 0600 replacement, file ownership/type checks, bounded parsing,
+  parent-directory synchronization, and fault injection cover crash recovery.
+  Decision writes distinguish a definite pre-decision failure from an outcome
+  that became uncertain after replacement; the latter confirms or rolls back
+  nothing until recovery can inspect the journal.
 
 - Added `--peer-journal FILE` startup inspection. Dangd accepts an absent
   configured journal, rejects malformed or unsafe files, forbids sharing the
   datastore snapshot path, and fails closed with a token-free transaction and
-  pending-peer summary when a durable group decision requires recovery. This
+  pending-peer summary when durable peer state requires recovery. This
   prevents ordinary service or `SIGHUP` reload from bypassing unresolved peer
   state while authenticated automatic recovery is still under development.
 
-- Added a bounded, programmatic one-RPC NETCONF/TLS client and a recovery
-  adapter that confirms an RFC 6241 persistent confirmed commit from a journal
-  participant. The client verifies mutual-TLS credentials and the server
-  hostname, validates untrusted XML and NETCONF namespaces, correlates the
-  reply `message-id`, requires the advertised protocol capabilities, escapes
-  persistent tokens through the XML API, and invokes no shell command. Live
-  mutual-TLS coverage confirms a pending commit using a token containing XML
-  metacharacters.
+- Added a bounded, programmatic one-RPC NETCONF/TLS client and recovery
+  adapters that confirm or cancel an RFC 6241 persistent confirmed commit from
+  a journal participant. The client verifies mutual-TLS credentials and the
+  server hostname, validates untrusted XML and NETCONF namespaces, correlates
+  the reply `message-id`, requires the advertised protocol capabilities,
+  escapes persistent tokens through the XML API, and invokes no shell command.
+  Live mutual-TLS coverage confirms and cancels pending commits.
 
 - Added `--peer-recovery FILE` and a private, versioned JSON configuration for
   stable peer-group-and-participant-to-NETCONF/TLS endpoint mappings. Version

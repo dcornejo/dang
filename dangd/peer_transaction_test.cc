@@ -45,6 +45,10 @@ PeerTransactionJournal Journal(FakePeerState *state, bool fail_decision = false,
                                bool fail_complete = false,
                                std::string fail_confirmation = {}) {
   return {
+      .record_abort = [state] {
+        state->events.push_back("abort journal");
+        return std::optional<std::string>{};
+      },
       .record_commit_decision =
           [state, fail_decision](const std::vector<std::string> &ids) {
             std::string event = "decision";
@@ -109,7 +113,8 @@ TEST(PeerTransactionCoordinatorTest, PrepareFailurePreventsEveryMutation) {
   EXPECT_TRUE(result.applied.empty());
   EXPECT_EQ(state.events,
             (std::vector<std::string>{"prepare primary", "prepare standby",
-                                      "release standby", "release primary"}));
+                                      "release standby", "release primary",
+                                      "abort journal"}));
 }
 
 TEST(PeerTransactionCoordinatorTest,
@@ -157,6 +162,8 @@ TEST(PeerTransactionCoordinatorTest,
   ASSERT_EQ(result.rollback_failures.size(), 1u);
   EXPECT_NE(result.rollback_failures.front().find("standby"),
             std::string::npos);
+  EXPECT_EQ(std::ranges::find(state.events, "abort journal"),
+            state.events.end());
 }
 
 TEST(PeerTransactionCoordinatorTest,
@@ -240,7 +247,33 @@ TEST(PeerTransactionCoordinatorTest, RejectsInvalidPairIdentity) {
                 .Execute(std::move(peers), Journal(&state))
                 .disposition,
             PeerTransactionDisposition::kAborted);
-  EXPECT_TRUE(state.events.empty());
+  EXPECT_EQ(state.events, (std::vector<std::string>{"abort journal"}));
+}
+
+TEST(PeerTransactionCoordinatorTest,
+     ResumeAbortCancelsEveryPossiblyAppliedPeerAndRemovesJournal) {
+  FakePeerState state;
+  const PeerTransactionResult result =
+      PeerTransactionCoordinator().ResumeAbort(Pair(&state), Journal(&state));
+  EXPECT_EQ(result.disposition, PeerTransactionDisposition::kAborted);
+  EXPECT_TRUE(result.message.empty());
+  EXPECT_EQ(state.events,
+            (std::vector<std::string>{"cancel primary", "cancel standby",
+                                      "release primary", "release standby",
+                                      "abort journal"}));
+}
+
+TEST(PeerTransactionCoordinatorTest,
+     ResumeAbortRetainsJournalWhenCancellationFails) {
+  FakePeerState state;
+  state.failures.insert("cancel primary");
+  const PeerTransactionResult result =
+      PeerTransactionCoordinator().ResumeAbort(Pair(&state), Journal(&state));
+  EXPECT_EQ(result.disposition,
+            PeerTransactionDisposition::kRollbackIncomplete);
+  ASSERT_EQ(result.rollback_failures.size(), 1u);
+  EXPECT_EQ(std::ranges::find(state.events, "abort journal"),
+            state.events.end());
 }
 
 } // namespace

@@ -22,10 +22,13 @@
 namespace dangd {
 namespace {
 
-constexpr int kJournalVersion = 1;
+constexpr int kJournalVersion = 2;
 constexpr std::size_t kMaximumJournalBytes = 1024 * 1024;
 
 std::optional<std::string> ValidateState(const PeerJournalState &state) {
+  if (state.decision != PeerJournalDecision::kPrepared &&
+      state.decision != PeerJournalDecision::kCommit)
+    return "peer journal contains an invalid decision";
   if (state.transaction_id.empty() || state.transaction_id.size() > 256)
     return "peer journal transaction identity is empty or too long";
   if (state.proposal_digest.empty() || state.proposal_digest.size() > 256)
@@ -49,6 +52,12 @@ std::optional<std::string> ValidateState(const PeerJournalState &state) {
   }
   if (primary_count != 1)
     return "peer journal requires exactly one primary participant";
+  if (state.decision == PeerJournalDecision::kPrepared &&
+      std::ranges::any_of(state.participants,
+                          [](const PeerJournalParticipant &participant) {
+                            return participant.confirmed;
+                          }))
+    return "prepared peer journal cannot contain confirmations";
   return std::nullopt;
 }
 
@@ -64,7 +73,9 @@ nlohmann::json ToJson(const PeerJournalState &state) {
          {"confirmed", participant.confirmed}});
   }
   return {{"version", kJournalVersion},
-          {"decision", "commit"},
+          {"decision", state.decision == PeerJournalDecision::kCommit
+                           ? "commit"
+                           : "prepared"},
           {"transaction-id", state.transaction_id},
           {"proposal-digest", state.proposal_digest},
           {"participants", std::move(participants)}};
@@ -72,13 +83,18 @@ nlohmann::json ToJson(const PeerJournalState &state) {
 
 std::optional<PeerJournalState> FromJson(const nlohmann::json &json) {
   try {
-    if (!json.is_object() || json.value("version", 0) != kJournalVersion ||
-        json.value("decision", "") != "commit" ||
+    const int version = json.value("version", 0);
+    const std::string decision = json.value("decision", "");
+    if (!json.is_object() || (version != 1 && version != kJournalVersion) ||
+        (decision != "prepared" && decision != "commit") ||
+        (version == 1 && decision != "commit") ||
         !json.at("participants").is_array())
       return std::nullopt;
     PeerJournalState state;
     state.transaction_id = json.at("transaction-id").get<std::string>();
     state.proposal_digest = json.at("proposal-digest").get<std::string>();
+    state.decision = decision == "commit" ? PeerJournalDecision::kCommit
+                                           : PeerJournalDecision::kPrepared;
     for (const nlohmann::json &value : json.at("participants")) {
       const std::string role = value.at("role").get<std::string>();
       if (role != "primary" && role != "standby")
@@ -209,16 +225,10 @@ PeerTransactionFileJournal::Create(const std::filesystem::path &path,
     *error = "peer transaction journal path is empty";
     return nullptr;
   }
+  state.decision = PeerJournalDecision::kPrepared;
   std::ranges::sort(state.participants, {}, &PeerJournalParticipant::id);
   if (const auto invalid = ValidateState(state)) {
     *error = *invalid;
-    return nullptr;
-  }
-  if (std::ranges::any_of(state.participants,
-                          [](const PeerJournalParticipant &participant) {
-                            return participant.confirmed;
-                          })) {
-    *error = "new peer transaction journal cannot contain confirmations";
     return nullptr;
   }
   std::error_code status_error;
@@ -231,9 +241,14 @@ PeerTransactionFileJournal::Create(const std::filesystem::path &path,
     *error = "an unresolved peer transaction journal already exists";
     return nullptr;
   }
-  return std::unique_ptr<PeerTransactionFileJournal>(
+  auto journal = std::unique_ptr<PeerTransactionFileJournal>(
       new PeerTransactionFileJournal(path, std::move(state),
                                      std::move(checkpoint)));
+  if (const SaveResult saved = journal->Save(); saved.error) {
+    *error = *saved.error;
+    return nullptr;
+  }
+  return journal;
 }
 
 std::unique_ptr<PeerTransactionFileJournal>
@@ -253,7 +268,8 @@ PeerTransactionFileJournal::Load(const std::filesystem::path &path,
     }
     auto journal = std::unique_ptr<PeerTransactionFileJournal>(
         new PeerTransactionFileJournal(path, *state, std::move(checkpoint)));
-    journal->decision_recorded_ = true;
+    journal->decision_recorded_ =
+        state->decision == PeerJournalDecision::kCommit;
     return journal;
   } catch (const nlohmann::json::exception &) {
     *error = "peer transaction journal is not valid JSON";
@@ -263,6 +279,7 @@ PeerTransactionFileJournal::Load(const std::filesystem::path &path,
 
 PeerTransactionJournal PeerTransactionFileJournal::Callbacks() {
   return {
+      .record_abort = [this] { return RecordAbort(); },
       .record_commit_decision =
           [this](const std::vector<std::string> &ids) {
             return RecordDecision(ids);
@@ -285,8 +302,11 @@ PeerTransactionDecisionResult PeerTransactionFileJournal::RecordDecision(
             "peer transaction journal participant set does not match decision"};
   if (decision_recorded_)
     return {.status = PeerTransactionDecisionStatus::kCommitted};
+  state_.decision = PeerJournalDecision::kCommit;
   const SaveResult saved = Save();
   if (saved.error) {
+    if (!saved.replacement_may_be_visible)
+      state_.decision = PeerJournalDecision::kPrepared;
     return {.status = saved.replacement_may_be_visible
                           ? PeerTransactionDecisionStatus::kOutcomeUnknown
                           : PeerTransactionDecisionStatus::kNotCommitted,
@@ -294,6 +314,22 @@ PeerTransactionDecisionResult PeerTransactionFileJournal::RecordDecision(
   }
   decision_recorded_ = true;
   return {.status = PeerTransactionDecisionStatus::kCommitted};
+}
+
+std::optional<std::string> PeerTransactionFileJournal::RecordAbort() {
+  if (decision_recorded_ || state_.decision == PeerJournalDecision::kCommit)
+    return "peer transaction already has a durable commit decision";
+  std::error_code error;
+  std::filesystem::remove(path_, error);
+  if (error)
+    return "cannot remove prepared peer transaction journal";
+  const std::filesystem::path parent = path_.parent_path().empty()
+                                           ? std::filesystem::path(".")
+                                           : path_.parent_path();
+  if (!SyncPath(parent, true))
+    return "prepared peer journal was removed but its directory cannot be "
+           "synchronized";
+  return std::nullopt;
 }
 
 std::optional<std::string> PeerTransactionFileJournal::RecordConfirmation(

@@ -298,14 +298,17 @@ accept a session, dangd activates the complete initial or restored running tree
 through the affected plugins as one dependency-ordered transaction.
 
 `--peer-journal FILE` reserves a separate private recovery path for future
-pair-wide transactions. If the path is absent, startup continues. If it
-contains an unsafe, malformed, or unresolved journal, startup and `SIGHUP`
-reload fail closed before accepting the replacement application. Diagnostics
-name the transaction and pending peers but do not expose proposal digests or
-persistent confirmed-commit tokens. With a valid private `--peer-recovery FILE`
-version 2 mapping keyed by the exact generic peer group and participant,
-startup and reload automatically confirm pending peers, durably record
-each acknowledgement, and continue only after removing the completed journal.
+pair-wide transactions. Version-2 journals durably record PREPARED before any
+network mutation and transition to COMMIT before confirmation. If the path is
+absent, startup continues. If it contains an unsafe, malformed, or unresolved
+journal, startup and `SIGHUP` reload fail closed before accepting the
+replacement application. Diagnostics name the transaction, recovery direction,
+and pending peers but do not expose proposal digests or persistent
+confirmed-commit tokens. With a valid private `--peer-recovery FILE` version 2
+mapping keyed by the exact generic peer group and participant, startup and
+reload automatically cancel every PREPARED participant or confirm pending
+COMMIT peers, durably record each acknowledgement, and continue only after
+removing the completed journal.
 Without a complete mapping or while any peer remains unavailable, startup stays
 fail-closed. These options recover an existing durable decision; they do not
 yet enable initiating pair-wide commits. Normal commit preflight also rejects a

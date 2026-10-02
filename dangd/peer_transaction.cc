@@ -59,6 +59,27 @@ ValidateParticipants(const std::vector<Participant> &participants,
   return std::nullopt;
 }
 
+std::optional<std::string>
+ValidateAbortParticipants(const std::vector<Participant> &participants) {
+  if (participants.size() < 2)
+    return "peer transaction requires at least two participants";
+  std::set<std::string> ids;
+  std::size_t primary_count = 0;
+  for (const Participant &participant : participants) {
+    if (participant.id.empty() || !ids.insert(participant.id).second)
+      return "peer transaction participant identifiers must be nonempty and "
+             "unique";
+    if (participant.role == PeerTransactionRole::kPrimary)
+      ++primary_count;
+    if (!participant.cancel || !participant.release)
+      return participant.id +
+             ": peer transaction cancellation callback is incomplete";
+  }
+  if (primary_count != 1)
+    return "peer transaction requires exactly one primary participant";
+  return std::nullopt;
+}
+
 void ReleasePrepared(const std::vector<Participant> &participants,
                      const std::vector<std::size_t> &prepared) {
   for (auto index = prepared.rbegin(); index != prepared.rend(); ++index)
@@ -76,6 +97,23 @@ void CancelApplied(const std::vector<Participant> &participants,
   }
   if (!result->rollback_failures.empty())
     result->disposition = PeerTransactionDisposition::kRollbackIncomplete;
+}
+
+void CompleteAbort(const PeerTransactionJournal &journal,
+                   PeerTransactionResult *result) {
+  if (!result->rollback_failures.empty())
+    return;
+  if (!journal.record_abort) {
+    result->disposition = PeerTransactionDisposition::kRollbackIncomplete;
+    result->message += result->message.empty() ? "" : "; ";
+    result->message += "peer prepared journal abort callback is missing";
+    return;
+  }
+  if (const auto error = journal.record_abort()) {
+    result->disposition = PeerTransactionDisposition::kRollbackIncomplete;
+    result->message += result->message.empty() ? "" : "; ";
+    result->message += "cannot remove peer prepared journal: " + *error;
+  }
 }
 
 std::vector<std::string>
@@ -96,11 +134,13 @@ PeerTransactionResult PeerTransactionCoordinator::Execute(
   PeerTransactionResult result;
   if (const auto error = ValidateParticipants(participants, true)) {
     result.message = *error;
+    CompleteAbort(journal, &result);
     return result;
   }
-  if (!journal.record_commit_decision || !journal.record_confirmation ||
-      !journal.record_complete) {
+  if (!journal.record_abort || !journal.record_commit_decision ||
+      !journal.record_confirmation || !journal.record_complete) {
     result.message = "peer transaction journal callbacks are incomplete";
+    CompleteAbort(journal, &result);
     return result;
   }
 
@@ -117,6 +157,7 @@ PeerTransactionResult PeerTransactionCoordinator::Execute(
     if (const auto error = participants[index].prepare()) {
       result.message = participants[index].id + ": prepare failed: " + *error;
       ReleasePrepared(participants, prepared);
+      CompleteAbort(journal, &result);
       return result;
     }
     result.prepared.push_back(participants[index].id);
@@ -132,6 +173,7 @@ PeerTransactionResult PeerTransactionCoordinator::Execute(
           participants[index].id + ": confirmed apply failed: " + *error;
       CancelApplied(participants, applied, &result);
       ReleasePrepared(participants, prepared);
+      CompleteAbort(journal, &result);
       return result;
     }
     result.applied.push_back(participants[index].id);
@@ -143,6 +185,7 @@ PeerTransactionResult PeerTransactionCoordinator::Execute(
                        ": post-apply verification failed: " + *error;
       CancelApplied(participants, applied, &result);
       ReleasePrepared(participants, prepared);
+      CompleteAbort(journal, &result);
       return result;
     }
   }
@@ -156,6 +199,7 @@ PeerTransactionResult PeerTransactionCoordinator::Execute(
         "cannot durably record peer commit decision: " + decision.error;
     CancelApplied(participants, applied, &result);
     ReleasePrepared(participants, prepared);
+    CompleteAbort(journal, &result);
     return result;
   }
   if (decision.status == PeerTransactionDecisionStatus::kOutcomeUnknown) {
@@ -277,6 +321,44 @@ PeerTransactionResult PeerTransactionCoordinator::ResumeCommit(
   }
   result.disposition = PeerTransactionDisposition::kCommitted;
   result.message.clear();
+  return result;
+}
+
+PeerTransactionResult PeerTransactionCoordinator::ResumeAbort(
+    std::vector<PeerTransactionParticipant> participants,
+    PeerTransactionJournal journal) const {
+  PeerTransactionResult result;
+  if (const auto error = ValidateAbortParticipants(participants)) {
+    result.disposition = PeerTransactionDisposition::kRollbackIncomplete;
+    result.message = *error;
+    return result;
+  }
+  if (!journal.record_abort) {
+    result.disposition = PeerTransactionDisposition::kRollbackIncomplete;
+    result.message = "peer transaction abort journal callback is incomplete";
+    return result;
+  }
+
+  const std::vector<std::size_t> order = ApplyOrder(participants);
+  for (auto index = order.rbegin(); index != order.rend(); ++index) {
+    if (const auto error = participants[*index].cancel()) {
+      result.rollback_failures.push_back(participants[*index].id + ": " +
+                                         *error);
+    }
+  }
+  for (const Participant &participant : participants)
+    participant.release();
+  if (!result.rollback_failures.empty()) {
+    result.disposition = PeerTransactionDisposition::kRollbackIncomplete;
+    result.message = "peer prepared transaction cancellation is incomplete";
+    return result;
+  }
+  if (const auto error = journal.record_abort()) {
+    result.disposition = PeerTransactionDisposition::kRollbackIncomplete;
+    result.message = "cannot remove peer prepared journal: " + *error;
+    return result;
+  }
+  result.disposition = PeerTransactionDisposition::kAborted;
   return result;
 }
 

@@ -27,12 +27,17 @@ struct PeerJournalParticipant {
   bool confirmed = false;
 };
 
-/** Complete private state retained while a group COMMIT decision is pending. */
+/** Durable group decision represented by the recovery journal. */
+enum class PeerJournalDecision { kPrepared, kCommit };
+
+/** Complete private state retained while a group transaction is unresolved. */
 struct PeerJournalState {
   /** Stable operator-visible identity for the logical group transaction. */
   std::string transaction_id;
   /** Digest binding the journal to the exact logical proposal. */
   std::string proposal_digest;
+  /** PREPARED before the group COMMIT decision, COMMIT afterwards. */
+  PeerJournalDecision decision = PeerJournalDecision::kPrepared;
   /** Canonically ordered participant recovery records. */
   std::vector<PeerJournalParticipant> participants;
 };
@@ -51,13 +56,14 @@ using PeerJournalSaveCheckpoint =
 /**
  * Private crash-safe JSON journal for one unresolved group commit.
  *
- * The file is created only when the coordinator records COMMIT. Each
- * confirmation acknowledgement atomically replaces and synchronizes it. Final
- * completion removes the journal and synchronizes its parent directory.
+ * Creation durably records PREPARED before network mutation. The coordinator
+ * atomically replaces that state with COMMIT before confirmation. A proven
+ * pre-decision abort or final completion removes the journal and synchronizes
+ * its parent directory.
  */
 class PeerTransactionFileJournal {
 public:
-  /** Creates an unwritten journal and rejects an existing recovery file. */
+  /** Durably creates PREPARED and rejects an existing recovery file. */
   [[nodiscard]] static std::unique_ptr<PeerTransactionFileJournal>
   Create(const std::filesystem::path &path, PeerJournalState state,
          std::string *error,
@@ -82,6 +88,7 @@ private:
 
   [[nodiscard]] PeerTransactionDecisionResult
   RecordDecision(const std::vector<std::string> &participant_ids);
+  [[nodiscard]] std::optional<std::string> RecordAbort();
   [[nodiscard]] std::optional<std::string>
   RecordConfirmation(const std::string &participant_id);
   [[nodiscard]] std::optional<std::string> RecordComplete();

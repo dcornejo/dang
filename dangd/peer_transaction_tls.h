@@ -44,7 +44,12 @@ MakeTlsTransactionParticipant(TlsPeerTransactionOptions options);
 ConfirmPersistentCommitOverTls(const TlsClientOptions &options,
                                const std::string &persistent_commit_id);
 
-/** Builds the confirmation-only participant used by restart recovery. */
+/** Idempotently cancels one persistent commit over authenticated NETCONF/TLS. */
+[[nodiscard]] std::optional<std::string>
+CancelPersistentCommitOverTls(const TlsClientOptions &options,
+                              const std::string &persistent_commit_id);
+
+/** Builds the confirmation/cancellation participant used by restart recovery. */
 [[nodiscard]] PeerTransactionParticipant
 MakeTlsRecoveryParticipant(const PeerJournalParticipant &journal_participant,
                            TlsClientOptions options);

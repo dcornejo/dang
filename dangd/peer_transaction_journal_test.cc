@@ -58,6 +58,8 @@ TEST(PeerTransactionFileJournalTest,
   std::string error;
   auto journal = PeerTransactionFileJournal::Create(path, State(), &error);
   ASSERT_TRUE(journal) << error;
+  EXPECT_TRUE(std::filesystem::exists(path));
+  EXPECT_EQ(journal->state().decision, PeerJournalDecision::kPrepared);
   PeerTransactionJournal callbacks = journal->Callbacks();
   EXPECT_EQ(callbacks.record_commit_decision({"primary", "standby"}).status,
             PeerTransactionDecisionStatus::kCommitted);
@@ -69,6 +71,7 @@ TEST(PeerTransactionFileJournalTest,
 
   auto loaded = PeerTransactionFileJournal::Load(path, &error);
   ASSERT_TRUE(loaded) << error;
+  EXPECT_EQ(loaded->state().decision, PeerJournalDecision::kCommit);
   ASSERT_EQ(loaded->state().participants.size(), 2u);
   EXPECT_FALSE(loaded->state().participants[0].confirmed);
   EXPECT_FALSE(loaded->state().participants[1].confirmed);
@@ -83,6 +86,17 @@ TEST(PeerTransactionFileJournalTest,
   callbacks = loaded->Callbacks();
   EXPECT_FALSE(callbacks.record_confirmation("primary"));
   EXPECT_FALSE(callbacks.record_complete());
+  EXPECT_FALSE(std::filesystem::exists(path));
+}
+
+TEST(PeerTransactionFileJournalTest, RemovesProvenPreparedAbort) {
+  TemporaryDirectory directory;
+  const auto path = directory.path() / "peer.json";
+  std::string error;
+  auto journal = PeerTransactionFileJournal::Create(path, State(), &error);
+  ASSERT_TRUE(journal) << error;
+  EXPECT_EQ(journal->state().decision, PeerJournalDecision::kPrepared);
+  EXPECT_FALSE(journal->Callbacks().record_abort());
   EXPECT_FALSE(std::filesystem::exists(path));
 }
 
@@ -107,8 +121,65 @@ TEST(PeerTransactionFileJournalTest, RejectsUnsafeOrInvalidRecoveryState) {
 #endif
 }
 
+TEST(PeerTransactionFileJournalTest, ReadsVersionOneAsCommittedDecision) {
+  TemporaryDirectory directory;
+  const auto path = directory.path() / "peer-v1.json";
+  std::ofstream(path) << R"json({
+    "version": 1,
+    "decision": "commit",
+    "transaction-id": "legacy-commit",
+    "proposal-digest": "sha256:legacy",
+    "participants": [
+      {"id":"primary","role":"primary",
+       "persistent-commit-id":"primary-token","confirmed":false},
+      {"id":"standby","role":"standby",
+       "persistent-commit-id":"standby-token","confirmed":false}
+    ]
+  })json";
+#if defined(__unix__) || defined(__APPLE__)
+  ASSERT_EQ(chmod(path.c_str(), S_IRUSR | S_IWUSR), 0);
+#endif
+  std::string error;
+  auto journal = PeerTransactionFileJournal::Load(path, &error);
+  ASSERT_TRUE(journal) << error;
+  EXPECT_EQ(journal->state().decision, PeerJournalDecision::kCommit);
+}
+
 TEST(PeerTransactionFileJournalTest,
      DistinguishesPreDecisionFailureFromUnknownDecisionOutcome) {
+  const PeerJournalSaveStage stages[] = {
+      PeerJournalSaveStage::kTemporaryWritten,
+      PeerJournalSaveStage::kTemporarySynchronized,
+      PeerJournalSaveStage::kJournalReplaced,
+      PeerJournalSaveStage::kDirectorySynchronized};
+  for (const PeerJournalSaveStage interrupted : stages) {
+    TemporaryDirectory directory;
+    const auto path = directory.path() / "peer.json";
+    std::string error;
+    auto journal = PeerTransactionFileJournal::Create(path, State(), &error);
+    ASSERT_TRUE(journal) << error;
+    journal = PeerTransactionFileJournal::Load(
+        path, &error, [interrupted](PeerJournalSaveStage stage) {
+          return stage != interrupted;
+        });
+    ASSERT_TRUE(journal) << error;
+    const PeerTransactionDecisionResult result =
+        journal->Callbacks().record_commit_decision({"primary", "standby"});
+    auto recovered = PeerTransactionFileJournal::Load(path, &error);
+    ASSERT_TRUE(recovered) << error;
+    if (interrupted == PeerJournalSaveStage::kTemporaryWritten ||
+        interrupted == PeerJournalSaveStage::kTemporarySynchronized) {
+      EXPECT_EQ(result.status, PeerTransactionDecisionStatus::kNotCommitted);
+      EXPECT_EQ(recovered->state().decision, PeerJournalDecision::kPrepared);
+    } else {
+      EXPECT_EQ(result.status, PeerTransactionDecisionStatus::kOutcomeUnknown);
+      EXPECT_EQ(recovered->state().decision, PeerJournalDecision::kCommit);
+    }
+  }
+}
+
+TEST(PeerTransactionFileJournalTest,
+     PreparedCreationFailureIsEitherAbsentOrRecoverable) {
   const PeerJournalSaveStage stages[] = {
       PeerJournalSaveStage::kTemporaryWritten,
       PeerJournalSaveStage::kTemporarySynchronized,
@@ -122,17 +193,15 @@ TEST(PeerTransactionFileJournalTest,
         path, State(), &error, [interrupted](PeerJournalSaveStage stage) {
           return stage != interrupted;
         });
-    ASSERT_TRUE(journal) << error;
-    const PeerTransactionDecisionResult result =
-        journal->Callbacks().record_commit_decision({"primary", "standby"});
+    EXPECT_FALSE(journal);
     if (interrupted == PeerJournalSaveStage::kTemporaryWritten ||
         interrupted == PeerJournalSaveStage::kTemporarySynchronized) {
-      EXPECT_EQ(result.status, PeerTransactionDecisionStatus::kNotCommitted);
       EXPECT_FALSE(std::filesystem::exists(path));
     } else {
-      EXPECT_EQ(result.status, PeerTransactionDecisionStatus::kOutcomeUnknown);
       auto recovered = PeerTransactionFileJournal::Load(path, &error);
-      EXPECT_TRUE(recovered) << error;
+      ASSERT_TRUE(recovered) << error;
+      EXPECT_EQ(recovered->state().decision,
+                PeerJournalDecision::kPrepared);
     }
   }
 }

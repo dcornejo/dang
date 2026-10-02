@@ -136,10 +136,13 @@ stays in this file with its remaining work rewritten precisely.
   coordinated, suppresses only nested peer discovery, and durably preserves
   that context for confirmed-commit rollback. The generic backend lifecycle
   now separates successful replacement from post-persistence finalization and
-  aborts retained work before persistence compensation. Before connecting the
-  controller, couple that phase to a crash-recoverable pending marker and the
-  distributed decision, and add atomic multi-group journaling or an explicit
-  fail-closed one-group limit. Add a total transaction deadline
+  aborts retained work before persistence compensation. The version-2 peer
+  journal now records PREPARED before network mutation and startup can safely
+  resume either cancellation or COMMIT confirmation. Before connecting the
+  controller, bind that PREPARED identity and proposal digest into the durable
+  datastore snapshot so recovery can choose the decision from both records,
+  and add atomic multi-group journaling or an explicit fail-closed one-group
+  limit. Add a total transaction deadline
   beyond the implemented per-I/O timeouts, fail-closed degraded-peer policy,
   NACM/observability, `dangctl` integration,
   and Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.

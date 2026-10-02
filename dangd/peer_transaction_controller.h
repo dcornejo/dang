@@ -33,8 +33,9 @@ using PeerPersistentIdFactory = std::function<std::optional<std::string>()>;
  * Materializes and executes one already composed peer transaction group.
  *
  * The controller owns endpoint lookup, persistent tokens, verifier routing,
- * journal creation, and coordinator invocation. It deliberately accepts no
- * plugin-specific topology or transport policy.
+ * durable PREPARED journal creation before network mutation, and coordinator
+ * invocation. It deliberately accepts no plugin-specific topology or transport
+ * policy.
  */
 class PeerTransactionController {
  public:

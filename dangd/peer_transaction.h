@@ -61,6 +61,8 @@ struct PeerTransactionDecisionResult {
 
 /** Durable decision boundary supplied by the journal backend. */
 struct PeerTransactionJournal {
+  /** Removes the durable prepared record after a proven pre-decision abort. */
+  std::function<std::optional<std::string>()> record_abort;
   /** Makes the group commit decision crash-safe before returning success. */
   std::function<PeerTransactionDecisionResult(
       const std::vector<std::string> &participant_ids)>
@@ -114,7 +116,8 @@ struct PeerTransactionResult {
  * primaries, all participants are verified, and the commit decision is durably
  * recorded before any confirmation. Before that decision, failure cancels the
  * already applied peers in reverse order. After it, failure is a recoverable
- * pending confirmation and is never converted into rollback.
+ * pending confirmation and is never converted into rollback. Execute requires
+ * a journal whose PREPARED state was made durable before the call.
  */
 class PeerTransactionCoordinator {
 public:
@@ -133,6 +136,16 @@ public:
   ResumeCommit(std::vector<PeerTransactionParticipant> participants,
                std::vector<std::string> already_confirmed,
                PeerTransactionJournal journal) const;
+
+  /**
+   * Cancels every participant named by a durable prepared record.
+   *
+   * Cancellation is intentionally attempted for every participant because a
+   * crash can hide which confirmed-commit requests reached their peers.
+   */
+  [[nodiscard]] PeerTransactionResult
+  ResumeAbort(std::vector<PeerTransactionParticipant> participants,
+              PeerTransactionJournal journal) const;
 };
 
 } // namespace dangd

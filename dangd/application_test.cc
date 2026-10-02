@@ -2561,6 +2561,38 @@ TEST(DangdApplicationTest, FailsClosedOnUnresolvedPeerTransactionJournal) {
   EXPECT_EQ(blocked.errors.front().find("not-logged"), std::string::npos);
 }
 
+TEST(DangdApplicationTest,
+     IdentifiesPreparedPeerJournalAsCancellationRecovery) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.peer_transaction_journal = inputs.Path("peer-prepared.json");
+  PeerJournalState state{
+      .transaction_id = "prepared-change",
+      .proposal_digest = "sha256:not-logged",
+      .participants = {{.id = "primary",
+                        .role = PeerTransactionRole::kPrimary,
+                        .persistent_commit_id = "secret-primary-token"},
+                       {.id = "standby",
+                        .role = PeerTransactionRole::kStandby,
+                        .persistent_commit_id = "secret-standby-token"}},
+  };
+  std::string journal_error;
+  auto journal = PeerTransactionFileJournal::Create(
+      *options.peer_transaction_journal, std::move(state), &journal_error);
+  ASSERT_TRUE(journal) << journal_error;
+  journal.reset();
+
+  auto blocked = Application::Load(options);
+  EXPECT_EQ(blocked.application, nullptr);
+  ASSERT_EQ(blocked.errors.size(), 1u);
+  EXPECT_NE(blocked.errors.front().find("cancellation recovery"),
+            std::string::npos);
+  EXPECT_NE(blocked.errors.front().find("primary standby"), std::string::npos);
+  EXPECT_EQ(blocked.errors.front().find("secret-primary-token"),
+            std::string::npos);
+  EXPECT_EQ(blocked.errors.front().find("not-logged"), std::string::npos);
+}
+
 TEST(DangdApplicationTest, RejectsUnsafePeerJournalConfiguration) {
   TemporaryInputs inputs;
   auto options = Options(inputs);

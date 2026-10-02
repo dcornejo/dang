@@ -222,18 +222,42 @@ bool RecoverOrRejectPendingPeerTransaction(const ApplicationOptions& options,
           MakeTlsRecoveryParticipant(participant, configured.at(participant.id)));
       if (participant.confirmed) confirmed.push_back(participant.id);
     }
-    const PeerTransactionResult recovered =
-        PeerTransactionCoordinator().ResumeCommit(
-            std::move(participants), std::move(confirmed), journal->Callbacks());
-    if (recovered.ok()) return false;
+    const bool recovering_commit =
+        journal->state().decision == PeerJournalDecision::kCommit;
+    const PeerTransactionResult recovered = recovering_commit
+        ? PeerTransactionCoordinator().ResumeCommit(
+              std::move(participants), std::move(confirmed),
+              journal->Callbacks())
+        : PeerTransactionCoordinator().ResumeAbort(
+              std::move(participants), journal->Callbacks());
+    if (recovered.ok() ||
+        (!recovering_commit &&
+         recovered.disposition == PeerTransactionDisposition::kAborted &&
+         recovered.message.empty()))
+      return false;
 
     std::ostringstream message;
-    message << "peer transaction recovery did not complete";
+    message << "peer transaction "
+            << (recovering_commit ? "confirmation" : "cancellation")
+            << " recovery did not complete";
     if (!recovered.message.empty()) message << ": " << recovered.message;
-    if (!recovered.pending_confirmations.empty()) {
+    if (recovering_commit && !recovered.pending_confirmations.empty()) {
       message << " (pending peers:";
       for (const std::string& id : recovered.pending_confirmations)
         message << ' ' << AuditField(id);
+      message << ')';
+    } else if (!recovering_commit && !recovered.rollback_failures.empty()) {
+      message << " (pending peers:";
+      for (const PeerJournalParticipant& participant :
+           journal->state().participants) {
+        const std::string prefix = participant.id + ": ";
+        if (std::ranges::any_of(
+                recovered.rollback_failures,
+                [&prefix](const std::string& failure) {
+                  return failure.starts_with(prefix);
+                }))
+          message << ' ' << AuditField(participant.id);
+      }
       message << ')';
     }
     errors->push_back(message.str());
@@ -252,9 +276,16 @@ bool RecoverOrRejectPendingPeerTransaction(const ApplicationOptions& options,
   std::ostringstream message;
   message << "unresolved peer transaction "
           << AuditField(journal->state().transaction_id)
-          << " requires recovery before startup (" << confirmed << '/'
-          << journal->state().participants.size()
-          << " confirmations durable; pending peers:";
+          << " requires "
+          << (journal->state().decision == PeerJournalDecision::kCommit
+                  ? "confirmation"
+                  : "cancellation")
+          << " recovery before startup (";
+  if (journal->state().decision == PeerJournalDecision::kCommit) {
+    message << confirmed << '/' << journal->state().participants.size()
+            << " confirmations durable; ";
+  }
+  message << "pending peers:";
   if (pending.empty()) {
     message << " none";
   } else {

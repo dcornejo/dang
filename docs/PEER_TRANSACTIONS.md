@@ -15,8 +15,8 @@ this boundary. ABI v9 now provides the generic plugin planning and verification
 contract, including isolated-worker transport, while the authenticated
 participant transport and automatic startup recovery are also implemented.
 Dangd does not advertise pair-wide commit support yet because the final
-datastore commit lifecycle, recursive-planning guard, multi-group policy, and
-observability are not connected.
+datastore-to-journal binding, multi-group policy, and observability are not
+connected.
 
 ## Plugin planning contract
 
@@ -68,6 +68,9 @@ release because it may already have acquired a remote lock.
 ## State and ordering
 
 ```text
+durably record PREPARED recovery state
+        |
+        v
 prepare every peer
         |
         v
@@ -86,10 +89,11 @@ confirm every peer --------> retry pending confirmations after restart
 durably record COMPLETE
 ```
 
-Before `COMMIT` is durably recorded, any failure cancels every already-applied
-confirmed commit in reverse order. A failed cancellation is reported as an
-unresolved rollback instead of being hidden. If the journal cannot record the
-decision, the transaction also rolls back.
+Before `COMMIT` is durably recorded, any failure cancels every possibly applied
+confirmed commit in reverse order. Only after every cancellation succeeds is
+the PREPARED record durably removed. A failed cancellation or journal cleanup
+is reported as an unresolved rollback instead of being hidden. If the journal
+cannot record the decision, the transaction also rolls back.
 
 After `COMMIT` is durable, cancellation is forbidden. A missing or failed
 confirmation becomes `commit-pending`; recovery replays confirmation only for
@@ -106,12 +110,14 @@ The coordinator rejects duplicate identities and groups without exactly one
 primary.
 
 `PeerTransactionFileJournal` implements the private recovery record. Its
-versioned JSON contains a bounded transaction identity and proposal digest plus
-each peer's stable identity, role, persistent confirmed-commit token, and
-confirmation state. It uses mode-0600 temporary files, file and directory
-synchronization, atomic replacement, bounded parsing, and owner/type checks.
-It refuses to replace an unresolved journal. Completion removes the record and
-synchronizes the parent directory.
+versioned JSON contains PREPARED or COMMIT, a bounded transaction identity and
+proposal digest, plus each peer's stable identity, role, persistent
+confirmed-commit token, and confirmation state. Version 2 writes PREPARED
+before the first network mutation. It uses mode-0600 temporary files, file and
+directory synchronization, atomic replacement, bounded parsing, and owner/type
+checks. It refuses to replace an unresolved journal. A proven abort or complete
+commit removes the record and synchronizes the parent directory. Version-1
+COMMIT records remain readable.
 
 A failure before atomic replacement proves that COMMIT was not recorded and
 permits reverse cancellation. A failure after replacement makes the decision
@@ -122,19 +128,23 @@ turning into contradictory decisions across a crash.
 
 When `--peer-journal FILE` is configured, application startup and staged
 `SIGHUP` reload inspect that path before serving requests. An absent file means
-there is no durable COMMIT to recover. An unsafe, malformed, or unresolved file
-fails startup; the diagnostic names the transaction, durable confirmation
-count, and pending peer identities without exposing the proposal digest or
-persistent commit tokens. The journal path must differ from `--state`.
-The recovery layer now has a programmatic confirmation-only NETCONF/TLS
-adapter. It opens a fresh mutual-TLS session, verifies the peer certificate and
-hostname, requires NETCONF base 1.0 and persistent confirmed-commit 1.1,
+there is no transaction to recover. PREPARED causes idempotent cancellation of
+every participant because a crash can hide which confirmed-commit requests
+arrived; COMMIT retries only missing confirmations. The record is removed only
+after the selected recovery completes. An unsafe, malformed, or unresolved
+file fails startup; the diagnostic names the transaction, recovery direction,
+and pending peer identities without exposing the proposal digest or persistent
+commit tokens. The journal path must differ from `--state`.
+The recovery layer has programmatic confirmation and cancellation NETCONF/TLS
+operations. Each opens a fresh mutual-TLS session, verifies the peer certificate
+and hostname, requires NETCONF base 1.0 and persistent confirmed-commit 1.1,
 validates bounded untrusted XML, correlates the reply `message-id`, and accepts
-only an unambiguous `<ok/>`. Persistent tokens are serialized with the XML API
-and are never included in diagnostics. Each socket connection and TLS I/O wait
-is bounded and messages have byte ceilings; hostname resolution and a total
-wall-clock transaction deadline remain integration boundaries. The adapter
-invokes no command-line client.
+only an unambiguous result. Cancellation also treats `invalid-value` as the
+required already-absent state. Persistent tokens are serialized with the XML
+API and are never included in diagnostics. Each socket connection and TLS I/O
+wait is bounded and messages have byte ceilings; hostname resolution and a
+total wall-clock transaction deadline remain integration boundaries. The
+adapter invokes no command-line client.
 
 `MakeTlsTransactionParticipant` maps the complete coordinator contract onto a
 single reusable authenticated session. Before sending any RPC it requires the
