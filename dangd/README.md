@@ -312,9 +312,13 @@ composed plugin plan unless every exact group/participant pair has a mapped
 core-owned endpoint, before any plugin or peer mutation. The generic controller
 can now bind one validated group to authenticated TLS participants, plugin
 verifiers, cryptographic persistent tokens, and the crash-safe journal. It is
-not invoked by NETCONF until participant commits can suppress recursive
-planning and local snapshot durability can be ordered with the distributed
-decision. See the user guide for the versioned JSON format.
+not invoked by NETCONF until local snapshot durability can be ordered with the
+distributed decision. Participant servers can now designate dedicated,
+transport-authenticated controller identities with repeatable
+`--peer-controller-user USER`; their local changes retain validation, NACM,
+plugin execution, rollback, and persistence while suppressing recursive peer
+discovery. See the user guide for the security expectations and versioned JSON
+format.
 
 Application RPCs and YANG 1.1 actions are resolved against the compiled schema
 before dispatch. `dangd` applies operation rules and `default-deny-all`; actions

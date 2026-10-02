@@ -39,6 +39,18 @@ struct TransactionResult {
   std::vector<config::ChangeEvent> changes;
 };
 
+/**
+ * Host-authenticated context for a running-configuration transaction.
+ *
+ * `externally_coordinated` means another dangd instance already owns the
+ * distributed transaction. Backends must still validate and apply the local
+ * change, but must not discover or start another distributed transaction.
+ * This assertion is transport policy and must never be accepted from RPC XML.
+ */
+struct BackendTransactionContext {
+  bool externally_coordinated = false;
+};
+
 /** One edit-config transaction, optionally containing multiple edit payloads. */
 struct EditConfigRequest {
   std::string session;
@@ -49,6 +61,8 @@ struct EditConfigRequest {
   ErrorOption error_option = ErrorOption::kStopOnError;
   /** Optional transaction-boundary authorization for each proposed change. */
   std::function<bool(const config::ChangeEvent&)> authorize_change;
+  /** Trusted host context forwarded only when the running tree is evaluated. */
+  BackendTransactionContext backend_context;
 };
 
 /** Parameters for a confirmed commit. */
@@ -66,6 +80,8 @@ struct PersistentDatastoreState {
   std::optional<std::int64_t> confirmation_expiry_unix_seconds;
   std::optional<std::string> confirming_session;
   std::optional<std::string> persist_token;
+  /** Context required if a pending confirmed commit must be rolled back. */
+  bool rollback_externally_coordinated = false;
   bool operator==(const PersistentDatastoreState&) const = default;
 };
 
@@ -81,14 +97,16 @@ class RunningConfigBackend {
       const config::RuntimeSchema&,
       const config::ConfigDocument&,
       const config::ConfigDocument&,
-      std::span<const config::ChangeEvent>) {
+      std::span<const config::ChangeEvent>,
+      BackendTransactionContext = {}) {
     return std::nullopt;
   }
   [[nodiscard]] virtual std::optional<config::ValidationFinding> Replace(
       const config::RuntimeSchema& schema,
       const config::ConfigDocument& before,
       const config::ConfigDocument& after,
-      std::span<const config::ChangeEvent> changes) = 0;
+      std::span<const config::ChangeEvent> changes,
+      BackendTransactionContext context = {}) = 0;
   virtual void AbortPreparedReplacement() noexcept {}
 };
 
@@ -129,31 +147,37 @@ class DatastoreManager {
   [[nodiscard]] TransactionResult Unlock(Datastore datastore,
                                          std::string_view session);
   [[nodiscard]] TransactionResult EditConfig(const EditConfigRequest& request);
-  [[nodiscard]] TransactionResult Validate(Datastore datastore);
+  [[nodiscard]] TransactionResult Validate(
+      Datastore datastore, BackendTransactionContext context = {});
   [[nodiscard]] TransactionResult Commit(
       std::string_view session,
       std::optional<ConfirmedCommitOptions> confirmed = std::nullopt,
-      std::function<bool(const config::ChangeEvent&)> authorize_change = {});
+      std::function<bool(const config::ChangeEvent&)> authorize_change = {},
+      BackendTransactionContext context = {});
   [[nodiscard]] TransactionResult ConfirmCommit(
       std::string_view session,
       std::optional<std::string_view> persist_id = std::nullopt);
   /** Applies a follow-up confirmed commit in an existing persistent sequence. */
   [[nodiscard]] TransactionResult ContinueConfirmedCommit(
       std::string_view session, std::string_view persist_id,
-      std::chrono::seconds timeout = std::chrono::seconds(600));
+      std::chrono::seconds timeout = std::chrono::seconds(600),
+      BackendTransactionContext context = {});
   [[nodiscard]] TransactionResult CancelCommit(
       std::string_view session,
-      std::optional<std::string_view> persist_id = std::nullopt);
+      std::optional<std::string_view> persist_id = std::nullopt,
+      BackendTransactionContext context = {});
   [[nodiscard]] TransactionResult DiscardChanges(std::string_view session);
   [[nodiscard]] TransactionResult CopyConfig(std::string_view session,
                                              Datastore source,
                                              Datastore target,
-      std::function<bool(const config::ChangeEvent&)> authorize_change = {});
+      std::function<bool(const config::ChangeEvent&)> authorize_change = {},
+      BackendTransactionContext context = {});
   /** Replaces a datastore with one complete, already parsed configuration. */
   [[nodiscard]] TransactionResult CopyConfig(
       std::string_view session, const config::ConfigDocument& source,
       Datastore target,
-      std::function<bool(const config::ChangeEvent&)> authorize_change = {});
+      std::function<bool(const config::ChangeEvent&)> authorize_change = {},
+      BackendTransactionContext context = {});
   [[nodiscard]] TransactionResult DeleteConfig(std::string_view session,
                                                Datastore target);
   /** Releases locks and cancels that session's non-persistent confirmed commit. */
@@ -177,6 +201,7 @@ class DatastoreManager {
     std::optional<Clock::time_point> confirmation_deadline;
     std::optional<std::string> confirming_session;
     std::optional<std::string> persist_token;
+    BackendTransactionContext rollback_context;
   };
   [[nodiscard]] config::ConfigDocument& Mutable(Datastore datastore);
   [[nodiscard]] const config::ConfigDocument& Get(Datastore datastore) const;
@@ -186,15 +211,17 @@ class DatastoreManager {
       const config::ConfigDocument& document) const;
   [[nodiscard]] TransactionResult ReplaceRunning(
       config::ConfigDocument replacement,
-      std::vector<config::ChangeEvent> changes);
+      std::vector<config::ChangeEvent> changes,
+      BackendTransactionContext context = {});
   [[nodiscard]] StateSnapshot SnapshotLocked() const;
   [[nodiscard]] PersistentDatastoreState PersistentStateLocked() const;
   [[nodiscard]] PersistentDatastoreState PersistentStateOf(
       const StateSnapshot& snapshot) const;
   [[nodiscard]] TransactionResult FinishMutation(
-      const StateSnapshot& before, TransactionResult result);
+      const StateSnapshot& before, TransactionResult result,
+      BackendTransactionContext context = {});
   [[nodiscard]] std::optional<config::ValidationFinding> RestoreLocked(
-      const StateSnapshot& snapshot);
+      const StateSnapshot& snapshot, BackendTransactionContext context = {});
 
   const config::RuntimeSchema& schema_;
   mutable std::mutex mutex_;
@@ -206,6 +233,7 @@ class DatastoreManager {
   std::optional<Clock::time_point> confirmation_deadline_;
   std::optional<std::string> confirming_session_;
   std::optional<std::string> persist_token_;
+  BackendTransactionContext rollback_context_;
   RunningConfigBackend* backend_ = nullptr;
   PersistentStateCommitter persistent_state_committer_;
 };

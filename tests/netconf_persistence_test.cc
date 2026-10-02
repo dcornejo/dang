@@ -71,11 +71,42 @@ TEST(NetconfPersistenceTest, SavesAndRestoresAllDatastores) {
   EXPECT_NE(serialized.find("\"confirming-session\": null"),
             std::string::npos);
   EXPECT_NE(serialized.find("\"persist-token\": null"), std::string::npos);
+  EXPECT_NE(serialized.find("\"rollback-externally-coordinated\": false"),
+            std::string::npos);
 
   DatastoreManager restored(fixture->schema, fixture->initial);
   ASSERT_TRUE(LoadDatastoreSnapshot(path, restored).ok);
   EXPECT_NE(restored.Read(Datastore::kCandidate).ToXml().find("candidate"),
             std::string::npos);
+  EXPECT_NE(restored.Read(Datastore::kRunning).ToXml().find("old"),
+            std::string::npos);
+  std::error_code ignored;
+  std::filesystem::remove(path, ignored);
+}
+
+TEST(NetconfPersistenceTest, RoundTripsExternalConfirmedCommitContext) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildPersistenceFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager source(fixture->schema, fixture->initial);
+  ASSERT_TRUE(source.EditConfig(
+      {"peer", Datastore::kCandidate,
+       {ValueEdit(fixture->schema, "temporary")}}).ok);
+  ConfirmedCommitOptions options;
+  options.persist = "secret";
+  const BackendTransactionContext external{
+      .externally_coordinated = true};
+  ASSERT_TRUE(source.Commit("peer", options, {}, external).ok);
+  const std::filesystem::path path = std::filesystem::temp_directory_path() /
+      "yang-netconf-external-confirmed-test.json";
+  ASSERT_TRUE(SaveDatastoreSnapshot(path, source).ok);
+
+  DatastoreManager restored(fixture->schema, fixture->initial);
+  ASSERT_TRUE(LoadDatastoreSnapshot(path, restored).ok);
+  EXPECT_TRUE(
+      restored.ExportPersistentState().rollback_externally_coordinated);
+  EXPECT_FALSE(restored.CancelCommit("peer", "secret").ok);
+  EXPECT_TRUE(restored.CancelCommit("peer", "secret", external).ok);
   EXPECT_NE(restored.Read(Datastore::kRunning).ToXml().find("old"),
             std::string::npos);
   std::error_code ignored;

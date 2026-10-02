@@ -403,8 +403,20 @@ install -m 600 peer-recovery.json /etc/dangd/peer-recovery.json
 ./build/dangd --model appliance.yang --config config.xml \
   --state appliance-state.json \
   --peer-journal appliance-peer-transaction.json \
-  --peer-recovery /etc/dangd/peer-recovery.json --check
+  --peer-recovery /etc/dangd/peer-recovery.json \
+  --peer-controller-user dangd-peer --check
 ```
+
+Configure `--peer-controller-user` on a participant for the local username to
+which its TLS certificate identity is mapped. This is a host-owned trust
+decision, not a NETCONF extension: no XML field can select the behavior. The
+identity does not bypass NACM and should be a dedicated account granted only
+the data access required for peer coordination. Its local validate, plugin
+checks, apply, rollback, and snapshot durability remain unchanged; dangd only
+suppresses rediscovery of another distributed peer plan. Repeat the option when
+several distinct controller identities are required. A controller identity
+cannot also be a NACM recovery user. Duplicate, padded, control-containing,
+malformed UTF-8, or oversized identities fail startup.
 
 The journal normally does not exist. If a durable group COMMIT remains after a
 crash, startup fails closed and reports the transaction identity, confirmation
@@ -418,7 +430,9 @@ pending set is preserved for the next retry. This recovery path completes a
 decision that was already durably COMMIT; it never rolls peers back. These
 operations hold an exclusive private `JOURNAL.lock` sibling; do not remove that
 lock while dangd is running or recovering. These options still do not initiate
-or enable new pair-wide commits.
+new pair-wide commits. The authenticated participant context prevents recursive
+planning, but local/distributed durability ordering and multi-group atomicity
+remain unfinished.
 
 ### Store a central symmetric key
 

@@ -7,6 +7,14 @@
 
 ### Added
 
+- Added repeatable `--peer-controller-user USER` host policy for authenticated
+  participant operations. These sessions retain NACM, schema validation,
+  plugin prepare/apply, locks, confirmed-commit rollback, and persistence while
+  suppressing only nested peer-plan discovery. The context cannot be selected
+  by RPC XML, is validated as a canonical identity, and is preserved in the
+  private snapshot for cancellation, disconnect, timeout, and restart rollback.
+  Peer-controller and NACM recovery identities must be distinct.
+
 - Added plugin ABI v9 for transport-neutral peer transaction planning and
   verification. Plugins return complete module-scoped images for stable peer
   identities plus opaque verifier context; dangd copies the contract through

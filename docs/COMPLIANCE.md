@@ -113,6 +113,14 @@ access fail closed. Initial and restored running configuration is activated
 through affected plugins before the application is made available to a
 transport; activation failure makes startup fail closed.
 
+Dangd also has a host-configured authenticated participant context for its
+generic multi-server transaction machinery. A configured peer-controller
+identity still uses standard NETCONF operations and all RFC 6241 datastore,
+NACM, validation, and confirmed-commit behavior; the implementation suppresses
+only nested distributed-plan discovery. The rollback context is durable across
+restart. This is internal orchestration policy, not an advertised NETCONF
+capability or a caller-selectable protocol extension.
+
 ### RFC 6242 — NETCONF over SSH and message framing
 
 Status: **substantial with an embedded `dangd` SSH host**.

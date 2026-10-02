@@ -34,6 +34,7 @@ void Usage() {
   std::cerr
       << "usage: dangd --model FILE --config FILE [--search DIR] [--state FILE]"
          " [--peer-journal FILE --peer-recovery FILE]"
+         " [--peer-controller-user USER]..."
          " [--nacm FILE] [--recovery-user USER]... [--no-default-superuser]"
          " [--plugin FILE]..."
          " [--plugin-worker FILE]"
@@ -88,6 +89,8 @@ int main(int argc, char* argv[]) {
     } else if (argument == "--peer-recovery" && index + 1 < argc) {
       options.peer_recovery_configuration =
           std::filesystem::path(argv[++index]);
+    } else if (argument == "--peer-controller-user" && index + 1 < argc) {
+      options.peer_controller_users.emplace_back(argv[++index]);
     } else if (argument == "--nacm" && index + 1 < argc) {
       options.nacm_configuration = std::filesystem::path(argv[++index]);
     } else if (argument == "--recovery-user" && index + 1 < argc) {

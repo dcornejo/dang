@@ -80,7 +80,8 @@ std::string ManagedNacmXml(const yang::config::ConfigDocument& document) {
 std::optional<yang::config::ValidationFinding>
 EnglishConfigurationBackend::Initialize(
     const yang::config::RuntimeSchema& schema,
-    const yang::config::ConfigDocument& configuration) {
+    const yang::config::ConfigDocument& configuration,
+    yang::netconf::BackendTransactionContext context) {
   auto empty = yang::config::ParseDatastoreXml(
       schema,
       "<config xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\"/>");
@@ -95,9 +96,11 @@ EnglishConfigurationBackend::Initialize(
   const auto changes =
       yang::config::DiffConfigDocuments(schema, *empty.document, configuration);
   if (auto error =
-          PrepareReplacement(schema, *empty.document, configuration, changes))
+          PrepareReplacement(schema, *empty.document, configuration, changes,
+                             context))
     return error;
-  if (auto error = Replace(schema, *empty.document, configuration, changes)) {
+  if (auto error =
+          Replace(schema, *empty.document, configuration, changes, context)) {
     AbortPreparedReplacement();
     return error;
   }
@@ -112,43 +115,46 @@ EnglishConfigurationBackend::PrepareReplacement(
     const yang::config::RuntimeSchema& schema,
     const yang::config::ConfigDocument& before,
     const yang::config::ConfigDocument& after,
-    std::span<const yang::config::ChangeEvent> changes) {
+    std::span<const yang::config::ChangeEvent> changes,
+    yang::netconf::BackendTransactionContext context) {
   prepared_nacm_.reset();
   prepared_peer_groups_.clear();
   if (plugins_) {
     if (auto error = plugins_->Prepare(schema, before, after, changes))
       return error;
-    std::optional<yang::config::ValidationFinding> candidate_error;
-    std::vector<PluginPeerCandidate> candidates =
-        plugins_->PeerCandidates(&candidate_error);
-    if (candidate_error) {
-      plugins_->Abort();
-      return candidate_error;
-    }
-    ComposePeerTransactionResult composed =
-        ComposePeerTransactionPlan(schema, candidates);
-    if (composed.error) {
-      plugins_->Abort();
-      return composed.error;
-    }
-    for (const ComposedPeerTransactionGroup& group : composed.groups) {
-      for (const PeerPlanParticipant& participant : group.participants) {
-        const std::string identity =
-            PeerIdentity(group.group_id, participant.participant_id);
-        if (peer_targets_.contains(identity)) continue;
-        yang::config::ValidationFinding finding;
-        finding.code = yang::config::ValidationCode::kInvalidValue;
-        finding.state = yang::config::FindingState::kInvalid;
-        finding.message =
-            "peer transaction target " + identity + " is not configured";
-        finding.module_name = "dangd";
-        finding.netconf_error_tag = "operation-failed";
-        finding.netconf_error_app_tag = "peer-target-missing";
+    if (!context.externally_coordinated) {
+      std::optional<yang::config::ValidationFinding> candidate_error;
+      std::vector<PluginPeerCandidate> candidates =
+          plugins_->PeerCandidates(&candidate_error);
+      if (candidate_error) {
         plugins_->Abort();
-        return finding;
+        return candidate_error;
       }
+      ComposePeerTransactionResult composed =
+          ComposePeerTransactionPlan(schema, candidates);
+      if (composed.error) {
+        plugins_->Abort();
+        return composed.error;
+      }
+      for (const ComposedPeerTransactionGroup& group : composed.groups) {
+        for (const PeerPlanParticipant& participant : group.participants) {
+          const std::string identity =
+              PeerIdentity(group.group_id, participant.participant_id);
+          if (peer_targets_.contains(identity)) continue;
+          yang::config::ValidationFinding finding;
+          finding.code = yang::config::ValidationCode::kInvalidValue;
+          finding.state = yang::config::FindingState::kInvalid;
+          finding.message =
+              "peer transaction target " + identity + " is not configured";
+          finding.module_name = "dangd";
+          finding.netconf_error_tag = "operation-failed";
+          finding.netconf_error_app_tag = "peer-target-missing";
+          plugins_->Abort();
+          return finding;
+        }
+      }
+      prepared_peer_groups_ = std::move(composed.groups);
     }
-    prepared_peer_groups_ = std::move(composed.groups);
   }
   if (managed_nacm_) {
     const std::string xml = ManagedNacmXml(after);
@@ -186,7 +192,8 @@ EnglishConfigurationBackend::Replace(
     const yang::config::RuntimeSchema& schema,
     const yang::config::ConfigDocument&,
     const yang::config::ConfigDocument& after,
-    std::span<const yang::config::ChangeEvent> changes) {
+    std::span<const yang::config::ChangeEvent> changes,
+    yang::netconf::BackendTransactionContext) {
   if (plugins_) {
     PluginApplyResult applied = plugins_->Apply(schema, after);
     prepared_peer_groups_.clear();

@@ -27,16 +27,19 @@ class RecordingBackend final : public RunningConfigBackend {
       const config::RuntimeSchema&,
       const config::ConfigDocument& before,
       const config::ConfigDocument& after,
-      std::span<const config::ChangeEvent> observed) override {
+      std::span<const config::ChangeEvent> observed,
+      BackendTransactionContext context) override {
     before_xml = before.ToXml();
     working_xml = after.ToXml();
     changes.assign(observed.begin(), observed.end());
+    contexts.push_back(context);
     return std::nullopt;
   }
 
   std::string before_xml;
   std::string working_xml;
   std::vector<config::ChangeEvent> changes;
+  std::vector<BackendTransactionContext> contexts;
 };
 
 class RejectingBackend final : public RunningConfigBackend {
@@ -44,7 +47,8 @@ class RejectingBackend final : public RunningConfigBackend {
   std::optional<config::ValidationFinding> PrepareReplacement(
       const config::RuntimeSchema&, const config::ConfigDocument&,
       const config::ConfigDocument&,
-      std::span<const config::ChangeEvent>) override {
+      std::span<const config::ChangeEvent>,
+      BackendTransactionContext) override {
     config::ValidationFinding finding;
     finding.code = config::ValidationCode::kInvalidValue;
     finding.state = config::FindingState::kInvalid;
@@ -55,7 +59,8 @@ class RejectingBackend final : public RunningConfigBackend {
   std::optional<config::ValidationFinding> Replace(
       const config::RuntimeSchema&, const config::ConfigDocument&,
       const config::ConfigDocument&,
-      std::span<const config::ChangeEvent>) override {
+      std::span<const config::ChangeEvent>,
+      BackendTransactionContext) override {
     applied = true;
     return std::nullopt;
   }
@@ -200,6 +205,49 @@ TEST(NetconfDatastoreTest, PublishesExactCommitChangesToRunningBackend) {
   EXPECT_EQ(backend.changes.front().after, "new");
   EXPECT_NE(backend.before_xml.find(">old</"), std::string::npos);
   EXPECT_NE(backend.working_xml.find(">new</"), std::string::npos);
+}
+
+TEST(NetconfDatastoreTest,
+     PreservesExternalCoordinationAcrossConfirmedCommitRollback) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  RecordingBackend backend;
+  DatastoreManager stores(fixture->schema, fixture->initial, std::nullopt,
+                          &backend);
+  ASSERT_TRUE(stores.EditConfig(
+      {"peer", Datastore::kCandidate,
+       {HostnameEdit(fixture->schema, "temporary")}}).ok);
+  ConfirmedCommitOptions options;
+  options.persist = "secret";
+  const BackendTransactionContext external{
+      .externally_coordinated = true};
+  ASSERT_TRUE(stores.Commit("peer", options, {}, external).ok);
+  EXPECT_TRUE(stores.ExportPersistentState().rollback_externally_coordinated);
+  ASSERT_FALSE(backend.contexts.empty());
+  EXPECT_TRUE(backend.contexts.back().externally_coordinated);
+
+  PersistentDatastoreState expired = stores.ExportPersistentState();
+  expired.confirmation_expiry_unix_seconds =
+      std::chrono::duration_cast<std::chrono::seconds>(
+          std::chrono::system_clock::now().time_since_epoch()).count() - 1;
+  RecordingBackend restored_backend;
+  DatastoreManager restored(fixture->schema, fixture->initial, std::nullopt,
+                            &restored_backend);
+  ASSERT_TRUE(restored.RestorePersistentState(expired).ok);
+  ASSERT_FALSE(restored_backend.contexts.empty());
+  EXPECT_TRUE(restored_backend.contexts.back().externally_coordinated);
+  EXPECT_NE(restored.Read(Datastore::kRunning).ToXml().find(">old</"),
+            std::string::npos);
+
+  EXPECT_FALSE(stores.CancelCommit("peer", "secret").ok);
+  ASSERT_TRUE(stores.CancelCommit("peer", "secret", external).ok);
+  ASSERT_GE(backend.contexts.size(), 2U);
+  EXPECT_TRUE(backend.contexts.back().externally_coordinated);
+  EXPECT_FALSE(
+      stores.ExportPersistentState().rollback_externally_coordinated);
+  EXPECT_NE(stores.Read(Datastore::kRunning).ToXml().find(">old</"),
+            std::string::npos);
 }
 
 TEST(NetconfDatastoreTest, BackendPreflightFailureDoesNotPublishOrArmRollback) {

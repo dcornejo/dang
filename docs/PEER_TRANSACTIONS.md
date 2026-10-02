@@ -179,6 +179,20 @@ running configuration and hardware unchanged. Entries for other inactive peer
 groups are allowed. Plugins never receive endpoint or credential data and
 cannot use an undocumented dangd facility to discover it.
 
+Each participant explicitly configures the authenticated local username used
+by its remote coordinator with repeatable `--peer-controller-user USER`.
+Transactions from that identity still pass XML/schema validation, NACM,
+datastore locking, plugin prepare/validate/apply, and persistence; only generic
+peer-candidate discovery is suppressed because the remote dangd already owns
+that distributed decision. The decision is based on the transport-authenticated
+and locally mapped username, never an RPC element or attribute. Use a dedicated
+identity, authorize only the configuration it must manage in NACM, and protect
+its mutual-TLS private key. A peer-controller identity cannot also be a NACM
+recovery identity; canonical malformed or duplicate identities fail startup.
+Confirmed-commit rollback retains this context in the private
+datastore snapshot so cancellation, disconnect, timeout, and restart do not
+recursively start another peer transaction.
+
 `PeerTransactionController` now materializes one validated group into the
 complete generic execution. It resolves the exact core-owned targets before
 constructing any session, creates independent 256-bit persistent commit tokens
@@ -208,10 +222,6 @@ preflight already collects, validates, and resolves every composed participant
 to a core-owned authenticated endpoint, but pair-wide management still
 requires:
 
-- a core participant-commit context that prevents a controller-issued commit
-  from recursively creating another peer plan. This context must be explicitly
-  authenticated and authorized; accepting a caller-controlled bypass flag
-  would weaken pair-wide safety;
 - an expanded backend/persistence lifecycle that cannot permanently confirm
   peers before the controller's own datastore snapshot is durable, and cannot
   report the local snapshot durable while the group decision can still abort;

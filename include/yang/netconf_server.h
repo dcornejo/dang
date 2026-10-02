@@ -6,6 +6,7 @@
 
 #include <functional>
 #include <optional>
+#include <set>
 #include <span>
 #include <string>
 #include <string_view>
@@ -141,6 +142,16 @@ class NetconfServer {
   void SetRecoveryAuditSink(RecoveryAuditSink sink) {
     recovery_audit_sink_ = std::move(sink);
   }
+  /**
+   * Installs authenticated identities whose transactions are coordinated by a
+   * remote dangd. RPC payloads cannot opt into this host-owned trust decision.
+   */
+  void SetExternallyCoordinatedUsers(std::vector<std::string> users) {
+    externally_coordinated_users_.clear();
+    externally_coordinated_users_.insert(
+        std::make_move_iterator(users.begin()),
+        std::make_move_iterator(users.end()));
+  }
   /** Registers a transport session before its server hello is sent. */
   [[nodiscard]] bool RegisterSession(std::uint32_t session_id,
                                      std::string username);
@@ -165,6 +176,7 @@ class NetconfServer {
   OperationalDataProvider* operational_ = nullptr;
   OperationProvider* operations_ = nullptr;
   RecoveryAuditSink recovery_audit_sink_;
+  std::set<std::string, std::less<>> externally_coordinated_users_;
 };
 
 }  // namespace yang::netconf

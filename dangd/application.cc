@@ -1017,6 +1017,7 @@ Application::Application(yang::config::RuntimeSchema schema,
                          yang::netconf::NacmPolicy nacm, bool managed_nacm,
                          std::unique_ptr<PluginRuntime> plugins,
                          std::vector<PeerRecoveryTarget> peer_targets,
+                         std::vector<std::string> peer_controller_users,
                          std::string yang_library_xml,
                          std::vector<DangdOperationalData::ModelSource>
                              model_sources)
@@ -1034,6 +1035,7 @@ Application::Application(yang::config::RuntimeSchema schema,
               &operational_, plugins_.get()),
       state_file_(std::move(state_file)),
       snapshot_save_checkpoint_(std::move(snapshot_save_checkpoint)) {
+  server_.SetExternallyCoordinatedUsers(std::move(peer_controller_users));
   operational_.SetAppliedConfigurationProvider([this] {
     pugi::xml_document document;
     if (!yang::ParseUntrustedXml(backend_.WorkingXml(), &document).ok)
@@ -1327,12 +1329,27 @@ LoadResult Application::LoadWithStateFileLock(
       return result;
     }
   }
+  yang::netconf::NacmPolicy peer_controller_identities;
+  for (const std::string& peer_controller_user :
+       options.peer_controller_users) {
+    if (!peer_controller_identities.AddRecoveryUser(peer_controller_user)) {
+      result.errors.push_back(
+          "peer controller users must be unique canonical UTF-8 identities");
+      return result;
+    }
+    if (nacm.IsRecoveryUser(peer_controller_user)) {
+      result.errors.push_back(
+          "peer controller users must not also be NACM recovery users");
+      return result;
+    }
+  }
 
   result.application = std::unique_ptr<Application>(new Application(
       std::move(schema), std::move(*parsed.document), options.state_file,
       std::move(state_file_lock),
       options.snapshot_save_checkpoint, std::move(nacm), managed_nacm,
-      std::move(plugins), std::move(peer_targets), yang_library_xml,
+      std::move(plugins), std::move(peer_targets),
+      options.peer_controller_users, yang_library_xml,
       std::move(model_sources)));
   bool restored_snapshot = false;
   if (options.state_file && !options.configuration_override) {
@@ -1359,8 +1376,12 @@ LoadResult Application::LoadWithStateFileLock(
   if (result.application) {
     const auto running = result.application->datastores_.Read(
         yang::netconf::Datastore::kRunning);
+    const yang::netconf::BackendTransactionContext activation_context{
+        .externally_coordinated =
+            result.application->datastores_.ExportPersistentState()
+                .rollback_externally_coordinated};
     if (auto error = result.application->backend_.Initialize(
-            result.application->schema_, running)) {
+            result.application->schema_, running, activation_context)) {
       result.errors.push_back("cannot activate startup configuration: " +
                               error->message);
       result.application.reset();

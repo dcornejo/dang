@@ -94,6 +94,8 @@ struct ApplicationOptions {
   std::optional<std::filesystem::path> nacm_configuration;
   /** Host-authenticated users whose sessions bypass NACM for recovery. */
   std::vector<std::string> recovery_users;
+  /** Authenticated peer controllers whose local changes are already composed. */
+  std::vector<std::string> peer_controller_users;
   /** Enables the built-in dangd-only recovery identity. */
   bool default_superuser = true;
   /** POSIX shared libraries implementing a supported dangd plugin ABI. */
@@ -168,6 +170,7 @@ class Application {
               yang::netconf::NacmPolicy nacm, bool managed_nacm,
               std::unique_ptr<PluginRuntime> plugins,
               std::vector<PeerRecoveryTarget> peer_targets,
+              std::vector<std::string> peer_controller_users,
               std::string yang_library_xml,
               std::vector<DangdOperationalData::ModelSource> model_sources);
 

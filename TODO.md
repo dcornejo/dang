@@ -131,11 +131,13 @@ stays in this file with its remaining work rewritten precisely.
   The generic production controller now converts one group into authenticated
   TLS participants, routes readback to the retained plugin verifiers, creates
   cryptographically random persistent tokens and the crash-safe journal, and
-  invokes the tested state machine. Connect it only after adding an authorized
-  participant-commit context that suppresses recursive peer planning, a
-  backend/persistence lifecycle that orders the local durable snapshot with
-  the distributed decision, and atomic multi-group journaling or an explicit
-  fail-closed one-group limit. Add a total transaction deadline
+  invokes the tested state machine. A repeatable host-owned peer-controller
+  identity now marks authenticated participant operations as already
+  coordinated, suppresses only nested peer discovery, and durably preserves
+  that context for confirmed-commit rollback. Connect the controller only
+  after adding a backend/persistence lifecycle that orders the local durable
+  snapshot with the distributed decision, and atomic multi-group journaling or
+  an explicit fail-closed one-group limit. Add a total transaction deadline
   beyond the implemented per-I/O timeouts, fail-closed degraded-peer policy,
   NACM/observability, `dangctl` integration,
   and Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.

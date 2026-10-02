@@ -38,21 +38,24 @@ class EnglishConfigurationBackend final
   /** Activates one complete startup tree as a single plugin transaction. */
   [[nodiscard]] std::optional<yang::config::ValidationFinding> Initialize(
       const yang::config::RuntimeSchema& schema,
-      const yang::config::ConfigDocument& configuration);
+      const yang::config::ConfigDocument& configuration,
+      yang::netconf::BackendTransactionContext context = {});
 
   [[nodiscard]] std::optional<yang::config::ValidationFinding>
   PrepareReplacement(
       const yang::config::RuntimeSchema& schema,
       const yang::config::ConfigDocument& before,
       const yang::config::ConfigDocument& after,
-      std::span<const yang::config::ChangeEvent> changes) override;
+      std::span<const yang::config::ChangeEvent> changes,
+      yang::netconf::BackendTransactionContext context = {}) override;
 
   /** Records exact changes in English and atomically replaces the working copy. */
   [[nodiscard]] std::optional<yang::config::ValidationFinding> Replace(
       const yang::config::RuntimeSchema& schema,
       const yang::config::ConfigDocument& before,
       const yang::config::ConfigDocument& after,
-      std::span<const yang::config::ChangeEvent> changes) override;
+      std::span<const yang::config::ChangeEvent> changes,
+      yang::netconf::BackendTransactionContext context = {}) override;
   void AbortPreparedReplacement() noexcept override;
 
   /** Returns an immutable snapshot of the backend working configuration. */

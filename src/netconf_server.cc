@@ -992,6 +992,9 @@ RpcResponse NetconfServer::Process(std::string_view session,
 
 RpcResponse NetconfServer::Process(const RpcSessionContext& session,
                                    std::string_view rpc_xml) {
+  const BackendTransactionContext backend_context{
+      .externally_coordinated =
+          externally_coordinated_users_.contains(session.username)};
   const std::optional<NacmPolicy> policy_snapshot =
       nacm_ == nullptr ? std::nullopt : std::optional<NacmPolicy>(*nacm_);
   const NacmPolicy* const nacm =
@@ -1362,8 +1365,9 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
         EditConfigRequest request{
             std::string(session.datastore_owner), *target,
             {std::move(*edit.document)}, *default_operation,
-            TestOption::kTestThenSet, ErrorOption::kRollbackOnError, {}};
+            TestOption::kTestThenSet, ErrorOption::kRollbackOnError, {}, {}};
         request.authorize_change = authorize_change;
+        request.backend_context = backend_context;
         result = datastores_.EditConfig(request);
       }
     }
@@ -1550,8 +1554,9 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
         EditConfigRequest request{
             std::string(session.datastore_owner), *target,
             {std::move(*edit.document)},
-            *default_operation, *test_option, *error_option, {}};
+            *default_operation, *test_option, *error_option, {}, {}};
         request.authorize_change = authorize_change;
+        request.backend_context = backend_context;
         result = datastores_.EditConfig(request);
       }
     }
@@ -1568,7 +1573,7 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
     const pugi::xml_node source_node = Child(operation, "source");
     const auto source = ParseDatastore(source_node);
     const pugi::xml_node url = Child(source_node, "url");
-    if (source) result = datastores_.Validate(*source);
+    if (source) result = datastores_.Validate(*source, backend_context);
     else if (url && urls_ != nullptr && UrlAllowed(*urls_, url.text().as_string())) {
       UrlResult read = urls_->Read(url.text().as_string());
       result = read.config_xml
@@ -1596,7 +1601,8 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
       }
       if (result.errors.empty()) {
         result = datastores_.ContinueConfirmedCommit(
-            session.datastore_owner, persist_id.text().as_string(), timeout);
+            session.datastore_owner, persist_id.text().as_string(), timeout,
+            backend_context);
       }
     } else if (persist_id) {
       result = datastores_.ConfirmCommit(session.datastore_owner,
@@ -1619,17 +1625,18 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
         options.persist = persist.text().as_string();
       if (result.errors.empty())
         result = datastores_.Commit(session.datastore_owner, options,
-                                    authorize_change);
+                                    authorize_change, backend_context);
     } else {
       result = datastores_.Commit(session.datastore_owner, std::nullopt,
-                                  authorize_change);
+                                  authorize_change, backend_context);
     }
   } else if (name == "cancel-commit") {
     const pugi::xml_node persist_id = Child(operation, "persist-id");
     result = datastores_.CancelCommit(
         session.datastore_owner,
         persist_id ? std::optional<std::string_view>(persist_id.text().as_string())
-                   : std::nullopt);
+                   : std::nullopt,
+        backend_context);
   } else if (name == "copy-config") {
     const pugi::xml_node source_node = Child(operation, "source");
     const auto source = ParseDatastore(source_node);
@@ -1697,7 +1704,7 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
       } else if (*source == Datastore::kRunning &&
                  *target == Datastore::kStartup) {
         result = datastores_.CopyConfig(session.datastore_owner, *source,
-                                        *target);
+                                        *target, {}, backend_context);
       } else {
         const std::string source_xml = nacm == nullptr
             ? datastores_.Read(*source).ToXml()
@@ -1711,7 +1718,7 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
         } else {
           result = datastores_.CopyConfig(
               session.datastore_owner, *parsed_source.document, *target,
-              authorize_change);
+              authorize_change, backend_context);
         }
       }
     } else {
@@ -1755,7 +1762,7 @@ RpcResponse NetconfServer::Process(const RpcSessionContext& session,
         } else {
           result = datastores_.CopyConfig(
               session.datastore_owner, *parsed_source.document, *target,
-              authorize_change);
+              authorize_change, backend_context);
         }
       }
     }

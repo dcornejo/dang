@@ -38,7 +38,9 @@ nlohmann::json ToJson(const PersistentDatastoreState& state) {
           {"confirmation-expiry-unix-seconds",
            OptionalJson(state.confirmation_expiry_unix_seconds)},
           {"confirming-session", OptionalJson(state.confirming_session)},
-          {"persist-token", OptionalJson(state.persist_token)}};
+          {"persist-token", OptionalJson(state.persist_token)},
+          {"rollback-externally-coordinated",
+           state.rollback_externally_coordinated}};
 }
 
 std::optional<PersistentDatastoreState> FromJson(const nlohmann::json& json) {
@@ -62,6 +64,10 @@ std::optional<PersistentDatastoreState> FromJson(const nlohmann::json& json) {
       state.confirming_session = json.at("confirming-session").get<std::string>();
     if (json.contains("persist-token") && !json.at("persist-token").is_null())
       state.persist_token = json.at("persist-token").get<std::string>();
+    if (json.contains("rollback-externally-coordinated")) {
+      state.rollback_externally_coordinated =
+          json.at("rollback-externally-coordinated").get<bool>();
+    }
     return state;
   } catch (const nlohmann::json::exception&) {
     return std::nullopt;

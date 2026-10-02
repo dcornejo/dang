@@ -1770,6 +1770,90 @@ TEST(DangdApplicationTest,
                                       "provider.release"}));
 }
 
+TEST(DangdApplicationTest,
+     AuthenticatedPeerControllerSuppressesOnlyNestedPeerDiscovery) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_PROVIDER_PLUGIN_PATH};
+  options.peer_controller_users = {"peer"};
+  options.state_file = inputs.Path("peer-controller-state.json");
+  options.nacm_configuration = inputs.Write("peer-nacm.xml", R"xml(
+    <nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+      <read-default>permit</read-default><write-default>deny</write-default>
+      <exec-default>deny</exec-default>
+      <groups><group><name>peer-test</name><user-name>peer</user-name>
+        <user-name>bob</user-name></group></groups>
+      <rule-list><name>peer-test</name><group>peer-test</group>
+        <rule><name>netconf</name><module-name>ietf-netconf</module-name>
+          <rpc-name>*</rpc-name><access-operations>exec</access-operations>
+          <action>permit</action></rule>
+        <rule><name>provider</name><module-name>dangd-test-provider</module-name>
+          <access-operations>*</access-operations><action>permit</action></rule>
+      </rule-list>
+    </nacm>)xml");
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
+  test_plugin::ResetTrace();
+
+  ASSERT_NE(SetProviderMode(*loaded.application, "peer-plan-valid")
+                .xml.find("<ok/>"),
+            std::string::npos);
+  yang::netconf::RpcSessionContext ordinary{2, "bob", "bob", {}};
+  const auto ordinary_validate = loaded.application->server().Process(
+      ordinary,
+      R"xml(<rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+                  message-id="ordinary"><validate><source><candidate/>
+                  </source></validate></rpc>)xml");
+  EXPECT_NE(ordinary_validate.xml.find("peer-target-missing"),
+            std::string::npos)
+      << ordinary_validate.xml;
+
+  yang::netconf::RpcSessionContext controller{3, "peer", "peer", {}};
+  const auto controller_validate = loaded.application->server().Process(
+      controller,
+      R"xml(<rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+                  message-id="controller"><validate><source><candidate/>
+                  </source></validate></rpc>)xml");
+  EXPECT_NE(controller_validate.xml.find("<ok/>"), std::string::npos)
+      << controller_validate.xml;
+  const auto committed = loaded.application->server().Process(
+      controller,
+      R"xml(<rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+                  message-id="commit"><commit><confirmed/>
+                  <persist>peer-token</persist></commit></rpc>)xml");
+  EXPECT_NE(committed.xml.find("<ok/>"), std::string::npos) << committed.xml;
+  EXPECT_NE(test_plugin::Active("provider").find("peer-plan-valid"),
+            std::string::npos);
+
+  loaded.application.reset();
+  auto restored = Application::Load(options);
+  EXPECT_NE(restored.application, nullptr)
+      << testing::PrintToString(restored.errors);
+  EXPECT_NE(test_plugin::Active("provider").find("peer-plan-valid"),
+            std::string::npos);
+}
+
+TEST(DangdApplicationTest, RejectsInvalidPeerControllerIdentities) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.peer_controller_users = {" peer"};
+  auto loaded = Application::Load(options);
+  EXPECT_EQ(loaded.application, nullptr);
+  ASSERT_FALSE(loaded.errors.empty());
+  EXPECT_NE(loaded.errors.front().find("canonical UTF-8"), std::string::npos);
+}
+
+TEST(DangdApplicationTest, SeparatesPeerControllerAndRecoveryIdentities) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.peer_controller_users = {"alice"};
+  auto loaded = Application::Load(options);
+  EXPECT_EQ(loaded.application, nullptr);
+  ASSERT_FALSE(loaded.errors.empty());
+  EXPECT_NE(loaded.errors.front().find("must not also be"), std::string::npos);
+}
+
 TEST(DangdApplicationTest, DispatchesPluginOwnedSchemaRpc) {
   TemporaryInputs inputs;
   auto options = Options(inputs);
