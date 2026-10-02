@@ -13,13 +13,24 @@
 
 namespace dangd {
 
-/** Stable authenticated endpoint for one journaled peer identity. */
+/** Stable authenticated endpoint for one peer-group participant. */
 struct PeerRecoveryTarget {
-  /** Exact participant identity stored in the peer transaction journal. */
-  std::string id;
+  /** Exact peer group identity supplied through the plugin contract. */
+  std::string group_id;
+  /** Exact participant identity within group_id. */
+  std::string participant_id;
   /** Mutual-TLS endpoint and client credentials used during recovery. */
   TlsClientOptions transport;
 };
+
+/**
+ * Returns the unambiguous host-owned identity used by coordination and journals.
+ *
+ * Both components have already been constrained by the public peer-plan
+ * contract to exclude '/', making this encoding stable and reversible.
+ */
+[[nodiscard]] std::string PeerRecoveryTargetId(
+    const PeerRecoveryTarget& target);
 
 /**
  * Loads a private, bounded, versioned JSON peer-recovery configuration.

@@ -360,10 +360,11 @@ Stable recovery targets are supplied in a separate private JSON file:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "peers": [
     {
-      "id": "kea-primary",
+      "group-id": "kea-ha-0123456789abcdef",
+      "participant-id": "kea-primary",
       "host": "kea-primary.example.net",
       "port": 6513,
       "certificate": "recovery-client.pem",
@@ -372,7 +373,8 @@ Stable recovery targets are supplied in a separate private JSON file:
       "timeout-ms": 10000
     },
     {
-      "id": "kea-standby",
+      "group-id": "kea-ha-0123456789abcdef",
+      "participant-id": "kea-standby",
       "host": "kea-standby.example.net",
       "port": 6513,
       "certificate": "recovery-client.pem",
@@ -384,10 +386,16 @@ Stable recovery targets are supplied in a separate private JSON file:
 ```
 
 Install it mode 0600, owned by the dangd service identity. Relative credential
-paths are resolved from the JSON file's directory. IDs must exactly match the
-journal participants; hosts are verified against the peer certificate. Unknown
-fields, duplicate IDs, invalid ports, and timeouts outside 1 through 600000
-milliseconds fail closed. The state, journal, and recovery files must be three
+paths are resolved from the JSON file's directory. Each `(group-id,
+participant-id)` pair must exactly match the identity supplied through the
+generic plugin peer-plan contract. Dangd converts that pair to the unambiguous
+journal identity `group-id/participant-id`; the slash cannot occur inside
+either contract identifier. Participant names may repeat in different groups,
+but duplicate pairs fail closed. Hosts are verified against the peer
+certificate. Unknown fields, unsafe identities, invalid ports, and timeouts
+outside 1 through 600000 milliseconds also fail closed. Version 1 files that
+identified only a participant are rejected because they cannot safely describe
+more than one peer group. The state, journal, and recovery files must be three
 different paths.
 
 ```sh

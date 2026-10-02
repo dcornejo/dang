@@ -2447,8 +2447,9 @@ TEST(DangdApplicationTest, ValidatesStablePeerRecoveryTargetMapping) {
   auto options = Options(inputs);
   options.peer_recovery_configuration = inputs.Write(
       "peer-recovery.json",
-      R"json({"version":1,"peers":[
-        {"id":"other","host":"other.example","port":6513,
+      R"json({"version":2,"peers":[
+        {"group-id":"kea-ha-a","participant-id":"other",
+         "host":"other.example","port":6513,
          "certificate":"client.pem","private-key":"client.key",
          "trust-anchor":"ca.pem"}
       ]})json");
@@ -2473,10 +2474,10 @@ TEST(DangdApplicationTest, ValidatesStablePeerRecoveryTargetMapping) {
   PeerJournalState state{
       .transaction_id = "change-43",
       .proposal_digest = "sha256:not-logged",
-      .participants = {{.id = "primary",
+      .participants = {{.id = "kea-ha-a/primary",
                         .role = PeerTransactionRole::kPrimary,
                         .persistent_commit_id = "primary-token"},
-                       {.id = "standby",
+                       {.id = "kea-ha-a/standby",
                         .role = PeerTransactionRole::kStandby,
                         .persistent_commit_id = "standby-token"}},
   };
@@ -2485,14 +2486,15 @@ TEST(DangdApplicationTest, ValidatesStablePeerRecoveryTargetMapping) {
       *options.peer_transaction_journal, std::move(state), &journal_error);
   ASSERT_TRUE(journal) << journal_error;
   ASSERT_EQ(journal->Callbacks()
-                .record_commit_decision({"primary", "standby"})
+                .record_commit_decision(
+                    {"kea-ha-a/primary", "kea-ha-a/standby"})
                 .status,
             PeerTransactionDecisionStatus::kCommitted);
 
   auto missing = Application::Load(options);
   EXPECT_EQ(missing.application, nullptr);
   ASSERT_EQ(missing.errors.size(), 1u);
-  EXPECT_NE(missing.errors.front().find("no target for primary"),
+  EXPECT_NE(missing.errors.front().find("no target for kea-ha-a/primary"),
             std::string::npos);
   EXPECT_EQ(missing.errors.front().find("primary-token"), std::string::npos);
 }

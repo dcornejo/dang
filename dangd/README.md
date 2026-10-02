@@ -301,7 +301,8 @@ contains an unsafe, malformed, or unresolved journal, startup and `SIGHUP`
 reload fail closed before accepting the replacement application. Diagnostics
 name the transaction and pending peers but do not expose proposal digests or
 persistent confirmed-commit tokens. With a valid private `--peer-recovery FILE`
-mapping, startup and reload automatically confirm pending peers, durably record
+version 2 mapping keyed by the exact generic peer group and participant,
+startup and reload automatically confirm pending peers, durably record
 each acknowledgement, and continue only after removing the completed journal.
 Without a complete mapping or while any peer remains unavailable, startup stays
 fail-closed. These options recover an existing durable decision; they do not

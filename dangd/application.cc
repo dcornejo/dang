@@ -198,7 +198,7 @@ bool RecoverOrRejectPendingPeerTransaction(const ApplicationOptions& options,
   std::map<std::string, TlsClientOptions> configured;
   if (recovery_targets) {
     for (const PeerRecoveryTarget& target : *recovery_targets)
-      configured.emplace(target.id, target.transport);
+      configured.emplace(PeerRecoveryTargetId(target), target.transport);
     for (const PeerJournalParticipant& participant :
          journal->state().participants) {
       if (!configured.contains(participant.id)) {

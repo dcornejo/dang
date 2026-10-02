@@ -432,25 +432,28 @@ TEST(PeerTransactionTlsTest,
   PeerJournalState state{
       .transaction_id = "automatic-recovery",
       .proposal_digest = "sha256:test",
-      .participants = {{.id = "primary",
+      .participants = {{.id = "kea-ha-a/primary",
                         .role = PeerTransactionRole::kPrimary,
                         .persistent_commit_id = "primary-token"},
-                       {.id = "standby",
+                       {.id = "kea-ha-a/standby",
                         .role = PeerTransactionRole::kStandby,
                         .persistent_commit_id = "standby-token"}}};
   auto journal = PeerTransactionFileJournal::Create(journal_path,
                                                     std::move(state), &error);
   ASSERT_TRUE(journal) << error;
   ASSERT_EQ(journal->Callbacks()
-                .record_commit_decision({"primary", "standby"})
+                .record_commit_decision(
+                    {"kea-ha-a/primary", "kea-ha-a/standby"})
                 .status,
             PeerTransactionDecisionStatus::kCommitted);
   journal.reset();
 
   const std::filesystem::path recovery_path = temporary / "recovery.json";
-  const auto target_json = [&](std::string id, std::uint16_t port) {
+  const auto target_json = [&](std::string participant_id,
+                               std::uint16_t port) {
     return nlohmann::json{
-        {"id", std::move(id)},
+        {"group-id", "kea-ha-a"},
+        {"participant-id", std::move(participant_id)},
         {"host", "localhost"},
         {"port", port},
         {"certificate", (certificates / "alice-cert.pem").string()},
@@ -459,7 +462,7 @@ TEST(PeerTransactionTlsTest,
   };
   std::ofstream recovery_output(recovery_path, std::ios::binary);
   recovery_output << nlohmann::json{
-      {"version", 1},
+      {"version", 2},
       {"peers", nlohmann::json::array({target_json("primary", primary_port),
                                        target_json("standby", standby_port)})}};
   recovery_output.close();

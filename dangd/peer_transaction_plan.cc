@@ -10,6 +10,7 @@
 #include <sstream>
 #include <utility>
 
+#include "dangd/peer_identity.h"
 #include "yang/xml_security.h"
 
 namespace dangd {
@@ -26,15 +27,6 @@ yang::config::ValidationFinding Failure(std::string provider,
   finding.netconf_error_tag = "operation-failed";
   finding.netconf_error_app_tag = "peer-plan-invalid";
   return finding;
-}
-
-bool ValidId(std::string_view value) {
-  if (value.empty() || value.size() > 128) return false;
-  return std::ranges::all_of(value, [](unsigned char byte) {
-    return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') ||
-           (byte >= '0' && byte <= '9') || byte == '.' || byte == '_' ||
-           byte == '-';
-  });
 }
 
 struct ParticipantBuilder {
@@ -61,8 +53,8 @@ ComposePeerTransactionResult ComposePeerTransactionPlan(
   std::map<ParticipantKey, ParticipantBuilder> participants;
   std::map<std::string, std::set<std::string>, std::less<>> group_modules;
   for (const PluginPeerCandidate& contribution : contributions) {
-    if (!ValidId(contribution.group_id) ||
-        !ValidId(contribution.participant_id) ||
+    if (!IsValidPeerIdentityComponent(contribution.group_id) ||
+        !IsValidPeerIdentityComponent(contribution.participant_id) ||
         contribution.provider.empty() || contribution.module_name.empty()) {
       result.error = Failure(contribution.provider,
                              "peer plan contains an invalid stable identity");

@@ -13,10 +13,12 @@
 #include <set>
 #include <string_view>
 
+#include "dangd/peer_identity.h"
+
 namespace dangd {
 namespace {
 
-constexpr int kConfigurationVersion = 1;
+constexpr int kConfigurationVersion = 2;
 constexpr std::size_t kMaximumConfigurationBytes = 1024 * 1024;
 constexpr std::size_t kMaximumPathBytes = 4096;
 constexpr std::uint32_t kMaximumTimeoutMilliseconds = 10 * 60 * 1000;
@@ -115,27 +117,35 @@ std::optional<std::vector<PeerRecoveryTarget>> LoadPeerRecoveryConfig(
     }
 
     static const std::set<std::string_view> peer_keys = {
-        "id",          "host",         "port",      "certificate",
-        "private-key", "trust-anchor", "timeout-ms"};
+        "group-id",    "participant-id", "host",         "port",
+        "certificate", "private-key",    "trust-anchor", "timeout-ms"};
     std::set<std::string> identities;
     std::vector<PeerRecoveryTarget> targets;
     targets.reserve(root["peers"].size());
     const std::filesystem::path directory = path.parent_path();
     for (const nlohmann::json& peer : root["peers"]) {
-      if (!HasOnlyKeys(peer, peer_keys) || !peer.contains("id") ||
-          !peer["id"].is_string() || !peer.contains("host") ||
+      if (!HasOnlyKeys(peer, peer_keys) || !peer.contains("group-id") ||
+          !peer["group-id"].is_string() ||
+          !peer.contains("participant-id") ||
+          !peer["participant-id"].is_string() || !peer.contains("host") ||
           !peer["host"].is_string() || !peer.contains("port") ||
           !peer["port"].is_number_unsigned()) {
         *error = "peer recovery target has invalid fields";
         return std::nullopt;
       }
-      const std::string id = peer["id"].get<std::string>();
+      const std::string group_id = peer["group-id"].get<std::string>();
+      const std::string participant_id =
+          peer["participant-id"].get<std::string>();
       const std::string host = peer["host"].get<std::string>();
       const std::uint64_t port = peer["port"].get<std::uint64_t>();
       const auto certificate = CredentialPath(peer, "certificate", directory);
       const auto private_key = CredentialPath(peer, "private-key", directory);
       const auto trust_anchor = CredentialPath(peer, "trust-anchor", directory);
-      if (!IsBoundedText(id, 256) || !identities.insert(id).second ||
+      const PeerRecoveryTarget identity{.group_id = group_id,
+                                        .participant_id = participant_id};
+      if (!IsValidPeerIdentityComponent(group_id) ||
+          !IsValidPeerIdentityComponent(participant_id) ||
+          !identities.insert(PeerRecoveryTargetId(identity)).second ||
           !IsHost(host) || port == 0 || port > UINT16_MAX || !certificate ||
           !private_key || !trust_anchor) {
         *error =
@@ -156,7 +166,8 @@ std::optional<std::vector<PeerRecoveryTarget>> LoadPeerRecoveryConfig(
         }
         timeout = static_cast<std::uint32_t>(parsed);
       }
-      targets.push_back({.id = id,
+      targets.push_back({.group_id = group_id,
+                         .participant_id = participant_id,
                          .transport = {.host = host,
                                        .port = static_cast<std::uint16_t>(port),
                                        .certificate = *certificate,
@@ -169,6 +180,10 @@ std::optional<std::vector<PeerRecoveryTarget>> LoadPeerRecoveryConfig(
     *error = "peer recovery configuration is not valid JSON";
     return std::nullopt;
   }
+}
+
+std::string PeerRecoveryTargetId(const PeerRecoveryTarget& target) {
+  return target.group_id + "/" + target.participant_id;
 }
 
 }  // namespace dangd

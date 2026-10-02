@@ -106,8 +106,10 @@ stays in this file with its remaining work rewritten precisely.
   without contradicting that decision. A bounded programmatic mutual-TLS
   client now performs authenticated persistent-commit confirmation with
   hostname, capability, namespace, and reply-correlation checks. A private
-  versioned `--peer-recovery` file now validates stable participant-to-endpoint
-  and trust mappings at startup and reload. Startup and reload now use those
+  versioned `--peer-recovery` file now validates exact generic
+  group-and-participant-to-endpoint and trust mappings at startup and reload,
+  with unambiguous host-owned journal identities across multiple groups.
+  Startup and reload now use those
   mappings to resume durable pending confirmations and proceed only after the
   journal is complete. The stateful mutual-TLS participant now maps prepare to
   candidate lock, complete replacement, and validation; maps apply to a

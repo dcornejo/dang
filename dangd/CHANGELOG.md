@@ -55,7 +55,10 @@
   metacharacters.
 
 - Added `--peer-recovery FILE` and a private, versioned JSON configuration for
-  stable journal-participant-to-NETCONF/TLS endpoint mappings. Startup and
+  stable peer-group-and-participant-to-NETCONF/TLS endpoint mappings. Version
+  2 uses the exact two-part public-contract identity and a host-owned canonical
+  journal key, so participant names may safely repeat in different groups.
+  Participant-only version 1 mappings are rejected as ambiguous. Startup and
   reload reject non-owned, non-0600, symlinked, oversized, malformed,
   duplicate, unknown-field, or out-of-range configurations and require every
   journal participant to have an exact target. Relative certificate, key, and

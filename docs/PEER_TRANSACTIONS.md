@@ -159,12 +159,18 @@ separate live failure-path test proves confirmed-commit cancellation restores
 the previous running configuration and that repeated cancellation is harmless.
 
 `--peer-recovery FILE` supplies the stable target mapping as a private,
-versioned JSON document. Each entry binds an exact journal participant ID to a
-host, port, client certificate, private key, trust anchor, and optional per-I/O
-timeout. Relative credential paths resolve against the configuration file.
+versioned JSON document. Version 2 binds the exact `(group-id,
+participant-id)` pair from the public peer-plan contract to a host, port,
+client certificate, private key, trust anchor, and optional per-I/O timeout.
+Dangd owns the canonical `group-id/participant-id` coordinator and journal
+identity; neither plugin-specific topology nor endpoint knowledge enters the
+daemon. Relative credential paths resolve against the configuration file.
 Startup and reload validate the complete file even when the journal is absent,
-and reject an unresolved journal if any participant lacks a target. The state,
-journal, and recovery configuration paths must all differ.
+reject duplicate pairs, allow the same participant name in different groups,
+and reject an unresolved journal if any paired identity lacks a target. Version
+1 participant-only mappings are deliberately unsupported because they become
+ambiguous when several peer groups exist. The state, journal, and recovery
+configuration paths must all differ.
 
 When both files are valid, startup and staged reload automatically resume the
 durable COMMIT decision. Already acknowledged peers are skipped. Each pending
