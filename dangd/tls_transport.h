@@ -4,6 +4,7 @@
 #ifndef DANGD_TLS_TRANSPORT_H_
 #define DANGD_TLS_TRANSPORT_H_
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -79,6 +80,9 @@ class TlsRpcSession {
   /** Sends one safe RPC and returns its validated, correlated reply. */
   [[nodiscard]] std::optional<std::string> Execute(std::string_view rpc,
                                                    std::string* error);
+  /** Rebounds subsequent TLS reads and writes on an established session. */
+  [[nodiscard]] bool SetTimeout(std::chrono::milliseconds timeout,
+                                std::string* error);
   /** Returns the validated server hello retained for the session lifetime. */
   [[nodiscard]] const std::string& server_hello() const noexcept;
   /** Closes the TLS transport. Calling this repeatedly is harmless. */

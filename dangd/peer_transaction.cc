@@ -145,6 +145,13 @@ PeerTransactionPrepareResult PeerTransactionCoordinator::Prepare(
   std::vector<std::size_t> applied;
 
   for (const std::size_t index : prepare_order) {
+    if (DeadlineExpired()) {
+      result.message = "peer transaction deadline expired before preparing " +
+                       participants[index].id;
+      ReleasePrepared(participants, prepared);
+      CompleteAbort(journal, &result);
+      return {.result = std::move(result)};
+    }
     // Preparation can fail after acquiring a remote lock. Include the
     // attempted participant in release cleanup even when its reply is an
     // error; release is required to be idempotent.
@@ -156,9 +163,25 @@ PeerTransactionPrepareResult PeerTransactionCoordinator::Prepare(
       return {.result = std::move(result)};
     }
     result.prepared.push_back(participants[index].id);
+    if (DeadlineExpired()) {
+      result.message = "peer transaction deadline expired while preparing " +
+                       participants[index].id;
+      ReleasePrepared(participants, prepared);
+      CompleteAbort(journal, &result);
+      return {.result = std::move(result)};
+    }
   }
 
   for (const std::size_t index : apply_order) {
+    if (DeadlineExpired()) {
+      result.message =
+          "peer transaction deadline expired before confirmed apply to " +
+          participants[index].id;
+      CancelApplied(participants, applied, &result);
+      ReleasePrepared(participants, prepared);
+      CompleteAbort(journal, &result);
+      return {.result = std::move(result)};
+    }
     // An error can be a lost reply after the confirmed commit took effect.
     // Cancel the attempted peer as well as earlier peers while the durable
     // group decision is still abort.
@@ -172,12 +195,39 @@ PeerTransactionPrepareResult PeerTransactionCoordinator::Prepare(
       return {.result = std::move(result)};
     }
     result.applied.push_back(participants[index].id);
+    if (DeadlineExpired()) {
+      result.message =
+          "peer transaction deadline expired during confirmed apply to " +
+          participants[index].id;
+      CancelApplied(participants, applied, &result);
+      ReleasePrepared(participants, prepared);
+      CompleteAbort(journal, &result);
+      return {.result = std::move(result)};
+    }
   }
 
   for (const std::size_t index : apply_order) {
+    if (DeadlineExpired()) {
+      result.message =
+          "peer transaction deadline expired before verification of " +
+          participants[index].id;
+      CancelApplied(participants, applied, &result);
+      ReleasePrepared(participants, prepared);
+      CompleteAbort(journal, &result);
+      return {.result = std::move(result)};
+    }
     if (const auto error = participants[index].verify()) {
       result.message = participants[index].id +
                        ": post-apply verification failed: " + *error;
+      CancelApplied(participants, applied, &result);
+      ReleasePrepared(participants, prepared);
+      CompleteAbort(journal, &result);
+      return {.result = std::move(result)};
+    }
+    if (DeadlineExpired()) {
+      result.message =
+          "peer transaction deadline expired during verification of " +
+          participants[index].id;
       CancelApplied(participants, applied, &result);
       ReleasePrepared(participants, prepared);
       CompleteAbort(journal, &result);
@@ -188,7 +238,8 @@ PeerTransactionPrepareResult PeerTransactionCoordinator::Prepare(
   result.disposition = PeerTransactionDisposition::kPrepared;
   PeerPreparedTransaction transaction{.participants = std::move(participants),
                                       .journal = std::move(journal),
-                                      .progress = result};
+                                      .progress = result,
+                                      .deadline_expired = deadline_expired_};
   return {.result = std::move(result), .transaction = std::move(transaction)};
 }
 
@@ -202,6 +253,25 @@ PeerTransactionResult PeerTransactionCoordinator::CommitPrepared(
   const std::vector<std::size_t> apply_order = ApplyOrder(participants);
   const std::vector<std::string> participant_ids =
       ParticipantIds(participants, prepare_order);
+  const auto deadline_expired = [&transaction] {
+    return transaction.deadline_expired && transaction.deadline_expired();
+  };
+
+  if (deadline_expired()) {
+    result.message =
+        "peer transaction deadline expired before the commit decision";
+    if (failure_policy == PeerDecisionFailurePolicy::kRetainPrepared) {
+      result.disposition = PeerTransactionDisposition::kCommitPending;
+      result.pending_confirmations = participant_ids;
+      ReleasePrepared(participants, prepare_order);
+      return result;
+    }
+    result.disposition = PeerTransactionDisposition::kAborted;
+    CancelApplied(participants, apply_order, &result);
+    ReleasePrepared(participants, prepare_order);
+    CompleteAbort(transaction.journal, &result);
+    return result;
+  }
 
   const PeerTransactionDecisionResult decision =
       transaction.journal.record_commit_decision(participant_ids);
@@ -235,7 +305,19 @@ PeerTransactionResult PeerTransactionCoordinator::CommitPrepared(
   }
 
   result.disposition = PeerTransactionDisposition::kCommitPending;
-  for (const std::size_t index : apply_order) {
+  for (std::size_t position = 0; position < apply_order.size(); ++position) {
+    const std::size_t index = apply_order[position];
+    if (deadline_expired()) {
+      if (result.message.empty()) {
+        result.message =
+            "peer transaction deadline expired during commit confirmation";
+      }
+      for (; position < apply_order.size(); ++position) {
+        result.pending_confirmations.push_back(
+            participants[apply_order[position]].id);
+      }
+      break;
+    }
     if (const auto error = participants[index].confirm()) {
       result.pending_confirmations.push_back(participants[index].id);
       if (result.message.empty()) {

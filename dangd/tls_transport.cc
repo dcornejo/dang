@@ -798,6 +798,36 @@ std::optional<std::string> TlsRpcSession::Execute(std::string_view rpc,
   return reply;
 }
 
+bool TlsRpcSession::SetTimeout(std::chrono::milliseconds timeout,
+                               std::string* error) {
+  if (error == nullptr) return false;
+  error->clear();
+  if (!implementation_ || implementation_->socket_fd < 0) {
+    *error = "NETCONF TLS session is closed";
+    return false;
+  }
+  if (timeout <= std::chrono::milliseconds::zero()) {
+    *error = "TLS client timeout must be positive";
+    return false;
+  }
+  const auto bounded = std::min<std::int64_t>(
+      timeout.count(), std::numeric_limits<std::uint32_t>::max());
+  const auto milliseconds = static_cast<std::uint32_t>(bounded);
+  const timeval socket_timeout{
+      .tv_sec = static_cast<time_t>(milliseconds / 1000),
+      .tv_usec =
+          static_cast<suseconds_t>((milliseconds % 1000) * 1000)};
+  if (setsockopt(implementation_->socket_fd, SOL_SOCKET, SO_RCVTIMEO,
+                 &socket_timeout, sizeof(socket_timeout)) != 0 ||
+      setsockopt(implementation_->socket_fd, SOL_SOCKET, SO_SNDTIMEO,
+                 &socket_timeout, sizeof(socket_timeout)) != 0) {
+    *error = std::string("cannot update TLS client timeout: ") +
+             std::strerror(errno);
+    return false;
+  }
+  return true;
+}
+
 const std::string& TlsRpcSession::server_hello() const noexcept {
   static const std::string empty;
   return implementation_ ? implementation_->server_hello : empty;

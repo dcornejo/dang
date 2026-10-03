@@ -297,34 +297,31 @@ restore procedure is documented in the user guide. Before an application can
 accept a session, dangd activates the complete initial or restored running tree
 through the affected plugins as one dependency-ordered transaction.
 
-`--peer-journal FILE` reserves a separate private recovery path for future
+`--peer-journal FILE` reserves a separate private recovery path for generic
 pair-wide transactions. Version-2 journals durably record PREPARED before any
-network mutation and transition to COMMIT before confirmation. If the path is
-absent, startup continues. If it contains an unsafe, malformed, or unresolved
-journal, startup and `SIGHUP` reload fail closed before accepting the
-replacement application. Diagnostics name the transaction, recovery direction,
-and pending peers but do not expose proposal digests or persistent
-confirmed-commit tokens. With a valid private `--peer-recovery FILE` version 2
-mapping keyed by the exact generic peer group and participant, startup and
-reload automatically cancel every PREPARED participant or confirm pending
-COMMIT peers, durably record each acknowledgement, and continue only after
-removing the completed journal.
-Without a complete mapping or while any peer remains unavailable, startup stays
-fail-closed. These options recover an existing durable decision; they do not
-yet enable initiating pair-wide commits. Normal commit preflight also rejects a
-composed plugin plan unless every exact group/participant pair has a mapped
-core-owned endpoint, before any plugin or peer mutation. The generic controller
-can now bind one validated group to authenticated TLS participants, plugin
-verifiers, cryptographic persistent tokens, and the crash-safe journal. It is
-not invoked by NETCONF. The generic backend contract now finalizes a
-replacement only after local snapshot durability, but the distributed decision
-still needs a crash-recoverable pending marker and multi-group atomicity before
-that controller can safely use the phase. Participant servers can now
-designate dedicated, transport-authenticated controller identities with
-repeatable `--peer-controller-user USER`; their local changes retain
-validation, NACM, plugin execution, rollback, and persistence while suppressing
-recursive peer discovery. See the user guide for the security expectations and
-versioned JSON format.
+network mutation and transition to COMMIT before confirmation. A private
+`--peer-recovery FILE` version-2 mapping binds exact generic group/participant
+identities to authenticated TLS endpoints; plugins never receive endpoints or
+credentials. Normal NETCONF commit preparation composes the affected plugins'
+peer plans, resolves every endpoint, prepares and verifies persistent confirmed
+commits, and retains them while local plugins and the marked datastore snapshot
+are applied. Only after that snapshot is durable does dangd select COMMIT and
+confirm the peers. Local apply or persistence failure cancels remote work.
+
+The shared forward-progress deadline defaults to 30000 milliseconds and is
+configurable with `--peer-transaction-timeout-ms`; it must be shorter than
+every proposed confirmed-commit rollback timeout. Before the durable decision,
+expiry causes rollback. After local durability or COMMIT, dangd retains the
+authoritative journal and datastore marker so startup can finish the same
+decision. Cleanup and recovery are not cut short by an expired forward
+deadline. Startup and `SIGHUP` reload fail closed on malformed, inconsistent,
+or unresolved recovery state and continue only after completing cancellation
+or confirmation. Participant servers can designate dedicated authenticated
+controllers with repeatable `--peer-controller-user USER`; all ordinary
+validation, NACM, plugin, rollback, and persistence protections remain while
+recursive peer discovery is suppressed. Transactions affecting several peer
+groups are rejected before mutation until atomic multi-group journaling is
+designed. See the user guide for configuration and security expectations.
 
 Application RPCs and YANG 1.1 actions are resolved against the compiled schema
 before dispatch. `dangd` applies operation rules and `default-deny-all`; actions

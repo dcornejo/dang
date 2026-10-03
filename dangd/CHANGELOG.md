@@ -7,6 +7,14 @@
 
 ### Added
 
+- Added `--peer-transaction-timeout-ms` and a shared monotonic deadline for
+  generic live peer coordination. The budget spans preparation, confirmed
+  apply, readback verification, the durable decision, and confirmation, while
+  each TLS wait is bounded by the remaining time. Expiry compensates before
+  COMMIT and preserves authoritative recovery state afterward. Cleanup and
+  restart recovery remain bounded by per-I/O timeouts but deliberately ignore
+  the expired forward-progress deadline.
+
 - Added a generic post-persistence backend finalization phase. A successful
   running replacement is finalized only after the datastore snapshot is
   durable; a failed save first aborts retained reversible work, then restores

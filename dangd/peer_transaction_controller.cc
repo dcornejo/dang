@@ -41,11 +41,13 @@ PeerTransactionController::PeerTransactionController(
     std::vector<PeerRecoveryTarget> targets,
     PeerVerificationCallback verify_peer,
     PeerParticipantFactory participant_factory,
-    PeerPersistentIdFactory persistent_id_factory)
+    PeerPersistentIdFactory persistent_id_factory,
+    std::chrono::milliseconds total_timeout)
     : targets_(std::move(targets)),
       verify_peer_(std::move(verify_peer)),
       participant_factory_(std::move(participant_factory)),
-      persistent_id_factory_(std::move(persistent_id_factory)) {
+      persistent_id_factory_(std::move(persistent_id_factory)),
+      total_timeout_(total_timeout) {
   if (!persistent_id_factory_) persistent_id_factory_ = SecurePersistentId;
 }
 
@@ -58,6 +60,20 @@ PeerTransactionControllerPrepareResult PeerTransactionController::Prepare(
     failed.message = "peer transaction controller callbacks are incomplete";
     return {.result = std::move(failed)};
   }
+  if (total_timeout_ <= std::chrono::milliseconds::zero()) {
+    failed.message = "peer transaction total timeout must be positive";
+    return {.result = std::move(failed)};
+  }
+  for (const PeerPlanParticipant& participant : group.participants) {
+    if (std::chrono::seconds(participant.confirmed_timeout_seconds) <=
+        total_timeout_) {
+      failed.message =
+          "peer transaction total timeout must be shorter than every "
+          "confirmed-commit rollback timeout";
+      return {.result = std::move(failed)};
+    }
+  }
+  const auto deadline = std::chrono::steady_clock::now() + total_timeout_;
 
   std::map<std::string, const PeerRecoveryTarget*, std::less<>> targets;
   for (const PeerRecoveryTarget& target : targets_)
@@ -115,6 +131,7 @@ PeerTransactionControllerPrepareResult PeerTransactionController::Prepare(
         .candidate_configuration = planned.candidate_configuration,
         .persistent_commit_id = material.persistent_id,
         .confirmed_timeout_seconds = planned.confirmed_timeout_seconds,
+        .deadline = deadline,
         .verify_replies =
             [verify_peer, verifiers, group_id = group.group_id,
              participant_id = planned.participant_id](
@@ -151,8 +168,10 @@ PeerTransactionControllerPrepareResult PeerTransactionController::Prepare(
     failed.message = "cannot create peer transaction journal: " + journal_error;
     return {.result = std::move(failed)};
   }
-  PeerTransactionPrepareResult prepared = PeerTransactionCoordinator().Prepare(
-      std::move(participants), journal->Callbacks());
+  PeerTransactionPrepareResult prepared =
+      PeerTransactionCoordinator([deadline] {
+        return std::chrono::steady_clock::now() >= deadline;
+      }).Prepare(std::move(participants), journal->Callbacks());
   if (!prepared.ok()) return {.result = std::move(prepared.result)};
   auto handle = std::make_unique<PreparedPeerTransactionHandle>(
       PreparedPeerTransactionHandle{

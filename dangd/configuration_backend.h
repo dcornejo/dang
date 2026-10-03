@@ -4,6 +4,7 @@
 #ifndef DANGD_CONFIGURATION_BACKEND_H_
 #define DANGD_CONFIGURATION_BACKEND_H_
 
+#include <chrono>
 #include <filesystem>
 #include <map>
 #include <memory>
@@ -37,7 +38,9 @@ class EnglishConfigurationBackend final
       bool durable_state_configured = false,
       PeerParticipantFactory participant_factory =
           MakeTlsTransactionParticipant,
-      PeerPersistentIdFactory persistent_id_factory = {});
+      PeerPersistentIdFactory persistent_id_factory = {},
+      std::chrono::milliseconds peer_transaction_timeout =
+          std::chrono::seconds(30));
 
   /** Activates one complete startup tree as a single plugin transaction. */
   [[nodiscard]] std::optional<yang::config::ValidationFinding> Initialize(

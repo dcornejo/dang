@@ -4,6 +4,7 @@
 #ifndef DANGD_PEER_TRANSACTION_CONTROLLER_H_
 #define DANGD_PEER_TRANSACTION_CONTROLLER_H_
 
+#include <chrono>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -63,7 +64,9 @@ class PeerTransactionController {
                             PeerVerificationCallback verify_peer,
                             PeerParticipantFactory participant_factory =
                                 MakeTlsTransactionParticipant,
-                            PeerPersistentIdFactory persistent_id_factory = {});
+                            PeerPersistentIdFactory persistent_id_factory = {},
+                            std::chrono::milliseconds total_timeout =
+                                std::chrono::seconds(30));
 
   /** Executes one group using the supplied stable transaction metadata. */
   [[nodiscard]] PeerTransactionResult Execute(
@@ -92,6 +95,7 @@ class PeerTransactionController {
   PeerVerificationCallback verify_peer_;
   PeerParticipantFactory participant_factory_;
   PeerPersistentIdFactory persistent_id_factory_;
+  std::chrono::milliseconds total_timeout_;
 };
 
 }  // namespace dangd

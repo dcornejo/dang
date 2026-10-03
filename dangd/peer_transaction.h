@@ -7,6 +7,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace dangd {
@@ -123,6 +124,8 @@ struct PeerPreparedTransaction {
   std::vector<PeerTransactionParticipant> participants;
   PeerTransactionJournal journal;
   PeerTransactionResult progress;
+  /** True when forward progress must stop; rollback deliberately ignores it. */
+  std::function<bool()> deadline_expired;
 };
 
 /** Result of stopping safely before the durable group COMMIT decision. */
@@ -145,6 +148,11 @@ struct PeerTransactionPrepareResult {
  */
 class PeerTransactionCoordinator {
  public:
+  /** Creates a coordinator with an optional shared forward-progress deadline. */
+  explicit PeerTransactionCoordinator(
+      std::function<bool()> deadline_expired = {})
+      : deadline_expired_(std::move(deadline_expired)) {}
+
   /** Prepares, applies confirmed commits, and verifies without choosing COMMIT.
    */
   [[nodiscard]] PeerTransactionPrepareResult Prepare(
@@ -186,6 +194,13 @@ class PeerTransactionCoordinator {
   [[nodiscard]] PeerTransactionResult ResumeAbort(
       std::vector<PeerTransactionParticipant> participants,
       PeerTransactionJournal journal) const;
+
+ private:
+  [[nodiscard]] bool DeadlineExpired() const {
+    return deadline_expired_ && deadline_expired_();
+  }
+
+  std::function<bool()> deadline_expired_;
 };
 
 }  // namespace dangd

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
@@ -34,6 +35,7 @@ void Usage() {
   std::cerr
       << "usage: dangd --model FILE --config FILE [--search DIR] [--state FILE]"
          " [--peer-journal FILE --peer-recovery FILE]"
+         " [--peer-transaction-timeout-ms MILLISECONDS]"
          " [--peer-controller-user USER]..."
          " [--nacm FILE] [--recovery-user USER]... [--no-default-superuser]"
          " [--plugin FILE]..."
@@ -89,6 +91,23 @@ int main(int argc, char* argv[]) {
     } else if (argument == "--peer-recovery" && index + 1 < argc) {
       options.peer_recovery_configuration =
           std::filesystem::path(argv[++index]);
+    } else if (argument == "--peer-transaction-timeout-ms" &&
+               index + 1 < argc) {
+      try {
+        const std::string value = argv[++index];
+        std::size_t consumed = 0;
+        const unsigned long long parsed = std::stoull(value, &consumed);
+        if (value.empty() || value.find_first_not_of("0123456789") !=
+                                 std::string::npos ||
+            consumed != value.size() || parsed == 0 ||
+            parsed > std::numeric_limits<std::uint32_t>::max()) {
+          throw std::out_of_range("peer transaction timeout");
+        }
+        options.peer_transaction_timeout = std::chrono::milliseconds(parsed);
+      } catch (const std::exception&) {
+        Usage();
+        return 2;
+      }
     } else if (argument == "--peer-controller-user" && index + 1 < argc) {
       options.peer_controller_users.emplace_back(argv[++index]);
     } else if (argument == "--nacm" && index + 1 < argc) {

@@ -142,9 +142,17 @@ validates bounded untrusted XML, correlates the reply `message-id`, and accepts
 only an unambiguous result. Cancellation also treats `invalid-value` as the
 required already-absent state. Persistent tokens are serialized with the XML
 API and are never included in diagnostics. Each socket connection and TLS I/O
-wait is bounded and messages have byte ceilings; hostname resolution and a
-total wall-clock transaction deadline remain integration boundaries. The
-adapter invokes no command-line client.
+wait is bounded and messages have byte ceilings. One shared monotonic deadline
+also bounds forward progress across preparation, confirmed apply, verification,
+the journal decision, and confirmation. Each live TLS wait is shortened to the
+smaller of its configured per-I/O timeout and the remaining transaction time.
+Pre-decision expiry cancels possibly applied peers; expiry after local
+durability retains PREPARED for recovery, and expiry after the durable COMMIT
+decision leaves unconfirmed peers pending. Cancellation, resource release, and
+startup recovery deliberately use their per-I/O timeouts without enforcing the
+expired forward deadline so safety work is not abandoned. Hostname resolution
+is still an integration boundary because the platform resolver API is
+synchronous. The adapter invokes no command-line client.
 
 `MakeTlsTransactionParticipant` maps the complete coordinator contract onto a
 single reusable authenticated session. Before sending any RPC it requires the
@@ -181,6 +189,12 @@ and reject an unresolved journal if any paired identity lacks a target. Version
 1 participant-only mappings are deliberately unsupported because they become
 ambiguous when several peer groups exist. The state, journal, and recovery
 configuration paths must all differ.
+
+`--peer-transaction-timeout-ms MILLISECONDS` sets the shared forward-progress
+deadline and defaults to 30000. It must be positive and strictly shorter than
+every participant's plugin-proposed confirmed-commit rollback timeout. This
+ordering ensures the coordinator stops initiating forward work while each
+remote still has time to roll back automatically.
 
 Normal backend preparation resolves every participant in every composed plan
 against this core-owned map before permitting any mutation. A missing target
@@ -273,9 +287,8 @@ version-1 snapshot compatibility.
 Pair-wide management still requires:
 
 - policy for unreachable or degraded peers, defaulting to rejection;
-- a total transaction deadline beyond the implemented per-I/O timeouts,
-  observability, NACM rules, packaging, and Linux/FreeBSD interoperability
-  tests; and
+- observability, NACM rules, packaging, and Linux/FreeBSD interoperability
+  tests, including resolver-stall containment; and
 - CLI support that submits the logical change through dangd rather than
   bypassing NETCONF validation, authorization, ordering, and rollback.
 

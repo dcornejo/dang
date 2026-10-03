@@ -1105,6 +1105,7 @@ Application::Application(
     std::unique_ptr<PluginRuntime> plugins,
     std::vector<PeerRecoveryTarget> peer_targets,
     std::optional<std::filesystem::path> peer_transaction_journal,
+    std::chrono::milliseconds peer_transaction_timeout,
     std::vector<std::string> peer_controller_users,
     std::string yang_library_xml,
     std::vector<DangdOperationalData::ModelSource> model_sources)
@@ -1117,7 +1118,8 @@ Application::Application(
                    &nacm_, plugins_.get(), &schema_),
       backend_(configuration, plugins_.get(), &nacm_, managed_nacm,
                std::move(peer_targets), std::move(peer_transaction_journal),
-               state_file.has_value()),
+               state_file.has_value(), MakeTlsTransactionParticipant, {},
+               peer_transaction_timeout),
       datastores_(schema_, std::move(configuration), std::nullopt, &backend_),
       server_(datastores_, &nacm_, nullptr, &notifications_, std::nullopt,
               &operational_, plugins_.get()),
@@ -1437,8 +1439,9 @@ LoadResult Application::LoadWithStateFileLock(
       std::move(schema), std::move(*parsed.document), options.state_file,
       std::move(state_file_lock), options.snapshot_save_checkpoint,
       std::move(nacm), managed_nacm, std::move(plugins), peer_targets,
-      options.peer_transaction_journal, options.peer_controller_users,
-      yang_library_xml, std::move(model_sources)));
+      options.peer_transaction_journal, options.peer_transaction_timeout,
+      options.peer_controller_users, yang_library_xml,
+      std::move(model_sources)));
   bool restored_snapshot = false;
   if (options.state_file && !options.configuration_override) {
     std::error_code exists_error;

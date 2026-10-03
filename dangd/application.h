@@ -4,6 +4,7 @@
 #ifndef DANGD_APPLICATION_H_
 #define DANGD_APPLICATION_H_
 
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -84,6 +85,9 @@ struct ApplicationOptions {
   std::optional<std::filesystem::path> state_file;
   /** Private unresolved peer-transaction journal inspected at startup. */
   std::optional<std::filesystem::path> peer_transaction_journal;
+  /** Total forward-progress limit for one live peer transaction. */
+  std::chrono::milliseconds peer_transaction_timeout =
+      std::chrono::seconds(30);
   /** Private stable mutual-TLS peer endpoint configuration. */
   std::optional<std::filesystem::path> peer_recovery_configuration;
   /** Optional durable-save checkpoint for fault injection and supervision. */
@@ -173,6 +177,7 @@ class Application {
               std::unique_ptr<PluginRuntime> plugins,
               std::vector<PeerRecoveryTarget> peer_targets,
               std::optional<std::filesystem::path> peer_transaction_journal,
+              std::chrono::milliseconds peer_transaction_timeout,
               std::vector<std::string> peer_controller_users,
               std::string yang_library_xml,
               std::vector<DangdOperationalData::ModelSource> model_sources);

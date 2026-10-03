@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 #include <unistd.h>
 
+#include <chrono>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -141,6 +142,9 @@ TEST_F(PeerTransactionControllerTest,
   EXPECT_EQ(captured[0].candidate_configuration, "<config><primary/></config>");
   EXPECT_EQ(captured[0].persistent_commit_id, "persistent-1");
   EXPECT_EQ(captured[1].persistent_commit_id, "persistent-2");
+  ASSERT_TRUE(captured[0].deadline);
+  ASSERT_TRUE(captured[1].deadline);
+  EXPECT_EQ(captured[0].deadline, captured[1].deadline);
   ASSERT_EQ(verifications.size(), 2u);
   EXPECT_EQ(verifications[0].group_id, "test-group");
   EXPECT_EQ(verifications[0].participant_id, "standby");
@@ -300,6 +304,28 @@ TEST_F(PeerTransactionControllerTest,
   EXPECT_FALSE(result.ok());
   EXPECT_NE(result.message.find("unique persistent"), std::string::npos);
   EXPECT_FALSE(participant_prepared);
+  EXPECT_FALSE(std::filesystem::exists(journal_path));
+}
+
+TEST_F(PeerTransactionControllerTest,
+       RejectsTotalTimeoutThatCannotPrecedePeerRollback) {
+  bool participant_created = false;
+  PeerTransactionController controller(
+      Targets(), {},
+      [&](TlsPeerTransactionOptions options) {
+        participant_created = true;
+        return MakeTlsTransactionParticipant(std::move(options));
+      },
+      [] { return std::optional<std::string>("persistent"); },
+      std::chrono::seconds(90));
+  const auto journal_path = directory_ / "transaction.json";
+
+  const PeerTransactionResult result = controller.Execute(
+      Group(), journal_path, "transaction-timeout", "sha256:proposal");
+
+  EXPECT_FALSE(result.ok());
+  EXPECT_NE(result.message.find("shorter than every"), std::string::npos);
+  EXPECT_FALSE(participant_created);
   EXPECT_FALSE(std::filesystem::exists(journal_path));
 }
 

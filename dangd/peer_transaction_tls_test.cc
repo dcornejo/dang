@@ -152,6 +152,27 @@ TEST(PeerTransactionTlsTest, RejectsZeroSocketTimeoutBeforeConnecting) {
   EXPECT_NE(error.find("timeout"), std::string::npos) << error;
 }
 
+TEST(PeerTransactionTlsTest, RejectsExpiredTransactionBeforeConnecting) {
+  PeerTransactionParticipant participant = MakeTlsTransactionParticipant(
+      {.id = "expired-peer",
+       .role = PeerTransactionRole::kPrimary,
+       .transport = {.host = "unreachable.invalid", .port = 6513},
+       .candidate_configuration =
+           "<config xmlns='urn:ietf:params:xml:ns:netconf:base:1.0'/>",
+       .persistent_commit_id = "expired-token",
+       .confirmed_timeout_seconds = 60,
+       .deadline =
+           std::chrono::steady_clock::now() - std::chrono::milliseconds(1),
+       .verify_replies = [](std::string_view, std::string_view) {
+         return std::optional<std::string>{};
+       }});
+
+  const auto error = participant.prepare();
+
+  ASSERT_TRUE(error);
+  EXPECT_NE(error->find("deadline expired"), std::string::npos) << *error;
+}
+
 TEST(PeerTransactionTlsTest,
      ExecutesDurableTwoPeerTransactionOverStatefulTlsSessions) {
   const std::filesystem::path source = DANG_TEST_SOURCE_DIR;

@@ -145,8 +145,47 @@ struct TlsTransactionState {
            std::to_string(++message_sequence);
   }
 
+  std::optional<std::chrono::milliseconds> Remaining(std::string* error) const {
+    if (!options.deadline)
+      return std::chrono::milliseconds(options.transport.timeout_milliseconds);
+    const auto remaining = std::chrono::ceil<std::chrono::milliseconds>(
+        *options.deadline - std::chrono::steady_clock::now());
+    if (remaining <= std::chrono::milliseconds::zero()) {
+      *error = "peer transaction deadline expired";
+      return std::nullopt;
+    }
+    return std::min(
+        remaining,
+        std::chrono::milliseconds(options.transport.timeout_milliseconds));
+  }
+
+  std::optional<TlsClientOptions> ForwardTransport(std::string* error) const {
+    const auto remaining = Remaining(error);
+    if (!remaining) return std::nullopt;
+    TlsClientOptions bounded = options.transport;
+    bounded.timeout_milliseconds =
+        static_cast<std::uint32_t>(remaining->count());
+    return bounded;
+  }
+
+  std::optional<std::string> ApplyTimeout(bool enforce_deadline = true) {
+    if (!session) return "participant TLS session is absent";
+    std::string error;
+    const auto timeout =
+        enforce_deadline
+            ? Remaining(&error)
+            : std::optional<std::chrono::milliseconds>(
+                  options.transport.timeout_milliseconds);
+    if (!timeout) return error;
+    if (!session->SetTimeout(*timeout, &error)) return error;
+    return std::nullopt;
+  }
+
   std::optional<std::string> Execute(std::string_view operation,
-                                     std::string_view xml) {
+                                     std::string_view xml,
+                                     bool enforce_deadline = true) {
+    if (const auto timeout_error = ApplyTimeout(enforce_deadline))
+      return timeout_error;
     std::string error;
     const auto reply =
         session->Execute(Rpc(NextMessageId(operation), xml), &error);
@@ -230,6 +269,7 @@ std::optional<std::string> ExecuteCancel(TlsTransactionState *state) {
            (RpcErrorTag(*reply) ? " (" + *RpcErrorTag(*reply) + ")" : "");
   };
   if (state->session) {
+    (void)state->ApplyTimeout(false);
     const auto result = execute();
     if (!result || error.empty())
       return result;
@@ -264,8 +304,10 @@ MakeTlsTransactionParticipant(TlsPeerTransactionOptions options) {
             kCandidateCapability, kValidateCapability,
             kConfirmedCommitCapability};
         if (!state->session) {
-          state->session = TlsRpcSession::Connect(state->options.transport,
-                                                  &error, required);
+          const auto transport = state->ForwardTransport(&error);
+          if (!transport) return error;
+          state->session =
+              TlsRpcSession::Connect(*transport, &error, required);
           if (!state->session)
             return error;
         }
@@ -278,6 +320,8 @@ MakeTlsTransactionParticipant(TlsPeerTransactionOptions options) {
         }
         const std::string copy =
             CopyCandidateRpc(state->NextMessageId("copy"), candidate);
+        if (const auto timeout_error = state->ApplyTimeout())
+          return timeout_error;
         const auto copied = state->session->Execute(copy, &error);
         if (!copied)
           return error;
@@ -311,6 +355,8 @@ MakeTlsTransactionParticipant(TlsPeerTransactionOptions options) {
         if (!state->applied || !state->session)
           return "participant has no applied confirmed commit";
         std::string error;
+        if (const auto timeout_error = state->ApplyTimeout())
+          return timeout_error;
         const auto running = state->session->Execute(
             Rpc(state->NextMessageId("verify"),
                 "<get-config><source><running/></source></get-config>"),
@@ -321,6 +367,8 @@ MakeTlsTransactionParticipant(TlsPeerTransactionOptions options) {
           return "peer rejected running configuration read" +
                  (RpcErrorTag(*running) ? " (" + *RpcErrorTag(*running) + ")"
                                         : "");
+        if (const auto timeout_error = state->ApplyTimeout())
+          return timeout_error;
         const auto operational = state->session->Execute(
             Rpc(state->NextMessageId("health"), "<get/>"), &error);
         if (!operational)
@@ -354,10 +402,10 @@ MakeTlsTransactionParticipant(TlsPeerTransactionOptions options) {
             if (state->locked) {
               (void)state->Execute(
                   "candidate unlock",
-                  "<unlock><target><candidate/></target></unlock>");
+                  "<unlock><target><candidate/></target></unlock>", false);
               state->locked = false;
             }
-            (void)state->Execute("close session", "<close-session/>");
+            (void)state->Execute("close session", "<close-session/>", false);
             state->session->Close();
             state->session.reset();
           },

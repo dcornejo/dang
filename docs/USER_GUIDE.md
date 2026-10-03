@@ -401,12 +401,22 @@ identified only a participant are rejected because they cannot safely describe
 more than one peer group. The state, journal, and recovery files must be three
 different paths.
 
+The separate `--peer-transaction-timeout-ms` option bounds total forward
+progress across every participant and defaults to 30000 milliseconds. It must
+be positive and shorter than every confirmed-commit timeout supplied by the
+affected plugins. Per-peer `timeout-ms` still bounds each individual network
+operation. When the total deadline expires, dangd rolls back before the durable
+decision or preserves the authoritative PREPARED/COMMIT record for startup
+recovery after local durability. Cleanup and recovery continue under per-I/O
+timeouts rather than abandoning safety work at the expired deadline.
+
 ```sh
 install -m 600 peer-recovery.json /etc/dangd/peer-recovery.json
 ./build/dangd --model appliance.yang --config config.xml \
   --state appliance-state.json \
   --peer-journal appliance-peer-transaction.json \
   --peer-recovery /etc/dangd/peer-recovery.json \
+  --peer-transaction-timeout-ms 30000 \
   --peer-controller-user dangd-peer --check
 ```
 
@@ -446,10 +456,9 @@ after cancellation or confirmation recovery completes. If a peer is
 unavailable or rejects the required operation, startup remains blocked and the
 record is preserved for the next retry. These operations hold an exclusive
 private `JOURNAL.lock` sibling; do not remove that lock while dangd is running
-or recovering. These options still do not initiate new pair-wide commits. The
-authenticated participant context prevents recursive planning, but the durable
-datastore snapshot is not yet bound to the prepared journal and multi-group
-atomicity remains unfinished.
+or recovering. The authenticated participant context prevents recursive
+planning. Transactions spanning multiple independent peer groups remain
+rejected before mutation until an atomic multi-group journal is designed.
 
 ### Store a central symmetric key
 

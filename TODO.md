@@ -165,9 +165,10 @@ stays in this file with its remaining work rewritten precisely.
   invokes that staged API for ordinary NETCONF commits, publishes the exact
   marker before finalization, cancels on local apply or persistence failure,
   and retains PREPARED for restart if selecting COMMIT fails after local
-  durability. Add a total transaction deadline
-  beyond the implemented per-I/O timeouts, fail-closed degraded-peer policy,
-  NACM/observability, `dangctl` integration,
+  durability. A shared configurable monotonic deadline now bounds all forward
+  stages and each TLS wait while leaving rollback and recovery free to finish;
+  synchronous hostname resolution still needs bounded operational containment.
+  Add fail-closed degraded-peer policy, NACM/observability, `dangctl` integration,
   and Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.
   See [`docs/PEER_TRANSACTIONS.md`](docs/PEER_TRANSACTIONS.md).
 

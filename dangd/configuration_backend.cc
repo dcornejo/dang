@@ -154,7 +154,8 @@ EnglishConfigurationBackend::EnglishConfigurationBackend(
     std::vector<PeerRecoveryTarget> peer_targets,
     std::optional<std::filesystem::path> peer_transaction_journal,
     bool durable_state_configured, PeerParticipantFactory participant_factory,
-    PeerPersistentIdFactory persistent_id_factory)
+    PeerPersistentIdFactory persistent_id_factory,
+    std::chrono::milliseconds peer_transaction_timeout)
     : plugins_(plugins),
       nacm_(nacm),
       managed_nacm_(managed_nacm),
@@ -173,7 +174,8 @@ EnglishConfigurationBackend::EnglishConfigurationBackend(
               PeerFailure("peer verification has no plugin runtime",
                           "peer-verifier-unavailable"));
         },
-        std::move(participant_factory), std::move(persistent_id_factory));
+        std::move(participant_factory), std::move(persistent_id_factory),
+        peer_transaction_timeout);
   }
 }
 

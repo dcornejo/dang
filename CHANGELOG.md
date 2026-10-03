@@ -12,6 +12,14 @@ and releases follow Semantic Versioning.
   including Linux/FreeBSD validation and an explicit mutual-exclusion boundary
   with the RFC 7317 system provider's existing NTP ownership.
 
+- Added a configurable shared monotonic deadline for live peer transactions.
+  It spans prepare, confirmed apply, authenticated verification, durable group
+  decision, and confirmation; established TLS waits shrink to the remaining
+  budget. Expiry rolls back safely before the decision and retains authoritative
+  PREPARED or COMMIT recovery state afterward. Rollback and startup recovery
+  deliberately continue under per-I/O timeouts, and unsafe deadline values that
+  do not precede every remote rollback window are rejected before mutation.
+
 - Connected composed ABI-v9 peer plans to the normal NETCONF backend path.
   Dangd now prepares and verifies remote persistent confirmed commits, exposes
   their exact transaction marker to datastore persistence, applies the local

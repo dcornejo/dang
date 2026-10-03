@@ -4,6 +4,7 @@
 #ifndef DANGD_PEER_TRANSACTION_TLS_H_
 #define DANGD_PEER_TRANSACTION_TLS_H_
 
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -30,6 +31,8 @@ struct TlsPeerTransactionOptions {
   std::string persistent_commit_id;
   /** Remote rollback deadline used by the confirmed commit. */
   std::uint32_t confirmed_timeout_seconds = 60;
+  /** Shared forward-progress deadline for the complete peer transaction. */
+  std::optional<std::chrono::steady_clock::time_point> deadline;
   /** Validates authenticated running `<get-config>` and operational `<get>`. */
   std::function<std::optional<std::string>(std::string_view, std::string_view)>
       verify_replies;

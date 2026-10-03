@@ -139,6 +139,12 @@ remains unadvertised until the remaining execution policy and multi-host
 evidence are complete. Transactions affecting several peer groups are
 currently rejected before mutation with `peer-group-limit`; dangd does not
 sequence independent group journals and misrepresent them as atomic.
+Forward progress has a shared configurable monotonic deadline that is shorter
+than each remote confirmed-commit rollback window and dynamically bounds every
+TLS operation. Expiry rolls back before the decision and preserves durable
+recovery state afterward; rollback and restart recovery are not cut short by
+the expired deadline. Synchronous hostname resolution remains outside that
+deadline and requires operational containment before a production claim.
 
 Dangd also has a host-configured authenticated participant context for its
 generic multi-server transaction machinery. A configured peer-controller

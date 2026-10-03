@@ -17,14 +17,18 @@ namespace {
 struct FakePeerState {
   std::vector<std::string> events;
   std::set<std::string> failures;
+  std::string expire_after;
+  bool deadline_expired = false;
 };
 
 PeerTransactionParticipant Peer(std::string id, PeerTransactionRole role,
                                 FakePeerState* state) {
   const std::string captured = id;
   auto operation = [state, captured](std::string name) {
-    state->events.push_back(name + " " + captured);
-    if (state->failures.contains(name + " " + captured))
+    const std::string event = name + " " + captured;
+    state->events.push_back(event);
+    if (state->expire_after == event) state->deadline_expired = true;
+    if (state->failures.contains(event))
       return std::optional<std::string>("injected " + name + " failure");
     return std::optional<std::string>{};
   };
@@ -126,6 +130,82 @@ TEST(PeerTransactionCoordinatorTest,
             std::ranges::find(state.events, "confirm standby"));
   EXPECT_LT(std::ranges::find(state.events, "confirm primary"),
             std::ranges::find(state.events, "complete"));
+}
+
+TEST(PeerTransactionCoordinatorTest,
+     DeadlineBeforeDecisionRollsBackEveryPossiblyAppliedPeer) {
+  FakePeerState state;
+  state.expire_after = "apply standby";
+  PeerTransactionCoordinator coordinator(
+      [&state] { return state.deadline_expired; });
+
+  const PeerTransactionPrepareResult prepared =
+      coordinator.Prepare(Pair(&state), Journal(&state));
+
+  EXPECT_FALSE(prepared.ok());
+  EXPECT_EQ(prepared.result.disposition,
+            PeerTransactionDisposition::kAborted);
+  EXPECT_NE(prepared.result.message.find("deadline expired"),
+            std::string::npos);
+  EXPECT_NE(std::ranges::find(state.events, "cancel standby"),
+            state.events.end());
+  EXPECT_EQ(std::ranges::find(state.events, "apply primary"),
+            state.events.end());
+  EXPECT_EQ(std::ranges::find(state.events, "decision primary standby"),
+            state.events.end());
+  EXPECT_NE(std::ranges::find(state.events, "abort journal"),
+            state.events.end());
+}
+
+TEST(PeerTransactionCoordinatorTest,
+     DeadlineAfterLocalDurabilityRetainsPreparedRecoveryState) {
+  FakePeerState state;
+  PeerTransactionCoordinator coordinator(
+      [&state] { return state.deadline_expired; });
+  PeerTransactionPrepareResult prepared =
+      coordinator.Prepare(Pair(&state), Journal(&state));
+  ASSERT_TRUE(prepared.ok()) << prepared.result.message;
+  state.deadline_expired = true;
+
+  const PeerTransactionResult result = coordinator.CommitPrepared(
+      std::move(*prepared.transaction),
+      PeerDecisionFailurePolicy::kRetainPrepared);
+
+  EXPECT_EQ(result.disposition, PeerTransactionDisposition::kCommitPending);
+  EXPECT_EQ(result.pending_confirmations,
+            (std::vector<std::string>{"primary", "standby"}));
+  EXPECT_EQ(std::ranges::find(state.events, "decision primary standby"),
+            state.events.end());
+  EXPECT_EQ(std::ranges::find(state.events, "cancel standby"),
+            state.events.end());
+  EXPECT_EQ(std::ranges::find(state.events, "abort journal"),
+            state.events.end());
+  EXPECT_NE(std::ranges::find(state.events, "release standby"),
+            state.events.end());
+}
+
+TEST(PeerTransactionCoordinatorTest,
+     DeadlineAfterDurableDecisionLeavesUnconfirmedPeersRecoverable) {
+  FakePeerState state;
+  state.expire_after = "confirm standby";
+  PeerTransactionCoordinator coordinator(
+      [&state] { return state.deadline_expired; });
+
+  const PeerTransactionResult result =
+      coordinator.Execute(Pair(&state), Journal(&state));
+
+  EXPECT_EQ(result.disposition, PeerTransactionDisposition::kCommitPending);
+  EXPECT_EQ(result.confirmed, (std::vector<std::string>{"standby"}));
+  EXPECT_EQ(result.pending_confirmations,
+            (std::vector<std::string>{"primary"}));
+  EXPECT_NE(std::ranges::find(state.events, "decision primary standby"),
+            state.events.end());
+  EXPECT_NE(std::ranges::find(state.events, "ack standby"),
+            state.events.end());
+  EXPECT_EQ(std::ranges::find(state.events, "confirm primary"),
+            state.events.end());
+  EXPECT_EQ(std::ranges::find(state.events, "cancel standby"),
+            state.events.end());
 }
 
 TEST(PeerTransactionCoordinatorTest,
