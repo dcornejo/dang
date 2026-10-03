@@ -8,6 +8,10 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Added a separately packaged RFC 9249 NTP provider to the plugin roadmap,
+  including Linux/FreeBSD validation and an explicit mutual-exclusion boundary
+  with the RFC 7317 system provider's existing NTP ownership.
+
 - Connected composed ABI-v9 peer plans to the normal NETCONF backend path.
   Dangd now prepares and verifies remote persistent confirmed commits, exposes
   their exact transaction marker to datastore persistence, applies the local

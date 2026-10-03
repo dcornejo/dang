@@ -84,6 +84,16 @@ stays in this file with its remaining work rewritten precisely.
   weights and nexthop-object-ID expansion remain absent. Complete the remaining
   kernel route-kind and RFC attribute fidelity, then advertise and test the
   module end to end.
+- [ ] Implement and document a separately packaged RFC 9249 NTP plugin using
+  the pinned `ietf-ntp@2022-07-05` module. Cover configuration and NMDA
+  operational state for NTPv4 and the model's NTPv3 compatibility, including
+  supported association modes, authentication, access rules, interfaces, VRF
+  binding, clock state, association state, and statistics. Prefer native
+  programmatic daemon APIs, validate on Linux and FreeBSD, and define an
+  explicit resource-ownership and migration policy against the RFC 7317
+  `system` plugin so the two packages cannot concurrently manage the same NTP
+  service or configuration files. Record daemon-specific unsupported features
+  and standards variances in the compliance ledger.
 - [ ] Complete RFC 9642 beyond the implemented central cleartext symmetric-key
   slice: add asymmetric key-pair verification, genuinely hidden and encrypted
   key representations, encryption and zeroization beyond the private snapshot
