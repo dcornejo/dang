@@ -705,8 +705,9 @@ format dependencies, and makes transaction results easier to attribute. A
 command is acceptable only when no suitable programmatic interface exists;
 that exception must be documented, must pass fixed validated arguments without
 a shell, and must have failure and rollback tests. This rule applies equally
-on Linux and FreeBSD; FreeBSD netlink is a candidate for routing and interface
-providers and must be evaluated rather than assuming `route(8)` is required.
+on Linux and FreeBSD. The external RFC 8431 provider demonstrates this rule by
+using FreeBSD route netlink for acknowledged route mutation rather than
+assuming `route(8)` is required.
 
 The collection-wide inventory and ordered removal plan are maintained in the
 external [`dang_plugins` production command-execution audit](https://github.com/dcornejo/dang_plugins/blob/main/COMMAND_EXECUTION_AUDIT.md).

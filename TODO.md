@@ -115,10 +115,10 @@ stays in this file with its remaining work rewritten precisely.
   process spawning in the example, Kea, FRR, IP-management, or VPP providers.
   RFC 7317 restart and shutdown now use documented orderly PID 1 signal
   interfaces on Linux and FreeBSD.
-  Linux RFC 8431 mutation now uses acknowledged rtnetlink requests without
-  executing `ip`; replace the remaining FreeBSD `route` argv executor with
-  route netlink mutation while preserving ordered compensation and attributed
-  errors. Replace the system plugin's remaining NTP `std::system()` calls with
+  Linux and FreeBSD RFC 8431 mutation now use acknowledged route-netlink
+  requests without executing `ip` or `route`, while preserving ordered
+  compensation and attributed errors. Replace the system plugin's remaining
+  NTP `std::system()` calls with
   the systemd D-Bus manager API on Linux and the safest supported FreeBSD
   service boundary; if FreeBSD exposes no stable programmatic interface, use
   only fixed absolute argv without a shell and document the evidence and

@@ -886,12 +886,13 @@ repository. Its ABI-v8 provider advertises the pinned schema, claims exclusive
 pins and independently validates the unmodified schema family. Its runtime
 foundation strictly parses destination-prefix IPv4/IPv6 routes with portable
 base nexthops, computes delete-before-install replacements, and produces
-shell-free Linux and FreeBSD command vectors. Only the routing instance named
+shell-free Linux and FreeBSD unit-test command vectors. Only the routing instance named
 `default` is accepted: VRF/VNET instance mapping is not implemented, and other
 names fail at the modeled instance path instead of being silently applied to
-the host default instance. Its `posix_spawnp` executor stops
-on failure and compensates completed changes in reverse order, retaining any
-rollback failures for reconciliation. Opt-in native tests install, observe,
+the host default instance. Its production executor uses acknowledged native
+route-netlink requests on both platforms, stops on failure, and compensates
+completed changes in reverse order, retaining any rollback failures for
+reconciliation. Opt-in native tests install, observe,
 delete, and recheck a documentation-prefix route inside a Linux network
 namespace and FreeBSD VNET jail without touching host routes. Unsupported match
 and nexthop semantics fail with an attributed model path. A strict, versioned
@@ -909,10 +910,9 @@ numeric state fails startup with an explicit family-qualified migration error
 rather than entering service with ambiguous operational identities.
 Operational and notification reads translate native names back to their unique
 modeled names, and FreeBSD polls FIB 0 plus each configured mapped FIB
-independently. FreeBSD interface-only
-nexthops now resolve exactly one usable local address in the route family via
-`getifaddrs(3)`; unnumbered and multihomed interfaces fail closed at the
-modeled nexthop path. The provider publishes partial observed operational data
+independently. FreeBSD interface-only nexthops now use the selected native
+interface index directly and work on unnumbered or multihomed interfaces
+without guessing a local gateway address. The provider publishes partial observed operational data
 by reading Linux rtnetlink or FreeBSD `NET_RT_DUMP` directly. It emits IPv4/IPv6
 unicast routes with coherent status and deterministic synthetic indexes:
 installed observations are active and explicitly uninstalled observations are
@@ -996,15 +996,12 @@ end-to-end interoperability evidence remain before a substantial RFC 8431
 claim; in particular, not every kernel route kind or RFC route attribute is
 represented.
 
-Linux route mutation uses bounded, sequenced rtnetlink requests and requires a
-correlated kernel acknowledgement under a receive timeout. Kernel rejection
-enters the same tested reverse-compensation path as other failures; production
-does not execute `ip(8)`. FreeBSD mutation remains an audited interim variance:
-it invokes `route(8)` through fixed validated argv and `posix_spawnp(3)` without
-a shell. The production command-execution audit requires that remaining
-boundary to move to FreeBSD route netlink, or to a documented routing-socket
-fallback for operations its installed netlink ABI cannot express, before RFC
-8431 can be considered complete. Both native observation paths already use
+Linux and FreeBSD route mutation use bounded, sequenced route-netlink requests
+and require a correlated kernel acknowledgement under a receive timeout.
+Kernel rejection enters the same tested reverse-compensation path as other
+failures; production executes neither `ip(8)` nor `route(8)`. The installed
+FreeBSD netlink ABI expresses the complete supported mutation slice, so no
+routing-socket fallback is required. Both native observation paths also use
 kernel APIs and do not spawn a command.
 
 BaseX is likewise only a datastore architecture investigation. The current
