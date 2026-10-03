@@ -254,9 +254,6 @@ version-1 snapshot compatibility.
 
 Pair-wide management still requires:
 
-- either one atomic journal covering every affected peer group or an explicit
-  fail-closed single-group limit. Sequentially committing groups would violate
-  the atomicity of one NETCONF commit;
 - generic production invocation of composed ABI-v9 plans through that safe
   lifecycle. The external Kea
   provider now supplies complete two-member hot-standby module images plus a
@@ -273,3 +270,10 @@ Pair-wide management still requires:
 
 Until those pieces are integrated, each Kea member remains an independently
 managed dangd instance and pair-wide atomicity must not be claimed.
+
+The production preparation path currently imposes a deliberate one-group
+limit. If affected plugins compose more than one group, the whole NETCONF
+transaction fails with `peer-group-limit` before endpoint resolution, plugin
+apply, or hardware mutation. This preserves atomicity without pretending that
+several independent journals form one decision. A future multi-group design
+must replace this limit with one durable decision record covering every group.

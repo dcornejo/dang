@@ -1710,6 +1710,35 @@ TEST(DangdApplicationTest, RejectsInvalidComposedPeerPlanBeforeApplyingPlugin) {
             std::string::npos);
 }
 
+TEST(DangdApplicationTest, RejectsSeveralPeerGroupsBeforeApplyingPlugin) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_PROVIDER_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
+  test_plugin::ResetTrace();
+
+  ASSERT_NE(SetProviderMode(*loaded.application, "peer-plan-multi")
+                .xml.find("<ok/>"),
+            std::string::npos);
+  const auto commit = Commit(*loaded.application);
+  EXPECT_NE(commit.xml.find("peer-group-limit"), std::string::npos)
+      << commit.xml;
+  EXPECT_NE(commit.xml.find("at most one peer group"), std::string::npos)
+      << commit.xml;
+  EXPECT_EQ(test_plugin::Trace(),
+            (std::vector<std::string>{"provider.prepare",
+                                      "provider.validate",
+                                      "provider.release"}));
+  EXPECT_TRUE(test_plugin::Active("provider").empty());
+  EXPECT_EQ(loaded.application->datastores()
+                .Read(yang::netconf::Datastore::kRunning)
+                .ToXml()
+                .find("peer-plan-multi"),
+            std::string::npos);
+}
+
 TEST(DangdApplicationTest,
      RequiresEveryComposedPeerParticipantToHaveAConfiguredEndpoint) {
   TemporaryInputs missing_inputs;

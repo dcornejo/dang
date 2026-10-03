@@ -132,7 +132,9 @@ the unjournaled remote-apply crash window. The local datastore snapshot now
 carries the matching transaction identity and proposal digest, and startup
 compares both records before selecting the decision. Pair-wide atomicity remains
 unadvertised until the production backend invokes this lifecycle and the
-multi-group policy is complete.
+remaining execution policy is complete. Transactions affecting several peer
+groups are currently rejected before mutation with `peer-group-limit`; dangd
+does not sequence independent group journals and misrepresent them as atomic.
 
 Dangd also has a host-configured authenticated participant context for its
 generic multi-server transaction machinery. A configured peer-controller

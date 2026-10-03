@@ -146,26 +146,35 @@ int NextNotification(void*, DangNotificationV1* event, DangPluginErrorV1*) {
 
 size_t PeerCandidateCount(void*, void* opaque) {
   const auto* prepared = static_cast<const Prepared*>(opaque);
-  return prepared && prepared->proposed.find("<mode>peer-plan-") !=
-                         std::string::npos
-             ? 2
-             : 0;
+  if (!prepared || prepared->proposed.find("<mode>peer-plan-") ==
+                       std::string::npos)
+    return 0;
+  return prepared->proposed.find("<mode>peer-plan-multi</mode>") !=
+                 std::string::npos
+      ? 4
+      : 2;
 }
 
 int PeerCandidateAt(void*, void* opaque, size_t index,
                     DangPeerCandidateV1* candidate, DangPluginErrorV1*) {
-  if (!candidate || index > 1) return 0;
+  const auto* prepared = static_cast<const Prepared*>(opaque);
+  const bool multiple_groups = prepared &&
+      prepared->proposed.find("<mode>peer-plan-multi</mode>") !=
+          std::string::npos;
+  if (!candidate || index >= (multiple_groups ? 4U : 2U)) return 0;
   constexpr const char* kConfiguration =
       "<config xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
       "<provider-settings xmlns=\"urn:dangd:test:provider\">"
       "<mode>normal</mode></provider-settings></config>";
-  const auto* prepared = static_cast<const Prepared*>(opaque);
   const bool invalid = prepared &&
       prepared->proposed.find("<mode>peer-plan-invalid</mode>") !=
           std::string::npos;
-  *candidate = {invalid ? "invalid/group" : "test-group",
-                index == 0 ? "primary" : "standby",
-                index == 0 ? DANG_PEER_PRIMARY_V1 : DANG_PEER_STANDBY_V1,
+  const bool primary = index % 2 == 0;
+  *candidate = {invalid ? "invalid/group"
+                        : multiple_groups && index >= 2 ? "second-group"
+                                                        : "test-group",
+                primary ? "primary" : "standby",
+                primary ? DANG_PEER_PRIMARY_V1 : DANG_PEER_STANDBY_V1,
                 60, "dangd-test-provider", kConfiguration,
                 "{\"expected_status\":\"ready\"}"};
   return 1;

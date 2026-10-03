@@ -145,9 +145,11 @@ stays in this file with its remaining work rewritten precisely.
   automatic backend activation until the host resolves it. Startup now loads
   the validated snapshot first, requires exact marker/journal identity and
   digest agreement, advances matching PREPARED state to COMMIT, confirms it,
-  durably clears the marker, and rejects mismatched or orphaned records. Before
-  connecting the controller, add atomic multi-group journaling or an explicit
-  fail-closed one-group limit. Add a total transaction deadline
+  durably clears the marker, and rejects mismatched or orphaned records. Normal
+  preparation now rejects any transaction affecting more than one peer group
+  before endpoint resolution or plugin mutation, providing an explicit safe
+  limit until an atomic multi-group journal is designed. Before connecting the
+  controller, add a total transaction deadline
   beyond the implemented per-I/O timeouts, fail-closed degraded-peer policy,
   NACM/observability, `dangctl` integration,
   and Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.

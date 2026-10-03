@@ -21,6 +21,11 @@ and releases follow Semantic Versioning.
   activation. Mismatched, unknown, and orphaned records fail closed; unmarked
   legacy COMMIT recovery and conservative PREPARED cancellation remain intact.
 
+- Added a fail-closed single peer-group limit to normal backend preparation.
+  A proposal spanning several groups is rejected before endpoint resolution or
+  plugin mutation, preventing independent journals from being mistaken for one
+  atomic NETCONF transaction.
+
 - Added the ABI-v9 public peer-transaction contract and supervised-worker
   transport. Dangd now composes complete, non-overlapping module images from
   several plugins for each stable participant and validates the final candidate

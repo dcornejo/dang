@@ -137,6 +137,21 @@ EnglishConfigurationBackend::PrepareReplacement(
         plugins_->Abort();
         return composed.error;
       }
+      // One NETCONF transaction must never be split across independently
+      // durable group journals. Until a multi-group journal exists, reject the
+      // complete proposal before resolving endpoints or mutating any plugin.
+      if (composed.groups.size() > 1) {
+        yang::config::ValidationFinding finding;
+        finding.code = yang::config::ValidationCode::kInvalidValue;
+        finding.state = yang::config::FindingState::kInvalid;
+        finding.message =
+            "one configuration transaction may affect at most one peer group";
+        finding.module_name = "dangd";
+        finding.netconf_error_tag = "operation-failed";
+        finding.netconf_error_app_tag = "peer-group-limit";
+        plugins_->Abort();
+        return finding;
+      }
       for (const ComposedPeerTransactionGroup& group : composed.groups) {
         for (const PeerPlanParticipant& participant : group.participants) {
           const std::string identity =
