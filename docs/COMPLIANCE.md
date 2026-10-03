@@ -723,6 +723,29 @@ incomplete compensation with explicit `hardware-state-diverged` reporting are
 covered by automated tests. A real device plugin must still reserve platform
 resources during preflight and provide backend-specific dependency edges.
 
+### RFC 7317 — system management
+
+Status: **substantial external plugin implementation with documented gaps**.
+
+The separately packaged `dang_plugins` system provider advertises the pinned
+`ietf-system@2014-08-06` model with authentication, local users, NTP, and
+timezone-name. It validates and applies hostname, timezone, static resolver,
+chrony or ntpd configuration, local authentication records, current time, and
+guarded restart and shutdown RPCs on Linux and FreeBSD. Power operations use
+the native PID 1 signal interfaces so the service manager performs an orderly
+shutdown; no service command or shell is involved.
+NTP reload and stop still use fixed host-owned service commands through
+`std::system()`. They contain no modeled data, but remain an explicit audited
+variance pending systemd D-Bus integration on Linux and determination of the
+safest supported FreeBSD service boundary.
+
+RADIUS, configurable NTP/DNS ports, `$0$` password replacement,
+resolver-manager integration, and exact reply-before-power-transition
+sequencing are not implemented. The external plugin guide records these and
+the narrower PAM, operational ABI, and date-time limitations. Dangd does not
+contain special knowledge of this provider; it is loaded and governed through
+the same public plugin contract as other models.
+
 ## RFC 9644 SSH client and server groupings
 
 Status: **published as a complete import-only schema family**.
@@ -972,6 +995,14 @@ limited to the portable reusable-nexthop subset. Complete state fidelity and
 end-to-end interoperability evidence remain before a substantial RFC 8431
 claim; in particular, not every kernel route kind or RFC route attribute is
 represented.
+
+The current route-mutation boundary is an audited interim variance. Linux
+invokes `ip` and FreeBSD invokes `route` through fixed validated argv and
+`posix_spawnp(3)` without a shell; ordered failures and reverse compensation
+are tested. The production command-execution audit requires this boundary to
+move to acknowledged Linux and FreeBSD route netlink operations before RFC
+8431 can be considered complete. The provider's native observation path
+already uses kernel APIs and does not spawn a command.
 
 BaseX is likewise only a datastore architecture investigation. The current
 implementation remains the in-process validated datastore manager with atomic

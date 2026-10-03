@@ -708,6 +708,9 @@ a shell, and must have failure and rollback tests. This rule applies equally
 on Linux and FreeBSD; FreeBSD netlink is a candidate for routing and interface
 providers and must be evaluated rather than assuming `route(8)` is required.
 
+The collection-wide inventory and ordered removal plan are maintained in the
+external [`dang_plugins` production command-execution audit](https://github.com/dcornejo/dang_plugins/blob/main/COMMAND_EXECUTION_AUDIT.md).
+
 NACM authorization has already succeeded before plugin preparation. Plugins
 must not implement an independent, inconsistent authorization policy for the
 same configuration nodes.

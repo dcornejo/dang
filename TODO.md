@@ -106,6 +106,24 @@ stays in this file with its remaining work rewritten precisely.
   revisions and documenting deviations, platform behavior, and Linux/FreeBSD
   validation requirements.
 
+### Implementation quality
+
+- [ ] Complete the production plugin command-execution audit now tracked in
+  the external
+  [`dang_plugins` audit](https://github.com/dcornejo/dang_plugins/blob/main/COMMAND_EXECUTION_AUDIT.md).
+  The initial source scan found no
+  process spawning in the example, Kea, FRR, IP-management, or VPP providers.
+  RFC 7317 restart and shutdown now use documented orderly PID 1 signal
+  interfaces on Linux and FreeBSD.
+  Replace the RFC 8431 `ip`/`route` argv executor with Linux and FreeBSD route
+  netlink mutation while preserving ordered compensation and attributed
+  errors. Replace the system plugin's remaining NTP `std::system()` calls with
+  the systemd D-Bus manager API on Linux and the safest supported FreeBSD
+  service boundary; if FreeBSD exposes no stable programmatic interface, use
+  only fixed absolute argv without a shell and document the evidence and
+  variance. Re-run the source inventory and native tests on both platforms
+  after each removal.
+
 ### Datastore architecture
 
 - [ ] Integrate the transport-neutral peer transaction coordinator into a
@@ -191,14 +209,6 @@ stays in this file with its remaining work rewritten precisely.
 
 ### Low priority
 
-- [ ] Audit existing plugins for operating-system work performed by spawning
-  command-line programs. Replace it with stable programmatic library, daemon,
-  socket, or kernel APIs wherever available, preserving transaction rollback,
-  error attribution, and Linux/FreeBSD behavior. In particular, prototype and
-  evaluate netlink route and interface operations on both Linux and FreeBSD;
-  document any operation for which a command remains unavoidable and test its
-  strict argv-only execution. New plugin code must prefer programmatic APIs
-  from the outset.
 - [ ] Evaluate one or more FD.io VPP plugins. Define which YANG modules and
   resources VPP would own, use VPP's supported programmatic APIs, determine
   whether routing, interface, ACL, and other domains belong in one transaction

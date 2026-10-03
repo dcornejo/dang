@@ -8,6 +8,13 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Promoted the external production plugin command-execution audit from low
+  priority to active implementation work. The provider inventory records the
+  programmatic boundaries already used by Kea, FRR, IP management, and VPP;
+  the RFC 7317 power RPCs now use guarded, orderly native PID 1 signals. The
+  remaining RFC 7317 NTP shell calls and RFC 8431 route-utility executor are
+  tracked with an ordered Linux/FreeBSD replacement plan.
+
 - Added a separately packaged RFC 9249 NTP provider to the plugin roadmap,
   including Linux/FreeBSD validation and an explicit mutual-exclusion boundary
   with the RFC 7317 system provider's existing NTP ownership.
