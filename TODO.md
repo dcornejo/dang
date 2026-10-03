@@ -151,8 +151,11 @@ stays in this file with its remaining work rewritten precisely.
   limit until an atomic multi-group journal is designed. The coordinator and
   controller now expose explicit prepare, commit, and abort stages: verified
   remote confirmed commits can remain journaled as PREPARED while the local
-  datastore crosses its durable snapshot boundary. Connect that staged API to
-  the generic backend lifecycle, then add a total transaction deadline
+  datastore crosses its durable snapshot boundary. The generic backend now
+  invokes that staged API for ordinary NETCONF commits, publishes the exact
+  marker before finalization, cancels on local apply or persistence failure,
+  and retains PREPARED for restart if selecting COMMIT fails after local
+  durability. Add a total transaction deadline
   beyond the implemented per-I/O timeouts, fail-closed degraded-peer policy,
   NACM/observability, `dangctl` integration,
   and Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.

@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "dangd/application.h"
-#include "dangd/peer_transaction_journal.h"
-#include "dangd/test_plugins/plugin_test_support.h"
-#include "yang/xml_security.h"
+
+#include <dlfcn.h>
 
 #include <algorithm>
 #include <atomic>
@@ -12,14 +11,16 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <nlohmann/json.hpp>
 #include <sstream>
 #include <string>
-#include <tuple>
 #include <thread>
+#include <tuple>
 #include <vector>
 
-#include <dlfcn.h>
-#include <nlohmann/json.hpp>
+#include "dangd/peer_transaction_journal.h"
+#include "dangd/test_plugins/plugin_test_support.h"
+#include "yang/xml_security.h"
 
 #if defined(__unix__) || defined(__APPLE__)
 #include <sys/stat.h>
@@ -36,9 +37,8 @@ TEST(DangdOperationalDataTest, UsesBackendAppliedConfigurationAsOperational) {
       "<yang-library><module-set/><content-id>test</content-id>"
       "</yang-library>",
       {}, &nacm, nullptr, nullptr);
-  operational.SetAppliedConfigurationProvider([] {
-    return "<data><applied xmlns='urn:test'>device</applied></data>";
-  });
+  operational.SetAppliedConfigurationProvider(
+      [] { return "<data><applied xmlns='urn:test'>device</applied></data>"; });
   const auto augmented = operational.AugmentDataXml(
       "<data><intended xmlns='urn:test'>server</intended></data>");
   const std::string& result = augmented.xml;
@@ -103,8 +103,10 @@ yang::netconf::RpcResponse SetProviderMode(Application& application,
       "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
       "message-id=\"edit\"><edit-config><target><candidate/></target>"
       "<config><provider-settings xmlns=\"urn:dangd:test:provider\">"
-      "<mode>" + std::string(mode) + "</mode></provider-settings></config>"
-      "</edit-config></rpc>");
+      "<mode>" +
+          std::string(mode) +
+          "</mode></provider-settings></config>"
+          "</edit-config></rpc>");
 }
 
 yang::netconf::RpcResponse Commit(Application& application) {
@@ -122,8 +124,8 @@ unsigned int NmdaStressRequestsPerThread() {
   if (!configured || !*configured) return kDefault;
   const std::string_view text(configured);
   unsigned int value = 0;
-  const auto parsed = std::from_chars(text.data(), text.data() + text.size(),
-                                      value);
+  const auto parsed =
+      std::from_chars(text.data(), text.data() + text.size(), value);
   if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size() ||
       value == 0 || value > kMaximum)
     return kDefault;
@@ -149,18 +151,19 @@ TEST(DangdApplicationTest, LoadsModelAndCompleteConfiguration) {
   EXPECT_NE(library.xml.find("<name>ds:intended</name>"), std::string::npos)
       << library.xml;
   EXPECT_NE(library.xml.find("<name>ietf-netconf-nmda</name>"),
-            std::string::npos) << library.xml;
+            std::string::npos)
+      << library.xml;
   EXPECT_NE(library.xml.find("<name>ietf-origin</name>"), std::string::npos)
       << library.xml;
   EXPECT_NE(library.xml.find("<name>dangd-reconciliation</name>"),
             std::string::npos)
       << library.xml;
-  EXPECT_NE(library.xml.find("<name>ietf-ssh-common</name>"),
-            std::string::npos) << library.xml;
-  EXPECT_NE(library.xml.find("<name>ietf-ssh-client</name>"),
-            std::string::npos) << library.xml;
-  EXPECT_NE(library.xml.find("<name>ietf-ssh-server</name>"),
-            std::string::npos) << library.xml;
+  EXPECT_NE(library.xml.find("<name>ietf-ssh-common</name>"), std::string::npos)
+      << library.xml;
+  EXPECT_NE(library.xml.find("<name>ietf-ssh-client</name>"), std::string::npos)
+      << library.xml;
+  EXPECT_NE(library.xml.find("<name>ietf-ssh-server</name>"), std::string::npos)
+      << library.xml;
   EXPECT_NE(library.xml.find("<feature>xpath</feature>"), std::string::npos)
       << library.xml;
 }
@@ -170,7 +173,8 @@ TEST(DangdApplicationTest, ManagesNacmProtectedCentralSymmetricKeys) {
   auto options = Options(inputs);
   options.state_file = inputs.Path("keystore-state.json");
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
 
   yang::netconf::RpcSessionContext recovery{1, "alice", "alice", {}};
   const auto edit = loaded.application->server().Process(recovery, R"xml(
@@ -231,21 +235,24 @@ TEST(DangdApplicationTest, ManagesNacmProtectedCentralSymmetricKeys) {
   EXPECT_NE(library.xml.find("<name>ietf-keystore</name>"), std::string::npos)
       << library.xml;
   EXPECT_NE(library.xml.find("<feature>central-keystore-supported</feature>"),
-            std::string::npos) << library.xml;
+            std::string::npos)
+      << library.xml;
   EXPECT_NE(library.xml.find("<feature>symmetric-keys</feature>"),
-            std::string::npos) << library.xml;
+            std::string::npos)
+      << library.xml;
 
   loaded.application.reset();
   auto restored = Application::Load(options);
   ASSERT_NE(restored.application, nullptr)
       << testing::PrintToString(restored.errors);
-  const auto after_restart = restored.application->server().Process(
-      recovery, R"xml(
+  const auto after_restart =
+      restored.application->server().Process(recovery, R"xml(
         <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="restored">
           <get-config><source><running/></source></get-config>
         </rpc>)xml");
   EXPECT_NE(after_restart.xml.find("<name>backup-key</name>"),
-            std::string::npos) << after_restart.xml;
+            std::string::npos)
+      << after_restart.xml;
   EXPECT_NE(after_restart.xml.find("AQIDBA=="), std::string::npos)
       << after_restart.xml;
 }
@@ -253,7 +260,8 @@ TEST(DangdApplicationTest, ManagesNacmProtectedCentralSymmetricKeys) {
 TEST(DangdApplicationTest, RetrievesAndEditsConventionalNmdaDatastores) {
   TemporaryInputs inputs;
   auto loaded = Application::Load(Options(inputs));
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
 
   const auto intended = loaded.application->server().Process(session, R"xml(
@@ -299,7 +307,8 @@ TEST(DangdApplicationTest, RetrievesAndEditsConventionalNmdaDatastores) {
             std::string::npos)
       << origins.xml;
 
-  const auto mixed_origins = loaded.application->server().Process(session, R"xml(
+  const auto mixed_origins =
+      loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="mixed-origins"
          xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
       <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
@@ -310,8 +319,8 @@ TEST(DangdApplicationTest, RetrievesAndEditsConventionalNmdaDatastores) {
             std::string::npos)
       << mixed_origins.xml;
 
-  const auto other_origins = loaded.application->server().Process(
-      session, R"xml(
+  const auto other_origins =
+      loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="origin-filter"
          xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores"
          xmlns:or="urn:ietf:params:xml:ns:yang:ietf-origin">
@@ -325,8 +334,8 @@ TEST(DangdApplicationTest, RetrievesAndEditsConventionalNmdaDatastores) {
   EXPECT_NE(other_origins.xml.find("yang-library"), std::string::npos)
       << other_origins.xml;
 
-  const auto derived_origin = loaded.application->server().Process(
-      session, R"xml(
+  const auto derived_origin =
+      loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="derived-origin"
          xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores"
          xmlns:or="urn:ietf:params:xml:ns:yang:ietf-origin">
@@ -339,8 +348,7 @@ TEST(DangdApplicationTest, RetrievesAndEditsConventionalNmdaDatastores) {
   EXPECT_NE(derived_origin.xml.find("edge-1"), std::string::npos)
       << derived_origin.xml;
 
-  const auto negated_base = loaded.application->server().Process(
-      session, R"xml(
+  const auto negated_base = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="negated-base"
          xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores"
          xmlns:or="urn:ietf:params:xml:ns:yang:ietf-origin">
@@ -354,8 +362,8 @@ TEST(DangdApplicationTest, RetrievesAndEditsConventionalNmdaDatastores) {
   EXPECT_NE(negated_base.xml.find("yang-library"), std::string::npos)
       << negated_base.xml;
 
-  const auto invalid_origin = loaded.application->server().Process(
-      session, R"xml(
+  const auto invalid_origin =
+      loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="bad-origin"
          xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores"
          xmlns:bad="urn:example:appliance">
@@ -370,8 +378,8 @@ TEST(DangdApplicationTest, RetrievesAndEditsConventionalNmdaDatastores) {
             std::string::npos)
       << invalid_origin.xml;
 
-  const auto conflicting_origins = loaded.application->server().Process(
-      session, R"xml(
+  const auto conflicting_origins =
+      loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="conflict"
          xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores"
          xmlns:or="urn:ietf:params:xml:ns:yang:ietf-origin">
@@ -409,13 +417,15 @@ TEST(DangdApplicationTest, RetrievesAndEditsConventionalNmdaDatastores) {
       </edit-data>
     </rpc>)xml");
   EXPECT_NE(rejected.xml.find("<error-tag>invalid-value</error-tag>"),
-            std::string::npos) << rejected.xml;
+            std::string::npos)
+      << rejected.xml;
 }
 
 TEST(DangdApplicationTest, ValidatesCompleteNmdaOperationInput) {
   TemporaryInputs inputs;
   auto loaded = Application::Load(Options(inputs));
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
 
   const auto duplicate = loaded.application->server().Process(session, R"xml(
@@ -429,7 +439,8 @@ TEST(DangdApplicationTest, ValidatesCompleteNmdaOperationInput) {
   EXPECT_NE(duplicate.xml.find("invalid element count"), std::string::npos)
       << duplicate.xml;
   EXPECT_NE(duplicate.xml.find("<error-tag>invalid-value</error-tag>"),
-            std::string::npos) << duplicate.xml;
+            std::string::npos)
+      << duplicate.xml;
 
   const auto unknown = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="unknown"
@@ -443,15 +454,16 @@ TEST(DangdApplicationTest, ValidatesCompleteNmdaOperationInput) {
       </edit-data>
     </rpc>)xml");
   EXPECT_NE(unknown.xml.find("<error-tag>unknown-element</error-tag>"),
-            std::string::npos) << unknown.xml;
+            std::string::npos)
+      << unknown.xml;
   EXPECT_EQ(loaded.application->datastores()
                 .Read(yang::netconf::Datastore::kCandidate)
                 .ToXml()
                 .find("must-not-apply"),
             std::string::npos);
 
-  const auto unsupported_defaults = loaded.application->server().Process(
-      session, R"xml(
+  const auto unsupported_defaults =
+      loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="defaults"
          xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores"
          xmlns:wd="urn:ietf:params:xml:ns:yang:ietf-netconf-with-defaults">
@@ -460,17 +472,20 @@ TEST(DangdApplicationTest, ValidatesCompleteNmdaOperationInput) {
         <wd:with-defaults>report-all</wd:with-defaults>
       </get-data>
     </rpc>)xml");
-  EXPECT_NE(unsupported_defaults.xml.find(
-                "<error-tag>invalid-value</error-tag>"),
-            std::string::npos) << unsupported_defaults.xml;
+  EXPECT_NE(
+      unsupported_defaults.xml.find("<error-tag>invalid-value</error-tag>"),
+      std::string::npos)
+      << unsupported_defaults.xml;
   EXPECT_NE(unsupported_defaults.xml.find("with-defaults is not supported"),
-            std::string::npos) << unsupported_defaults.xml;
+            std::string::npos)
+      << unsupported_defaults.xml;
 }
 
 TEST(DangdApplicationTest, CoversConventionalNmdaRetrievalCrossProduct) {
   TemporaryInputs inputs;
   auto loaded = Application::Load(Options(inputs));
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
   for (const std::string_view datastore :
        {"running", "candidate", "startup", "intended"}) {
@@ -479,33 +494,36 @@ TEST(DangdApplicationTest, CoversConventionalNmdaRetrievalCrossProduct) {
         "message-id=\"matrix\" "
         "xmlns:ds=\"urn:ietf:params:xml:ns:yang:ietf-datastores\">"
         "<get-data xmlns=\"urn:ietf:params:xml:ns:yang:ietf-netconf-nmda\">"
-        "<datastore>ds:" + std::string(datastore) + "</datastore>";
+        "<datastore>ds:" +
+        std::string(datastore) + "</datastore>";
     const auto subtree = loaded.application->server().Process(
         session, prefix +
-            "<subtree-filter><system xmlns=\"urn:example:appliance\"/>"
-            "</subtree-filter><config-filter>true</config-filter>"
-            "<max-depth>2</max-depth></get-data></rpc>");
+                     "<subtree-filter><system xmlns=\"urn:example:appliance\"/>"
+                     "</subtree-filter><config-filter>true</config-filter>"
+                     "<max-depth>2</max-depth></get-data></rpc>");
     EXPECT_NE(subtree.xml.find("edge-1"), std::string::npos)
         << datastore << ": " << subtree.xml;
 
     const auto xpath = loaded.application->server().Process(
         session, prefix +
-            "<xpath-filter xmlns:a=\"urn:example:appliance\">"
-            "/a:system/a:hostname</xpath-filter><config-filter>true</config-filter>"
-            "<max-depth>1</max-depth></get-data></rpc>");
+                     "<xpath-filter xmlns:a=\"urn:example:appliance\">"
+                     "/a:system/a:hostname</"
+                     "xpath-filter><config-filter>true</config-filter>"
+                     "<max-depth>1</max-depth></get-data></rpc>");
     EXPECT_NE(xpath.xml.find("edge-1"), std::string::npos)
         << datastore << ": " << xpath.xml;
 
     const auto state_only = loaded.application->server().Process(
-        session, prefix +
-            "<config-filter>false</config-filter></get-data></rpc>");
+        session,
+        prefix + "<config-filter>false</config-filter></get-data></rpc>");
     EXPECT_EQ(state_only.xml.find("edge-1"), std::string::npos)
         << datastore << ": " << state_only.xml;
 
     const auto origin = loaded.application->server().Process(
         session, prefix + "<with-origin/></get-data></rpc>");
     EXPECT_NE(origin.xml.find("<error-tag>invalid-value</error-tag>"),
-              std::string::npos) << datastore << ": " << origin.xml;
+              std::string::npos)
+        << datastore << ": " << origin.xml;
   }
 
   const auto unknown = loaded.application->server().Process(session, R"xml(
@@ -516,7 +534,8 @@ TEST(DangdApplicationTest, CoversConventionalNmdaRetrievalCrossProduct) {
       </get-data>
     </rpc>)xml");
   EXPECT_NE(unknown.xml.find("<error-tag>invalid-value</error-tag>"),
-            std::string::npos) << unknown.xml;
+            std::string::npos)
+      << unknown.xml;
 }
 
 TEST(DangdApplicationTest, AppliesNmdaDefaultOperationsAndLocks) {
@@ -543,24 +562,26 @@ TEST(DangdApplicationTest, AppliesNmdaDefaultOperationsAndLocks) {
   options.model = inputs.Write("operations.yang", model);
   options.configuration = inputs.Write("operations.xml", configuration);
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   yang::netconf::RpcSessionContext alice{1, "alice", "alice", {}};
   yang::netconf::RpcSessionContext other{2, "alice", "other", {}};
 
   const auto edit = [&](const yang::netconf::RpcSessionContext& session,
-                        std::string_view operation,
-                        std::string_view hostname) {
+                        std::string_view operation, std::string_view hostname) {
     return loaded.application->server().Process(
         session,
         "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
         "message-id=\"edit\" xmlns:ds=\"urn:ietf:params:xml:ns:yang:"
         "ietf-datastores\"><edit-data xmlns=\"urn:ietf:params:xml:ns:yang:"
         "ietf-netconf-nmda\"><datastore>ds:candidate</datastore>"
-        "<default-operation>" + std::string(operation) +
-        "</default-operation><config><system "
-        "xmlns=\"urn:example:appliance\"><hostname>" +
-        std::string(hostname) + "</hostname></system></config>"
-        "</edit-data></rpc>");
+        "<default-operation>" +
+            std::string(operation) +
+            "</default-operation><config><system "
+            "xmlns=\"urn:example:appliance\"><hostname>" +
+            std::string(hostname) +
+            "</hostname></system></config>"
+            "</edit-data></rpc>");
   };
 
   EXPECT_NE(edit(alice, "merge", "edge-merge").xml.find("<ok/>"),
@@ -642,7 +663,8 @@ TEST(DangdApplicationTest, AppliesNmdaDefaultOperationsAndLocks) {
       <lock><target><nmda:datastore>ds:operational</nmda:datastore></target></lock>
     </rpc>)xml");
   EXPECT_NE(readonly_lock.xml.find("<error-tag>invalid-value</error-tag>"),
-            std::string::npos) << readonly_lock.xml;
+            std::string::npos)
+      << readonly_lock.xml;
 }
 
 TEST(DangdApplicationTest, ComposesNmdaReadFiltersWithNacm) {
@@ -689,7 +711,8 @@ TEST(DangdApplicationTest, ComposesNmdaReadFiltersWithNacm) {
       </rule-list>
     </nacm>)xml");
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   yang::netconf::RpcSessionContext alice{1, "alice", "alice", {}};
 
   const auto response = loaded.application->server().Process(alice, R"xml(
@@ -702,11 +725,14 @@ TEST(DangdApplicationTest, ComposesNmdaReadFiltersWithNacm) {
         <max-depth>2</max-depth><with-origin/>
       </get-data>
     </rpc>)xml");
-  EXPECT_EQ(response.xml.find("<rpc-error>"), std::string::npos) << response.xml;
+  EXPECT_EQ(response.xml.find("<rpc-error>"), std::string::npos)
+      << response.xml;
   EXPECT_NE(response.xml.find("<hostname or:origin=\"or:intended\">edge-1"),
-            std::string::npos) << response.xml;
+            std::string::npos)
+      << response.xml;
   EXPECT_NE(response.xml.find("<rack or:origin=\"or:intended\""),
-            std::string::npos) << response.xml;
+            std::string::npos)
+      << response.xml;
   EXPECT_EQ(response.xml.find("hidden"), std::string::npos) << response.xml;
   EXPECT_EQ(response.xml.find("seven"), std::string::npos) << response.xml;
   EXPECT_EQ(response.xml.find("yang-library"), std::string::npos)
@@ -779,8 +805,9 @@ TEST(DangdApplicationTest, ProvidesRemovableDangdOnlySuperuser) {
         <system xmlns="urn:example:appliance"><hostname>recovered</hostname></system>
       </config></edit-config>
     </rpc>)xml";
-  EXPECT_NE(loaded.application->server().Process("guest", edit).xml.find(
-                "access-denied"),
+  EXPECT_NE(loaded.application->server()
+                .Process("guest", edit)
+                .xml.find("access-denied"),
             std::string::npos);
   EXPECT_NE(loaded.application->server()
                 .Process(std::string(kDefaultSuperuser), edit)
@@ -826,11 +853,12 @@ TEST(DangdApplicationTest, LoadsNacmAndUsesAuthenticatedSessionIdentity) {
       "message-id=\"nacm\"><commit/></rpc>";
   yang::netconf::RpcSessionContext alice{1, "alice", "alice", {}};
   yang::netconf::RpcSessionContext bob{2, "bob", "bob", {}};
-  EXPECT_NE(loaded.application->server().Process(alice, commit).xml.find(
-                "<ok/>"),
-            std::string::npos);
-  EXPECT_NE(loaded.application->server().Process(bob, commit).xml.find(
-                "access-denied"),
+  EXPECT_NE(
+      loaded.application->server().Process(alice, commit).xml.find("<ok/>"),
+      std::string::npos);
+  EXPECT_NE(loaded.application->server()
+                .Process(bob, commit)
+                .xml.find("access-denied"),
             std::string::npos);
 }
 
@@ -844,10 +872,10 @@ TEST(DangdApplicationTest, EmitsSafeRecoveryAuditRecords) {
   const std::string request =
       "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
       "message-id=\"audit\"><get/></rpc>";
-  (void)loaded.application->server().Process(
-      {71, "ordinary", "ordinary", {}}, request);
-  (void)loaded.application->server().Process(
-      {72, "user=name", "user=name", {}}, request);
+  (void)loaded.application->server().Process({71, "ordinary", "ordinary", {}},
+                                             request);
+  (void)loaded.application->server().Process({72, "user=name", "user=name", {}},
+                                             request);
 
   const std::vector<std::string> records =
       loaded.application->DrainRecoveryAuditRecords();
@@ -896,7 +924,8 @@ TEST(DangdApplicationTest, SeedsAndCommitsDatastoreManagedNacm) {
           "</system></config>"),
       .nacm_configuration = source / "dangd/examples/nacm.xml"};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   EXPECT_NE(loaded.application->datastores()
                 .Read(yang::netconf::Datastore::kRunning)
                 .ToXml()
@@ -908,22 +937,25 @@ TEST(DangdApplicationTest, SeedsAndCommitsDatastoreManagedNacm) {
   const std::string commit =
       "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
       "message-id=\"c\"><commit/></rpc>";
-  EXPECT_NE(loaded.application->server().Process(bob, commit).xml.find(
-                "access-denied"),
+  EXPECT_NE(loaded.application->server()
+                .Process(bob, commit)
+                .xml.find("access-denied"),
             std::string::npos);
-  ASSERT_NE(loaded.application->server().Process(alice, R"xml(
+  ASSERT_NE(loaded.application->server()
+                .Process(alice, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="e">
       <edit-config><target><candidate/></target><config>
         <nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
           <exec-default>permit</exec-default>
         </nacm>
       </config></edit-config>
-    </rpc>)xml").xml.find("<ok/>"), std::string::npos);
-  ASSERT_NE(loaded.application->server().Process(alice, commit).xml.find(
-                "<ok/>"),
+    </rpc>)xml")
+                .xml.find("<ok/>"),
             std::string::npos);
-  EXPECT_NE(loaded.application->server().Process(bob, commit).xml.find(
-                "<ok/>"),
+  ASSERT_NE(
+      loaded.application->server().Process(alice, commit).xml.find("<ok/>"),
+      std::string::npos);
+  EXPECT_NE(loaded.application->server().Process(bob, commit).xml.find("<ok/>"),
             std::string::npos);
 }
 
@@ -932,7 +964,8 @@ TEST(DangdApplicationTest, LoadsPluginModelAndRejectsPluginInvalidCommit) {
   auto options = Options(inputs);
   options.plugins = {DANG_TEST_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   EXPECT_TRUE(loaded.application->schema()
                   .FindRoot({"urn:dangd:example-plugin", "plugin-settings"})
                   .has_value());
@@ -957,7 +990,8 @@ TEST(DangdApplicationTest, LoadsPluginModelAndRejectsPluginInvalidCommit) {
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="2">
       <commit/>
     </rpc>)xml");
-  EXPECT_NE(commit.xml.find("operation-failed"), std::string::npos) << commit.xml;
+  EXPECT_NE(commit.xml.find("operation-failed"), std::string::npos)
+      << commit.xml;
   EXPECT_NE(commit.xml.find("dangd-example-plugin"), std::string::npos)
       << commit.xml;
   EXPECT_EQ(loaded.application->datastores()
@@ -980,9 +1014,9 @@ TEST(DangdApplicationTest, ActivatesInitialAndRestoredPluginConfiguration) {
                      DANG_TEST_PROVIDER_PLUGIN_PATH};
   options.state_file = inputs.Path("plugin-state.json");
   const std::vector<std::string> expected{
-      "provider.prepare", "consumer.prepare", "provider.validate",
-      "consumer.validate", "provider.apply", "consumer.apply",
-      "consumer.release", "provider.release"};
+      "provider.prepare",  "consumer.prepare", "provider.validate",
+      "consumer.validate", "provider.apply",   "consumer.apply",
+      "consumer.release",  "provider.release"};
 
   test_plugin::ResetTrace();
   auto initial = Application::Load(options);
@@ -1024,9 +1058,9 @@ TEST(DangdApplicationTest, RejectsStartupWhenPluginHydrationFails) {
             std::string::npos);
   EXPECT_FALSE(std::filesystem::exists(*options.state_file));
   EXPECT_EQ(test_plugin::Trace(),
-            (std::vector<std::string>{
-                "provider.prepare", "consumer.prepare", "provider.validate",
-                "consumer.validate", "consumer.release", "provider.release"}));
+            (std::vector<std::string>{"provider.prepare", "consumer.prepare",
+                                      "provider.validate", "consumer.validate",
+                                      "consumer.release", "provider.release"}));
 }
 
 TEST(DangdApplicationTest,
@@ -1036,7 +1070,8 @@ TEST(DangdApplicationTest,
   options.plugins = {DANG_TEST_PLUGIN_PATH};
   options.plugin_worker_executable = DANG_TEST_PLUGIN_WORKER_PATH;
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   EXPECT_TRUE(loaded.application->schema()
                   .FindRoot({"urn:dangd:example-plugin", "plugin-settings"})
                   .has_value());
@@ -1055,7 +1090,8 @@ TEST(DangdApplicationTest,
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="2">
       <commit/>
     </rpc>)xml");
-  EXPECT_NE(commit.xml.find("operation-failed"), std::string::npos) << commit.xml;
+  EXPECT_NE(commit.xml.find("operation-failed"), std::string::npos)
+      << commit.xml;
   EXPECT_NE(commit.xml.find("dangd-example-plugin"), std::string::npos)
       << commit.xml;
   EXPECT_EQ(loaded.application->datastores()
@@ -1088,12 +1124,14 @@ TEST(DangdApplicationTest, WorkerRejectsInvalidStartupPluginConfiguration) {
 }
 
 #if defined(DANG_TEST_IP_PLUGIN_PATH)
-TEST(DangdApplicationTest, IpManagementPluginPublishesRfc8344AndPrintsApplyPlan) {
+TEST(DangdApplicationTest,
+     IpManagementPluginPublishesRfc8344AndPrintsApplyPlan) {
   TemporaryInputs inputs;
   auto options = Options(inputs);
   options.plugins = {DANG_TEST_IP_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   EXPECT_TRUE(loaded.application->schema()
                   .FindRoot({"urn:ietf:params:xml:ns:yang:ietf-interfaces",
                              "interfaces"})
@@ -1171,7 +1209,8 @@ TEST(DangdApplicationTest, ReportsAndOmitsInvalidOperationalPluginData) {
   auto options = Options(inputs);
   options.plugins = {DANG_TEST_BROKEN_OPERATIONAL_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
   const auto response = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="bad-state"
@@ -1182,10 +1221,12 @@ TEST(DangdApplicationTest, ReportsAndOmitsInvalidOperationalPluginData) {
     </rpc>)xml");
   EXPECT_EQ(response.xml.find(">invalid</counter>"), std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("operational provider test-broken-operational failed during validation"),
+  EXPECT_NE(response.xml.find("operational provider test-broken-operational "
+                              "failed during validation"),
             std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("<error-tag>operation-failed</error-tag>"), std::string::npos)
+  EXPECT_NE(response.xml.find("<error-tag>operation-failed</error-tag>"),
+            std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find("outside the YANG type&apos;s value space"),
             std::string::npos)
@@ -1194,15 +1235,17 @@ TEST(DangdApplicationTest, ReportsAndOmitsInvalidOperationalPluginData) {
             std::string::npos)
       << response.xml;
 
-  const auto legacy_response = loaded.application->server().Process(session, R"xml(
+  const auto legacy_response =
+      loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="bad-state-get">
       <get/>
     </rpc>)xml");
   EXPECT_EQ(legacy_response.xml.find(">invalid</counter>"), std::string::npos)
       << legacy_response.xml;
-  EXPECT_NE(legacy_response.xml.find(
-                "operational provider test-broken-operational failed during validation"),
-            std::string::npos)
+  EXPECT_NE(
+      legacy_response.xml.find("operational provider test-broken-operational "
+                               "failed during validation"),
+      std::string::npos)
       << legacy_response.xml;
   EXPECT_NE(legacy_response.xml.find("operational-provider-failure"),
             std::string::npos)
@@ -1214,17 +1257,21 @@ TEST(DangdApplicationTest, RejectsOversizedOperationalProviderData) {
   auto options = Options(inputs);
   options.plugins = {DANG_TEST_OVERSIZED_OPERATIONAL_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   const auto response = loaded.application->server().Process("alice", R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="oversized">
       <get/>
     </rpc>)xml");
   EXPECT_NE(response.xml.find("<error-tag>operation-failed</error-tag>"),
-            std::string::npos) << response.xml;
+            std::string::npos)
+      << response.xml;
   EXPECT_NE(response.xml.find("test-broken-operational failed during callback"),
-            std::string::npos) << response.xml;
+            std::string::npos)
+      << response.xml;
   EXPECT_NE(response.xml.find("operational XML exceeds the resource limit"),
-            std::string::npos) << response.xml;
+            std::string::npos)
+      << response.xml;
   EXPECT_EQ(response.xml.find(std::string(1024, 'x')), std::string::npos)
       << response.xml;
 }
@@ -1234,7 +1281,8 @@ TEST(DangdApplicationTest, SustainsConcurrentOperationalProviderRetrieval) {
   auto options = Options(inputs);
   options.plugins = {DANG_TEST_CONCURRENT_OPERATIONAL_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
 
   constexpr unsigned int kThreads = 8;
   const unsigned int requests_per_thread = NmdaStressRequestsPerThread();
@@ -1250,7 +1298,8 @@ TEST(DangdApplicationTest, SustainsConcurrentOperationalProviderRetrieval) {
       for (unsigned int request = 0; request < requests_per_thread; ++request) {
         yang::netconf::RpcSessionContext session{
             1000 + thread, "alice", "alice", {}};
-        const auto response = loaded.application->server().Process(session,
+        const auto response = loaded.application->server().Process(
+            session,
             "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
             "message-id=\"concurrent\"><get/></rpc>");
         if (response.xml.find("<rpc-reply") == std::string::npos ||
@@ -1270,7 +1319,8 @@ TEST(DangdApplicationTest, SustainsConcurrentOperationalProviderRetrieval) {
       <get/>
     </rpc>)xml");
   EXPECT_NE(final.xml.find("<maximum-concurrency>8</maximum-concurrency>"),
-            std::string::npos) << final.xml;
+            std::string::npos)
+      << final.xml;
 }
 
 TEST(DangdApplicationTest, EnforcesCompleteProviderChildCollections) {
@@ -1278,7 +1328,8 @@ TEST(DangdApplicationTest, EnforcesCompleteProviderChildCollections) {
   auto options = Options(inputs);
   options.plugins = {DANG_TEST_COMPLETE_OPERATIONAL_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
   const auto response = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="complete"
@@ -1290,10 +1341,12 @@ TEST(DangdApplicationTest, EnforcesCompleteProviderChildCollections) {
   EXPECT_EQ(response.xml.find("<target-ref>missing</target-ref>"),
             std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("operational provider test-complete-operational failed during validation"),
+  EXPECT_NE(response.xml.find("operational provider test-complete-operational "
+                              "failed during validation"),
             std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("operational-provider-failure"), std::string::npos)
+  EXPECT_NE(response.xml.find("operational-provider-failure"),
+            std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find("leafref value has no matching target instance"),
             std::string::npos)
@@ -1306,7 +1359,8 @@ TEST(DangdApplicationTest, RejectsMissingMandatoryNodeFromSeparateProvider) {
   options.plugins = {DANG_TEST_MANDATORY_OWNER_PLUGIN_PATH,
                      DANG_TEST_MANDATORY_PUBLISHER_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
   const auto response = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="mandatory"
@@ -1317,14 +1371,19 @@ TEST(DangdApplicationTest, RejectsMissingMandatoryNodeFromSeparateProvider) {
     </rpc>)xml");
   EXPECT_EQ(response.xml.find("<name>uplink</name>"), std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("operational provider test-mandatory-publisher failed during validation"),
-            std::string::npos) << response.xml;
-  EXPECT_NE(response.xml.find("operational-provider-failure"), std::string::npos)
+  EXPECT_NE(response.xml.find("operational provider test-mandatory-publisher "
+                              "failed during validation"),
+            std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find("operational-provider-failure"),
+            std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find("mandatory data node is absent"),
-            std::string::npos) << response.xml;
+            std::string::npos)
+      << response.xml;
   EXPECT_NE(response.xml.find("operational-mandatory}status"),
-            std::string::npos) << response.xml;
+            std::string::npos)
+      << response.xml;
 }
 
 TEST(DangdApplicationTest, KeepsCompletenessScopedToExactListInstance) {
@@ -1334,7 +1393,8 @@ TEST(DangdApplicationTest, KeepsCompletenessScopedToExactListInstance) {
                      DANG_TEST_MANDATORY_COMPLETE_PLUGIN_PATH,
                      DANG_TEST_MANDATORY_PARTIAL_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   const auto response = loaded.application->server().Process("alice", R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="scoped">
       <get/>
@@ -1344,7 +1404,8 @@ TEST(DangdApplicationTest, KeepsCompletenessScopedToExactListInstance) {
   EXPECT_NE(response.xml.find("<name>wan</name>"), std::string::npos)
       << response.xml;
   EXPECT_EQ(response.xml.find("operational-provider-failure"),
-            std::string::npos) << response.xml;
+            std::string::npos)
+      << response.xml;
 }
 
 TEST(DangdApplicationTest, ResolvesStateLeafrefAcrossOperationalProviders) {
@@ -1354,7 +1415,8 @@ TEST(DangdApplicationTest, ResolvesStateLeafrefAcrossOperationalProviders) {
                      DANG_TEST_LEAFREF_TARGET_PLUGIN_PATH,
                      DANG_TEST_LEAFREF_VALID_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
   const auto response = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="leafref-ok"
@@ -1365,10 +1427,12 @@ TEST(DangdApplicationTest, ResolvesStateLeafrefAcrossOperationalProviders) {
     </rpc>)xml");
   EXPECT_NE(response.xml.find("<name>present</name>"), std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("<selected>present</selected>"), std::string::npos)
+  EXPECT_NE(response.xml.find("<selected>present</selected>"),
+            std::string::npos)
       << response.xml;
   EXPECT_EQ(response.xml.find("<provider>test-leafref-valid</provider>"),
-            std::string::npos) << response.xml;
+            std::string::npos)
+      << response.xml;
 }
 
 TEST(DangdApplicationTest, RejectsUnresolvedStateLeafrefFromLaterProvider) {
@@ -1378,7 +1442,8 @@ TEST(DangdApplicationTest, RejectsUnresolvedStateLeafrefFromLaterProvider) {
                      DANG_TEST_LEAFREF_TARGET_PLUGIN_PATH,
                      DANG_TEST_LEAFREF_INVALID_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
   const auto response = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="leafref-bad"
@@ -1389,14 +1454,20 @@ TEST(DangdApplicationTest, RejectsUnresolvedStateLeafrefFromLaterProvider) {
     </rpc>)xml");
   EXPECT_EQ(response.xml.find("<name>present</name>"), std::string::npos)
       << response.xml;
-  EXPECT_EQ(response.xml.find("<selected>missing</selected>"), std::string::npos)
+  EXPECT_EQ(response.xml.find("<selected>missing</selected>"),
+            std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("operational provider test-leafref-invalid failed during merge"),
-            std::string::npos) << response.xml;
-  EXPECT_NE(response.xml.find("operational-provider-failure"), std::string::npos)
+  EXPECT_NE(
+      response.xml.find(
+          "operational provider test-leafref-invalid failed during merge"),
+      std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find("operational-provider-failure"),
+            std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find("leafref value has no matching target instance"),
-            std::string::npos) << response.xml;
+            std::string::npos)
+      << response.xml;
 }
 
 TEST(DangdApplicationTest, ResolvesInstanceIdentifierAcrossStateProviders) {
@@ -1406,7 +1477,8 @@ TEST(DangdApplicationTest, ResolvesInstanceIdentifierAcrossStateProviders) {
                      DANG_TEST_INSTANCE_TARGET_PLUGIN_PATH,
                      DANG_TEST_INSTANCE_VALID_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
   const auto response = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="instance-ok"
@@ -1418,7 +1490,8 @@ TEST(DangdApplicationTest, ResolvesInstanceIdentifierAcrossStateProviders) {
   EXPECT_NE(response.xml.find("oi:name='present'"), std::string::npos)
       << response.xml;
   EXPECT_EQ(response.xml.find("<provider>test-instance-valid</provider>"),
-            std::string::npos) << response.xml;
+            std::string::npos)
+      << response.xml;
 }
 
 TEST(DangdApplicationTest, RejectsInstanceIdentifierIntoClosedStateSubtree) {
@@ -1428,7 +1501,8 @@ TEST(DangdApplicationTest, RejectsInstanceIdentifierIntoClosedStateSubtree) {
                      DANG_TEST_INSTANCE_TARGET_PLUGIN_PATH,
                      DANG_TEST_INSTANCE_INVALID_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
   const auto response = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="instance-bad"
@@ -1439,13 +1513,18 @@ TEST(DangdApplicationTest, RejectsInstanceIdentifierIntoClosedStateSubtree) {
     </rpc>)xml");
   EXPECT_EQ(response.xml.find("oi:name='missing'"), std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("operational provider test-instance-invalid failed during merge"),
-            std::string::npos) << response.xml;
-  EXPECT_NE(response.xml.find("operational-provider-failure"), std::string::npos)
+  EXPECT_NE(
+      response.xml.find(
+          "operational provider test-instance-invalid failed during merge"),
+      std::string::npos)
+      << response.xml;
+  EXPECT_NE(response.xml.find("operational-provider-failure"),
+            std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find(
                 "instance-identifier does not select an existing data node"),
-            std::string::npos) << response.xml;
+            std::string::npos)
+      << response.xml;
 }
 
 TEST(DangdApplicationTest, RejectsLaterOperationalProviderCollision) {
@@ -1460,7 +1539,8 @@ TEST(DangdApplicationTest, RejectsLaterOperationalProviderCollision) {
   options.plugins = {DANG_TEST_COLLISION_FIRST_PLUGIN_PATH,
                      DANG_TEST_COLLISION_SECOND_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
   const auto response = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="collision"
@@ -1479,11 +1559,13 @@ TEST(DangdApplicationTest, RejectsLaterOperationalProviderCollision) {
                 "</counter>"),
             std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find(
-                "operational provider test-collision-second failed during merge"),
-            std::string::npos)
+  EXPECT_NE(
+      response.xml.find(
+          "operational provider test-collision-second failed during merge"),
+      std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("operational-provider-failure"), std::string::npos)
+  EXPECT_NE(response.xml.find("operational-provider-failure"),
+            std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find("occurs more than once"), std::string::npos)
       << response.xml;
@@ -1500,7 +1582,8 @@ TEST(DangdApplicationTest, RejectsOperationalReferenceMissingFromAppliedData) {
   )xml");
   options.plugins = {DANG_TEST_COLLISION_FIRST_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
   const auto response = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="reference"
@@ -1513,11 +1596,13 @@ TEST(DangdApplicationTest, RejectsOperationalReferenceMissingFromAppliedData) {
                 "<counter xmlns=\"urn:dangd:test:operational-collision\">"),
             std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find(
-                "operational provider test-collision-first failed during merge"),
-            std::string::npos)
+  EXPECT_NE(
+      response.xml.find(
+          "operational provider test-collision-first failed during merge"),
+      std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("operational-provider-failure"), std::string::npos)
+  EXPECT_NE(response.xml.find("operational-provider-failure"),
+            std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find("leafref value has no matching target instance"),
             std::string::npos)
@@ -1529,7 +1614,8 @@ TEST(DangdApplicationTest, RejectsOperationalProviderCollisionWithCoreData) {
   auto options = Options(inputs);
   options.plugins = {DANG_TEST_COLLISION_CORE_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
   const auto response = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="core-collision"
@@ -1544,7 +1630,8 @@ TEST(DangdApplicationTest, RejectsOperationalProviderCollisionWithCoreData) {
                 "operational provider test-collision-core failed during merge"),
             std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("operational-provider-failure"), std::string::npos)
+  EXPECT_NE(response.xml.find("operational-provider-failure"),
+            std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find("occurs more than once"), std::string::npos)
       << response.xml;
@@ -1556,7 +1643,8 @@ TEST(DangdApplicationTest, RejectsCrossProviderUniqueConstraintViolation) {
   options.plugins = {DANG_TEST_UNIQUE_FIRST_PLUGIN_PATH,
                      DANG_TEST_UNIQUE_SECOND_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
   const auto response = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="unique"
@@ -1573,7 +1661,8 @@ TEST(DangdApplicationTest, RejectsCrossProviderUniqueConstraintViolation) {
                 "operational provider test-unique-second failed during merge"),
             std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("operational-provider-failure"), std::string::npos)
+  EXPECT_NE(response.xml.find("operational-provider-failure"),
+            std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find(
                 "list entries have identical values for a unique constraint"),
@@ -1582,8 +1671,8 @@ TEST(DangdApplicationTest, RejectsCrossProviderUniqueConstraintViolation) {
 }
 
 class OperationalXPathConstraintTest
-    : public testing::TestWithParam<std::tuple<const char*, const char*,
-                                               const char*>> {};
+    : public testing::TestWithParam<
+          std::tuple<const char*, const char*, const char*>> {};
 
 TEST_P(OperationalXPathConstraintTest,
        RejectsConstraintResolvedByEarlierProvider) {
@@ -1592,7 +1681,8 @@ TEST_P(OperationalXPathConstraintTest,
   options.plugins = {DANG_TEST_XPATH_CONTEXT_PLUGIN_PATH,
                      std::get<0>(GetParam())};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
   const auto response = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="xpath"
@@ -1609,23 +1699,23 @@ TEST_P(OperationalXPathConstraintTest,
       << response.xml;
   EXPECT_NE(response.xml.find(std::get<2>(GetParam())), std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("operational-provider-failure"), std::string::npos)
+  EXPECT_NE(response.xml.find("operational-provider-failure"),
+            std::string::npos)
       << response.xml;
 }
 
 INSTANTIATE_TEST_SUITE_P(
     MustAndWhen, OperationalXPathConstraintTest,
-    testing::Values(
-        std::tuple{DANG_TEST_XPATH_MUST_PLUGIN_PATH, "<must-state",
-                   "must constraint evaluates to false"},
-        std::tuple{DANG_TEST_XPATH_WHEN_PLUGIN_PATH, "<when-state",
-                   "when constraint evaluates to false"}),
+    testing::Values(std::tuple{DANG_TEST_XPATH_MUST_PLUGIN_PATH, "<must-state",
+                               "must constraint evaluates to false"},
+                    std::tuple{DANG_TEST_XPATH_WHEN_PLUGIN_PATH, "<when-state",
+                               "when constraint evaluates to false"}),
     [](const testing::TestParamInfo<OperationalXPathConstraintTest::ParamType>&
            info) { return info.index == 0 ? "Must" : "When"; });
 
 class OperationalXPathAbsenceTest
-    : public testing::TestWithParam<std::tuple<const char*, const char*,
-                                               const char*>> {};
+    : public testing::TestWithParam<
+          std::tuple<const char*, const char*, const char*>> {};
 
 TEST_P(OperationalXPathAbsenceTest, UsesEarlierCompleteSubtreeToDecideAbsence) {
   TemporaryInputs inputs;
@@ -1634,7 +1724,8 @@ TEST_P(OperationalXPathAbsenceTest, UsesEarlierCompleteSubtreeToDecideAbsence) {
                      DANG_TEST_XPATH_ABSENCE_INPUT_PLUGIN_PATH,
                      std::get<0>(GetParam())};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
   const auto response = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="xpath-absence"
@@ -1645,22 +1736,25 @@ TEST_P(OperationalXPathAbsenceTest, UsesEarlierCompleteSubtreeToDecideAbsence) {
     </rpc>)xml");
   EXPECT_EQ(response.xml.find(
                 "<inputs xmlns=\"urn:dangd:test:operational-xpath-absence\""),
-            std::string::npos) << response.xml;
+            std::string::npos)
+      << response.xml;
   EXPECT_EQ(response.xml.find(std::get<1>(GetParam())), std::string::npos)
       << response.xml;
   EXPECT_NE(response.xml.find(std::get<2>(GetParam())), std::string::npos)
       << response.xml;
-  EXPECT_NE(response.xml.find("operational-provider-failure"), std::string::npos)
+  EXPECT_NE(response.xml.find("operational-provider-failure"),
+            std::string::npos)
       << response.xml;
 }
 
 INSTANTIATE_TEST_SUITE_P(
     MustAndWhen, OperationalXPathAbsenceTest,
-    testing::Values(
-        std::tuple{DANG_TEST_XPATH_ABSENCE_MUST_PLUGIN_PATH, "<must-state",
-                   "must constraint evaluates to false"},
-        std::tuple{DANG_TEST_XPATH_ABSENCE_WHEN_PLUGIN_PATH, "<when-state",
-                   "when constraint evaluates to false"}),
+    testing::Values(std::tuple{DANG_TEST_XPATH_ABSENCE_MUST_PLUGIN_PATH,
+                               "<must-state",
+                               "must constraint evaluates to false"},
+                    std::tuple{DANG_TEST_XPATH_ABSENCE_WHEN_PLUGIN_PATH,
+                               "<when-state",
+                               "when constraint evaluates to false"}),
     [](const testing::TestParamInfo<OperationalXPathAbsenceTest::ParamType>&
            info) { return info.index == 0 ? "Must" : "When"; });
 
@@ -1670,7 +1764,8 @@ TEST(DangdApplicationTest, AppliesDependentPluginsInDependencyOrder) {
   options.plugins = {DANG_TEST_CONSUMER_PLUGIN_PATH,
                      DANG_TEST_PROVIDER_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   test_plugin::ResetTrace();
 
   ASSERT_NE(SetProviderMode(*loaded.application, "active").xml.find("<ok/>"),
@@ -1678,10 +1773,10 @@ TEST(DangdApplicationTest, AppliesDependentPluginsInDependencyOrder) {
   const auto commit = Commit(*loaded.application);
   ASSERT_NE(commit.xml.find("<ok/>"), std::string::npos) << commit.xml;
   EXPECT_EQ(test_plugin::Trace(),
-            (std::vector<std::string>{
-                "provider.prepare", "consumer.prepare", "provider.validate",
-                "consumer.validate", "provider.apply", "consumer.apply",
-                "consumer.release", "provider.release"}));
+            (std::vector<std::string>{"provider.prepare", "consumer.prepare",
+                                      "provider.validate", "consumer.validate",
+                                      "provider.apply", "consumer.apply",
+                                      "consumer.release", "provider.release"}));
 }
 
 TEST(DangdApplicationTest, RejectsInvalidComposedPeerPlanBeforeApplyingPlugin) {
@@ -1689,7 +1784,8 @@ TEST(DangdApplicationTest, RejectsInvalidComposedPeerPlanBeforeApplyingPlugin) {
   auto options = Options(inputs);
   options.plugins = {DANG_TEST_PROVIDER_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   test_plugin::ResetTrace();
 
   ASSERT_NE(SetProviderMode(*loaded.application, "peer-plan-invalid")
@@ -1699,8 +1795,7 @@ TEST(DangdApplicationTest, RejectsInvalidComposedPeerPlanBeforeApplyingPlugin) {
   EXPECT_NE(commit.xml.find("invalid stable identity"), std::string::npos)
       << commit.xml;
   EXPECT_EQ(test_plugin::Trace(),
-            (std::vector<std::string>{"provider.prepare",
-                                      "provider.validate",
+            (std::vector<std::string>{"provider.prepare", "provider.validate",
                                       "provider.release"}));
   EXPECT_TRUE(test_plugin::Active("provider").empty());
   EXPECT_EQ(loaded.application->datastores()
@@ -1719,17 +1814,16 @@ TEST(DangdApplicationTest, RejectsSeveralPeerGroupsBeforeApplyingPlugin) {
       << testing::PrintToString(loaded.errors);
   test_plugin::ResetTrace();
 
-  ASSERT_NE(SetProviderMode(*loaded.application, "peer-plan-multi")
-                .xml.find("<ok/>"),
-            std::string::npos);
+  ASSERT_NE(
+      SetProviderMode(*loaded.application, "peer-plan-multi").xml.find("<ok/>"),
+      std::string::npos);
   const auto commit = Commit(*loaded.application);
   EXPECT_NE(commit.xml.find("peer-group-limit"), std::string::npos)
       << commit.xml;
   EXPECT_NE(commit.xml.find("at most one peer group"), std::string::npos)
       << commit.xml;
   EXPECT_EQ(test_plugin::Trace(),
-            (std::vector<std::string>{"provider.prepare",
-                                      "provider.validate",
+            (std::vector<std::string>{"provider.prepare", "provider.validate",
                                       "provider.release"}));
   EXPECT_TRUE(test_plugin::Active("provider").empty());
   EXPECT_EQ(loaded.application->datastores()
@@ -1740,7 +1834,7 @@ TEST(DangdApplicationTest, RejectsSeveralPeerGroupsBeforeApplyingPlugin) {
 }
 
 TEST(DangdApplicationTest,
-     RequiresEveryComposedPeerParticipantToHaveAConfiguredEndpoint) {
+     RequiresEveryComposedPeerParticipantAndInvokesConfiguredController) {
   TemporaryInputs missing_inputs;
   auto missing_options = Options(missing_inputs);
   missing_options.plugins = {DANG_TEST_PROVIDER_PLUGIN_PATH};
@@ -1758,14 +1852,14 @@ TEST(DangdApplicationTest,
   EXPECT_NE(rejected.xml.find("test-group/primary"), std::string::npos)
       << rejected.xml;
   EXPECT_EQ(test_plugin::Trace(),
-            (std::vector<std::string>{"provider.prepare",
-                                      "provider.validate",
+            (std::vector<std::string>{"provider.prepare", "provider.validate",
                                       "provider.release"}));
   EXPECT_TRUE(test_plugin::Active("provider").empty());
 
   TemporaryInputs configured_inputs;
   auto configured_options = Options(configured_inputs);
   configured_options.plugins = {DANG_TEST_PROVIDER_PLUGIN_PATH};
+  configured_options.state_file = configured_inputs.Path("state.json");
   configured_options.peer_transaction_journal =
       configured_inputs.Path("peer-journal.json");
   configured_options.peer_recovery_configuration = configured_inputs.Write(
@@ -1792,12 +1886,18 @@ TEST(DangdApplicationTest,
   ASSERT_NE(SetProviderMode(*configured.application, "peer-plan-valid")
                 .xml.find("<ok/>"),
             std::string::npos);
-  const auto accepted = Commit(*configured.application);
-  EXPECT_NE(accepted.xml.find("<ok/>"), std::string::npos) << accepted.xml;
+  const auto invoked = Commit(*configured.application);
+  EXPECT_NE(invoked.xml.find("peer-prepare-failed"), std::string::npos)
+      << invoked.xml;
+  EXPECT_NE(invoked.xml.find("cannot load certificate chain"),
+            std::string::npos)
+      << invoked.xml;
   EXPECT_EQ(test_plugin::Trace(),
-            (std::vector<std::string>{"provider.prepare",
-                                      "provider.validate", "provider.apply",
+            (std::vector<std::string>{"provider.prepare", "provider.validate",
                                       "provider.release"}));
+  EXPECT_TRUE(test_plugin::Active("provider").empty());
+  EXPECT_FALSE(
+      std::filesystem::exists(*configured_options.peer_transaction_journal));
 }
 
 TEST(DangdApplicationTest,
@@ -1826,9 +1926,9 @@ TEST(DangdApplicationTest,
       << testing::PrintToString(loaded.errors);
   test_plugin::ResetTrace();
 
-  ASSERT_NE(SetProviderMode(*loaded.application, "peer-plan-valid")
-                .xml.find("<ok/>"),
-            std::string::npos);
+  ASSERT_NE(
+      SetProviderMode(*loaded.application, "peer-plan-valid").xml.find("<ok/>"),
+      std::string::npos);
   yang::netconf::RpcSessionContext ordinary{2, "bob", "bob", {}};
   const auto ordinary_validate = loaded.application->server().Process(
       ordinary,
@@ -1889,7 +1989,8 @@ TEST(DangdApplicationTest, DispatchesPluginOwnedSchemaRpc) {
   auto options = Options(inputs);
   options.plugins = {DANG_TEST_PROVIDER_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
   const auto response = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="status">
@@ -1904,9 +2005,11 @@ TEST(DangdApplicationTest, PublishesBackendAppliedStateAndNodeOutcomes) {
   auto options = Options(inputs);
   options.plugins = {DANG_TEST_PROVIDER_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   ASSERT_NE(SetProviderMode(*loaded.application, "backend-transform")
-                .xml.find("<ok/>"), std::string::npos);
+                .xml.find("<ok/>"),
+            std::string::npos);
   ASSERT_NE(Commit(*loaded.application).xml.find("<ok/>"), std::string::npos);
 
   const auto response = loaded.application->server().Process("alice", R"xml(
@@ -1919,11 +2022,14 @@ TEST(DangdApplicationTest, PublishesBackendAppliedStateAndNodeOutcomes) {
       << response.xml;
   EXPECT_EQ(response.xml.find("or:origin="), std::string::npos) << response.xml;
   EXPECT_NE(response.xml.find("<disposition>transformed</disposition>"),
-            std::string::npos) << response.xml;
+            std::string::npos)
+      << response.xml;
   EXPECT_NE(response.xml.find("<disposition>rejected</disposition>"),
-            std::string::npos) << response.xml;
+            std::string::npos)
+      << response.xml;
   EXPECT_NE(response.xml.find("<disposition>delayed</disposition>"),
-            std::string::npos) << response.xml;
+            std::string::npos)
+      << response.xml;
 
   const auto system = loaded.application->server().Process("alice", R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="system"
@@ -1957,10 +2063,12 @@ TEST(DangdApplicationTest, RejectsAndCompensatesInvalidAppliedStateReport) {
   auto options = Options(inputs);
   options.plugins = {DANG_TEST_PROVIDER_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   test_plugin::ResetTrace();
   ASSERT_NE(SetProviderMode(*loaded.application, "backend-invalid-report")
-                .xml.find("<ok/>"), std::string::npos);
+                .xml.find("<ok/>"),
+            std::string::npos);
 
   const auto commit = Commit(*loaded.application);
   EXPECT_NE(commit.xml.find("invalid applied state"), std::string::npos)
@@ -1986,11 +2094,12 @@ TEST(DangdApplicationTest, ValidatesEveryPluginBeforeApplyingAnyPlugin) {
   EXPECT_NE(commit.xml.find("provider mode is incompatible"), std::string::npos)
       << commit.xml;
   EXPECT_NE(commit.xml.find("/provider:provider-settings/provider:mode"),
-            std::string::npos) << commit.xml;
+            std::string::npos)
+      << commit.xml;
   EXPECT_EQ(test_plugin::Trace(),
-            (std::vector<std::string>{
-                "provider.prepare", "consumer.prepare", "provider.validate",
-                "consumer.validate", "consumer.release", "provider.release"}));
+            (std::vector<std::string>{"provider.prepare", "consumer.prepare",
+                                      "provider.validate", "consumer.validate",
+                                      "consumer.release", "provider.release"}));
   EXPECT_TRUE(test_plugin::Active("provider").empty());
   EXPECT_TRUE(test_plugin::Active("consumer").empty());
 }
@@ -2009,11 +2118,12 @@ TEST(DangdApplicationTest, RejectsExhaustedHardwareBeforeApplyingAnything) {
             std::string::npos);
   const auto commit = Commit(*loaded.application);
   EXPECT_NE(commit.xml.find("simulated hardware capacity exhausted"),
-            std::string::npos) << commit.xml;
+            std::string::npos)
+      << commit.xml;
   EXPECT_EQ(test_plugin::Trace(),
-            (std::vector<std::string>{
-                "provider.prepare", "consumer.prepare", "provider.validate",
-                "consumer.validate", "consumer.release", "provider.release"}));
+            (std::vector<std::string>{"provider.prepare", "consumer.prepare",
+                                      "provider.validate", "consumer.validate",
+                                      "consumer.release", "provider.release"}));
   EXPECT_TRUE(test_plugin::Active("provider").empty());
   EXPECT_TRUE(test_plugin::Active("consumer").empty());
   EXPECT_EQ(loaded.application->datastores()
@@ -2037,7 +2147,8 @@ TEST(DangdApplicationTest, RollsBackAppliedDependencyAfterConsumerFailure) {
             std::string::npos);
   const auto commit = Commit(*loaded.application);
   EXPECT_NE(commit.xml.find("simulated consumer hardware failure"),
-            std::string::npos) << commit.xml;
+            std::string::npos)
+      << commit.xml;
   EXPECT_EQ(test_plugin::Trace(),
             (std::vector<std::string>{
                 "provider.prepare", "consumer.prepare", "provider.validate",
@@ -2045,8 +2156,7 @@ TEST(DangdApplicationTest, RollsBackAppliedDependencyAfterConsumerFailure) {
                 "provider.rollback", "consumer.release", "provider.release"}));
   EXPECT_EQ(test_plugin::Active("provider").find("consumer-apply-fail"),
             std::string::npos);
-  EXPECT_NE(test_plugin::Active("provider").find("edge-1"),
-            std::string::npos);
+  EXPECT_NE(test_plugin::Active("provider").find("edge-1"), std::string::npos);
   EXPECT_TRUE(test_plugin::Active("consumer").empty());
   EXPECT_EQ(loaded.application->datastores()
                 .Read(yang::netconf::Datastore::kRunning)
@@ -2064,20 +2174,21 @@ TEST(DangdApplicationTest, ReportsApplyAndRollbackFailuresTogether) {
   ASSERT_NE(loaded.application, nullptr);
   test_plugin::ResetTrace();
 
-  ASSERT_NE(SetProviderMode(*loaded.application,
-                            "consumer-apply-rollback-fail")
+  ASSERT_NE(SetProviderMode(*loaded.application, "consumer-apply-rollback-fail")
                 .xml.find("<ok/>"),
             std::string::npos);
   const auto commit = Commit(*loaded.application);
   EXPECT_NE(commit.xml.find("simulated consumer hardware failure"),
-            std::string::npos) << commit.xml;
+            std::string::npos)
+      << commit.xml;
   EXPECT_NE(commit.xml.find("simulated provider rollback failure"),
-            std::string::npos) << commit.xml;
+            std::string::npos)
+      << commit.xml;
   EXPECT_NE(commit.xml.find("hardware-state-diverged"), std::string::npos)
       << commit.xml;
-  EXPECT_NE(test_plugin::Active("provider").find(
-                "consumer-apply-rollback-fail"),
-            std::string::npos);
+  EXPECT_NE(
+      test_plugin::Active("provider").find("consumer-apply-rollback-fail"),
+      std::string::npos);
   EXPECT_EQ(loaded.application->datastores()
                 .Read(yang::netconf::Datastore::kRunning)
                 .ToXml()
@@ -2085,7 +2196,8 @@ TEST(DangdApplicationTest, ReportsApplyAndRollbackFailuresTogether) {
             std::string::npos);
 
   yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
-  const auto reconciliation = loaded.application->server().Process(session, R"xml(
+  const auto reconciliation =
+      loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="reconcile"
          xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
       <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
@@ -2106,8 +2218,7 @@ TEST(DangdApplicationTest, ReportsApplyAndRollbackFailuresTogether) {
   ASSERT_NE(SetProviderMode(*loaded.application, "active").xml.find("<ok/>"),
             std::string::npos);
   ASSERT_NE(Commit(*loaded.application).xml.find("<ok/>"), std::string::npos);
-  const auto reconciled = loaded.application->server().Process(
-      session, R"xml(
+  const auto reconciled = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="reconciled"
          xmlns:ds="urn:ietf:params:xml:ns:yang:ietf-datastores">
       <get-data xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-nmda">
@@ -2130,17 +2241,23 @@ TEST(DangdApplicationTest, RollsPluginBackWithCancelledConfirmedCommit) {
   auto loaded = Application::Load(options);
   ASSERT_NE(loaded.application, nullptr);
   yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
-  ASSERT_NE(loaded.application->server().Process(session, R"xml(
+  ASSERT_NE(loaded.application->server()
+                .Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="1">
       <edit-config><target><candidate/></target><config>
         <plugin-settings xmlns="urn:dangd:example-plugin"><mode>active</mode>
         </plugin-settings>
       </config></edit-config>
-    </rpc>)xml").xml.find("<ok/>"), std::string::npos);
-  ASSERT_NE(loaded.application->server().Process(session, R"xml(
+    </rpc>)xml")
+                .xml.find("<ok/>"),
+            std::string::npos);
+  ASSERT_NE(loaded.application->server()
+                .Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="2">
       <commit><confirmed/><confirm-timeout>60</confirm-timeout></commit>
-    </rpc>)xml").xml.find("<ok/>"), std::string::npos);
+    </rpc>)xml")
+                .xml.find("<ok/>"),
+            std::string::npos);
 
   void* handle = dlopen(DANG_TEST_PLUGIN_PATH, RTLD_NOW | RTLD_LOCAL);
   ASSERT_NE(handle, nullptr);
@@ -2151,10 +2268,13 @@ TEST(DangdApplicationTest, RollsPluginBackWithCancelledConfirmedCommit) {
   EXPECT_NE(std::string(active()).find("<mode>active</mode>"),
             std::string::npos);
 
-  ASSERT_NE(loaded.application->server().Process(session, R"xml(
+  ASSERT_NE(loaded.application->server()
+                .Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="3">
       <cancel-commit/>
-    </rpc>)xml").xml.find("<ok/>"), std::string::npos);
+    </rpc>)xml")
+                .xml.find("<ok/>"),
+            std::string::npos);
   EXPECT_EQ(std::string(active()).find("plugin-settings"), std::string::npos);
   dlclose(handle);
 }
@@ -2179,20 +2299,25 @@ TEST(DangdApplicationTest, AdvertisesPluginSourceThroughYangLibraryGet) {
   EXPECT_NE(get.xml.find("<module-set-id>"), std::string::npos) << get.xml;
   EXPECT_NE(get.xml.find("<netconf-state"), std::string::npos) << get.xml;
   EXPECT_NE(get.xml.find("<identifier>ietf-netconf-monitoring</identifier>"),
-            std::string::npos) << get.xml;
+            std::string::npos)
+      << get.xml;
   EXPECT_NE(get.xml.find("<location>NETCONF</location>"), std::string::npos)
       << get.xml;
   EXPECT_NE(get.xml.find("<conformance-type>implement</conformance-type>"),
-            std::string::npos) << get.xml;
+            std::string::npos)
+      << get.xml;
   EXPECT_NE(get.xml.find("<conformance-type>import</conformance-type>"),
-            std::string::npos) << get.xml;
+            std::string::npos)
+      << get.xml;
   EXPECT_NE(get.xml.find("<name>ds:operational</name>"), std::string::npos)
       << get.xml;
   EXPECT_NE(get.xml.find("<denied-operations>0</denied-operations>"),
-            std::string::npos) << get.xml;
-  EXPECT_NE(loaded.application->server().ServerHello(9).find(
-                "capability:yang-library:1.1?revision=2019-01-04&amp;content-id="),
-            std::string::npos);
+            std::string::npos)
+      << get.xml;
+  EXPECT_NE(
+      loaded.application->server().ServerHello(9).find(
+          "capability:yang-library:1.1?revision=2019-01-04&amp;content-id="),
+      std::string::npos);
   EXPECT_NE(loaded.application->server().ServerHello(9).find(
                 "ietf-netconf-monitoring?module=ietf-netconf-monitoring&amp;"
                 "revision=2010-10-04"),
@@ -2225,8 +2350,8 @@ TEST(DangdApplicationTest, RetrievesBuiltInAndPluginYangSources) {
         "xmlns=\"urn:ietf:params:xml:ns:yang:ietf-netconf-monitoring\">" +
             std::string(body) + "</get-schema></rpc>");
   };
-  const auto root = retrieve(
-      "<identifier>appliance</identifier><format>yang</format>");
+  const auto root =
+      retrieve("<identifier>appliance</identifier><format>yang</format>");
   EXPECT_NE(root.xml.find("module appliance"), std::string::npos) << root.xml;
   const auto plugin = retrieve(
       "<identifier>dangd-example-plugin</identifier>"
@@ -2237,7 +2362,8 @@ TEST(DangdApplicationTest, RetrievesBuiltInAndPluginYangSources) {
       "<identifier>ietf-netconf-monitoring</identifier>"
       "<version>2010-10-04</version>");
   EXPECT_NE(monitoring.xml.find("module ietf-netconf-monitoring"),
-            std::string::npos) << monitoring.xml;
+            std::string::npos)
+      << monitoring.xml;
   const auto reconciliation = retrieve(
       "<identifier>dangd-reconciliation</identifier>"
       "<version>2026-08-23</version>");
@@ -2247,11 +2373,11 @@ TEST(DangdApplicationTest, RetrievesBuiltInAndPluginYangSources) {
   const auto ssh_server = retrieve(
       "<identifier>ietf-ssh-server</identifier>"
       "<version>2024-10-10</version>");
-  EXPECT_NE(ssh_server.xml.find("module ietf-ssh-server"),
-            std::string::npos) << ssh_server.xml;
-  EXPECT_NE(retrieve("<identifier>missing</identifier>")
-                .xml.find("invalid-value"),
-            std::string::npos);
+  EXPECT_NE(ssh_server.xml.find("module ietf-ssh-server"), std::string::npos)
+      << ssh_server.xml;
+  EXPECT_NE(
+      retrieve("<identifier>missing</identifier>").xml.find("invalid-value"),
+      std::string::npos);
   EXPECT_NE(retrieve("<identifier>appliance</identifier><format>yin</format>")
                 .xml.find("invalid-value"),
             std::string::npos);
@@ -2262,25 +2388,28 @@ TEST(DangdApplicationTest, PublishesDeviationRelationshipsInBothLibraries) {
   auto options = Options(inputs);
   options.plugins = {DANG_TEST_DEVIATION_PLUGIN_PATH};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
   const auto get = loaded.application->server().Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="1">
       <get/>
     </rpc>)xml");
-  EXPECT_NE(get.xml.find(
-                "<name>appliance</name><namespace>urn:example:appliance"
-                "</namespace><deviation>dangd-test-deviation</deviation>"),
-            std::string::npos) << get.xml;
-  EXPECT_NE(get.xml.find(
-                "<deviation><name>dangd-test-deviation</name>"
-                "<revision>2026-08-20</revision></deviation>"),
-            std::string::npos) << get.xml;
-  EXPECT_NE(get.xml.find(
-                "<name>dangd-test-deviation</name><revision>2026-08-20"
-                "</revision><namespace>urn:dangd:test:deviation</namespace>"
-                "<conformance-type>implement</conformance-type>"),
-            std::string::npos) << get.xml;
+  EXPECT_NE(
+      get.xml.find("<name>appliance</name><namespace>urn:example:appliance"
+                   "</namespace><deviation>dangd-test-deviation</deviation>"),
+      std::string::npos)
+      << get.xml;
+  EXPECT_NE(get.xml.find("<deviation><name>dangd-test-deviation</name>"
+                         "<revision>2026-08-20</revision></deviation>"),
+            std::string::npos)
+      << get.xml;
+  EXPECT_NE(
+      get.xml.find("<name>dangd-test-deviation</name><revision>2026-08-20"
+                   "</revision><namespace>urn:dangd:test:deviation</namespace>"
+                   "<conformance-type>implement</conformance-type>"),
+      std::string::npos)
+      << get.xml;
 }
 
 TEST(DangdApplicationTest, PublishesYangLibraryUpdateToSubscribers) {
@@ -2300,8 +2429,9 @@ TEST(DangdApplicationTest, PublishesYangLibraryUpdateToSubscribers) {
   ASSERT_EQ(notifications.size(), 2u);
   EXPECT_NE(notifications.front().find("yang-library-update"),
             std::string::npos);
-  EXPECT_NE(notifications.front().find("<content-id>replacement-id</content-id>"),
-            std::string::npos);
+  EXPECT_NE(
+      notifications.front().find("<content-id>replacement-id</content-id>"),
+      std::string::npos);
   EXPECT_NE(notifications.back().find("yang-library-change"),
             std::string::npos);
   EXPECT_NE(notifications.back().find(
@@ -2342,7 +2472,8 @@ TEST(DangdApplicationTest, ValidatesAndPublishesPluginNotifications) {
       <exec-default>permit</exec-default>
     </nacm>)xml");
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
 
   yang::netconf::RpcSessionContext session{43, "alice", "alice", {}};
   const auto subscribe = loaded.application->server().Process(session, R"xml(
@@ -2352,7 +2483,8 @@ TEST(DangdApplicationTest, ValidatesAndPublishesPluginNotifications) {
     </rpc>)xml");
   ASSERT_NE(subscribe.xml.find("<ok/>"), std::string::npos) << subscribe.xml;
   yang::netconf::RpcSessionContext denied{44, "bob", "bob", {}};
-  const auto denied_subscribe = loaded.application->server().Process(denied, R"xml(
+  const auto denied_subscribe =
+      loaded.application->server().Process(denied, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="denied-sub">
       <create-subscription
         xmlns="urn:ietf:params:xml:ns:netconf:notification:1.0"/>
@@ -2386,12 +2518,14 @@ TEST(DangdApplicationTest, AtomicallyReloadsSchemaWithRunningConfiguration) {
     container system { leaf hostname { type string; mandatory true; } }
   })yang");
   const auto config = inputs.Write(
-      "reload.xml", "<config xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
+      "reload.xml",
+      "<config xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
       "<system xmlns=\"urn:dangd:reload\"><hostname>edge</hostname></system>"
       "</config>");
   ApplicationOptions options{.model = model, .configuration = config};
   auto loaded = Application::Load(options);
-  ASSERT_NE(loaded.application, nullptr) << testing::PrintToString(loaded.errors);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
   const std::string old_id = loaded.application->yang_library_content_id();
 
   inputs.Write("reload.yang", R"yang(module reloadable {
@@ -2428,17 +2562,21 @@ TEST(DangdApplicationTest, AtomicallyReloadsSchemaWithRunningConfiguration) {
   EXPECT_EQ(replacement.application->yang_library_content_id(), replacement_id);
 }
 
-TEST(DangdApplicationTest, ReloadsLibraryInventoryAndAdvertisedDatastoreSchema) {
+TEST(DangdApplicationTest,
+     ReloadsLibraryInventoryAndAdvertisedDatastoreSchema) {
   TemporaryInputs inputs;
   auto options = Options(inputs);
   auto base = Application::Load(options);
   ASSERT_NE(base.application, nullptr) << testing::PrintToString(base.errors);
   yang::netconf::RpcSessionContext session{77, "alice", "alice", {}};
-  ASSERT_NE(base.application->server().Process(session, R"xml(
+  ASSERT_NE(base.application->server()
+                .Process(session, R"xml(
     <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="sub">
       <create-subscription
         xmlns="urn:ietf:params:xml:ns:netconf:notification:1.0"/>
-    </rpc>)xml").xml.find("<ok/>"), std::string::npos);
+    </rpc>)xml")
+                .xml.find("<ok/>"),
+            std::string::npos);
   const std::string base_id = base.application->yang_library_content_id();
 
   options.plugins = {DANG_TEST_DEVIATION_PLUGIN_PATH};
@@ -2457,7 +2595,8 @@ TEST(DangdApplicationTest, ReloadsLibraryInventoryAndAdvertisedDatastoreSchema) 
 
   options.plugins = {DANG_TEST_PLUGIN_PATH};
   auto plugin = Application::Reload(options, *deviated.application);
-  ASSERT_NE(plugin.application, nullptr) << testing::PrintToString(plugin.errors);
+  ASSERT_NE(plugin.application, nullptr)
+      << testing::PrintToString(plugin.errors);
   EXPECT_NE(plugin.application->yang_library_content_id(), deviation_id);
   EXPECT_TRUE(plugin.application->schema()
                   .FindRoot({"urn:dangd:example-plugin", "plugin-settings"})
@@ -2493,10 +2632,10 @@ TEST(DangdApplicationTest, ReloadsLibraryInventoryAndAdvertisedDatastoreSchema) 
 TEST(DangdApplicationTest, RejectsSchemaInvalidConfiguration) {
   TemporaryInputs inputs;
   auto options = Options(inputs);
-  options.configuration = inputs.Write(
-      "invalid.xml",
-      "<config xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
-      "<system xmlns=\"urn:example:appliance\"/></config>");
+  options.configuration =
+      inputs.Write("invalid.xml",
+                   "<config xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">"
+                   "<system xmlns=\"urn:example:appliance\"/></config>");
   auto loaded = Application::Load(options);
   EXPECT_EQ(loaded.application, nullptr);
   ASSERT_FALSE(loaded.errors.empty());
@@ -2638,10 +2777,9 @@ TEST(DangdApplicationTest, RejectsOrphanedAndMismatchedBackendRecoveryState) {
     std::ifstream input(*options.state_file);
     input >> snapshot;
   }
-  snapshot["backend-recovery"] = {
-      {"kind", "peer-transaction-v1"},
-      {"transaction-id", "snapshot-transaction"},
-      {"proposal-digest", "sha256:snapshot"}};
+  snapshot["backend-recovery"] = {{"kind", "peer-transaction-v1"},
+                                  {"transaction-id", "snapshot-transaction"},
+                                  {"proposal-digest", "sha256:snapshot"}};
   {
     std::ofstream output(*options.state_file, std::ios::trunc);
     output << snapshot.dump(2) << '\n';
@@ -2690,33 +2828,32 @@ TEST(DangdApplicationTest, RejectsUnsafePeerJournalConfiguration) {
   options.state_file.reset();
   options.peer_transaction_journal = inputs.Write("bad-peer.json", "not-json");
 #if defined(__unix__) || defined(__APPLE__)
-  ASSERT_EQ(chmod(options.peer_transaction_journal->c_str(),
-                  S_IRUSR | S_IWUSR),
+  ASSERT_EQ(chmod(options.peer_transaction_journal->c_str(), S_IRUSR | S_IWUSR),
             0);
 #endif
   auto malformed = Application::Load(options);
   EXPECT_EQ(malformed.application, nullptr);
   ASSERT_EQ(malformed.errors.size(), 1u);
-  EXPECT_NE(malformed.errors.front().find(
-                "cannot load peer transaction journal"),
-            std::string::npos);
+  EXPECT_NE(
+      malformed.errors.front().find("cannot load peer transaction journal"),
+      std::string::npos);
 }
 
 TEST(DangdApplicationTest, ValidatesStablePeerRecoveryTargetMapping) {
   TemporaryInputs inputs;
   auto options = Options(inputs);
-  options.peer_recovery_configuration = inputs.Write(
-      "peer-recovery.json",
-      R"json({"version":2,"peers":[
+  options.peer_recovery_configuration =
+      inputs.Write("peer-recovery.json",
+                   R"json({"version":2,"peers":[
         {"group-id":"kea-ha-a","participant-id":"other",
          "host":"other.example","port":6513,
          "certificate":"client.pem","private-key":"client.key",
          "trust-anchor":"ca.pem"}
       ]})json");
 #if defined(__unix__) || defined(__APPLE__)
-  ASSERT_EQ(chmod(options.peer_recovery_configuration->c_str(),
-                  S_IRUSR | S_IWUSR),
-            0);
+  ASSERT_EQ(
+      chmod(options.peer_recovery_configuration->c_str(), S_IRUSR | S_IWUSR),
+      0);
 #endif
 
   auto without_journal = Application::Load(options);
@@ -2727,8 +2864,7 @@ TEST(DangdApplicationTest, ValidatesStablePeerRecoveryTargetMapping) {
 
   options.peer_transaction_journal = inputs.Path("peer-transaction.json");
   auto ready = Application::Load(options);
-  ASSERT_NE(ready.application, nullptr)
-      << testing::PrintToString(ready.errors);
+  ASSERT_NE(ready.application, nullptr) << testing::PrintToString(ready.errors);
   ready.application.reset();
 
   PeerJournalState state{
@@ -2745,11 +2881,11 @@ TEST(DangdApplicationTest, ValidatesStablePeerRecoveryTargetMapping) {
   auto journal = PeerTransactionFileJournal::Create(
       *options.peer_transaction_journal, std::move(state), &journal_error);
   ASSERT_TRUE(journal) << journal_error;
-  ASSERT_EQ(journal->Callbacks()
-                .record_commit_decision(
-                    {"kea-ha-a/primary", "kea-ha-a/standby"})
-                .status,
-            PeerTransactionDecisionStatus::kCommitted);
+  ASSERT_EQ(
+      journal->Callbacks()
+          .record_commit_decision({"kea-ha-a/primary", "kea-ha-a/standby"})
+          .status,
+      PeerTransactionDecisionStatus::kCommitted);
 
   auto missing = Application::Load(options);
   EXPECT_EQ(missing.application, nullptr);
@@ -2769,8 +2905,8 @@ TEST(DangdApplicationTest, LiveCommitRestoresSnapshotAndBackendOnSaveFailure) {
   for (const auto interrupted_stage : stages) {
     TemporaryInputs inputs;
     auto options = Options(inputs);
-    options.state_file = inputs.Path("state-" + std::to_string(++sequence) +
-                                     ".json");
+    options.state_file =
+        inputs.Path("state-" + std::to_string(++sequence) + ".json");
     bool armed = false;
     options.snapshot_save_checkpoint =
         [&](yang::netconf::SnapshotSaveStage stage) {
@@ -2788,8 +2924,9 @@ TEST(DangdApplicationTest, LiveCommitRestoresSnapshotAndBackendOnSaveFailure) {
       </rpc>)xml");
     ASSERT_NE(edited.xml.find("<ok/>"), std::string::npos) << edited.xml;
     std::ifstream before_input(*options.state_file, std::ios::binary);
-    const std::string durable_before((std::istreambuf_iterator<char>(before_input)),
-                                     std::istreambuf_iterator<char>());
+    const std::string durable_before(
+        (std::istreambuf_iterator<char>(before_input)),
+        std::istreambuf_iterator<char>());
 
     armed = true;
     const auto committed = Commit(*loaded.application);
@@ -2798,22 +2935,25 @@ TEST(DangdApplicationTest, LiveCommitRestoresSnapshotAndBackendOnSaveFailure) {
     EXPECT_NE(committed.xml.find("operation-failed"), std::string::npos)
         << committed.xml;
     EXPECT_NE(committed.xml.find("datastore persistence failed"),
-              std::string::npos) << committed.xml;
+              std::string::npos)
+        << committed.xml;
     EXPECT_NE(loaded.application->datastores()
                   .Read(yang::netconf::Datastore::kRunning)
                   .ToXml()
                   .find("edge-1"),
               std::string::npos);
-    EXPECT_NE(loaded.application->working_configuration().ToXml().find("edge-1"),
-              std::string::npos);
+    EXPECT_NE(
+        loaded.application->working_configuration().ToXml().find("edge-1"),
+        std::string::npos);
     EXPECT_NE(loaded.application->datastores()
                   .Read(yang::netconf::Datastore::kCandidate)
                   .ToXml()
                   .find("edge-2"),
               std::string::npos);
     std::ifstream after_input(*options.state_file, std::ios::binary);
-    const std::string durable_after((std::istreambuf_iterator<char>(after_input)),
-                                    std::istreambuf_iterator<char>());
+    const std::string durable_after(
+        (std::istreambuf_iterator<char>(after_input)),
+        std::istreambuf_iterator<char>());
     EXPECT_EQ(durable_after, durable_before);
   }
 }
@@ -2843,8 +2983,8 @@ TEST(DangdApplicationTest, PersistsManagedNacmBeforeFirstBootCompletes) {
 
   unsigned sequence = 0;
   for (const yang::netconf::SnapshotSaveStage interrupted_stage : stages) {
-    options.state_file = inputs.Path(
-        "first-boot-" + std::to_string(sequence++) + ".json");
+    options.state_file =
+        inputs.Path("first-boot-" + std::to_string(sequence++) + ".json");
     options.snapshot_save_checkpoint =
         [interrupted_stage](yang::netconf::SnapshotSaveStage stage) {
           return stage != interrupted_stage;
@@ -2852,9 +2992,10 @@ TEST(DangdApplicationTest, PersistsManagedNacmBeforeFirstBootCompletes) {
     auto interrupted = Application::Load(options);
     EXPECT_EQ(interrupted.application, nullptr);
     ASSERT_FALSE(interrupted.errors.empty());
-    EXPECT_NE(interrupted.errors.front().find(
-                  "cannot persist initial state file"),
-              std::string::npos) << testing::PrintToString(interrupted.errors);
+    EXPECT_NE(
+        interrupted.errors.front().find("cannot persist initial state file"),
+        std::string::npos)
+        << testing::PrintToString(interrupted.errors);
 
     options.snapshot_save_checkpoint = {};
     auto restarted = Application::Load(options);
@@ -2901,12 +3042,12 @@ TEST(DangdApplicationTest, RunsFramedBase10SessionOverStreams) {
   std::ostringstream output;
   std::ostringstream errors;
   EXPECT_EQ(RunStreamSession(*loaded.application, input, output, errors, 41,
-                             "operator"), 0);
+                             "operator"),
+            0);
   EXPECT_TRUE(errors.str().empty());
   EXPECT_NE(output.str().find("<session-id>41</session-id>"),
             std::string::npos);
-  EXPECT_NE(output.str().find("message-id=\"7\"><ok/>"),
-            std::string::npos);
+  EXPECT_NE(output.str().find("message-id=\"7\"><ok/>"), std::string::npos);
 }
 
 TEST(DangdApplicationTest, CommitReplacesBackendAndDescribesDeltaInEnglish) {
@@ -2931,11 +3072,10 @@ TEST(DangdApplicationTest, CommitReplacesBackendAndDescribesDeltaInEnglish) {
   ASSERT_EQ(deltas.size(), 1u);
   EXPECT_NE(deltas.front().find("Changed "), std::string::npos);
   EXPECT_NE(deltas.front().find("hostname"), std::string::npos);
-  EXPECT_NE(deltas.front().find("\"edge-1\" to \"edge-2\""),
-            std::string::npos);
-  EXPECT_NE(loaded.application->working_configuration().ToXml().find(
-                ">edge-2</"),
-            std::string::npos);
+  EXPECT_NE(deltas.front().find("\"edge-1\" to \"edge-2\""), std::string::npos);
+  EXPECT_NE(
+      loaded.application->working_configuration().ToXml().find(">edge-2</"),
+      std::string::npos);
 }
 
 TEST(DangdApplicationTest, DescribesOrderedMoveDeltaInEnglish) {
@@ -2975,7 +3115,8 @@ TEST(DangdApplicationTest, DescribesOrderedMoveDeltaInEnglish) {
       << deltas.front();
 }
 
-TEST(DangdApplicationTest, FailedCommitPreservesRunningAndBackendConfiguration) {
+TEST(DangdApplicationTest,
+     FailedCommitPreservesRunningAndBackendConfiguration) {
   TemporaryInputs inputs;
   auto loaded = Application::Load(Options(inputs));
   ASSERT_NE(loaded.application, nullptr);
@@ -3004,23 +3145,22 @@ TEST(DangdApplicationTest, FailedCommitPreservesRunningAndBackendConfiguration) 
             std::string::npos);
   EXPECT_NE(commit.xml.find("mandatory data node is absent"),
             std::string::npos);
-  EXPECT_NE(commit.xml.find(
-                "mandatory data node is absent (module: appliance, path: "
-                "/{urn:example:appliance}system/"
-                "{urn:example:appliance}hostname)"),
-            std::string::npos);
-  EXPECT_NE(commit.xml.find(
-                "<error-path xmlns:n0=\"urn:example:appliance\">"
-                "/n0:system/n0:hostname</error-path>"),
+  EXPECT_NE(
+      commit.xml.find("mandatory data node is absent (module: appliance, path: "
+                      "/{urn:example:appliance}system/"
+                      "{urn:example:appliance}hostname)"),
+      std::string::npos);
+  EXPECT_NE(commit.xml.find("<error-path xmlns:n0=\"urn:example:appliance\">"
+                            "/n0:system/n0:hostname</error-path>"),
             std::string::npos);
   EXPECT_NE(loaded.application->datastores()
                 .Read(yang::netconf::Datastore::kRunning)
                 .ToXml()
                 .find(">edge-1</"),
             std::string::npos);
-  EXPECT_NE(loaded.application->working_configuration().ToXml().find(
-                ">edge-1</"),
-            std::string::npos);
+  EXPECT_NE(
+      loaded.application->working_configuration().ToXml().find(">edge-1</"),
+      std::string::npos);
   EXPECT_TRUE(loaded.application->DrainBackendDeltas().empty());
 }
 
@@ -3039,9 +3179,9 @@ TEST(DangdApplicationTest, InvalidEditTargetReturnsNetconfError) {
             std::string::npos);
   EXPECT_NE(response.xml.find("invalid edit-config parameters"),
             std::string::npos);
-  EXPECT_NE(loaded.application->working_configuration().ToXml().find(
-                ">edge-1</"),
-            std::string::npos);
+  EXPECT_NE(
+      loaded.application->working_configuration().ToXml().find(">edge-1</"),
+      std::string::npos);
   EXPECT_TRUE(loaded.application->DrainBackendDeltas().empty());
 }
 

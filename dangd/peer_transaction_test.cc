@@ -3,13 +3,13 @@
 
 #include "dangd/peer_transaction.h"
 
+#include <gtest/gtest.h>
+
 #include <algorithm>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
-
-#include <gtest/gtest.h>
 
 namespace dangd {
 namespace {
@@ -20,7 +20,7 @@ struct FakePeerState {
 };
 
 PeerTransactionParticipant Peer(std::string id, PeerTransactionRole role,
-                                FakePeerState *state) {
+                                FakePeerState* state) {
   const std::string captured = id;
   auto operation = [state, captured](std::string name) {
     state->events.push_back(name + " " + captured);
@@ -41,7 +41,7 @@ PeerTransactionParticipant Peer(std::string id, PeerTransactionRole role,
   };
 }
 
-PeerTransactionJournal Journal(FakePeerState *state, bool fail_decision = false,
+PeerTransactionJournal Journal(FakePeerState* state, bool fail_decision = false,
                                bool fail_complete = false,
                                std::string fail_confirmation = {}) {
   return {
@@ -51,10 +51,9 @@ PeerTransactionJournal Journal(FakePeerState *state, bool fail_decision = false,
             return std::optional<std::string>{};
           },
       .record_commit_decision =
-          [state, fail_decision](const std::vector<std::string> &ids) {
+          [state, fail_decision](const std::vector<std::string>& ids) {
             std::string event = "decision";
-            for (const std::string &id : ids)
-              event += " " + id;
+            for (const std::string& id : ids) event += " " + id;
             state->events.push_back(std::move(event));
             if (fail_decision)
               return PeerTransactionDecisionResult{
@@ -64,7 +63,7 @@ PeerTransactionJournal Journal(FakePeerState *state, bool fail_decision = false,
                 .status = PeerTransactionDecisionStatus::kCommitted};
           },
       .record_confirmation =
-          [state, fail_confirmation](const std::string &id) {
+          [state, fail_confirmation](const std::string& id) {
             state->events.push_back("ack " + id);
             if (id == fail_confirmation)
               return std::optional<std::string>("journal unavailable");
@@ -80,7 +79,7 @@ PeerTransactionJournal Journal(FakePeerState *state, bool fail_decision = false,
   };
 }
 
-std::vector<PeerTransactionParticipant> Pair(FakePeerState *state) {
+std::vector<PeerTransactionParticipant> Pair(FakePeerState* state) {
   std::vector<PeerTransactionParticipant> peers;
   peers.push_back(Peer("primary", PeerTransactionRole::kPrimary, state));
   peers.push_back(Peer("standby", PeerTransactionRole::kStandby, state));
@@ -264,7 +263,7 @@ TEST(PeerTransactionCoordinatorTest,
      UnknownDecisionOutcomeNeverConfirmsOrRollsBack) {
   FakePeerState state;
   PeerTransactionJournal journal = Journal(&state);
-  journal.record_commit_decision = [&state](const std::vector<std::string> &) {
+  journal.record_commit_decision = [&state](const std::vector<std::string>&) {
     state.events.push_back("decision unknown");
     return PeerTransactionDecisionResult{
         .status = PeerTransactionDecisionStatus::kOutcomeUnknown,
@@ -279,6 +278,29 @@ TEST(PeerTransactionCoordinatorTest,
   EXPECT_EQ(std::ranges::find(state.events, "confirm standby"),
             state.events.end());
   EXPECT_EQ(std::ranges::find(state.events, "cancel standby"),
+            state.events.end());
+}
+
+TEST(PeerTransactionCoordinatorTest,
+     DurableLocalStateRetainsPreparedJournalWhenDecisionWriteFails) {
+  FakePeerState state;
+  PeerTransactionPrepareResult prepared =
+      PeerTransactionCoordinator().Prepare(Pair(&state), Journal(&state, true));
+  ASSERT_TRUE(prepared.ok());
+
+  const PeerTransactionResult result =
+      PeerTransactionCoordinator().CommitPrepared(
+          std::move(*prepared.transaction),
+          PeerDecisionFailurePolicy::kRetainPrepared);
+
+  EXPECT_EQ(result.disposition, PeerTransactionDisposition::kCommitPending);
+  EXPECT_EQ(result.pending_confirmations,
+            (std::vector<std::string>{"primary", "standby"}));
+  EXPECT_EQ(std::ranges::find(state.events, "cancel standby"),
+            state.events.end());
+  EXPECT_EQ(std::ranges::find(state.events, "abort journal"),
+            state.events.end());
+  EXPECT_NE(std::ranges::find(state.events, "release standby"),
             state.events.end());
 }
 
@@ -320,5 +342,5 @@ TEST(PeerTransactionCoordinatorTest,
             state.events.end());
 }
 
-} // namespace
-} // namespace dangd
+}  // namespace
+}  // namespace dangd

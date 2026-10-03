@@ -600,6 +600,7 @@ if(YANG_BUILD_TESTS)
   if(YANG_BUILD_DANGD)
     find_program(DANG_OPENSSH_CLIENT ssh)
     add_executable(dangd_tests dangd/application_test.cc
+      dangd/configuration_backend_test.cc
       dangd/hardware_transaction_test.cc dangd/peer_transaction_test.cc
       dangd/peer_transaction_controller_test.cc
       dangd/peer_transaction_plan_test.cc

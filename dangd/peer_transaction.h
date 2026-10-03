@@ -65,10 +65,10 @@ struct PeerTransactionJournal {
   std::function<std::optional<std::string>()> record_abort;
   /** Makes the group commit decision crash-safe before returning success. */
   std::function<PeerTransactionDecisionResult(
-      const std::vector<std::string> &participant_ids)>
+      const std::vector<std::string>& participant_ids)>
       record_commit_decision;
   /** Durably records one acknowledged participant confirmation. */
-  std::function<std::optional<std::string>(const std::string &participant_id)>
+  std::function<std::optional<std::string>(const std::string& participant_id)>
       record_confirmation;
   /** Marks recovery complete after every participant is confirmed. */
   std::function<std::optional<std::string>()> record_complete;
@@ -81,6 +81,14 @@ enum class PeerTransactionDisposition {
   kPrepared,
   kCommitPending,
   kCommitted,
+};
+
+/** Action when COMMIT is proven not durable at the caller's decision point. */
+enum class PeerDecisionFailurePolicy {
+  /** Cancel remote work because the caller has not committed local state. */
+  kAbort,
+  /** Preserve PREPARED for recovery because local state is already durable. */
+  kRetainPrepared,
 };
 
 /** Result retained for operator reporting and durable recovery. */
@@ -136,24 +144,26 @@ struct PeerTransactionPrepareResult {
  * a journal whose PREPARED state was made durable before the call.
  */
 class PeerTransactionCoordinator {
-public:
+ public:
   /** Prepares, applies confirmed commits, and verifies without choosing COMMIT.
    */
-  [[nodiscard]] PeerTransactionPrepareResult
-  Prepare(std::vector<PeerTransactionParticipant> participants,
-          PeerTransactionJournal journal) const;
+  [[nodiscard]] PeerTransactionPrepareResult Prepare(
+      std::vector<PeerTransactionParticipant> participants,
+      PeerTransactionJournal journal) const;
 
   /** Durably selects COMMIT, confirms every peer, and releases resources. */
-  [[nodiscard]] PeerTransactionResult
-  CommitPrepared(PeerPreparedTransaction transaction) const;
+  [[nodiscard]] PeerTransactionResult CommitPrepared(
+      PeerPreparedTransaction transaction,
+      PeerDecisionFailurePolicy failure_policy =
+          PeerDecisionFailurePolicy::kAbort) const;
 
   /** Cancels verified remote work while PREPARED remains authoritative. */
-  [[nodiscard]] PeerTransactionResult
-  AbortPrepared(PeerPreparedTransaction transaction) const;
+  [[nodiscard]] PeerTransactionResult AbortPrepared(
+      PeerPreparedTransaction transaction) const;
 
-  [[nodiscard]] PeerTransactionResult
-  Execute(std::vector<PeerTransactionParticipant> participants,
-          PeerTransactionJournal journal) const;
+  [[nodiscard]] PeerTransactionResult Execute(
+      std::vector<PeerTransactionParticipant> participants,
+      PeerTransactionJournal journal) const;
 
   /**
    * Replays an already durable commit decision after restart or a lost reply.
@@ -162,10 +172,10 @@ public:
    * prepare, apply, verify, or cancel. It releases the recovery sessions after
    * their confirmation attempts.
    */
-  [[nodiscard]] PeerTransactionResult
-  ResumeCommit(std::vector<PeerTransactionParticipant> participants,
-               std::vector<std::string> already_confirmed,
-               PeerTransactionJournal journal) const;
+  [[nodiscard]] PeerTransactionResult ResumeCommit(
+      std::vector<PeerTransactionParticipant> participants,
+      std::vector<std::string> already_confirmed,
+      PeerTransactionJournal journal) const;
 
   /**
    * Cancels every participant named by a durable prepared record.
@@ -173,11 +183,11 @@ public:
    * Cancellation is intentionally attempted for every participant because a
    * crash can hide which confirmed-commit requests reached their peers.
    */
-  [[nodiscard]] PeerTransactionResult
-  ResumeAbort(std::vector<PeerTransactionParticipant> participants,
-              PeerTransactionJournal journal) const;
+  [[nodiscard]] PeerTransactionResult ResumeAbort(
+      std::vector<PeerTransactionParticipant> participants,
+      PeerTransactionJournal journal) const;
 };
 
-} // namespace dangd
+}  // namespace dangd
 
-#endif // DANGD_PEER_TRANSACTION_H_
+#endif  // DANGD_PEER_TRANSACTION_H_

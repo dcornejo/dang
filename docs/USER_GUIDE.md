@@ -352,10 +352,13 @@ or if a plugin rejects or cannot apply the restored configuration. Do not edit
 snapshot JSON manually; use NETCONF to migrate configuration between different
 schemas or software versions.
 
-### 8.1 Reserve peer-transaction recovery state
+### 8.1 Configure peer-transaction recovery state
 
-Future pair-wide transactions use a separate private journal. Reserve and
-inspect its path with `--peer-journal`; it must not be the `--state` path.
+Pair-wide transactions use a separate private journal. Configure and inspect
+its path with `--peer-journal`; it must not be the `--state` path. Live peer
+coordination also requires `--state`: dangd will not start remote confirmed
+commits unless the matching local running tree and recovery marker can be made
+durable before the group COMMIT decision.
 Stable recovery targets are supplied in a separate private JSON file:
 
 ```json
@@ -417,6 +420,17 @@ suppresses rediscovery of another distributed peer plan. Repeat the option when
 several distinct controller identities are required. A controller identity
 cannot also be a NACM recovery user. Duplicate, padded, control-containing,
 malformed UTF-8, or oversized identities fail startup.
+
+On a normal NETCONF commit, affected plugins contribute complete peer images
+and opaque verification contexts through the public contract. Dangd composes
+and validates them, prepares every remote candidate, applies persistent
+confirmed commits standby-first, and verifies authenticated readback. It then
+applies the local plugin transaction and saves the new local snapshot with the
+matching recovery marker. Only after that save succeeds does it durably select
+the peer COMMIT decision and confirm the remotes. A local apply or snapshot
+failure cancels remote work. A finalization failure retains both records and
+blocks further changes until restart completes recovery. Startup hydration
+does not originate a distributed change.
 
 The journal normally does not exist. Version 2 first records PREPARED before
 any remote mutation, then atomically changes it to COMMIT before permanent

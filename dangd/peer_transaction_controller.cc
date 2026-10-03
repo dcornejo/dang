@@ -3,12 +3,12 @@
 
 #include "dangd/peer_transaction_controller.h"
 
+#include <openssl/rand.h>
+
 #include <array>
 #include <map>
 #include <set>
 #include <utility>
-
-#include <openssl/rand.h>
 
 #include "dangd/peer_identity.h"
 #include "dangd/peer_transaction_journal.h"
@@ -35,39 +35,38 @@ PeerTransactionRole Role(std::uint32_t role) {
                                       : PeerTransactionRole::kStandby;
 }
 
-} // namespace
+}  // namespace
 
 PeerTransactionController::PeerTransactionController(
     std::vector<PeerRecoveryTarget> targets,
     PeerVerificationCallback verify_peer,
     PeerParticipantFactory participant_factory,
     PeerPersistentIdFactory persistent_id_factory)
-    : targets_(std::move(targets)), verify_peer_(std::move(verify_peer)),
+    : targets_(std::move(targets)),
+      verify_peer_(std::move(verify_peer)),
       participant_factory_(std::move(participant_factory)),
       persistent_id_factory_(std::move(persistent_id_factory)) {
-  if (!persistent_id_factory_)
-    persistent_id_factory_ = SecurePersistentId;
+  if (!persistent_id_factory_) persistent_id_factory_ = SecurePersistentId;
 }
 
-PeerTransactionControllerPrepareResult
-PeerTransactionController::Prepare(const ComposedPeerTransactionGroup &group,
-                                   const std::filesystem::path &journal_path,
-                                   std::string transaction_id,
-                                   std::string proposal_digest) const {
+PeerTransactionControllerPrepareResult PeerTransactionController::Prepare(
+    const ComposedPeerTransactionGroup& group,
+    const std::filesystem::path& journal_path, std::string transaction_id,
+    std::string proposal_digest) const {
   PeerTransactionResult failed;
   if (!participant_factory_ || !persistent_id_factory_) {
     failed.message = "peer transaction controller callbacks are incomplete";
     return {.result = std::move(failed)};
   }
 
-  std::map<std::string, const PeerRecoveryTarget *, std::less<>> targets;
-  for (const PeerRecoveryTarget &target : targets_)
+  std::map<std::string, const PeerRecoveryTarget*, std::less<>> targets;
+  for (const PeerRecoveryTarget& target : targets_)
     targets.emplace(PeerRecoveryTargetId(target), &target);
 
   std::set<std::string> persistent_ids;
   struct MaterializedParticipant {
-    const PeerPlanParticipant *planned = nullptr;
-    const PeerRecoveryTarget *target = nullptr;
+    const PeerPlanParticipant* planned = nullptr;
+    const PeerRecoveryTarget* target = nullptr;
     std::string identity;
     std::string persistent_id;
   };
@@ -76,7 +75,7 @@ PeerTransactionController::Prepare(const ComposedPeerTransactionGroup &group,
   PeerJournalState journal_state{.transaction_id = transaction_id,
                                  .proposal_digest = proposal_digest};
   journal_state.participants.reserve(group.participants.size());
-  for (const PeerPlanParticipant &planned : group.participants) {
+  for (const PeerPlanParticipant& planned : group.participants) {
     const std::string identity =
         PeerIdentity(group.group_id, planned.participant_id);
     const auto target = targets.find(identity);
@@ -100,8 +99,8 @@ PeerTransactionController::Prepare(const ComposedPeerTransactionGroup &group,
 
   std::vector<PeerTransactionParticipant> participants;
   participants.reserve(materialized.size());
-  for (const MaterializedParticipant &material : materialized) {
-    const PeerPlanParticipant &planned = *material.planned;
+  for (const MaterializedParticipant& material : materialized) {
+    const PeerPlanParticipant& planned = *material.planned;
     const PeerTransactionRole role = Role(planned.role);
     journal_state.participants.push_back(
         {.id = material.identity,
@@ -123,7 +122,7 @@ PeerTransactionController::Prepare(const ComposedPeerTransactionGroup &group,
                 std::string_view operational) -> std::optional<std::string> {
           if (!verify_peer && !verifiers.empty())
             return "peer verifier callback is unavailable";
-          for (const PeerPlanVerifier &verifier : verifiers) {
+          for (const PeerPlanVerifier& verifier : verifiers) {
             const auto finding = verify_peer(PluginPeerVerification{
                 .provider = verifier.provider,
                 .group_id = group_id,
@@ -154,8 +153,7 @@ PeerTransactionController::Prepare(const ComposedPeerTransactionGroup &group,
   }
   PeerTransactionPrepareResult prepared = PeerTransactionCoordinator().Prepare(
       std::move(participants), journal->Callbacks());
-  if (!prepared.ok())
-    return {.result = std::move(prepared.result)};
+  if (!prepared.ok()) return {.result = std::move(prepared.result)};
   auto handle = std::make_unique<PreparedPeerTransactionHandle>(
       PreparedPeerTransactionHandle{
           .journal = std::move(journal),
@@ -166,14 +164,15 @@ PeerTransactionController::Prepare(const ComposedPeerTransactionGroup &group,
 }
 
 PeerTransactionResult PeerTransactionController::Commit(
-    std::unique_ptr<PreparedPeerTransactionHandle> prepared) const {
+    std::unique_ptr<PreparedPeerTransactionHandle> prepared,
+    PeerDecisionFailurePolicy failure_policy) const {
   if (!prepared) {
     PeerTransactionResult result;
     result.message = "prepared peer transaction handle is absent";
     return result;
   }
   return PeerTransactionCoordinator().CommitPrepared(
-      std::move(prepared->transaction));
+      std::move(prepared->transaction), failure_policy);
 }
 
 PeerTransactionResult PeerTransactionController::Abort(
@@ -187,17 +186,15 @@ PeerTransactionResult PeerTransactionController::Abort(
       std::move(prepared->transaction));
 }
 
-PeerTransactionResult
-PeerTransactionController::Execute(const ComposedPeerTransactionGroup &group,
-                                   const std::filesystem::path &journal_path,
-                                   std::string transaction_id,
-                                   std::string proposal_digest) const {
+PeerTransactionResult PeerTransactionController::Execute(
+    const ComposedPeerTransactionGroup& group,
+    const std::filesystem::path& journal_path, std::string transaction_id,
+    std::string proposal_digest) const {
   PeerTransactionControllerPrepareResult prepared =
       Prepare(group, journal_path, std::move(transaction_id),
               std::move(proposal_digest));
-  if (!prepared.ok())
-    return std::move(prepared.result);
+  if (!prepared.ok()) return std::move(prepared.result);
   return Commit(std::move(prepared.prepared));
 }
 
-} // namespace dangd
+}  // namespace dangd

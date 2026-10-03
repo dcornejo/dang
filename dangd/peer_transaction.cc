@@ -13,8 +13,8 @@ namespace {
 
 using Participant = PeerTransactionParticipant;
 
-std::vector<std::size_t>
-PrepareOrder(const std::vector<Participant> &participants) {
+std::vector<std::size_t> PrepareOrder(
+    const std::vector<Participant>& participants) {
   std::vector<std::size_t> order(participants.size());
   for (std::size_t index = 0; index < order.size(); ++index)
     order[index] = index;
@@ -23,8 +23,8 @@ PrepareOrder(const std::vector<Participant> &participants) {
   return order;
 }
 
-std::vector<std::size_t>
-ApplyOrder(const std::vector<Participant> &participants) {
+std::vector<std::size_t> ApplyOrder(
+    const std::vector<Participant>& participants) {
   std::vector<std::size_t> order = PrepareOrder(participants);
   std::ranges::stable_sort(order, {}, [&](std::size_t index) {
     return participants[index].role == PeerTransactionRole::kPrimary ? 1 : 0;
@@ -32,19 +32,17 @@ ApplyOrder(const std::vector<Participant> &participants) {
   return order;
 }
 
-std::optional<std::string>
-ValidateParticipants(const std::vector<Participant> &participants,
-                     bool require_all_callbacks) {
+std::optional<std::string> ValidateParticipants(
+    const std::vector<Participant>& participants, bool require_all_callbacks) {
   if (participants.size() < 2)
     return "peer transaction requires at least two participants";
   std::set<std::string> ids;
   std::size_t primary_count = 0;
-  for (const Participant &participant : participants) {
+  for (const Participant& participant : participants) {
     if (participant.id.empty() || !ids.insert(participant.id).second)
       return "peer transaction participant identifiers must be nonempty and "
              "unique";
-    if (participant.role == PeerTransactionRole::kPrimary)
-      ++primary_count;
+    if (participant.role == PeerTransactionRole::kPrimary) ++primary_count;
     if (!participant.confirm || !participant.release)
       return participant.id +
              ": peer transaction recovery callbacks are incomplete";
@@ -59,18 +57,17 @@ ValidateParticipants(const std::vector<Participant> &participants,
   return std::nullopt;
 }
 
-std::optional<std::string>
-ValidateAbortParticipants(const std::vector<Participant> &participants) {
+std::optional<std::string> ValidateAbortParticipants(
+    const std::vector<Participant>& participants) {
   if (participants.size() < 2)
     return "peer transaction requires at least two participants";
   std::set<std::string> ids;
   std::size_t primary_count = 0;
-  for (const Participant &participant : participants) {
+  for (const Participant& participant : participants) {
     if (participant.id.empty() || !ids.insert(participant.id).second)
       return "peer transaction participant identifiers must be nonempty and "
              "unique";
-    if (participant.role == PeerTransactionRole::kPrimary)
-      ++primary_count;
+    if (participant.role == PeerTransactionRole::kPrimary) ++primary_count;
     if (!participant.cancel || !participant.release)
       return participant.id +
              ": peer transaction cancellation callback is incomplete";
@@ -80,15 +77,15 @@ ValidateAbortParticipants(const std::vector<Participant> &participants) {
   return std::nullopt;
 }
 
-void ReleasePrepared(const std::vector<Participant> &participants,
-                     const std::vector<std::size_t> &prepared) {
+void ReleasePrepared(const std::vector<Participant>& participants,
+                     const std::vector<std::size_t>& prepared) {
   for (auto index = prepared.rbegin(); index != prepared.rend(); ++index)
     participants[*index].release();
 }
 
-void CancelApplied(const std::vector<Participant> &participants,
-                   const std::vector<std::size_t> &applied,
-                   PeerTransactionResult *result) {
+void CancelApplied(const std::vector<Participant>& participants,
+                   const std::vector<std::size_t>& applied,
+                   PeerTransactionResult* result) {
   for (auto index = applied.rbegin(); index != applied.rend(); ++index) {
     if (const auto error = participants[*index].cancel()) {
       result->rollback_failures.push_back(participants[*index].id + ": " +
@@ -99,10 +96,9 @@ void CancelApplied(const std::vector<Participant> &participants,
     result->disposition = PeerTransactionDisposition::kRollbackIncomplete;
 }
 
-void CompleteAbort(const PeerTransactionJournal &journal,
-                   PeerTransactionResult *result) {
-  if (!result->rollback_failures.empty())
-    return;
+void CompleteAbort(const PeerTransactionJournal& journal,
+                   PeerTransactionResult* result) {
+  if (!result->rollback_failures.empty()) return;
   if (!journal.record_abort) {
     result->disposition = PeerTransactionDisposition::kRollbackIncomplete;
     result->message += result->message.empty() ? "" : "; ";
@@ -116,17 +112,16 @@ void CompleteAbort(const PeerTransactionJournal &journal,
   }
 }
 
-std::vector<std::string>
-ParticipantIds(const std::vector<Participant> &participants,
-               const std::vector<std::size_t> &order) {
+std::vector<std::string> ParticipantIds(
+    const std::vector<Participant>& participants,
+    const std::vector<std::size_t>& order) {
   std::vector<std::string> ids;
   ids.reserve(order.size());
-  for (const std::size_t index : order)
-    ids.push_back(participants[index].id);
+  for (const std::size_t index : order) ids.push_back(participants[index].id);
   return ids;
 }
 
-} // namespace
+}  // namespace
 
 PeerTransactionPrepareResult PeerTransactionCoordinator::Prepare(
     std::vector<PeerTransactionParticipant> participants,
@@ -198,9 +193,10 @@ PeerTransactionPrepareResult PeerTransactionCoordinator::Prepare(
 }
 
 PeerTransactionResult PeerTransactionCoordinator::CommitPrepared(
-    PeerPreparedTransaction transaction) const {
+    PeerPreparedTransaction transaction,
+    PeerDecisionFailurePolicy failure_policy) const {
   PeerTransactionResult result = std::move(transaction.progress);
-  std::vector<PeerTransactionParticipant> &participants =
+  std::vector<PeerTransactionParticipant>& participants =
       transaction.participants;
   const std::vector<std::size_t> prepare_order = PrepareOrder(participants);
   const std::vector<std::size_t> apply_order = ApplyOrder(participants);
@@ -210,6 +206,16 @@ PeerTransactionResult PeerTransactionCoordinator::CommitPrepared(
   const PeerTransactionDecisionResult decision =
       transaction.journal.record_commit_decision(participant_ids);
   if (decision.status == PeerTransactionDecisionStatus::kNotCommitted) {
+    if (failure_policy == PeerDecisionFailurePolicy::kRetainPrepared) {
+      result.disposition = PeerTransactionDisposition::kCommitPending;
+      result.message =
+          "cannot durably record peer commit decision; PREPARED recovery is "
+          "required: " +
+          decision.error;
+      result.pending_confirmations = participant_ids;
+      ReleasePrepared(participants, prepare_order);
+      return result;
+    }
     result.disposition = PeerTransactionDisposition::kAborted;
     result.message =
         "cannot durably record peer commit decision: " + decision.error;
@@ -253,8 +259,7 @@ PeerTransactionResult PeerTransactionCoordinator::CommitPrepared(
   }
   ReleasePrepared(participants, prepare_order);
 
-  if (!result.pending_confirmations.empty())
-    return result;
+  if (!result.pending_confirmations.empty()) return result;
   if (const auto error = transaction.journal.record_complete()) {
     result.message =
         "peer commit completed but journal cleanup is pending: " + *error;
@@ -316,9 +321,9 @@ PeerTransactionResult PeerTransactionCoordinator::ResumeCommit(
     return result;
   }
   std::set<std::string> participant_ids;
-  for (const Participant &participant : participants)
+  for (const Participant& participant : participants)
     participant_ids.insert(participant.id);
-  for (const std::string &id : confirmed) {
+  for (const std::string& id : confirmed) {
     if (!participant_ids.contains(id)) {
       result.message =
           "peer transaction journal contains unknown participant " + id;
@@ -328,9 +333,8 @@ PeerTransactionResult PeerTransactionCoordinator::ResumeCommit(
   result.confirmed = std::move(already_confirmed);
 
   for (const std::size_t index : ApplyOrder(participants)) {
-    const std::string &id = participants[index].id;
-    if (confirmed.contains(id))
-      continue;
+    const std::string& id = participants[index].id;
+    if (confirmed.contains(id)) continue;
     if (const auto error = participants[index].confirm()) {
       result.pending_confirmations.push_back(id);
       if (result.message.empty())
@@ -350,11 +354,9 @@ PeerTransactionResult PeerTransactionCoordinator::ResumeCommit(
     }
     result.confirmed.push_back(id);
   }
-  for (const Participant &participant : participants)
-    participant.release();
+  for (const Participant& participant : participants) participant.release();
 
-  if (!result.pending_confirmations.empty())
-    return result;
+  if (!result.pending_confirmations.empty()) return result;
   if (const auto error = journal.record_complete()) {
     result.message =
         "peer commit completed but journal cleanup is pending: " + *error;
@@ -388,8 +390,7 @@ PeerTransactionResult PeerTransactionCoordinator::ResumeAbort(
                                          *error);
     }
   }
-  for (const Participant &participant : participants)
-    participant.release();
+  for (const Participant& participant : participants) participant.release();
   if (!result.rollback_failures.empty()) {
     result.disposition = PeerTransactionDisposition::kRollbackIncomplete;
     result.message = "peer prepared transaction cancellation is incomplete";
@@ -404,4 +405,4 @@ PeerTransactionResult PeerTransactionCoordinator::ResumeAbort(
   return result;
 }
 
-} // namespace dangd
+}  // namespace dangd

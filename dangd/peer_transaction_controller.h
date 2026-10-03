@@ -22,7 +22,7 @@ namespace dangd {
 /** Routes authenticated peer readback through a retained plugin verifier. */
 using PeerVerificationCallback =
     std::function<std::optional<yang::config::ValidationFinding>(
-        const PluginPeerVerification &)>;
+        const PluginPeerVerification&)>;
 
 /** Creates one participant; injectable to test controller policy without I/O.
  */
@@ -58,7 +58,7 @@ struct PeerTransactionControllerPrepareResult {
  * accepts no plugin-specific topology or transport policy.
  */
 class PeerTransactionController {
-public:
+ public:
   PeerTransactionController(std::vector<PeerRecoveryTarget> targets,
                             PeerVerificationCallback verify_peer,
                             PeerParticipantFactory participant_factory =
@@ -66,32 +66,34 @@ public:
                             PeerPersistentIdFactory persistent_id_factory = {});
 
   /** Executes one group using the supplied stable transaction metadata. */
-  [[nodiscard]] PeerTransactionResult
-  Execute(const ComposedPeerTransactionGroup &group,
-          const std::filesystem::path &journal_path, std::string transaction_id,
-          std::string proposal_digest) const;
+  [[nodiscard]] PeerTransactionResult Execute(
+      const ComposedPeerTransactionGroup& group,
+      const std::filesystem::path& journal_path, std::string transaction_id,
+      std::string proposal_digest) const;
 
   /** Stops after verified confirmed applies while PREPARED is still durable. */
-  [[nodiscard]] PeerTransactionControllerPrepareResult
-  Prepare(const ComposedPeerTransactionGroup &group,
-          const std::filesystem::path &journal_path, std::string transaction_id,
-          std::string proposal_digest) const;
+  [[nodiscard]] PeerTransactionControllerPrepareResult Prepare(
+      const ComposedPeerTransactionGroup& group,
+      const std::filesystem::path& journal_path, std::string transaction_id,
+      std::string proposal_digest) const;
 
   /** Selects COMMIT and confirms a retained prepared group. */
-  [[nodiscard]] PeerTransactionResult
-  Commit(std::unique_ptr<PreparedPeerTransactionHandle> prepared) const;
+  [[nodiscard]] PeerTransactionResult Commit(
+      std::unique_ptr<PreparedPeerTransactionHandle> prepared,
+      PeerDecisionFailurePolicy failure_policy =
+          PeerDecisionFailurePolicy::kAbort) const;
 
   /** Cancels a retained prepared group without selecting COMMIT. */
-  [[nodiscard]] PeerTransactionResult
-  Abort(std::unique_ptr<PreparedPeerTransactionHandle> prepared) const;
+  [[nodiscard]] PeerTransactionResult Abort(
+      std::unique_ptr<PreparedPeerTransactionHandle> prepared) const;
 
-private:
+ private:
   std::vector<PeerRecoveryTarget> targets_;
   PeerVerificationCallback verify_peer_;
   PeerParticipantFactory participant_factory_;
   PeerPersistentIdFactory persistent_id_factory_;
 };
 
-} // namespace dangd
+}  // namespace dangd
 
-#endif // DANGD_PEER_TRANSACTION_CONTROLLER_H_
+#endif  // DANGD_PEER_TRANSACTION_CONTROLLER_H_

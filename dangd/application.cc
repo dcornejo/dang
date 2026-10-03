@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "dangd/application.h"
-#include "dangd/peer_recovery_config.h"
-#include "dangd/peer_transaction_tls.h"
-#include "dangd/peer_transaction_journal.h"
-#include "dangd/plugin_worker_runtime.h"
+
+#include <fcntl.h>
+#include <openssl/evp.h>
+#include <sys/file.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <array>
@@ -15,19 +17,16 @@
 #include <fstream>
 #include <iterator>
 #include <map>
+#include <pugixml.hpp>
 #include <set>
 #include <sstream>
 #include <system_error>
 #include <utility>
 
-#include <fcntl.h>
-#include <sys/file.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
-#include <pugixml.hpp>
-#include <openssl/evp.h>
-
+#include "dangd/peer_recovery_config.h"
+#include "dangd/peer_transaction_journal.h"
+#include "dangd/peer_transaction_tls.h"
+#include "dangd/plugin_worker_runtime.h"
 #include "yang/compiler.h"
 #include "yang/diagnostic.h"
 #include "yang/module_resolver.h"
@@ -48,8 +47,8 @@ class StateFileLock {
     std::error_code path_error;
     state_file = std::filesystem::weakly_canonical(state_file, path_error);
     if (path_error) {
-      *error = "cannot resolve " + std::string(description) + " path: " +
-               path_error.message();
+      *error = "cannot resolve " + std::string(description) +
+               " path: " + path_error.message();
       return nullptr;
     }
     std::filesystem::path lock_file = state_file;
@@ -62,7 +61,7 @@ class StateFileLock {
                lock_file.string() + ": " + std::strerror(errno);
       return nullptr;
     }
-    struct stat metadata {};
+    struct stat metadata{};
     if (fstat(descriptor, &metadata) != 0) {
       const int saved_errno = errno;
       close(descriptor);
@@ -125,10 +124,9 @@ namespace {
 
 std::string AuditField(std::string_view value);
 
-bool ConfigurePeerRecovery(const ApplicationOptions& options,
-                           std::vector<std::string>* errors,
-                           std::vector<PeerRecoveryTarget>*
-                               configured_targets) {
+bool ConfigurePeerRecovery(
+    const ApplicationOptions& options, std::vector<std::string>* errors,
+    std::vector<PeerRecoveryTarget>* configured_targets) {
   configured_targets->clear();
   if (options.peer_recovery_configuration &&
       !options.peer_transaction_journal) {
@@ -146,8 +144,7 @@ bool ConfigurePeerRecovery(const ApplicationOptions& options,
   std::set<std::filesystem::path> normalized_paths;
   for (const std::filesystem::path& path : persistence_paths) {
     std::error_code path_error;
-    const auto normalized =
-        std::filesystem::weakly_canonical(path, path_error);
+    const auto normalized = std::filesystem::weakly_canonical(path, path_error);
     if (path_error) {
       errors->push_back("cannot resolve configured persistence paths");
       return true;
@@ -214,9 +211,9 @@ bool RecoverOrRejectPendingPeerTransaction(
   }
 
   std::string recovery_lock_error;
-  const auto recovery_lock = StateFileLock::Acquire(
-      *options.peer_transaction_journal, &recovery_lock_error,
-      "peer transaction journal");
+  const auto recovery_lock =
+      StateFileLock::Acquire(*options.peer_transaction_journal,
+                             &recovery_lock_error, "peer transaction journal");
   if (!recovery_lock) {
     errors->push_back(std::move(recovery_lock_error));
     return true;
@@ -258,8 +255,8 @@ bool RecoverOrRejectPendingPeerTransaction(
     participants.reserve(journal->state().participants.size());
     for (const PeerJournalParticipant& participant :
          journal->state().participants) {
-      participants.push_back(
-          MakeTlsRecoveryParticipant(participant, configured.at(participant.id)));
+      participants.push_back(MakeTlsRecoveryParticipant(
+          participant, configured.at(participant.id)));
       if (participant.confirmed) confirmed.push_back(participant.id);
     }
     bool recovering_commit =
@@ -275,17 +272,18 @@ bool RecoverOrRejectPendingPeerTransaction(
       if (decision.status != PeerTransactionDecisionStatus::kCommitted) {
         errors->push_back(
             "cannot durably select COMMIT for the matching backend recovery "
-            "state: " + decision.error);
+            "state: " +
+            decision.error);
         return true;
       }
       recovering_commit = true;
     }
-    const PeerTransactionResult recovered = recovering_commit
-        ? PeerTransactionCoordinator().ResumeCommit(
-              std::move(participants), std::move(confirmed),
-              journal->Callbacks())
-        : PeerTransactionCoordinator().ResumeAbort(
-              std::move(participants), journal->Callbacks());
+    const PeerTransactionResult recovered =
+        recovering_commit ? PeerTransactionCoordinator().ResumeCommit(
+                                std::move(participants), std::move(confirmed),
+                                journal->Callbacks())
+                          : PeerTransactionCoordinator().ResumeAbort(
+                                std::move(participants), journal->Callbacks());
     if (recovered.ok() ||
         (!recovering_commit &&
          recovered.disposition == PeerTransactionDisposition::kAborted &&
@@ -309,11 +307,10 @@ bool RecoverOrRejectPendingPeerTransaction(
       for (const PeerJournalParticipant& participant :
            journal->state().participants) {
         const std::string prefix = participant.id + ": ";
-        if (std::ranges::any_of(
-                recovered.rollback_failures,
-                [&prefix](const std::string& failure) {
-                  return failure.starts_with(prefix);
-                }))
+        if (std::ranges::any_of(recovered.rollback_failures,
+                                [&prefix](const std::string& failure) {
+                                  return failure.starts_with(prefix);
+                                }))
           message << ' ' << AuditField(participant.id);
       }
       message << ')';
@@ -333,8 +330,7 @@ bool RecoverOrRejectPendingPeerTransaction(
   }
   std::ostringstream message;
   message << "unresolved peer transaction "
-          << AuditField(journal->state().transaction_id)
-          << " requires "
+          << AuditField(journal->state().transaction_id) << " requires "
           << (journal->state().decision == PeerJournalDecision::kCommit
                   ? "confirmation"
                   : "cancellation")
@@ -393,7 +389,8 @@ class OverlayRepository final : public yang::ModuleSourceRepository {
       std::string_view name, std::optional<std::string_view> revision,
       yang::ModuleKind kind, yang::DiagnosticSink& diagnostics) override {
     yang::VectorDiagnosticSink ignored;
-    if (auto source = memory_.Load(name, revision, kind, ignored)) return source;
+    if (auto source = memory_.Load(name, revision, kind, ignored))
+      return source;
     return filesystem_.Load(name, revision, kind, diagnostics);
   }
 
@@ -409,8 +406,8 @@ std::optional<std::string> ReadFile(const std::filesystem::path& path,
   std::error_code size_error;
   const std::uintmax_t size = std::filesystem::file_size(path, size_error);
   if (!size_error && size > maximum_bytes) {
-    errors->push_back(std::string(description) + " exceeds the byte limit: " +
-                      path.string());
+    errors->push_back(std::string(description) +
+                      " exceeds the byte limit: " + path.string());
     return std::nullopt;
   }
   std::ifstream input(path, std::ios::binary);
@@ -422,8 +419,8 @@ std::optional<std::string> ReadFile(const std::filesystem::path& path,
   std::string contents((std::istreambuf_iterator<char>(input)),
                        std::istreambuf_iterator<char>());
   if (contents.size() > maximum_bytes) {
-    errors->push_back(std::string(description) + " exceeds the byte limit: " +
-                      path.string());
+    errors->push_back(std::string(description) +
+                      " exceeds the byte limit: " + path.string());
     return std::nullopt;
   }
   return contents;
@@ -437,8 +434,9 @@ void AppendDiagnostics(const yang::VectorDiagnosticSink& diagnostics,
   }
 }
 
-void AppendFindings(const std::vector<yang::config::ValidationFinding>& findings,
-                    std::vector<std::string>* errors) {
+void AppendFindings(
+    const std::vector<yang::config::ValidationFinding>& findings,
+    std::vector<std::string>* errors) {
   for (const auto& finding : findings) {
     std::string message;
     if (!finding.instance_path.empty()) message = finding.instance_path + ": ";
@@ -454,15 +452,15 @@ bool WriteAll(std::ostream& output, const std::string& bytes) {
 }
 
 bool HasManagedNacm(const yang::config::RuntimeSchema& schema) {
-  return schema.FindRoot({
-      "urn:ietf:params:xml:ns:yang:ietf-netconf-acm", "nacm"}).has_value();
+  return schema
+      .FindRoot({"urn:ietf:params:xml:ns:yang:ietf-netconf-acm", "nacm"})
+      .has_value();
 }
 
 std::string NamespaceFor(pugi::xml_node node, std::string_view prefix) {
   const std::string attribute =
       prefix.empty() ? "xmlns" : "xmlns:" + std::string(prefix);
-  for (pugi::xml_node current = node; current;
-       current = current.parent()) {
+  for (pugi::xml_node current = node; current; current = current.parent()) {
     if (const pugi::xml_attribute found = current.attribute(attribute.c_str()))
       return found.as_string();
   }
@@ -475,7 +473,9 @@ struct FragmentValidation {
   std::string reason;
 };
 
-struct CompleteOperationalNode { std::string instance_path; };
+struct CompleteOperationalNode {
+  std::string instance_path;
+};
 
 FragmentValidation ValidateFragmentInstance(
     const yang::config::RuntimeSchema& schema, pugi::xml_node root,
@@ -484,8 +484,7 @@ FragmentValidation ValidateFragmentInstance(
     std::span<const CompleteOperationalNode> complete_nodes = {}) {
   pugi::xml_document wrapped;
   pugi::xml_node data = wrapped.append_child("data");
-  data.append_attribute("xmlns") =
-      "urn:ietf:params:xml:ns:netconf:base:1.0";
+  data.append_attribute("xmlns") = "urn:ietf:params:xml:ns:netconf:base:1.0";
   if (data_wrapper) {
     for (const pugi::xml_node child : root.children())
       if (child.type() == pugi::node_element) data.append_copy(child);
@@ -495,18 +494,20 @@ FragmentValidation ValidateFragmentInstance(
   std::ostringstream xml;
   wrapped.print(xml, "", pugi::format_raw);
   const auto parsed = yang::config::ParseDatastoreXml(
-      schema, xml.str(), {.coverage = yang::config::Coverage::kSelected,
-                          .allow_origin_metadata = true});
+      schema, xml.str(),
+      {.coverage = yang::config::Coverage::kSelected,
+       .allow_origin_metadata = true});
   if (!parsed.document) {
-    if (parsed.findings.empty()) return {false, {}, "fragment cannot be parsed"};
+    if (parsed.findings.empty())
+      return {false, {}, "fragment cannot be parsed"};
     return {false, parsed.findings.front().instance_path,
             parsed.findings.front().message};
   }
   yang::config::ConfigDocument instance = std::move(*parsed.document);
   if (complete) {
     for (yang::config::ConfigNodeId id = 0; id < instance.size(); ++id)
-      instance = instance.WithChildCoverage(
-          id, yang::config::Coverage::kComplete);
+      instance =
+          instance.WithChildCoverage(id, yang::config::Coverage::kComplete);
   } else if (!complete_nodes.empty()) {
     for (yang::config::ConfigNodeId id = 0; id < instance.size(); ++id) {
       const bool closed = std::ranges::any_of(
@@ -515,8 +516,8 @@ FragmentValidation ValidateFragmentInstance(
                    yang::config::ConfigNodeInstancePath(schema, instance, id);
           });
       if (closed)
-        instance = instance.WithChildCoverage(
-            id, yang::config::Coverage::kComplete);
+        instance =
+            instance.WithChildCoverage(id, yang::config::Coverage::kComplete);
       if (closed) {
         for (yang::config::RuntimeSchemaNodeId child :
              schema.DataChildren(instance.Get(id).schema))
@@ -529,8 +530,7 @@ FragmentValidation ValidateFragmentInstance(
       {schema, instance,
        context ? yang::config::ValidationScope::kPartialWithContext
                : yang::config::ValidationScope::kPartialStandalone,
-       context,
-       std::nullopt, true});
+       context, std::nullopt, true});
   if (validation.valid) return {true, {}, {}};
   const auto finding = std::ranges::find_if(
       validation.findings, [](const yang::config::ValidationFinding& value) {
@@ -546,8 +546,7 @@ std::vector<CompleteOperationalNode> CompleteNodesForFragment(
     bool data_wrapper) {
   pugi::xml_document wrapped;
   pugi::xml_node data = wrapped.append_child("data");
-  data.append_attribute("xmlns") =
-      "urn:ietf:params:xml:ns:netconf:base:1.0";
+  data.append_attribute("xmlns") = "urn:ietf:params:xml:ns:netconf:base:1.0";
   if (data_wrapper) {
     for (const pugi::xml_node child : root.children())
       if (child.type() == pugi::node_element) data.append_copy(child);
@@ -557,8 +556,9 @@ std::vector<CompleteOperationalNode> CompleteNodesForFragment(
   std::ostringstream xml;
   wrapped.print(xml, "", pugi::format_raw);
   auto parsed = yang::config::ParseDatastoreXml(
-      schema, xml.str(), {.coverage = yang::config::Coverage::kSelected,
-                          .allow_origin_metadata = true});
+      schema, xml.str(),
+      {.coverage = yang::config::Coverage::kSelected,
+       .allow_origin_metadata = true});
   std::vector<CompleteOperationalNode> result;
   if (!parsed.document) return result;
   for (yang::config::ConfigNodeId id = 0; id < parsed.document->size(); ++id)
@@ -571,18 +571,19 @@ std::string SeedNacm(std::string configuration, std::string_view nacm) {
   pugi::xml_document config_document;
   pugi::xml_document nacm_document;
   if (!yang::ParseUntrustedXml(configuration, &config_document).ok ||
-      !yang::ParseUntrustedXml(nacm, &nacm_document).ok) return configuration;
+      !yang::ParseUntrustedXml(nacm, &nacm_document).ok)
+    return configuration;
   pugi::xml_node root = config_document.document_element();
   for (const pugi::xml_node child : root.children()) {
     const std::string_view name = child.name();
     const std::size_t colon = name.find(':');
-    const std::string_view prefix =
-        colon == std::string_view::npos ? std::string_view() : name.substr(0, colon);
+    const std::string_view prefix = colon == std::string_view::npos
+                                        ? std::string_view()
+                                        : name.substr(0, colon);
     const std::string_view local =
         colon == std::string_view::npos ? name : name.substr(colon + 1);
-    if (local == "nacm" &&
-        NamespaceFor(child, prefix) ==
-            "urn:ietf:params:xml:ns:yang:ietf-netconf-acm")
+    if (local == "nacm" && NamespaceFor(child, prefix) ==
+                               "urn:ietf:params:xml:ns:yang:ietf-netconf-acm")
       return configuration;
   }
   root.append_copy(nacm_document.document_element());
@@ -601,8 +602,9 @@ std::string NacmSubtree(const yang::config::ConfigDocument& configuration) {
     const std::string_view local =
         colon == std::string_view::npos ? name : name.substr(colon + 1);
     if (local != "nacm") continue;
-    const std::string_view prefix =
-        colon == std::string_view::npos ? std::string_view() : name.substr(0, colon);
+    const std::string_view prefix = colon == std::string_view::npos
+                                        ? std::string_view()
+                                        : name.substr(0, colon);
     if (NamespaceFor(child, prefix) !=
         "urn:ietf:params:xml:ns:yang:ietf-netconf-acm")
       continue;
@@ -641,7 +643,8 @@ std::string BuildYangLibraryXml(
       for (const yang::StatementId id : root.children) {
         const yang::Statement& statement = source.syntax->Get(id);
         if (statement.keyword != "deviation" || !statement.argument ||
-            !statement.argument->starts_with('/')) continue;
+            !statement.argument->starts_with('/'))
+          continue;
         const std::string_view path = *statement.argument;
         const std::size_t slash = path.find('/', 1);
         const std::string_view first = path.substr(1, slash - 1);
@@ -670,15 +673,16 @@ std::string BuildYangLibraryXml(
       "urn:ietf:params:xml:ns:yang:ietf-datastores";
   pugi::xml_node set = library.append_child("module-set");
   set.append_child("name").text() = "dangd-modules";
-  std::vector<const yang::ResolvedModule*> modules = compilation.schemas.modules();
+  std::vector<const yang::ResolvedModule*> modules =
+      compilation.schemas.modules();
   std::ranges::sort(modules, {}, [](const yang::ResolvedModule* module) {
     return std::pair(module->name, module->revision.value_or(""));
   });
   for (const yang::ResolvedModule* module : modules) {
     if (module->name == "dangd-aggregate") continue;
     const bool is_implemented = implemented.contains(module->name);
-    pugi::xml_node entry = set.append_child(
-        is_implemented ? "module" : "import-only-module");
+    pugi::xml_node entry =
+        set.append_child(is_implemented ? "module" : "import-only-module");
     entry.append_child("name").text() = module->name.c_str();
     if (module->revision)
       entry.append_child("revision").text() = module->revision->c_str();
@@ -697,9 +701,9 @@ std::string BuildYangLibraryXml(
         entry.append_child("feature").text() = feature.c_str();
     }
     if (is_implemented && module->name == "ietf-netconf") {
-      for (const char* feature : {"writable-running", "candidate",
-                                  "confirmed-commit", "rollback-on-error",
-                                  "validate", "startup", "xpath"})
+      for (const char* feature :
+           {"writable-running", "candidate", "confirmed-commit",
+            "rollback-on-error", "validate", "startup", "xpath"})
         entry.append_child("feature").text() = feature;
     }
     if (is_implemented && module->name == "ietf-netconf-nmda")
@@ -722,8 +726,8 @@ std::string BuildYangLibraryXml(
   pugi::xml_node schema = library.append_child("schema");
   schema.append_child("name").text() = "dangd-schema";
   schema.append_child("module-set").text() = "dangd-modules";
-  for (const char* datastore : {"running", "candidate", "startup",
-                                "intended", "operational"}) {
+  for (const char* datastore :
+       {"running", "candidate", "startup", "intended", "operational"}) {
     pugi::xml_node entry = library.append_child("datastore");
     entry.append_child("name").text() =
         (std::string("ds:") + datastore).c_str();
@@ -748,7 +752,8 @@ std::vector<DangdOperationalData::ModelSource> BuildModelSources(
     if (std::ranges::any_of(result, [&](const auto& existing) {
           return existing.identifier == module.name &&
                  existing.version == version;
-        })) return;
+        }))
+      return;
     result.push_back({module.name, version, std::string(namespace_uri),
                       std::string(module.syntax->source()->contents())});
   };
@@ -771,14 +776,14 @@ DangdOperationalData::DangdOperationalData(
     const yang::netconf::NacmPolicy* nacm, const PluginRuntime* plugins,
     const yang::config::RuntimeSchema* runtime_schema)
     : yang_library_xml_(std::move(yang_library_xml)),
-      model_sources_(std::move(model_sources)), nacm_(nacm),
-      plugins_(plugins), schema_(runtime_schema) {
+      model_sources_(std::move(model_sources)),
+      nacm_(nacm),
+      plugins_(plugins),
+      schema_(runtime_schema) {
   pugi::xml_document library;
   pugi::xml_document legacy;
-  if (!yang::ParseUntrustedXml(yang_library_xml_, &library).ok)
-    return;
-  const pugi::xml_node set =
-      library.document_element().child("module-set");
+  if (!yang::ParseUntrustedXml(yang_library_xml_, &library).ok) return;
+  const pugi::xml_node set = library.document_element().child("module-set");
   pugi::xml_node state = legacy.append_child("modules-state");
   state.append_attribute("xmlns") =
       "urn:ietf:params:xml:ns:yang:ietf-yang-library";
@@ -802,7 +807,8 @@ DangdOperationalData::DangdOperationalData(
         legacy_deviation.append_copy(deviation).set_name("name");
         for (const pugi::xml_node candidate : set.children("module")) {
           if (std::string_view(candidate.child("name").text().as_string()) !=
-              deviation.text().as_string()) continue;
+              deviation.text().as_string())
+            continue;
           if (candidate.child("revision"))
             legacy_deviation.append_copy(candidate.child("revision"));
           else
@@ -844,8 +850,7 @@ DangdOperationalData::DangdOperationalData(
 DangdOperationalData::DataResult DangdOperationalData::AugmentDataXml(
     std::string_view configuration_data_xml) const {
   pugi::xml_document document;
-  if (!yang::ParseUntrustedXml(configuration_data_xml, &document).ok)
-    return {};
+  if (!yang::ParseUntrustedXml(configuration_data_xml, &document).ok) return {};
   if (applied_configuration_provider_) {
     const std::string applied_xml = applied_configuration_provider_();
     pugi::xml_document applied;
@@ -867,8 +872,7 @@ DangdOperationalData::DataResult DangdOperationalData::AugmentDataXml(
     context_data.append_attribute("xmlns") =
         "urn:ietf:params:xml:ns:netconf:base:1.0";
     for (const pugi::xml_node child : data.children())
-      if (child.type() == pugi::node_element)
-        context_data.append_copy(child);
+      if (child.type() == pugi::node_element) context_data.append_copy(child);
     std::ostringstream applied_xml;
     wrapped_context.print(applied_xml, "", pugi::format_raw);
     auto parsed_context = yang::config::ParseDatastoreXml(
@@ -881,10 +885,9 @@ DangdOperationalData::DataResult DangdOperationalData::AugmentDataXml(
       applied_context_error =
           FragmentValidation{false, {}, "applied context cannot be parsed"};
     } else {
-      applied_context_error =
-          FragmentValidation{false,
-                             parsed_context.findings.front().instance_path,
-                             parsed_context.findings.front().message};
+      applied_context_error = FragmentValidation{
+          false, parsed_context.findings.front().instance_path,
+          parsed_context.findings.front().message};
     }
   }
   pugi::xml_document library;
@@ -906,15 +909,14 @@ DangdOperationalData::DataResult DangdOperationalData::AugmentDataXml(
       accepted.append_copy(modules_state.document_element());
     if (monitoring.document_element())
       accepted.append_copy(monitoring.document_element());
-    const std::size_t core_children =
-        static_cast<std::size_t>(std::distance(accepted.begin(), accepted.end()));
+    const std::size_t core_children = static_cast<std::size_t>(
+        std::distance(accepted.begin(), accepted.end()));
     std::vector<CompleteOperationalNode> complete_provider_nodes;
     for (const PluginOperationalFragment& fragment :
          plugins_->OperationalData()) {
       if (fragment.error) {
-        provider_failures.push_back(
-            {fragment.provider, "callback", fragment.error_path,
-             *fragment.error});
+        provider_failures.push_back({fragment.provider, "callback",
+                                     fragment.error_path, *fragment.error});
         continue;
       }
       pugi::xml_document plugin_data;
@@ -930,8 +932,7 @@ DangdOperationalData::DataResult DangdOperationalData::AugmentDataXml(
       std::vector<CompleteOperationalNode> fragment_complete_nodes;
       if (fragment.complete)
         fragment_complete_nodes = CompleteNodesForFragment(
-            *schema_, root,
-            std::string_view(LocalName(root.name())) == "data");
+            *schema_, root, std::string_view(LocalName(root.name())) == "data");
       pugi::xml_document candidate_data;
       pugi::xml_node candidate = candidate_data.append_child("data");
       for (const pugi::xml_node child : accepted.children())
@@ -974,8 +975,8 @@ DangdOperationalData::DataResult DangdOperationalData::AugmentDataXml(
                                           candidate_complete_nodes);
       }
       if (!merged.valid) {
-        provider_failures.push_back({fragment.provider, "merge",
-                                     merged.instance_path, merged.reason});
+        provider_failures.push_back(
+            {fragment.provider, "merge", merged.instance_path, merged.reason});
         continue;
       }
       accepted.remove_children();
@@ -989,7 +990,8 @@ DangdOperationalData::DataResult DangdOperationalData::AugmentDataXml(
         data.append_copy(child);
     pugi::xml_document reconciliation;
     if (yang::ParseUntrustedXml(plugins_->ReconciliationData(provider_failures),
-                                &reconciliation).ok)
+                                &reconciliation)
+            .ok)
       data.append_copy(reconciliation.document_element());
     for (const OperationalProviderFailure& failure : provider_failures) {
       yang::config::ValidationFinding finding;
@@ -1012,9 +1014,8 @@ DangdOperationalData::DataResult DangdOperationalData::AugmentDataXml(
     const std::string_view prefix = colon == std::string_view::npos
                                         ? std::string_view()
                                         : name.substr(0, colon);
-    const std::string_view local = colon == std::string_view::npos
-                                       ? name
-                                       : name.substr(colon + 1);
+    const std::string_view local =
+        colon == std::string_view::npos ? name : name.substr(colon + 1);
     if (local == "nacm" && NamespaceFor(child, prefix) ==
                                "urn:ietf:params:xml:ns:yang:ietf-netconf-acm") {
       nacm = child;
@@ -1027,10 +1028,8 @@ DangdOperationalData::DataResult DangdOperationalData::AugmentDataXml(
         "urn:ietf:params:xml:ns:yang:ietf-netconf-acm";
   }
   const yang::netconf::NacmCounters counters = nacm_->counters();
-  nacm.append_child("denied-operations").text() =
-      counters.denied_operations;
-  nacm.append_child("denied-data-writes").text() =
-      counters.denied_data_writes;
+  nacm.append_child("denied-operations").text() = counters.denied_operations;
+  nacm.append_child("denied-data-writes").text() = counters.denied_data_writes;
   nacm.append_child("denied-notifications").text() =
       counters.denied_notifications;
   std::ostringstream output;
@@ -1045,22 +1044,22 @@ void DangdOperationalData::SetAppliedConfigurationProvider(
 
 std::vector<std::string> DangdOperationalData::Capabilities() const {
   pugi::xml_document document;
-  if (!yang::ParseUntrustedXml(yang_library_xml_, &document).ok)
-    return {};
+  if (!yang::ParseUntrustedXml(yang_library_xml_, &document).ok) return {};
   const pugi::xml_node content =
       document.document_element().child("content-id");
   if (!content) return {};
   return {
       "urn:ietf:params:netconf:capability:yang-library:1.1?revision="
-      "2019-01-04&content-id=" + std::string(content.text().as_string()),
+      "2019-01-04&content-id=" +
+          std::string(content.text().as_string()),
       "urn:ietf:params:xml:ns:yang:ietf-netconf-monitoring?"
       "module=ietf-netconf-monitoring&revision=2010-10-04"};
 }
 
 yang::netconf::OperationalDataProvider::SchemaLookup
-DangdOperationalData::GetSchema(
-    std::string_view identifier, std::optional<std::string_view> version,
-    std::string_view format) const {
+DangdOperationalData::GetSchema(std::string_view identifier,
+                                std::optional<std::string_view> version,
+                                std::string_view format) const {
   using Status = SchemaLookup::Status;
   if (format != "yang" && format != "ncm:yang")
     return {Status::kUnsupportedFormat, {}};
@@ -1077,8 +1076,7 @@ DangdOperationalData::GetSchema(
 
 std::string DangdOperationalData::content_id() const {
   pugi::xml_document document;
-  if (!yang::ParseUntrustedXml(yang_library_xml_, &document).ok)
-    return {};
+  if (!yang::ParseUntrustedXml(yang_library_xml_, &document).ok) return {};
   return document.document_element().child("content-id").text().as_string();
 }
 
@@ -1097,19 +1095,19 @@ std::string DangdOperationalData::source_digest() const {
   return Sha256(material);
 }
 
-Application::Application(yang::config::RuntimeSchema schema,
-                         yang::config::ConfigDocument configuration,
-                         std::optional<std::filesystem::path> state_file,
-                         std::shared_ptr<StateFileLock> state_file_lock,
-                         yang::netconf::SnapshotSaveCheckpoint
-                             snapshot_save_checkpoint,
-                         yang::netconf::NacmPolicy nacm, bool managed_nacm,
-                         std::unique_ptr<PluginRuntime> plugins,
-                         std::vector<PeerRecoveryTarget> peer_targets,
-                         std::vector<std::string> peer_controller_users,
-                         std::string yang_library_xml,
-                         std::vector<DangdOperationalData::ModelSource>
-                             model_sources)
+Application::Application(
+    yang::config::RuntimeSchema schema,
+    yang::config::ConfigDocument configuration,
+    std::optional<std::filesystem::path> state_file,
+    std::shared_ptr<StateFileLock> state_file_lock,
+    yang::netconf::SnapshotSaveCheckpoint snapshot_save_checkpoint,
+    yang::netconf::NacmPolicy nacm, bool managed_nacm,
+    std::unique_ptr<PluginRuntime> plugins,
+    std::vector<PeerRecoveryTarget> peer_targets,
+    std::optional<std::filesystem::path> peer_transaction_journal,
+    std::vector<std::string> peer_controller_users,
+    std::string yang_library_xml,
+    std::vector<DangdOperationalData::ModelSource> model_sources)
     : state_file_lock_(std::move(state_file_lock)),
       schema_(std::move(schema)),
       plugins_(std::move(plugins)),
@@ -1118,7 +1116,8 @@ Application::Application(yang::config::RuntimeSchema schema,
       operational_(std::move(yang_library_xml), std::move(model_sources),
                    &nacm_, plugins_.get(), &schema_),
       backend_(configuration, plugins_.get(), &nacm_, managed_nacm,
-               std::move(peer_targets)),
+               std::move(peer_targets), std::move(peer_transaction_journal),
+               state_file.has_value()),
       datastores_(schema_, std::move(configuration), std::nullopt, &backend_),
       server_(datastores_, &nacm_, nullptr, &notifications_, std::nullopt,
               &operational_, plugins_.get()),
@@ -1139,8 +1138,8 @@ Application::Application(yang::config::RuntimeSchema schema,
         std::lock_guard lock(recovery_audit_mutex_);
         recovery_audit_records_.push_back(
             "recovery RPC attempt: session=" +
-            std::to_string(record.session_id) + " user=" +
-            AuditField(record.username) +
+            std::to_string(record.session_id) +
+            " user=" + AuditField(record.username) +
             " bytes=" + std::to_string(record.rpc_bytes));
       });
   notifications_.SetInstanceDataProvider([this] {
@@ -1170,10 +1169,10 @@ std::vector<std::string> Application::PollPluginNotifications() {
       errors.push_back("plugin " + event.provider + ": " + *event.error);
       continue;
     }
-    if (!notifications_.Publish(
-            event.stream_name, event.module_name, event.notification_name,
-            event.content_xml, std::chrono::system_clock::now(),
-            event.default_deny_all, event.instance_path))
+    if (!notifications_.Publish(event.stream_name, event.module_name,
+                                event.notification_name, event.content_xml,
+                                std::chrono::system_clock::now(),
+                                event.default_deny_all, event.instance_path))
       errors.push_back("plugin " + event.provider +
                        ": notification was rejected by the host");
   }
@@ -1195,14 +1194,13 @@ bool Application::PublishYangLibraryUpdate(std::string_view content_id) {
     document.print(output, "", pugi::format_raw);
     return output.str();
   };
-  const std::string content =
-      notification("yang-library-update", "content-id");
-  const bool current = notifications_.Publish(
-      "NETCONF", "ietf-yang-library", "yang-library-update", content);
+  const std::string content = notification("yang-library-update", "content-id");
+  const bool current = notifications_.Publish("NETCONF", "ietf-yang-library",
+                                              "yang-library-update", content);
   const std::string legacy =
       notification("yang-library-change", "module-set-id");
-  const bool compatible = notifications_.Publish(
-      "NETCONF", "ietf-yang-library", "yang-library-change", legacy);
+  const bool compatible = notifications_.Publish("NETCONF", "ietf-yang-library",
+                                                 "yang-library-change", legacy);
   return current && compatible;
 }
 
@@ -1234,7 +1232,8 @@ LoadResult Application::LoadWithStateFileLock(
         result.errors.push_back(std::move(lock_error));
         return result;
       }
-      state_file_lock = StateFileLock::Acquire(*options.state_file, &lock_error);
+      state_file_lock =
+          StateFileLock::Acquire(*options.state_file, &lock_error);
       if (!state_file_lock) {
         result.errors.push_back(std::move(lock_error));
         return result;
@@ -1245,11 +1244,12 @@ LoadResult Application::LoadWithStateFileLock(
   const auto model_text = ReadFile(
       options.model, yang::DefaultResourceLimits().maximum_source_bytes,
       "YANG model", &result.errors);
-  const auto configuration_text = options.configuration_override
-      ? options.configuration_override
-      : ReadFile(options.configuration,
-                 yang::DefaultResourceLimits().maximum_xml_bytes,
-                 "XML configuration", &result.errors);
+  const auto configuration_text =
+      options.configuration_override
+          ? options.configuration_override
+          : ReadFile(options.configuration,
+                     yang::DefaultResourceLimits().maximum_xml_bytes,
+                     "XML configuration", &result.errors);
   std::optional<std::string> nacm_text;
   if (options.nacm_configuration) {
     nacm_text = ReadFile(*options.nacm_configuration,
@@ -1360,12 +1360,12 @@ LoadResult Application::LoadWithStateFileLock(
       return result;
     }
   }
-  auto schema = yang::config::RuntimeSchemaBuilder::FromCompilation(*compilation);
-  std::set<std::string> implemented{root_module_name, "ietf-netconf-acm",
-                                    "ietf-yang-library",
-                                    "ietf-netconf-monitoring",
-                                    "ietf-netconf", "ietf-netconf-nmda",
-                                    "dangd-reconciliation", "ietf-keystore"};
+  auto schema =
+      yang::config::RuntimeSchemaBuilder::FromCompilation(*compilation);
+  std::set<std::string> implemented{
+      root_module_name,          "ietf-netconf-acm", "ietf-yang-library",
+      "ietf-netconf-monitoring", "ietf-netconf",     "ietf-netconf-nmda",
+      "dangd-reconciliation",    "ietf-keystore"};
   for (const PluginYangSource& plugin_source : plugins->yang_sources()) {
     if (plugin_source.role != DANG_YANG_IMPORT_ONLY_V1)
       implemented.insert(plugin_source.module_name);
@@ -1376,7 +1376,8 @@ LoadResult Application::LoadWithStateFileLock(
   const bool managed_nacm = HasManagedNacm(schema);
   std::string seeded_configuration = *configuration_text;
   if (managed_nacm && nacm_text)
-    seeded_configuration = SeedNacm(std::move(seeded_configuration), *nacm_text);
+    seeded_configuration =
+        SeedNacm(std::move(seeded_configuration), *nacm_text);
   auto parsed = yang::config::ParseDatastoreXml(schema, seeded_configuration);
   if (!parsed.document) {
     AppendFindings(parsed.findings, &result.errors);
@@ -1391,8 +1392,8 @@ LoadResult Application::LoadWithStateFileLock(
 
   yang::netconf::NacmPolicy nacm;
   if (managed_nacm || nacm_text) {
-    std::string policy_xml = managed_nacm ? NacmSubtree(*parsed.document)
-                                           : *nacm_text;
+    std::string policy_xml =
+        managed_nacm ? NacmSubtree(*parsed.document) : *nacm_text;
     if (!policy_xml.empty()) {
       auto loaded_nacm = yang::netconf::LoadNacmPolicy(policy_xml);
       if (!loaded_nacm.policy) {
@@ -1434,11 +1435,10 @@ LoadResult Application::LoadWithStateFileLock(
 
   result.application = std::unique_ptr<Application>(new Application(
       std::move(schema), std::move(*parsed.document), options.state_file,
-      std::move(state_file_lock),
-      options.snapshot_save_checkpoint, std::move(nacm), managed_nacm,
-      std::move(plugins), peer_targets,
-      options.peer_controller_users, yang_library_xml,
-      std::move(model_sources)));
+      std::move(state_file_lock), options.snapshot_save_checkpoint,
+      std::move(nacm), managed_nacm, std::move(plugins), peer_targets,
+      options.peer_transaction_journal, options.peer_controller_users,
+      yang_library_xml, std::move(model_sources)));
   bool restored_snapshot = false;
   if (options.state_file && !options.configuration_override) {
     std::error_code exists_error;
@@ -1475,8 +1475,7 @@ LoadResult Application::LoadWithStateFileLock(
           result.application->datastores_.ClearBackendRecoveryState(
               *recovery_state);
       if (!cleared.ok) {
-        result.errors.push_back(
-            "cannot clear resolved backend recovery state");
+        result.errors.push_back("cannot clear resolved backend recovery state");
         result.application.reset();
       } else if (const auto persistence_error =
                      result.application->SaveState()) {
@@ -1526,9 +1525,10 @@ LoadResult Application::LoadWithStateFileLock(
           finding.state = yang::config::FindingState::kInvalid;
           finding.netconf_error_tag = "operation-failed";
           finding.message = "datastore persistence failed: " +
-              saved.error.value_or("unknown persistence error");
+                            saved.error.value_or("unknown persistence error");
           if (!compensated.ok) {
-            finding.message += "; prior snapshot restoration failed: " +
+            finding.message +=
+                "; prior snapshot restoration failed: " +
                 compensated.error.value_or("unknown persistence error");
           }
           return finding;
@@ -1550,16 +1550,16 @@ LoadResult Application::Reload(const ApplicationOptions& options,
         ("dangd-plugin-" + std::to_string(getpid()) + "-" +
          std::to_string(++sequence) + plugin.extension().string());
     std::error_code error;
-    std::filesystem::copy_file(plugin, copy,
-                               std::filesystem::copy_options::overwrite_existing,
-                               error);
+    std::filesystem::copy_file(
+        plugin, copy, std::filesystem::copy_options::overwrite_existing, error);
     if (error) {
       for (const auto& path : staged) {
         std::error_code ignored;
         std::filesystem::remove(path, ignored);
       }
-      return {nullptr, {"cannot stage plugin for atomic reload: " +
-                        plugin.string() + ": " + error.message()}};
+      return {nullptr,
+              {"cannot stage plugin for atomic reload: " + plugin.string() +
+               ": " + error.message()}};
     }
     staged.push_back(copy);
   }
@@ -1585,9 +1585,8 @@ LoadResult Application::Reload(const ApplicationOptions& options,
 
 std::optional<std::string> Application::SaveState() const {
   if (!state_file_) return std::nullopt;
-  const auto saved =
-      yang::netconf::SaveDatastoreSnapshot(
-          *state_file_, datastores_, snapshot_save_checkpoint_);
+  const auto saved = yang::netconf::SaveDatastoreSnapshot(
+      *state_file_, datastores_, snapshot_save_checkpoint_);
   if (saved.ok) return std::nullopt;
   return saved.error.value_or("unknown persistence error");
 }
@@ -1600,8 +1599,8 @@ int RunStreamSession(Application& application, std::istream& input,
     errors << "dangd: stream session requires a nonzero ID and username\n";
     return 2;
   }
-  yang::netconf::NetconfSession session(
-      application.server(), session_id, std::move(authenticated_username));
+  yang::netconf::NetconfSession session(application.server(), session_id,
+                                        std::move(authenticated_username));
   if (!session.valid()) {
     errors << "dangd: cannot register NETCONF session\n";
     return 1;
@@ -1616,8 +1615,8 @@ int RunStreamSession(Application& application, std::istream& input,
     input.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
     const std::streamsize count = input.gcount();
     if (count == 0) break;
-    auto response = session.Receive(std::string_view(
-        buffer.data(), static_cast<std::size_t>(count)));
+    auto response = session.Receive(
+        std::string_view(buffer.data(), static_cast<std::size_t>(count)));
     for (const std::string& bytes : response.bytes_to_send) {
       if (!WriteAll(output, bytes)) {
         errors << "dangd: cannot write NETCONF output\n";

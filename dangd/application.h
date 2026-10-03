@@ -17,7 +17,6 @@
 
 #include "dangd/configuration_backend.h"
 #include "dangd/plugin_manager.h"
-
 #include "yang/config_validation.h"
 #include "yang/nacm.h"
 #include "yang/netconf_datastore.h"
@@ -50,12 +49,11 @@ class DangdOperationalData final
   [[nodiscard]] DataResult AugmentDataXml(
       std::string_view configuration_data_xml) const override;
   /** Supplies the configuration actually accepted by the device backend. */
-  void SetAppliedConfigurationProvider(
-      std::function<std::string()> provider);
+  void SetAppliedConfigurationProvider(std::function<std::string()> provider);
   [[nodiscard]] std::vector<std::string> Capabilities() const override;
-  [[nodiscard]] SchemaLookup GetSchema(
-      std::string_view identifier, std::optional<std::string_view> version,
-      std::string_view format) const override;
+  [[nodiscard]] SchemaLookup GetSchema(std::string_view identifier,
+                                       std::optional<std::string_view> version,
+                                       std::string_view format) const override;
   /** Returns the current RFC 8525 content identifier. */
   [[nodiscard]] std::string content_id() const;
   /** Hashes the exact retrievable source registry for reload consistency. */
@@ -94,7 +92,8 @@ struct ApplicationOptions {
   std::optional<std::filesystem::path> nacm_configuration;
   /** Host-authenticated users whose sessions bypass NACM for recovery. */
   std::vector<std::string> recovery_users;
-  /** Authenticated peer controllers whose local changes are already composed. */
+  /** Authenticated peer controllers whose local changes are already composed.
+   */
   std::vector<std::string> peer_controller_users;
   /** Enables the built-in dangd-only recovery identity. */
   bool default_superuser = true;
@@ -111,7 +110,8 @@ struct LoadResult;
 /** Owns the compiled schema, NETCONF datastores, and protocol service. */
 class Application {
  public:
-  /** Compiles, validates, and constructs an application from filesystem inputs. */
+  /** Compiles, validates, and constructs an application from filesystem inputs.
+   */
   [[nodiscard]] static LoadResult Load(const ApplicationOptions& options);
   /** Builds a replacement using the current running configuration. */
   [[nodiscard]] static LoadResult Reload(const ApplicationOptions& options,
@@ -129,7 +129,8 @@ class Application {
   [[nodiscard]] yang::netconf::DatastoreManager& datastores() noexcept {
     return datastores_;
   }
-  /** Returns the immutable runtime schema shared by all configuration layers. */
+  /** Returns the immutable runtime schema shared by all configuration layers.
+   */
   [[nodiscard]] const yang::config::RuntimeSchema& schema() const noexcept {
     return schema_;
   }
@@ -147,7 +148,8 @@ class Application {
   [[nodiscard]] std::vector<std::string> DrainRecoveryAuditRecords();
   /** Drains plugin events through schema validation and NACM publication. */
   [[nodiscard]] std::vector<std::string> PollPluginNotifications();
-  /** Returns an immutable copy of the backend's current working configuration. */
+  /** Returns an immutable copy of the backend's current working configuration.
+   */
   [[nodiscard]] yang::config::ConfigDocument working_configuration() const {
     return backend_.Working();
   }
@@ -170,6 +172,7 @@ class Application {
               yang::netconf::NacmPolicy nacm, bool managed_nacm,
               std::unique_ptr<PluginRuntime> plugins,
               std::vector<PeerRecoveryTarget> peer_targets,
+              std::optional<std::filesystem::path> peer_transaction_journal,
               std::vector<std::string> peer_controller_users,
               std::string yang_library_xml,
               std::vector<DangdOperationalData::ModelSource> model_sources);

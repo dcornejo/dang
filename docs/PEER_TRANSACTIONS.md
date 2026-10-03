@@ -225,11 +225,11 @@ An exclusive mode-0600 sibling lock is held across journal load, network replay,
 acknowledgement writes, and cleanup so competing daemon processes cannot recover
 the same decision concurrently.
 
-## Remaining integration
+## Production commit path and remaining work
 
-The controller is not reachable from NETCONF or `dangctl` yet. Production
-preflight already collects, validates, and resolves every composed participant
-to a core-owned authenticated endpoint. The datastore/backend contract now
+The normal NETCONF commit path now invokes the generic controller. Production
+preflight collects, validates, and resolves every composed participant to a
+core-owned authenticated endpoint. The datastore/backend contract
 separates replacement from finalization: ordinary commits invoke finalization
 only after the local snapshot is durable, persistence failure aborts retained
 reversible work before compensating the live state, and startup finalizes an
@@ -250,9 +250,18 @@ COMMIT. The existing one-shot operation is implemented by composing these
 stages. This is a transport- and plugin-neutral contract; the retained handle
 contains the live sessions and private journal, not provider-specific state.
 
-This supplies the ordering and persistence seam the controller needs, but it is
-not yet crash-safe distributed execution. Startup now restores and validates
-the snapshot before peer recovery. A matching `peer-transaction-v1` marker and
+The backend uses those stages directly. It prepares and verifies the remote
+participants, publishes the exact marker through the datastore, applies the
+local plugins, and selects COMMIT only after the marked local snapshot is
+durable. Local apply or persistence failure aborts the remote PREPARED work.
+Once local state is durable, even a proven COMMIT-journal write failure retains
+PREPARED instead of cancelling; the marker blocks more mutations and startup
+retries the same decision. Live coordination is rejected unless a persistent
+datastore state file is configured. Startup hydration applies its already
+authoritative local snapshot without originating another peer transaction.
+
+Startup restores and validates the snapshot before peer recovery. A matching
+`peer-transaction-v1` marker and
 PREPARED journal are advanced durably to COMMIT and confirmed; matching COMMIT
 state resumes confirmation. Only after successful peer recovery is the marker
 cleared and saved, before backend activation. Mismatched identities or digests,
@@ -263,13 +272,6 @@ version-1 snapshot compatibility.
 
 Pair-wide management still requires:
 
-- generic production invocation of composed ABI-v9 plans through that safe
-  staged lifecycle from the backend durability hooks. The external Kea
-  provider now supplies complete two-member hot-standby module images plus a
-  strict dual-view verifier, while the core validates and composes those
-  transport-neutral contributions, and `PeerTransactionController` now binds
-  one such group to TLS participants, verifiers, tokens, and its journal. The
-  normal NETCONF commit path does not yet invoke the resulting controller;
 - policy for unreachable or degraded peers, defaulting to rejection;
 - a total transaction deadline beyond the implemented per-I/O timeouts,
   observability, NACM rules, packaging, and Linux/FreeBSD interoperability
@@ -277,8 +279,8 @@ Pair-wide management still requires:
 - CLI support that submits the logical change through dangd rather than
   bypassing NETCONF validation, authorization, ordering, and rollback.
 
-Until those pieces are integrated, each Kea member remains an independently
-managed dangd instance and pair-wide atomicity must not be claimed.
+Until those operational policies and multi-host evidence are complete,
+pair-wide atomicity must not be advertised as production-ready.
 
 The production preparation path currently imposes a deliberate one-group
 limit. If affected plugins compose more than one group, the whole NETCONF

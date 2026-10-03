@@ -8,6 +8,21 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Connected composed ABI-v9 peer plans to the normal NETCONF backend path.
+  Dangd now prepares and verifies remote persistent confirmed commits, exposes
+  their exact transaction marker to datastore persistence, applies the local
+  plugin transaction, and selects COMMIT only during post-persistence backend
+  finalization. Local apply or snapshot failure cancels remote work while
+  PREPARED remains authoritative. Startup hydration never originates a new
+  distributed transaction, and live coordination requires a configured
+  persistent datastore state file.
+
+- Preserved PREPARED recovery when the local snapshot is already durable but a
+  remote COMMIT journal write is proven to have failed. This post-persistence
+  policy releases live sessions without cancellation, retains the journal and
+  datastore marker, blocks later mutations, and lets startup retry the same
+  decision without creating a local/remote split.
+
 - Split generic peer coordination into explicit prepare, commit, and abort
   stages. The controller can now retain live, verified confirmed commits while
   the crash-safe journal remains PREPARED, allowing the datastore to choose
