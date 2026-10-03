@@ -128,20 +128,20 @@ ParticipantIds(const std::vector<Participant> &participants,
 
 } // namespace
 
-PeerTransactionResult PeerTransactionCoordinator::Execute(
+PeerTransactionPrepareResult PeerTransactionCoordinator::Prepare(
     std::vector<PeerTransactionParticipant> participants,
     PeerTransactionJournal journal) const {
   PeerTransactionResult result;
   if (const auto error = ValidateParticipants(participants, true)) {
     result.message = *error;
     CompleteAbort(journal, &result);
-    return result;
+    return {.result = std::move(result)};
   }
   if (!journal.record_abort || !journal.record_commit_decision ||
       !journal.record_confirmation || !journal.record_complete) {
     result.message = "peer transaction journal callbacks are incomplete";
     CompleteAbort(journal, &result);
-    return result;
+    return {.result = std::move(result)};
   }
 
   const std::vector<std::size_t> prepare_order = PrepareOrder(participants);
@@ -158,7 +158,7 @@ PeerTransactionResult PeerTransactionCoordinator::Execute(
       result.message = participants[index].id + ": prepare failed: " + *error;
       ReleasePrepared(participants, prepared);
       CompleteAbort(journal, &result);
-      return result;
+      return {.result = std::move(result)};
     }
     result.prepared.push_back(participants[index].id);
   }
@@ -174,7 +174,7 @@ PeerTransactionResult PeerTransactionCoordinator::Execute(
       CancelApplied(participants, applied, &result);
       ReleasePrepared(participants, prepared);
       CompleteAbort(journal, &result);
-      return result;
+      return {.result = std::move(result)};
     }
     result.applied.push_back(participants[index].id);
   }
@@ -186,20 +186,36 @@ PeerTransactionResult PeerTransactionCoordinator::Execute(
       CancelApplied(participants, applied, &result);
       ReleasePrepared(participants, prepared);
       CompleteAbort(journal, &result);
-      return result;
+      return {.result = std::move(result)};
     }
   }
 
+  result.disposition = PeerTransactionDisposition::kPrepared;
+  PeerPreparedTransaction transaction{.participants = std::move(participants),
+                                      .journal = std::move(journal),
+                                      .progress = result};
+  return {.result = std::move(result), .transaction = std::move(transaction)};
+}
+
+PeerTransactionResult PeerTransactionCoordinator::CommitPrepared(
+    PeerPreparedTransaction transaction) const {
+  PeerTransactionResult result = std::move(transaction.progress);
+  std::vector<PeerTransactionParticipant> &participants =
+      transaction.participants;
+  const std::vector<std::size_t> prepare_order = PrepareOrder(participants);
+  const std::vector<std::size_t> apply_order = ApplyOrder(participants);
   const std::vector<std::string> participant_ids =
       ParticipantIds(participants, prepare_order);
+
   const PeerTransactionDecisionResult decision =
-      journal.record_commit_decision(participant_ids);
+      transaction.journal.record_commit_decision(participant_ids);
   if (decision.status == PeerTransactionDecisionStatus::kNotCommitted) {
+    result.disposition = PeerTransactionDisposition::kAborted;
     result.message =
         "cannot durably record peer commit decision: " + decision.error;
-    CancelApplied(participants, applied, &result);
-    ReleasePrepared(participants, prepared);
-    CompleteAbort(journal, &result);
+    CancelApplied(participants, apply_order, &result);
+    ReleasePrepared(participants, prepare_order);
+    CompleteAbort(transaction.journal, &result);
     return result;
   }
   if (decision.status == PeerTransactionDecisionStatus::kOutcomeUnknown) {
@@ -208,7 +224,7 @@ PeerTransactionResult PeerTransactionCoordinator::Execute(
     result.message =
         "peer commit decision outcome is unknown: " + decision.error;
     result.pending_confirmations = participant_ids;
-    ReleasePrepared(participants, prepared);
+    ReleasePrepared(participants, prepare_order);
     return result;
   }
 
@@ -223,7 +239,7 @@ PeerTransactionResult PeerTransactionCoordinator::Execute(
       continue;
     }
     if (const auto error =
-            journal.record_confirmation(participants[index].id)) {
+            transaction.journal.record_confirmation(participants[index].id)) {
       result.pending_confirmations.push_back(participants[index].id);
       if (result.message.empty()) {
         result.message = participants[index].id +
@@ -235,11 +251,11 @@ PeerTransactionResult PeerTransactionCoordinator::Execute(
     }
     result.confirmed.push_back(participants[index].id);
   }
-  ReleasePrepared(participants, prepared);
+  ReleasePrepared(participants, prepare_order);
 
   if (!result.pending_confirmations.empty())
     return result;
-  if (const auto error = journal.record_complete()) {
+  if (const auto error = transaction.journal.record_complete()) {
     result.message =
         "peer commit completed but journal cleanup is pending: " + *error;
     result.journal_cleanup_pending = true;
@@ -248,6 +264,32 @@ PeerTransactionResult PeerTransactionCoordinator::Execute(
   result.disposition = PeerTransactionDisposition::kCommitted;
   result.message.clear();
   return result;
+}
+
+PeerTransactionResult PeerTransactionCoordinator::AbortPrepared(
+    PeerPreparedTransaction transaction) const {
+  PeerTransactionResult result = std::move(transaction.progress);
+  const std::vector<std::size_t> prepare_order =
+      PrepareOrder(transaction.participants);
+  const std::vector<std::size_t> apply_order =
+      ApplyOrder(transaction.participants);
+  result.disposition = PeerTransactionDisposition::kAborted;
+  result.message.clear();
+  CancelApplied(transaction.participants, apply_order, &result);
+  ReleasePrepared(transaction.participants, prepare_order);
+  CompleteAbort(transaction.journal, &result);
+  return result;
+}
+
+PeerTransactionResult PeerTransactionCoordinator::Execute(
+    std::vector<PeerTransactionParticipant> participants,
+    PeerTransactionJournal journal) const {
+  PeerTransactionPrepareResult prepared =
+      Prepare(std::move(participants), std::move(journal));
+  if (!prepared.ok()) {
+    return std::move(prepared.result);
+  }
+  return CommitPrepared(std::move(*prepared.transaction));
 }
 
 PeerTransactionResult PeerTransactionCoordinator::ResumeCommit(

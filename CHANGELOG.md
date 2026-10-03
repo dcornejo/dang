@@ -8,6 +8,12 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Split generic peer coordination into explicit prepare, commit, and abort
+  stages. The controller can now retain live, verified confirmed commits while
+  the crash-safe journal remains PREPARED, allowing the datastore to choose
+  COMMIT only after its local snapshot becomes durable or cancel the remote
+  work when local persistence fails.
+
 - Added a plugin-neutral durable backend-recovery contract. Snapshot version 2
   records an opaque recovery kind, transaction identity, and proposal digest
   with the new running configuration before backend finalization, then clears

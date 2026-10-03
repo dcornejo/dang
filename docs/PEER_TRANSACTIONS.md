@@ -241,6 +241,15 @@ or clear retains the marker, and generic restore refuses to activate a marked
 backend until its host has reconciled the record. Version-1 snapshots remain
 readable as unmarked state. Plugins cannot see or modify this host metadata.
 
+The coordinator and controller now expose that lifecycle directly. `Prepare`
+prepares all participants, applies persistent confirmed commits in safe order,
+performs plugin-supplied verification, and returns an owning handle while the
+journal remains PREPARED. `Commit` durably selects COMMIT before confirming
+participants, while `Abort` cancels in reverse apply order without selecting
+COMMIT. The existing one-shot operation is implemented by composing these
+stages. This is a transport- and plugin-neutral contract; the retained handle
+contains the live sessions and private journal, not provider-specific state.
+
 This supplies the ordering and persistence seam the controller needs, but it is
 not yet crash-safe distributed execution. Startup now restores and validates
 the snapshot before peer recovery. A matching `peer-transaction-v1` marker and
@@ -255,7 +264,7 @@ version-1 snapshot compatibility.
 Pair-wide management still requires:
 
 - generic production invocation of composed ABI-v9 plans through that safe
-  lifecycle. The external Kea
+  staged lifecycle from the backend durability hooks. The external Kea
   provider now supplies complete two-member hot-standby module images plus a
   strict dual-view verifier, while the core validates and composes those
   transport-neutral contributions, and `PeerTransactionController` now binds

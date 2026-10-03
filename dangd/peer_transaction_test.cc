@@ -45,10 +45,11 @@ PeerTransactionJournal Journal(FakePeerState *state, bool fail_decision = false,
                                bool fail_complete = false,
                                std::string fail_confirmation = {}) {
   return {
-      .record_abort = [state] {
-        state->events.push_back("abort journal");
-        return std::optional<std::string>{};
-      },
+      .record_abort =
+          [state] {
+            state->events.push_back("abort journal");
+            return std::optional<std::string>{};
+          },
       .record_commit_decision =
           [state, fail_decision](const std::vector<std::string> &ids) {
             std::string event = "decision";
@@ -102,6 +103,49 @@ TEST(PeerTransactionCoordinatorTest,
                 "decision primary standby", "confirm standby", "ack standby",
                 "confirm primary", "ack primary", "release standby",
                 "release primary", "complete"}));
+}
+
+TEST(PeerTransactionCoordinatorTest,
+     RetainsPreparedWorkUntilAnExplicitCommitDecision) {
+  FakePeerState state;
+  PeerTransactionPrepareResult prepared =
+      PeerTransactionCoordinator().Prepare(Pair(&state), Journal(&state));
+  ASSERT_TRUE(prepared.ok()) << prepared.result.message;
+  EXPECT_EQ(prepared.result.disposition, PeerTransactionDisposition::kPrepared);
+  EXPECT_EQ(std::ranges::find(state.events, "decision primary standby"),
+            state.events.end());
+  EXPECT_EQ(std::ranges::find(state.events, "confirm standby"),
+            state.events.end());
+  EXPECT_EQ(std::ranges::find(state.events, "release standby"),
+            state.events.end());
+
+  const PeerTransactionResult committed =
+      PeerTransactionCoordinator().CommitPrepared(
+          std::move(*prepared.transaction));
+  EXPECT_TRUE(committed.ok()) << committed.message;
+  EXPECT_LT(std::ranges::find(state.events, "decision primary standby"),
+            std::ranges::find(state.events, "confirm standby"));
+  EXPECT_LT(std::ranges::find(state.events, "confirm primary"),
+            std::ranges::find(state.events, "complete"));
+}
+
+TEST(PeerTransactionCoordinatorTest,
+     ExplicitAbortCancelsRetainedPreparedWorkWithoutChoosingCommit) {
+  FakePeerState state;
+  PeerTransactionPrepareResult prepared =
+      PeerTransactionCoordinator().Prepare(Pair(&state), Journal(&state));
+  ASSERT_TRUE(prepared.ok()) << prepared.result.message;
+
+  const PeerTransactionResult aborted =
+      PeerTransactionCoordinator().AbortPrepared(
+          std::move(*prepared.transaction));
+  EXPECT_EQ(aborted.disposition, PeerTransactionDisposition::kAborted);
+  EXPECT_EQ(std::ranges::find(state.events, "decision primary standby"),
+            state.events.end());
+  EXPECT_LT(std::ranges::find(state.events, "cancel primary"),
+            std::ranges::find(state.events, "cancel standby"));
+  EXPECT_LT(std::ranges::find(state.events, "release standby"),
+            std::ranges::find(state.events, "abort journal"));
 }
 
 TEST(PeerTransactionCoordinatorTest, PrepareFailurePreventsEveryMutation) {

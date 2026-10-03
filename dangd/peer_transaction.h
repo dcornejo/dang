@@ -78,6 +78,7 @@ struct PeerTransactionJournal {
 enum class PeerTransactionDisposition {
   kAborted,
   kRollbackIncomplete,
+  kPrepared,
   kCommitPending,
   kCommitted,
 };
@@ -109,6 +110,21 @@ struct PeerTransactionResult {
   }
 };
 
+/** Retained, verified remote work whose durable decision is still PREPARED. */
+struct PeerPreparedTransaction {
+  std::vector<PeerTransactionParticipant> participants;
+  PeerTransactionJournal journal;
+  PeerTransactionResult progress;
+};
+
+/** Result of stopping safely before the durable group COMMIT decision. */
+struct PeerTransactionPrepareResult {
+  PeerTransactionResult result;
+  std::optional<PeerPreparedTransaction> transaction;
+
+  [[nodiscard]] bool ok() const noexcept { return transaction.has_value(); }
+};
+
 /**
  * Coordinates a fail-closed, confirmed-commit transaction across peers.
  *
@@ -121,6 +137,20 @@ struct PeerTransactionResult {
  */
 class PeerTransactionCoordinator {
 public:
+  /** Prepares, applies confirmed commits, and verifies without choosing COMMIT.
+   */
+  [[nodiscard]] PeerTransactionPrepareResult
+  Prepare(std::vector<PeerTransactionParticipant> participants,
+          PeerTransactionJournal journal) const;
+
+  /** Durably selects COMMIT, confirms every peer, and releases resources. */
+  [[nodiscard]] PeerTransactionResult
+  CommitPrepared(PeerPreparedTransaction transaction) const;
+
+  /** Cancels verified remote work while PREPARED remains authoritative. */
+  [[nodiscard]] PeerTransactionResult
+  AbortPrepared(PeerPreparedTransaction transaction) const;
+
   [[nodiscard]] PeerTransactionResult
   Execute(std::vector<PeerTransactionParticipant> participants,
           PeerTransactionJournal journal) const;

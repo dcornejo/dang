@@ -148,8 +148,11 @@ stays in this file with its remaining work rewritten precisely.
   durably clears the marker, and rejects mismatched or orphaned records. Normal
   preparation now rejects any transaction affecting more than one peer group
   before endpoint resolution or plugin mutation, providing an explicit safe
-  limit until an atomic multi-group journal is designed. Before connecting the
-  controller, add a total transaction deadline
+  limit until an atomic multi-group journal is designed. The coordinator and
+  controller now expose explicit prepare, commit, and abort stages: verified
+  remote confirmed commits can remain journaled as PREPARED while the local
+  datastore crosses its durable snapshot boundary. Connect that staged API to
+  the generic backend lifecycle, then add a total transaction deadline
   beyond the implemented per-I/O timeouts, fail-closed degraded-peer policy,
   NACM/observability, `dangctl` integration,
   and Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.

@@ -35,7 +35,7 @@ PeerTransactionRole Role(std::uint32_t role) {
                                       : PeerTransactionRole::kStandby;
 }
 
-}  // namespace
+} // namespace
 
 PeerTransactionController::PeerTransactionController(
     std::vector<PeerRecoveryTarget> targets,
@@ -49,49 +49,48 @@ PeerTransactionController::PeerTransactionController(
     persistent_id_factory_ = SecurePersistentId;
 }
 
-PeerTransactionResult PeerTransactionController::Execute(
-    const ComposedPeerTransactionGroup& group,
-    const std::filesystem::path& journal_path, std::string transaction_id,
-    std::string proposal_digest) const {
+PeerTransactionControllerPrepareResult
+PeerTransactionController::Prepare(const ComposedPeerTransactionGroup &group,
+                                   const std::filesystem::path &journal_path,
+                                   std::string transaction_id,
+                                   std::string proposal_digest) const {
   PeerTransactionResult failed;
   if (!participant_factory_ || !persistent_id_factory_) {
     failed.message = "peer transaction controller callbacks are incomplete";
-    return failed;
+    return {.result = std::move(failed)};
   }
 
-  std::map<std::string, const PeerRecoveryTarget*, std::less<>> targets;
-  for (const PeerRecoveryTarget& target : targets_)
+  std::map<std::string, const PeerRecoveryTarget *, std::less<>> targets;
+  for (const PeerRecoveryTarget &target : targets_)
     targets.emplace(PeerRecoveryTargetId(target), &target);
 
   std::set<std::string> persistent_ids;
   struct MaterializedParticipant {
-    const PeerPlanParticipant* planned = nullptr;
-    const PeerRecoveryTarget* target = nullptr;
+    const PeerPlanParticipant *planned = nullptr;
+    const PeerRecoveryTarget *target = nullptr;
     std::string identity;
     std::string persistent_id;
   };
   std::vector<MaterializedParticipant> materialized;
   materialized.reserve(group.participants.size());
-  PeerJournalState journal_state{.transaction_id = std::move(transaction_id),
-                                 .proposal_digest =
-                                     std::move(proposal_digest)};
+  PeerJournalState journal_state{.transaction_id = transaction_id,
+                                 .proposal_digest = proposal_digest};
   journal_state.participants.reserve(group.participants.size());
-  for (const PeerPlanParticipant& planned : group.participants) {
+  for (const PeerPlanParticipant &planned : group.participants) {
     const std::string identity =
         PeerIdentity(group.group_id, planned.participant_id);
     const auto target = targets.find(identity);
     if (target == targets.end()) {
       failed.message =
           "peer transaction target " + identity + " is not configured";
-      return failed;
+      return {.result = std::move(failed)};
     }
     const auto persistent_id = persistent_id_factory_();
     if (!persistent_id || persistent_id->empty() ||
         persistent_id->size() > 256 ||
         !persistent_ids.insert(*persistent_id).second) {
-      failed.message =
-          "cannot create a unique persistent peer commit identity";
-      return failed;
+      failed.message = "cannot create a unique persistent peer commit identity";
+      return {.result = std::move(failed)};
     }
     materialized.push_back({.planned = &planned,
                             .target = target->second,
@@ -101,8 +100,8 @@ PeerTransactionResult PeerTransactionController::Execute(
 
   std::vector<PeerTransactionParticipant> participants;
   participants.reserve(materialized.size());
-  for (const MaterializedParticipant& material : materialized) {
-    const PeerPlanParticipant& planned = *material.planned;
+  for (const MaterializedParticipant &material : materialized) {
+    const PeerPlanParticipant &planned = *material.planned;
     const PeerTransactionRole role = Role(planned.role);
     journal_state.participants.push_back(
         {.id = material.identity,
@@ -122,28 +121,27 @@ PeerTransactionResult PeerTransactionController::Execute(
              participant_id = planned.participant_id](
                 std::string_view running,
                 std::string_view operational) -> std::optional<std::string> {
-              if (!verify_peer && !verifiers.empty())
-                return "peer verifier callback is unavailable";
-              for (const PeerPlanVerifier& verifier : verifiers) {
-                const auto finding = verify_peer(PluginPeerVerification{
-                    .provider = verifier.provider,
-                    .group_id = group_id,
-                    .participant_id = participant_id,
-                    .verification_context_json =
-                        verifier.verification_context_json,
-                    .running_reply_xml = std::string(running),
-                    .operational_reply_xml = std::string(operational)});
-                if (finding) {
-                  std::string message = "plugin " + verifier.provider +
-                                        " rejected peer verification: " +
-                                        finding->message;
-                  if (!finding->instance_path.empty())
-                    message += " at " + finding->instance_path;
-                  return message;
-                }
-              }
-              return std::nullopt;
-            },
+          if (!verify_peer && !verifiers.empty())
+            return "peer verifier callback is unavailable";
+          for (const PeerPlanVerifier &verifier : verifiers) {
+            const auto finding = verify_peer(PluginPeerVerification{
+                .provider = verifier.provider,
+                .group_id = group_id,
+                .participant_id = participant_id,
+                .verification_context_json = verifier.verification_context_json,
+                .running_reply_xml = std::string(running),
+                .operational_reply_xml = std::string(operational)});
+            if (finding) {
+              std::string message =
+                  "plugin " + verifier.provider +
+                  " rejected peer verification: " + finding->message;
+              if (!finding->instance_path.empty())
+                message += " at " + finding->instance_path;
+              return message;
+            }
+          }
+          return std::nullopt;
+        },
     }));
   }
 
@@ -151,12 +149,55 @@ PeerTransactionResult PeerTransactionController::Execute(
   auto journal = PeerTransactionFileJournal::Create(
       journal_path, std::move(journal_state), &journal_error);
   if (!journal) {
-    failed.message = "cannot create peer transaction journal: " +
-                     journal_error;
-    return failed;
+    failed.message = "cannot create peer transaction journal: " + journal_error;
+    return {.result = std::move(failed)};
   }
-  return PeerTransactionCoordinator().Execute(std::move(participants),
-                                               journal->Callbacks());
+  PeerTransactionPrepareResult prepared = PeerTransactionCoordinator().Prepare(
+      std::move(participants), journal->Callbacks());
+  if (!prepared.ok())
+    return {.result = std::move(prepared.result)};
+  auto handle = std::make_unique<PreparedPeerTransactionHandle>(
+      PreparedPeerTransactionHandle{
+          .journal = std::move(journal),
+          .transaction = std::move(*prepared.transaction),
+          .transaction_id = std::move(transaction_id),
+          .proposal_digest = std::move(proposal_digest)});
+  return {.result = std::move(prepared.result), .prepared = std::move(handle)};
 }
 
-}  // namespace dangd
+PeerTransactionResult PeerTransactionController::Commit(
+    std::unique_ptr<PreparedPeerTransactionHandle> prepared) const {
+  if (!prepared) {
+    PeerTransactionResult result;
+    result.message = "prepared peer transaction handle is absent";
+    return result;
+  }
+  return PeerTransactionCoordinator().CommitPrepared(
+      std::move(prepared->transaction));
+}
+
+PeerTransactionResult PeerTransactionController::Abort(
+    std::unique_ptr<PreparedPeerTransactionHandle> prepared) const {
+  if (!prepared) {
+    PeerTransactionResult result;
+    result.message = "prepared peer transaction handle is absent";
+    return result;
+  }
+  return PeerTransactionCoordinator().AbortPrepared(
+      std::move(prepared->transaction));
+}
+
+PeerTransactionResult
+PeerTransactionController::Execute(const ComposedPeerTransactionGroup &group,
+                                   const std::filesystem::path &journal_path,
+                                   std::string transaction_id,
+                                   std::string proposal_digest) const {
+  PeerTransactionControllerPrepareResult prepared =
+      Prepare(group, journal_path, std::move(transaction_id),
+              std::move(proposal_digest));
+  if (!prepared.ok())
+    return std::move(prepared.result);
+  return Commit(std::move(prepared.prepared));
+}
+
+} // namespace dangd
