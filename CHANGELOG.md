@@ -8,6 +8,12 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded removal of the external RFC 8431 provider's Linux `ip(8)` process
+  boundary. Production route changes now use bounded, sequenced rtnetlink
+  requests with correlated kernel acknowledgements and retain the existing
+  reverse-compensation policy. FreeBSD `route(8)` execution and RFC 7317 NTP
+  service commands remain active audit items.
+
 - Promoted the external production plugin command-execution audit from low
   priority to active implementation work. The provider inventory records the
   programmatic boundaries already used by Kea, FRR, IP management, and VPP;

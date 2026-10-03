@@ -996,13 +996,16 @@ end-to-end interoperability evidence remain before a substantial RFC 8431
 claim; in particular, not every kernel route kind or RFC route attribute is
 represented.
 
-The current route-mutation boundary is an audited interim variance. Linux
-invokes `ip` and FreeBSD invokes `route` through fixed validated argv and
-`posix_spawnp(3)` without a shell; ordered failures and reverse compensation
-are tested. The production command-execution audit requires this boundary to
-move to acknowledged Linux and FreeBSD route netlink operations before RFC
-8431 can be considered complete. The provider's native observation path
-already uses kernel APIs and does not spawn a command.
+Linux route mutation uses bounded, sequenced rtnetlink requests and requires a
+correlated kernel acknowledgement under a receive timeout. Kernel rejection
+enters the same tested reverse-compensation path as other failures; production
+does not execute `ip(8)`. FreeBSD mutation remains an audited interim variance:
+it invokes `route(8)` through fixed validated argv and `posix_spawnp(3)` without
+a shell. The production command-execution audit requires that remaining
+boundary to move to FreeBSD route netlink, or to a documented routing-socket
+fallback for operations its installed netlink ABI cannot express, before RFC
+8431 can be considered complete. Both native observation paths already use
+kernel APIs and do not spawn a command.
 
 BaseX is likewise only a datastore architecture investigation. The current
 implementation remains the in-process validated datastore manager with atomic
