@@ -151,8 +151,14 @@ durability retains PREPARED for recovery, and expiry after the durable COMMIT
 decision leaves unconfirmed peers pending. Cancellation, resource release, and
 startup recovery deliberately use their per-I/O timeouts without enforcing the
 expired forward deadline so safety work is not abandoned. Hostname resolution
-is still an integration boundary because the platform resolver API is
-synchronous. The adapter invokes no command-line client.
+runs behind the same monotonic connection budget. Because the portable
+platform resolver call cannot be cancelled, dangd permits at most eight
+outstanding resolver workers; a timed-out worker may finish later, and new
+lookups fail closed if the cap is exhausted. Numeric addresses bypass the
+worker. Address resolution and every returned-address connection attempt share
+one budget rather than each restarting the timeout, and at most 32 usable
+addresses are retained from one lookup. The adapter invokes no command-line
+client.
 
 `MakeTlsTransactionParticipant` maps the complete coordinator contract onto a
 single reusable authenticated session. Before sending any RPC it requires the
@@ -288,7 +294,7 @@ Pair-wide management still requires:
 
 - policy for unreachable or degraded peers, defaulting to rejection;
 - observability, NACM rules, packaging, and Linux/FreeBSD interoperability
-  tests, including resolver-stall containment; and
+  tests; and
 - CLI support that submits the logical change through dangd rather than
   bypassing NETCONF validation, authorization, ordering, and rollback.
 

@@ -51,6 +51,8 @@ struct TlsClientOptions {
   std::filesystem::path trust_anchor;
   /** Bounds each socket connect, TLS I/O, write, and reply-read wait. */
   std::uint32_t timeout_milliseconds = 10'000;
+  /** Optional absolute bound shared with a larger internal transaction. */
+  std::optional<std::chrono::steady_clock::time_point> deadline;
 };
 
 /** Authenticated server hello and reply returned by one NETCONF RPC. */

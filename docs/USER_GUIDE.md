@@ -405,10 +405,13 @@ The separate `--peer-transaction-timeout-ms` option bounds total forward
 progress across every participant and defaults to 30000 milliseconds. It must
 be positive and shorter than every confirmed-commit timeout supplied by the
 affected plugins. Per-peer `timeout-ms` still bounds each individual network
-operation. When the total deadline expires, dangd rolls back before the durable
-decision or preserves the authoritative PREPARED/COMMIT record for startup
-recovery after local durability. Cleanup and recovery continue under per-I/O
-timeouts rather than abandoning safety work at the expired deadline.
+operation, including hostname resolution and all resolved-address connection
+attempts as one budget. Dangd caps uncancellable platform resolver calls at
+eight outstanding workers and rejects later lookups until capacity returns.
+When the total deadline expires, dangd rolls back before the durable decision
+or preserves the authoritative PREPARED/COMMIT record for startup recovery
+after local durability. Cleanup and recovery continue under per-I/O timeouts
+rather than abandoning safety work at the expired deadline.
 
 ```sh
 install -m 600 peer-recovery.json /etc/dangd/peer-recovery.json

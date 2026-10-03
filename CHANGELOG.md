@@ -20,6 +20,13 @@ and releases follow Semantic Versioning.
   deliberately continue under per-I/O timeouts, and unsafe deadline values that
   do not precede every remote rollback window are rejected before mutation.
 
+- Bounded TLS hostname resolution and multi-address connection setup by one
+  monotonic client budget. Numeric addresses retain a direct path; hostnames use
+  capped asynchronous platform resolver workers so an uncancellable stalled
+  lookup cannot block a transaction thread or consume unbounded resources.
+  Resolver-cap exhaustion and timeout fail closed without invoking an external
+  command.
+
 - Connected composed ABI-v9 peer plans to the normal NETCONF backend path.
   Dangd now prepares and verifies remote persistent confirmed commits, exposes
   their exact transaction marker to datastore persistence, applies the local

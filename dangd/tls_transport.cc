@@ -5,15 +5,22 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cerrno>
 #include <cctype>
+#include <chrono>
 #include <csignal>
 #include <cstring>
+#include <condition_variable>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <ranges>
+#include <string>
 #include <string_view>
+#include <thread>
+#include <vector>
 
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -106,53 +113,198 @@ bool ConfigurePeerIdentity(SSL* tls, const std::string& host,
 }
 
 int ConnectSocket(std::string_view host, std::uint16_t port,
-                  std::uint32_t timeout_milliseconds, std::string* error) {
+                  std::uint32_t timeout_milliseconds,
+                  std::optional<std::chrono::steady_clock::time_point>
+                      transaction_deadline,
+                  std::string* error) {
   if (timeout_milliseconds == 0) {
     *error = "TLS client timeout must be positive";
     return -1;
   }
+  auto deadline = std::chrono::steady_clock::now() +
+                  std::chrono::milliseconds(timeout_milliseconds);
+  if (transaction_deadline && *transaction_deadline < deadline)
+    deadline = *transaction_deadline;
+  if (deadline <= std::chrono::steady_clock::now()) {
+    *error = "TLS client deadline expired";
+    return -1;
+  }
+  struct SocketAddress {
+    sockaddr_storage storage{};
+    socklen_t length = 0;
+    int family = AF_UNSPEC;
+    int socket_type = 0;
+    int protocol = 0;
+  };
+  const auto collect = [](addrinfo* addresses) {
+    constexpr std::size_t kMaximumResolvedAddresses = 32;
+    std::vector<SocketAddress> result;
+    for (const addrinfo* address = addresses; address != nullptr;
+         address = address->ai_next) {
+      if (result.size() == kMaximumResolvedAddresses) break;
+      if (address->ai_addr == nullptr || address->ai_addrlen <= 0 ||
+          static_cast<std::size_t>(address->ai_addrlen) >
+              sizeof(sockaddr_storage)) {
+        continue;
+      }
+      SocketAddress copied{.length = address->ai_addrlen,
+                           .family = address->ai_family,
+                           .socket_type = address->ai_socktype,
+                           .protocol = address->ai_protocol};
+      std::memcpy(&copied.storage, address->ai_addr,
+                  static_cast<std::size_t>(address->ai_addrlen));
+      result.push_back(copied);
+    }
+    return result;
+  };
   addrinfo hints{};
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
-  addrinfo* addresses = nullptr;
+  hints.ai_flags = AI_NUMERICSERV;
   const std::string service = std::to_string(port);
   const std::string host_text(host);
-  const int lookup = getaddrinfo(host_text.c_str(), service.c_str(), &hints,
-                                 &addresses);
-  if (lookup != 0) {
-    *error = std::string("cannot resolve TLS server: ") +
-             gai_strerror(lookup);
+  std::array<unsigned char, sizeof(in6_addr)> numeric_bytes{};
+  const bool numeric =
+      inet_pton(AF_INET, host_text.c_str(), numeric_bytes.data()) == 1 ||
+      inet_pton(AF_INET6, host_text.c_str(), numeric_bytes.data()) == 1;
+  std::vector<SocketAddress> resolved;
+  if (numeric) {
+    hints.ai_flags |= AI_NUMERICHOST;
+    addrinfo* addresses = nullptr;
+    const int lookup = getaddrinfo(host_text.c_str(), service.c_str(), &hints,
+                                   &addresses);
+    if (lookup != 0) {
+      *error = std::string("cannot resolve TLS server: ") +
+               gai_strerror(lookup);
+      return -1;
+    }
+    std::unique_ptr<addrinfo, decltype(&freeaddrinfo)> owned(addresses,
+                                                             freeaddrinfo);
+    resolved = collect(addresses);
+  } else {
+    struct ResolverState {
+      std::mutex mutex;
+      std::condition_variable ready;
+      bool complete = false;
+      int result = EAI_FAIL;
+      std::vector<SocketAddress> addresses;
+    };
+    constexpr std::size_t kMaximumConcurrentResolvers = 8;
+    // A platform resolver call cannot be cancelled portably. The process-wide
+    // cap bounds timed-out workers and later requests fail closed until a
+    // worker eventually returns capacity.
+    static std::atomic<std::size_t> active_resolvers{0};
+    auto* resolver_counter = &active_resolvers;
+    std::size_t active = active_resolvers.load(std::memory_order_relaxed);
+    while (active < kMaximumConcurrentResolvers &&
+           !active_resolvers.compare_exchange_weak(
+               active, active + 1, std::memory_order_acq_rel,
+               std::memory_order_relaxed)) {
+    }
+    if (active >= kMaximumConcurrentResolvers) {
+      *error = "TLS server resolver capacity is exhausted";
+      return -1;
+    }
+    const auto state = std::make_shared<ResolverState>();
+    try {
+      std::thread([state, host_text, service, hints, collect,
+                   resolver_counter] {
+        int lookup = EAI_MEMORY;
+        std::vector<SocketAddress> addresses;
+        try {
+          addrinfo* raw = nullptr;
+          lookup = getaddrinfo(host_text.c_str(), service.c_str(), &hints,
+                               &raw);
+          std::unique_ptr<addrinfo, decltype(&freeaddrinfo)> owned(raw,
+                                                                   freeaddrinfo);
+          if (lookup == 0) addresses = collect(raw);
+        } catch (...) {
+          lookup = EAI_MEMORY;
+        }
+        {
+          std::lock_guard lock(state->mutex);
+          state->result = lookup;
+          state->addresses = std::move(addresses);
+          state->complete = true;
+        }
+        state->ready.notify_one();
+        resolver_counter->fetch_sub(1, std::memory_order_acq_rel);
+      }).detach();
+    } catch (...) {
+      active_resolvers.fetch_sub(1, std::memory_order_acq_rel);
+      *error = "cannot start TLS server resolver";
+      return -1;
+    }
+    std::unique_lock lock(state->mutex);
+    if (!state->ready.wait_until(lock, deadline,
+                                 [&state] { return state->complete; })) {
+      *error = "TLS server name resolution timed out";
+      return -1;
+    }
+    if (state->result != 0) {
+      *error = std::string("cannot resolve TLS server: ") +
+               gai_strerror(state->result);
+      return -1;
+    }
+    resolved = std::move(state->addresses);
+  }
+  if (resolved.empty()) {
+    *error = "TLS server name resolved to no usable addresses";
     return -1;
   }
-  std::unique_ptr<addrinfo, decltype(&freeaddrinfo)> owned(addresses,
-                                                           freeaddrinfo);
-  for (addrinfo* address = addresses; address != nullptr;
-       address = address->ai_next) {
+  const auto remaining_milliseconds = [&]() -> std::optional<std::uint32_t> {
+    const auto remaining = std::chrono::ceil<std::chrono::milliseconds>(
+        deadline - std::chrono::steady_clock::now());
+    if (remaining <= std::chrono::milliseconds::zero()) return std::nullopt;
+    return static_cast<std::uint32_t>(std::min<std::int64_t>(
+        remaining.count(), std::numeric_limits<std::uint32_t>::max()));
+  };
+  int last_socket_error = 0;
+  for (const SocketAddress& address : resolved) {
+    const auto remaining = remaining_milliseconds();
+    if (!remaining) {
+      *error = "TLS server connection timed out";
+      return -1;
+    }
     const int socket_fd =
-        socket(address->ai_family, address->ai_socktype, address->ai_protocol);
+        socket(address.family, address.socket_type, address.protocol);
     if (socket_fd < 0) continue;
     const int flags = fcntl(socket_fd, F_GETFL, 0);
     if (flags < 0 || fcntl(socket_fd, F_SETFL, flags | O_NONBLOCK) != 0) {
       close(socket_fd);
       continue;
     }
-    int connected = connect(socket_fd, address->ai_addr, address->ai_addrlen);
+    int connected = connect(
+        socket_fd, reinterpret_cast<const sockaddr*>(&address.storage),
+        address.length);
     if (connected != 0 && errno == EINPROGRESS) {
+      const auto poll_budget = remaining_milliseconds();
+      if (!poll_budget) {
+        close(socket_fd);
+        *error = "TLS server connection timed out";
+        return -1;
+      }
       pollfd descriptor{socket_fd, POLLOUT, 0};
       const std::uint32_t bounded = std::min<std::uint32_t>(
-          timeout_milliseconds,
+          *poll_budget,
           static_cast<std::uint32_t>(std::numeric_limits<int>::max()));
       connected = poll(&descriptor, 1, static_cast<int>(bounded));
+      if (connected <= 0) {
+        last_socket_error = connected == 0 ? ETIMEDOUT : errno;
+        close(socket_fd);
+        continue;
+      }
       int socket_error = 0;
       socklen_t error_size = sizeof(socket_error);
-      if (connected <= 0 ||
-          getsockopt(socket_fd, SOL_SOCKET, SO_ERROR, &socket_error,
+      if (getsockopt(socket_fd, SOL_SOCKET, SO_ERROR, &socket_error,
                      &error_size) != 0 ||
           socket_error != 0) {
+        last_socket_error = socket_error == 0 ? errno : socket_error;
         close(socket_fd);
         continue;
       }
     } else if (connected != 0) {
+      last_socket_error = errno;
       close(socket_fd);
       continue;
     }
@@ -160,10 +312,16 @@ int ConnectSocket(std::string_view host, std::uint16_t port,
       close(socket_fd);
       continue;
     }
+    const auto socket_budget = remaining_milliseconds();
+    if (!socket_budget) {
+      close(socket_fd);
+      *error = "TLS server connection timed out";
+      return -1;
+    }
     timeval timeout{
-        .tv_sec = static_cast<time_t>(timeout_milliseconds / 1000),
+        .tv_sec = static_cast<time_t>(*socket_budget / 1000),
         .tv_usec = static_cast<suseconds_t>(
-            (timeout_milliseconds % 1000) * 1000)};
+            (*socket_budget % 1000) * 1000)};
     if (setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
                    sizeof(timeout)) != 0 ||
         setsockopt(socket_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout,
@@ -173,8 +331,10 @@ int ConnectSocket(std::string_view host, std::uint16_t port,
     }
     return socket_fd;
   }
-  *error = std::string("cannot connect to TLS server: ") +
-           std::strerror(errno);
+  *error = last_socket_error == 0
+               ? "cannot connect to TLS server"
+               : std::string("cannot connect to TLS server: ") +
+                     std::strerror(last_socket_error);
   return -1;
 }
 
@@ -695,6 +855,11 @@ std::unique_ptr<TlsRpcSession> TlsRpcSession::Connect(
     std::span<const std::string_view> required_server_capabilities) {
   if (error == nullptr) return nullptr;
   error->clear();
+  if (options.deadline &&
+      std::chrono::steady_clock::now() >= *options.deadline) {
+    *error = "TLS client deadline expired";
+    return nullptr;
+  }
   Context context(SSL_CTX_new(TLS_client_method()), SSL_CTX_free);
   if (!context) {
     *error = LastTlsError("cannot create TLS client context");
@@ -706,7 +871,8 @@ std::unique_ptr<TlsRpcSession> TlsRpcSession::Connect(
                             options.private_key, options.trust_anchor, error))
     return nullptr;
   const int socket_fd = ConnectSocket(options.host, options.port,
-                                      options.timeout_milliseconds, error);
+                                      options.timeout_milliseconds,
+                                      options.deadline, error);
   if (socket_fd < 0) return nullptr;
   Session tls(SSL_new(context.get()), SSL_free);
   if (!tls) {
@@ -872,7 +1038,8 @@ int RunTlsClient(const TlsClientOptions& options, std::istream& input,
     return 1;
   }
   const int socket_fd = ConnectSocket(options.host, options.port,
-                                      options.timeout_milliseconds, &error);
+                                      options.timeout_milliseconds,
+                                      options.deadline, &error);
   if (socket_fd < 0) {
     diagnostics << "dangctl: " << error << '\n';
     return 1;

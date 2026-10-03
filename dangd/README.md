@@ -313,10 +313,12 @@ configurable with `--peer-transaction-timeout-ms`; it must be shorter than
 every proposed confirmed-commit rollback timeout. Before the durable decision,
 expiry causes rollback. After local durability or COMMIT, dangd retains the
 authoritative journal and datastore marker so startup can finish the same
-decision. Cleanup and recovery are not cut short by an expired forward
-deadline. Startup and `SIGHUP` reload fail closed on malformed, inconsistent,
-or unresolved recovery state and continue only after completing cancellation
-or confirmation. Participant servers can designate dedicated authenticated
+decision. Hostname resolution and all address attempts share the connection
+budget, with a fail-closed cap on uncancellable platform resolver workers.
+Cleanup and recovery are not cut short by an expired forward deadline. Startup
+and `SIGHUP` reload fail closed on malformed, inconsistent, or unresolved
+recovery state and continue only after completing cancellation or confirmation.
+Participant servers can designate dedicated authenticated
 controllers with repeatable `--peer-controller-user USER`; all ordinary
 validation, NACM, plugin, rollback, and persistence protections remain while
 recursive peer discovery is suppressed. Transactions affecting several peer

@@ -143,8 +143,12 @@ Forward progress has a shared configurable monotonic deadline that is shorter
 than each remote confirmed-commit rollback window and dynamically bounds every
 TLS operation. Expiry rolls back before the decision and preserves durable
 recovery state afterward; rollback and restart recovery are not cut short by
-the expired deadline. Synchronous hostname resolution remains outside that
-deadline and requires operational containment before a production claim.
+the expired deadline. Hostname lookup and all resolved-address connection
+attempts share the same monotonic connection budget. At most eight portable
+resolver workers may remain outstanding when the platform call cannot be
+cancelled; further lookups fail closed until capacity returns. One lookup
+retains at most 32 usable addresses, all sharing the original connection
+budget.
 
 Dangd also has a host-configured authenticated participant context for its
 generic multi-server transaction machinery. A configured peer-controller

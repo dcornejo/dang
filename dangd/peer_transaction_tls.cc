@@ -165,6 +165,7 @@ struct TlsTransactionState {
     TlsClientOptions bounded = options.transport;
     bounded.timeout_milliseconds =
         static_cast<std::uint32_t>(remaining->count());
+    bounded.deadline = options.deadline;
     return bounded;
   }
 

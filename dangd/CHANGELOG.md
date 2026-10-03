@@ -15,6 +15,12 @@
   restart recovery remain bounded by per-I/O timeouts but deliberately ignore
   the expired forward-progress deadline.
 
+- Added bounded hostname resolution to the programmatic TLS client. Resolution
+  and every address attempt share one monotonic timeout, while at most eight
+  uncancellable platform resolver workers may remain outstanding. Numeric
+  addresses bypass worker creation and resolver timeout or capacity exhaustion
+  fails closed.
+
 - Added a generic post-persistence backend finalization phase. A successful
   running replacement is finalized only after the datastore snapshot is
   durable; a failed save first aborts retained reversible work, then restores

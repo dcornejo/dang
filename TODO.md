@@ -166,8 +166,9 @@ stays in this file with its remaining work rewritten precisely.
   marker before finalization, cancels on local apply or persistence failure,
   and retains PREPARED for restart if selecting COMMIT fails after local
   durability. A shared configurable monotonic deadline now bounds all forward
-  stages and each TLS wait while leaving rollback and recovery free to finish;
-  synchronous hostname resolution still needs bounded operational containment.
+  stages and each TLS wait while leaving rollback and recovery free to finish.
+  Hostname resolution and every address attempt now share that connection
+  budget, with a fail-closed cap on uncancellable platform resolver workers.
   Add fail-closed degraded-peer policy, NACM/observability, `dangctl` integration,
   and Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.
   See [`docs/PEER_TRANSACTIONS.md`](docs/PEER_TRANSACTIONS.md).

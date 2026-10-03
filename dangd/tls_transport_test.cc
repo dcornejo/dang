@@ -221,6 +221,43 @@ TEST(DangdTlsTransportTest, ReusesAuthenticatedSessionAcrossCandidateRpcs) {
             std::string::npos);
 }
 
+TEST(DangdTlsTransportTest, BoundsHostnameResolutionByClientTimeout) {
+  const std::filesystem::path certificates =
+      std::filesystem::path(DANG_TEST_SOURCE_DIR) / "dangd/testdata/tls";
+  TlsClientOptions options{
+      .host = "peer-resolution-test.invalid",
+      .port = 6513,
+      .certificate = certificates / "alice-cert.pem",
+      .private_key = certificates / "alice-key.pem",
+      .trust_anchor = certificates / "ca-cert.pem",
+      .timeout_milliseconds = 50};
+  std::string error;
+  const auto started = std::chrono::steady_clock::now();
+
+  const auto session = TlsRpcSession::Connect(options, &error);
+
+  const auto elapsed = std::chrono::steady_clock::now() - started;
+  EXPECT_FALSE(session);
+  EXPECT_TRUE(error.find("resolve") != std::string::npos ||
+              error.find("resolution timed out") != std::string::npos)
+      << error;
+  EXPECT_LT(elapsed, std::chrono::seconds(2));
+}
+
+TEST(DangdTlsTransportTest, RejectsExpiredSharedDeadlineBeforeLocalIo) {
+  TlsClientOptions options{
+      .host = "peer-resolution-test.invalid",
+      .port = 6513,
+      .deadline =
+          std::chrono::steady_clock::now() - std::chrono::milliseconds(1)};
+  std::string error;
+
+  const auto session = TlsRpcSession::Connect(options, &error);
+
+  EXPECT_FALSE(session);
+  EXPECT_NE(error.find("deadline expired"), std::string::npos) << error;
+}
+
 TEST(DangdTlsTransportTest, MapsOnlyOneCanonicalCertificateCommonName) {
   Subject valid(X509_NAME_new(), X509_NAME_free);
   ASSERT_TRUE(valid);
