@@ -117,10 +117,10 @@ stays in this file with its remaining work rewritten precisely.
   interfaces on Linux and FreeBSD.
   Linux and FreeBSD RFC 8431 mutation now use acknowledged route-netlink
   requests without executing `ip` or `route`, while preserving ordered
-  compensation and attributed errors. Replace the system plugin's remaining
-  NTP `std::system()` calls with
-  the systemd D-Bus manager API on Linux and the safest supported FreeBSD
-  service boundary; if FreeBSD exposes no stable programmatic interface, use
+  compensation and attributed errors. Linux RFC 7317 NTP lifecycle now uses
+  the systemd D-Bus manager and waits for the correlated job result. Replace
+  the remaining FreeBSD `std::system()` NTP service boundary with the safest
+  supported FreeBSD interface; if FreeBSD exposes no stable programmatic interface, use
   only fixed absolute argv without a shell and document the evidence and
   variance. Re-run the source inventory and native tests on both platforms
   after each removal.

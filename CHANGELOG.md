@@ -8,26 +8,34 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded the external RFC 7317 provider's replacement of Linux NTP service
+  commands with the systemd manager's sd-bus API. The provider now waits for
+  the correlated unit-job completion, rejects non-`done` results, bounds the
+  wait, and uses reload-or-restart so rollback restores a service stopped by a
+  failed transaction. Live validation preserved chrony's initial active state.
+  The command-execution audit is now narrowed to the single FreeBSD ntpd rc.d
+  shell boundary.
+
 - Recorded removal of the external RFC 8431 provider's FreeBSD `route(8)`
   process boundary. Production IPv4 and IPv6 changes now use acknowledged
   route-netlink requests with explicit FIB, gateway, interface-index, and
   preference attributes. Native VNET coverage includes direct routing on an
-  unnumbered interface. Only the RFC 7317 NTP service shell calls remain in the
-  active external-plugin command-execution audit.
+  unnumbered interface. Only the FreeBSD RFC 7317 NTP service shell boundary
+  remains in the active external-plugin command-execution audit.
 
 - Recorded removal of the external RFC 8431 provider's Linux `ip(8)` process
   boundary. Production route changes now use bounded, sequenced rtnetlink
   requests with correlated kernel acknowledgements and retain the existing
   reverse-compensation policy. FreeBSD route mutation is now covered by the
-  native implementation recorded above; RFC 7317 NTP service commands remain.
+  native implementation recorded above; only the FreeBSD RFC 7317 NTP service
+  boundary remains.
 
 - Promoted the external production plugin command-execution audit from low
   priority to active implementation work. The provider inventory records the
   programmatic boundaries already used by Kea, FRR, IP management, and VPP;
   the RFC 7317 power RPCs now use guarded, orderly native PID 1 signals. The
-  remaining RFC 7317 NTP shell calls are tracked with an ordered
-  Linux/FreeBSD replacement plan; the RFC 8431 route-utility executor has now
-  been removed on both platforms.
+  remaining FreeBSD RFC 7317 NTP shell boundary is tracked next; the Linux NTP
+  and RFC 8431 route-utility executors have now been removed.
 
 - Added a separately packaged RFC 9249 NTP provider to the plugin roadmap,
   including Linux/FreeBSD validation and an explicit mutual-exclusion boundary

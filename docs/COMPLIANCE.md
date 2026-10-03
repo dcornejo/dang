@@ -733,11 +733,14 @@ timezone-name. It validates and applies hostname, timezone, static resolver,
 chrony or ntpd configuration, local authentication records, current time, and
 guarded restart and shutdown RPCs on Linux and FreeBSD. Power operations use
 the native PID 1 signal interfaces so the service manager performs an orderly
-shutdown; no service command or shell is involved.
-NTP reload and stop still use fixed host-owned service commands through
-`std::system()`. They contain no modeled data, but remain an explicit audited
-variance pending systemd D-Bus integration on Linux and determination of the
-safest supported FreeBSD service boundary.
+shutdown; no service command or shell is involved. Linux NTP lifecycle uses
+the systemd manager's sd-bus API, subscribes before enqueueing each chrony job,
+waits for its correlated `JobRemoved` signal under a bounded timeout, and
+accepts only a `done` result. Reload-or-restart ensures rollback can restore an
+enabled service after a stop. FreeBSD NTP lifecycle still uses one fixed
+host-owned rc.d command through `std::system()`; it contains no modeled data,
+but remains an explicit audited variance pending determination of the safest
+supported FreeBSD service boundary.
 
 RADIUS, configurable NTP/DNS ports, `$0$` password replacement,
 resolver-manager integration, and exact reply-before-power-transition
