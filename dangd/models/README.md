@@ -30,6 +30,14 @@ for hardware actions whose compensation failed. It is implemented by the core,
 published through RFC 8525 YANG Library, and retrievable through RFC 6022
 `get-schema` like the bundled standards modules.
 
+`dangd-peer-transactions@2026-10-02.yang` is the core-owned operational model
+for generic multi-host transaction progress. It exposes only public contract
+identities, roles, lifecycle progress, counters, and an actionable diagnostic;
+private endpoints, credentials, transaction identifiers, proposal digests, and
+persistent confirmed-commit tokens are deliberately absent. The complete
+container is `nacm:default-deny-all` and requires an explicit read grant outside
+the host-configured recovery identities.
+
 The RFC 9644 SSH grouping family is pinned at revision 2024-10-10:
 `ietf-ssh-common`, `ietf-ssh-client`, and `ietf-ssh-server`. Its IANA algorithm
 modules are pinned at 2024-10-16. The exact RFC 9640 crypto-types, RFC 9641

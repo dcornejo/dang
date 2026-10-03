@@ -150,6 +150,16 @@ cancelled; further lookups fail closed until capacity returns. One lookup
 retains at most 32 usable addresses, all sharing the original connection
 budget.
 
+The project-owned `dangd-peer-transactions` operational model exposes generic
+coordination phase, counters, and public-contract participant progress. The
+entire container carries `nacm:default-deny-all`; ordinary users therefore see
+none of it without an explicit read rule, while host-configured recovery users
+retain diagnostic access. Private endpoint, credential, transaction-id,
+proposal-digest, and persistent-token material is never modeled. This closes
+the core observability and authorization part of the pair-wide integration
+gap; degraded-peer policy, packaging, CLI integration, and multi-host platform
+evidence remain.
+
 Dangd also has a host-configured authenticated participant context for its
 generic multi-server transaction machinery. A configured peer-controller
 identity still uses standard NETCONF operations and all RFC 6241 datastore,

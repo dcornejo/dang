@@ -194,6 +194,20 @@ TEST(EnglishConfigurationBackendTest,
   EXPECT_NE(std::ranges::find(events, "remote confirm pair/standby"),
             events.end());
   EXPECT_NE(backend.WorkingXml().find("new"), std::string::npos);
+  const std::string operational = backend.PeerTransactionOperationalXml();
+  EXPECT_NE(operational.find("<phase>committed</phase>"), std::string::npos)
+      << operational;
+  EXPECT_NE(operational.find("<attempts>1</attempts>"), std::string::npos)
+      << operational;
+  EXPECT_NE(operational.find("<committed>1</committed>"), std::string::npos)
+      << operational;
+  EXPECT_NE(operational.find("<identity>pair/primary</identity>"),
+            std::string::npos)
+      << operational;
+  EXPECT_NE(operational.find("<progress>confirmed</progress>"),
+            std::string::npos)
+      << operational;
+  EXPECT_EQ(operational.find("token-"), std::string::npos) << operational;
 }
 
 TEST(EnglishConfigurationBackendTest,
@@ -230,6 +244,28 @@ TEST(EnglishConfigurationBackendTest,
                                  }),
             events.end());
   EXPECT_NE(backend.WorkingXml().find("old"), std::string::npos);
+  const std::string operational = backend.PeerTransactionOperationalXml();
+  EXPECT_NE(operational.find("<phase>aborted</phase>"), std::string::npos)
+      << operational;
+  EXPECT_NE(operational.find("<aborted>1</aborted>"), std::string::npos)
+      << operational;
+  EXPECT_NE(operational.find("<progress>applied</progress>"), std::string::npos)
+      << operational;
+}
+
+TEST(EnglishConfigurationBackendTest,
+     ReportsDisabledPeerCoordinationWithoutPrivateConfiguration) {
+  auto fixture = BuildFixture();
+  ASSERT_TRUE(fixture.has_value());
+  EnglishConfigurationBackend backend(fixture->before, nullptr, nullptr, false);
+
+  const std::string operational = backend.PeerTransactionOperationalXml();
+  EXPECT_NE(operational.find("<coordination-enabled>false"), std::string::npos)
+      << operational;
+  EXPECT_NE(operational.find("<phase>disabled</phase>"), std::string::npos)
+      << operational;
+  EXPECT_NE(operational.find("<attempts>0</attempts>"), std::string::npos)
+      << operational;
 }
 
 TEST(EnglishConfigurationBackendTest,

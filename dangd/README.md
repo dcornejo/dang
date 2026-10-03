@@ -157,9 +157,12 @@ decision boundary than this local transaction. The implemented state machine,
 fail-closed recovery rules, automatic lifecycle recovery, and complete
 stateful mutual-TLS participant adapter are described in
 [Peer transaction coordination](../docs/PEER_TRANSACTIONS.md). The production
-pair-wide entry point is not yet connected; the external Kea provider now
-supplies generic candidates and health verification, and the core can
-materialize one group for execution. Pair-wide atomicity is not advertised.
+entry point now composes generic plugin candidates during normal NETCONF
+commit, prepares and verifies one resolved group, crosses the local durable
+snapshot boundary, and then selects the group decision. The external Kea
+provider supplies the first candidates and health verifier. Pair-wide atomicity
+is not advertised until degraded-peer policy, packaging, CLI integration, and
+Linux/FreeBSD multi-host evidence are complete.
 
 ## Embedded SSH server example
 
@@ -318,6 +321,13 @@ budget, with a fail-closed cap on uncancellable platform resolver workers.
 Cleanup and recovery are not cut short by an expired forward deadline. Startup
 and `SIGHUP` reload fail closed on malformed, inconsistent, or unresolved
 recovery state and continue only after completing cancellation or confirmation.
+The built-in `dangd-peer-transactions` operational model reports whether
+coordination is enabled, the current or most recent lifecycle phase,
+process-lifetime outcome counters, and per-participant progress. Its container
+is denied by NACM unless an explicit read rule grants it; configured recovery
+identities can inspect it for emergency diagnosis. The model never publishes
+endpoints, credentials, transaction identifiers, proposal digests, or
+persistent confirmed-commit tokens.
 Participant servers can designate dedicated authenticated
 controllers with repeatable `--peer-controller-user USER`; all ordinary
 validation, NACM, plugin, rollback, and persistence protections remain while

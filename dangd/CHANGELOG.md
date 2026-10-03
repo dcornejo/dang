@@ -7,6 +7,14 @@
 
 ### Added
 
+- Added the built-in `dangd-peer-transactions` operational model for generic
+  multi-host commit diagnosis. It publishes coordination availability, the
+  current or most recent lifecycle phase, process-lifetime outcome counters,
+  and public-contract participant progress. The complete subtree is
+  `nacm:default-deny-all`, and the implementation never exposes endpoint,
+  credential, proposal-digest, private transaction-id, or persistent-token
+  material.
+
 - Added `--peer-transaction-timeout-ms` and a shared monotonic deadline for
   generic live peer coordination. The budget spans preparation, confirmed
   apply, readback verification, the durable decision, and confirmation, while

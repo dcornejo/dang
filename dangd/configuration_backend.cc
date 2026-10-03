@@ -6,6 +6,7 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 
+#include <algorithm>
 #include <array>
 #include <pugixml.hpp>
 #include <sstream>
@@ -177,6 +178,88 @@ EnglishConfigurationBackend::EnglishConfigurationBackend(
         std::move(participant_factory), std::move(persistent_id_factory),
         peer_transaction_timeout);
   }
+  peer_coordination_enabled_ =
+      peer_controller_ != nullptr && !peer_targets_.empty();
+  peer_transaction_phase_ = peer_coordination_enabled_ ? "idle" : "disabled";
+}
+
+void EnglishConfigurationBackend::BeginPeerTransaction(
+    const ComposedPeerTransactionGroup& group) {
+  std::lock_guard lock(mutex_);
+  ++peer_transaction_attempts_;
+  peer_transaction_phase_ = "preparing";
+  peer_transaction_group_ = group.group_id;
+  peer_transaction_message_.clear();
+  peer_participants_.clear();
+  peer_participants_.reserve(group.participants.size());
+  for (const PeerPlanParticipant& participant : group.participants) {
+    peer_participants_.push_back(
+        {.identity = PeerIdentity(group.group_id, participant.participant_id),
+         .role =
+             participant.role == DANG_PEER_PRIMARY_V1 ? "primary" : "standby"});
+  }
+}
+
+void EnglishConfigurationBackend::SetPeerTransactionPhase(std::string phase) {
+  std::lock_guard lock(mutex_);
+  peer_transaction_phase_ = std::move(phase);
+}
+
+void EnglishConfigurationBackend::RecordPeerTransactionResult(
+    const PeerTransactionResult& result) {
+  std::lock_guard lock(mutex_);
+  using Disposition = PeerTransactionDisposition;
+  switch (result.disposition) {
+    case Disposition::kAborted:
+      peer_transaction_phase_ = "aborted";
+      ++peer_transaction_aborted_;
+      break;
+    case Disposition::kRollbackIncomplete:
+      peer_transaction_phase_ = "rollback-incomplete";
+      ++peer_transaction_rollback_incomplete_;
+      break;
+    case Disposition::kPrepared:
+      peer_transaction_phase_ = "prepared";
+      break;
+    case Disposition::kCommitPending:
+      peer_transaction_phase_ = "commit-pending";
+      ++peer_transaction_commit_pending_;
+      break;
+    case Disposition::kCommitted:
+      peer_transaction_phase_ = "committed";
+      ++peer_transaction_committed_;
+      break;
+  }
+  peer_transaction_message_ = result.message;
+  const auto contains = [](const std::vector<std::string>& identities,
+                           std::string_view identity) {
+    return std::ranges::find(identities, identity) != identities.end();
+  };
+  const auto rollback_failed = [&result](std::string_view identity) {
+    const std::string prefix = std::string(identity) + ":";
+    return std::ranges::any_of(result.rollback_failures,
+                               [&prefix](const std::string& failure) {
+                                 return failure.starts_with(prefix);
+                               });
+  };
+  for (PeerParticipantOperationalState& participant : peer_participants_) {
+    if (rollback_failed(participant.identity)) {
+      participant.progress = "rollback-failed";
+    } else if (contains(result.pending_confirmations, participant.identity)) {
+      participant.progress = "pending-confirmation";
+    } else if (contains(result.confirmed, participant.identity)) {
+      participant.progress = "confirmed";
+    } else if (result.disposition == Disposition::kPrepared &&
+               contains(result.applied, participant.identity)) {
+      participant.progress = "verified";
+    } else if (contains(result.applied, participant.identity)) {
+      participant.progress = "applied";
+    } else if (contains(result.prepared, participant.identity)) {
+      participant.progress = "prepared";
+    } else {
+      participant.progress = "planned";
+    }
+  }
 }
 
 std::optional<yang::config::ValidationFinding>
@@ -222,7 +305,9 @@ EnglishConfigurationBackend::PrepareReplacement(
     std::span<const yang::config::ChangeEvent> changes,
     yang::netconf::BackendTransactionContext context) {
   if (prepared_peer_transaction_ && peer_controller_) {
-    (void)peer_controller_->Abort(std::move(prepared_peer_transaction_));
+    SetPeerTransactionPhase("aborting");
+    RecordPeerTransactionResult(
+        peer_controller_->Abort(std::move(prepared_peer_transaction_)));
   }
   prepared_recovery_state_.reset();
   prepared_nacm_.reset();
@@ -332,10 +417,12 @@ EnglishConfigurationBackend::PrepareReplacement(
       return PeerFailure("cannot create secure peer transaction metadata",
                          "peer-metadata-failed");
     }
+    BeginPeerTransaction(prepared_peer_groups_.front());
     PeerTransactionControllerPrepareResult prepared = peer_controller_->Prepare(
         prepared_peer_groups_.front(), *peer_transaction_journal_,
         *transaction_id, *proposal_digest);
     if (!prepared.ok()) {
+      RecordPeerTransactionResult(prepared.result);
       if (plugins_) plugins_->Abort();
       prepared_nacm_.reset();
       prepared_peer_groups_.clear();
@@ -347,6 +434,7 @@ EnglishConfigurationBackend::PrepareReplacement(
         .transaction_id = prepared.prepared->transaction_id,
         .proposal_digest = prepared.prepared->proposal_digest};
     prepared_peer_transaction_ = std::move(prepared.prepared);
+    RecordPeerTransactionResult(prepared.result);
   }
   return std::nullopt;
 }
@@ -382,7 +470,9 @@ EnglishConfigurationBackend::Replace(
 
 void EnglishConfigurationBackend::AbortPreparedReplacement() noexcept {
   if (prepared_peer_transaction_ && peer_controller_) {
-    (void)peer_controller_->Abort(std::move(prepared_peer_transaction_));
+    SetPeerTransactionPhase("aborting");
+    RecordPeerTransactionResult(
+        peer_controller_->Abort(std::move(prepared_peer_transaction_)));
   }
   if (plugins_) plugins_->Abort();
   prepared_recovery_state_.reset();
@@ -402,11 +492,13 @@ EnglishConfigurationBackend::CommitPreparedReplacement() {
     prepared_peer_groups_.clear();
     return std::nullopt;
   }
+  SetPeerTransactionPhase("committing");
   PeerTransactionResult result =
       peer_controller_->Commit(std::move(prepared_peer_transaction_),
                                PeerDecisionFailurePolicy::kRetainPrepared);
   prepared_recovery_state_.reset();
   prepared_peer_groups_.clear();
+  RecordPeerTransactionResult(result);
   if (result.disposition == PeerTransactionDisposition::kCommitted)
     return std::nullopt;
   return PeerFailure(
@@ -424,6 +516,40 @@ yang::config::ConfigDocument EnglishConfigurationBackend::Working() const {
 std::string EnglishConfigurationBackend::WorkingXml() const {
   std::lock_guard lock(mutex_);
   return working_xml_;
+}
+
+std::string EnglishConfigurationBackend::PeerTransactionOperationalXml() const {
+  std::lock_guard lock(mutex_);
+  pugi::xml_document document;
+  pugi::xml_node root = document.append_child("peer-transactions");
+  root.append_attribute("xmlns") = "urn:dangd:peer-transactions";
+  root.append_child("coordination-enabled").text() = peer_coordination_enabled_;
+  root.append_child("phase").text() = peer_transaction_phase_.c_str();
+  root.append_child("attempts").text() =
+      std::to_string(peer_transaction_attempts_).c_str();
+  root.append_child("committed").text() =
+      std::to_string(peer_transaction_committed_).c_str();
+  root.append_child("aborted").text() =
+      std::to_string(peer_transaction_aborted_).c_str();
+  root.append_child("rollback-incomplete").text() =
+      std::to_string(peer_transaction_rollback_incomplete_).c_str();
+  root.append_child("commit-pending").text() =
+      std::to_string(peer_transaction_commit_pending_).c_str();
+  if (!peer_transaction_group_.empty())
+    root.append_child("group-id").text() = peer_transaction_group_.c_str();
+  if (!peer_transaction_message_.empty())
+    root.append_child("last-message").text() =
+        peer_transaction_message_.c_str();
+  for (const PeerParticipantOperationalState& participant :
+       peer_participants_) {
+    pugi::xml_node node = root.append_child("participant");
+    node.append_child("identity").text() = participant.identity.c_str();
+    node.append_child("role").text() = participant.role.c_str();
+    node.append_child("progress").text() = participant.progress.c_str();
+  }
+  std::ostringstream output;
+  root.print(output, "  ", pugi::format_raw);
+  return output.str();
 }
 
 std::vector<std::string> EnglishConfigurationBackend::DrainDeltas() {

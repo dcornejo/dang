@@ -158,6 +158,13 @@ TEST(DangdApplicationTest, LoadsModelAndCompleteConfiguration) {
   EXPECT_NE(library.xml.find("<name>dangd-reconciliation</name>"),
             std::string::npos)
       << library.xml;
+  EXPECT_NE(library.xml.find("<name>dangd-peer-transactions</name>"),
+            std::string::npos)
+      << library.xml;
+  EXPECT_NE(library.xml.find("<peer-transactions"), std::string::npos)
+      << library.xml;
+  EXPECT_NE(library.xml.find("<phase>disabled</phase>"), std::string::npos)
+      << library.xml;
   EXPECT_NE(library.xml.find("<name>ietf-ssh-common</name>"), std::string::npos)
       << library.xml;
   EXPECT_NE(library.xml.find("<name>ietf-ssh-client</name>"), std::string::npos)
@@ -166,6 +173,13 @@ TEST(DangdApplicationTest, LoadsModelAndCompleteConfiguration) {
       << library.xml;
   EXPECT_NE(library.xml.find("<feature>xpath</feature>"), std::string::npos)
       << library.xml;
+
+  const auto ordinary = loaded.application->server().Process("bob", R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="read">
+      <get/>
+    </rpc>)xml");
+  EXPECT_EQ(ordinary.xml.find("<peer-transactions"), std::string::npos)
+      << ordinary.xml;
 }
 
 TEST(DangdApplicationTest, ManagesNacmProtectedCentralSymmetricKeys) {
@@ -2370,6 +2384,12 @@ TEST(DangdApplicationTest, RetrievesBuiltInAndPluginYangSources) {
   EXPECT_NE(reconciliation.xml.find("module dangd-reconciliation"),
             std::string::npos)
       << reconciliation.xml;
+  const auto peer_transactions = retrieve(
+      "<identifier>dangd-peer-transactions</identifier>"
+      "<version>2026-10-02</version>");
+  EXPECT_NE(peer_transactions.xml.find("module dangd-peer-transactions"),
+            std::string::npos)
+      << peer_transactions.xml;
   const auto ssh_server = retrieve(
       "<identifier>ietf-ssh-server</identifier>"
       "<version>2024-10-10</version>");

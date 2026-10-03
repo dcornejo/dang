@@ -5,6 +5,7 @@
 #define DANGD_CONFIGURATION_BACKEND_H_
 
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <map>
 #include <memory>
@@ -74,11 +75,27 @@ class EnglishConfigurationBackend final
   [[nodiscard]] yang::config::ConfigDocument Working() const;
   /** Returns applied XML while retaining validated instance metadata. */
   [[nodiscard]] std::string WorkingXml() const;
+  /** Returns privacy-minimal, NACM-protected peer coordination state. */
+  [[nodiscard]] std::string PeerTransactionOperationalXml() const;
   /** Returns and clears all descriptions accumulated since the preceding call.
    */
   [[nodiscard]] std::vector<std::string> DrainDeltas();
 
  private:
+  struct PeerParticipantOperationalState {
+    std::string identity;
+    std::string role;
+    std::string progress = "planned";
+  };
+
+  /** Starts one observable live attempt without retaining private metadata. */
+  void BeginPeerTransaction(const ComposedPeerTransactionGroup& group);
+  /** Records a controller result using only its public participant identities.
+   */
+  void RecordPeerTransactionResult(const PeerTransactionResult& result);
+  /** Changes only the transient phase while an operation is in progress. */
+  void SetPeerTransactionPhase(std::string phase);
+
   mutable std::mutex mutex_;
   PluginRuntime* plugins_ = nullptr;
   yang::netconf::NacmPolicy* nacm_ = nullptr;
@@ -101,6 +118,16 @@ class EnglishConfigurationBackend final
   std::string working_xml_;
   yang::config::ConfigDocument working_;
   std::vector<std::string> deltas_;
+  bool peer_coordination_enabled_ = false;
+  std::string peer_transaction_phase_ = "disabled";
+  std::string peer_transaction_group_;
+  std::string peer_transaction_message_;
+  std::vector<PeerParticipantOperationalState> peer_participants_;
+  std::uint64_t peer_transaction_attempts_ = 0;
+  std::uint64_t peer_transaction_committed_ = 0;
+  std::uint64_t peer_transaction_aborted_ = 0;
+  std::uint64_t peer_transaction_rollback_incomplete_ = 0;
+  std::uint64_t peer_transaction_commit_pending_ = 0;
 };
 
 }  // namespace dangd

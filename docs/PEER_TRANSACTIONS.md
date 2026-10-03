@@ -14,9 +14,11 @@ lost reply from a failed mutation.
 this boundary. ABI v9 now provides the generic plugin planning and verification
 contract, including isolated-worker transport, while the authenticated
 participant transport and automatic startup recovery are also implemented.
-Dangd does not advertise pair-wide commit support yet because the final
-datastore-to-journal binding, multi-group policy, and observability are not
-connected.
+The ordinary NETCONF commit path now binds the peer journal to the durable
+local datastore snapshot, rejects multi-group proposals before mutation, and
+publishes NACM-protected generic operational state. Dangd does not advertise
+pair-wide commit support yet because degraded-peer policy, packaging, CLI
+integration, and Linux/FreeBSD multi-host evidence remain incomplete.
 
 ## Plugin planning contract
 
@@ -293,10 +295,20 @@ version-1 snapshot compatibility.
 Pair-wide management still requires:
 
 - policy for unreachable or degraded peers, defaulting to rejection;
-- observability, NACM rules, packaging, and Linux/FreeBSD interoperability
-  tests; and
+- packaging and Linux/FreeBSD interoperability tests; and
 - CLI support that submits the logical change through dangd rather than
   bypassing NETCONF validation, authorization, ordering, and rollback.
+
+Core observability is available at
+`dangd-peer-transactions:peer-transactions`. It reports the current or last
+phase, process-lifetime outcome counters, the generic group identity, and each
+participant's role and progress. The model intentionally omits all transport
+addresses, credentials, private transaction identifiers, proposal digests,
+and persistent confirmed-commit tokens. Because identities and diagnostics can
+still reveal topology, the container uses `nacm:default-deny-all`: recovery
+identities retain emergency visibility, and other operators require an explicit
+NACM read rule. This is core transaction state and has no plugin-specific
+branches or provider-dependent interpretation.
 
 Until those operational policies and multi-host evidence are complete,
 pair-wide atomicity must not be advertised as production-ready.

@@ -463,6 +463,26 @@ or recovering. The authenticated participant context prevents recursive
 planning. Transactions spanning multiple independent peer groups remain
 rejected before mutation until an atomic multi-group journal is designed.
 
+Inspect the live or most recent coordination result with a subtree-filtered
+`<get>`:
+
+```xml
+<get>
+  <filter type="subtree">
+    <peer-transactions xmlns="urn:dangd:peer-transactions"/>
+  </filter>
+</get>
+```
+
+The returned state contains lifecycle counters and generic participant
+identities and progress, but never endpoints, credentials, proposal digests,
+private transaction identifiers, or persistent confirmed-commit tokens. The
+container is `nacm:default-deny-all`; recovery identities can read it, while an
+ordinary operator needs a `permit` rule with `module-name` set to
+`dangd-peer-transactions` and `access-operations` containing `read` in one of
+that operator's NACM rule lists. Keep the grant narrow because participant
+identities and failure diagnostics may reveal topology.
+
 ### Store a central symmetric key
 
 The built-in RFC 9642 slice accepts central cleartext symmetric keys. A recovery

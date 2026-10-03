@@ -1,0 +1,120 @@
+module dangd-peer-transactions {
+  yang-version 1.1;
+  namespace "urn:dangd:peer-transactions";
+  prefix dpt;
+
+  import ietf-netconf-acm {
+    prefix nacm;
+    revision-date 2018-02-14;
+  }
+
+  organization "dangd project";
+  description
+    "Privacy-minimal operational state for generic multi-host configuration
+     transactions coordinated by dangd.  The model deliberately excludes
+     transport endpoints, credentials, proposal digests, transaction
+     identifiers, and persistent confirmed-commit tokens.";
+
+  revision 2026-10-02 {
+    description "Initial generic peer-transaction observability.";
+  }
+
+  container peer-transactions {
+    config false;
+    nacm:default-deny-all;
+    description
+      "Current or most recent peer transaction in this daemon process.
+       Access is denied by default because participant identities and failure
+       diagnostics may reveal deployment topology.  An operator must grant an
+       explicit NACM read rule, while a configured recovery identity retains
+       emergency access.";
+
+    leaf coordination-enabled {
+      type boolean;
+      mandatory true;
+      description
+        "True when the host supplied both the private peer journal and the
+         endpoint inventory needed to coordinate a transaction.";
+    }
+    leaf phase {
+      type enumeration {
+        enum disabled;
+        enum idle;
+        enum preparing;
+        enum prepared;
+        enum committing;
+        enum aborting;
+        enum committed;
+        enum aborted;
+        enum rollback-incomplete;
+        enum commit-pending;
+      }
+      mandatory true;
+      description
+        "Lifecycle phase of the current transaction, or the terminal phase of
+         the most recent attempt.  A pending or incomplete phase requires
+         operator attention and durable recovery.";
+    }
+    leaf attempts {
+      type uint64;
+      mandatory true;
+      description "Transactions submitted to the live coordinator since start.";
+    }
+    leaf committed {
+      type uint64;
+      mandatory true;
+      description "Attempts completed on every participant since start.";
+    }
+    leaf aborted {
+      type uint64;
+      mandatory true;
+      description "Attempts safely stopped before the durable COMMIT decision.";
+    }
+    leaf rollback-incomplete {
+      type uint64;
+      mandatory true;
+      description "Attempts whose pre-decision compensation did not complete.";
+    }
+    leaf commit-pending {
+      type uint64;
+      mandatory true;
+      description
+        "Attempts for which completion must be recovered from durable state.";
+    }
+    leaf group-id {
+      type string;
+      description "Public contract identity of the current or last group.";
+    }
+    leaf last-message {
+      type string;
+      description
+        "First actionable diagnostic from the current or last attempt.  This
+         never contains a proposal digest, transaction identifier, credential,
+         endpoint, or persistent confirmed-commit token.";
+    }
+    list participant {
+      key "identity";
+      description "Progress retained for one public-contract participant.";
+      leaf identity {
+        type string;
+        description "Canonical group and participant identity.";
+      }
+      leaf role {
+        type enumeration { enum primary; enum standby; }
+        mandatory true;
+      }
+      leaf progress {
+        type enumeration {
+          enum planned;
+          enum prepared;
+          enum applied;
+          enum verified;
+          enum confirmed;
+          enum pending-confirmation;
+          enum rollback-failed;
+        }
+        mandatory true;
+      }
+    }
+  }
+}

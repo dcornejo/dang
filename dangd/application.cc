@@ -1007,6 +1007,19 @@ DangdOperationalData::DataResult DangdOperationalData::AugmentDataXml(
       operational_findings.push_back(std::move(finding));
     }
   }
+  if (core_operational_data_provider_) {
+    pugi::xml_document core;
+    const std::string core_xml = core_operational_data_provider_();
+    if (yang::ParseUntrustedXml(core_xml, &core).ok) {
+      const pugi::xml_node root = core.document_element();
+      if (std::string_view(LocalName(root.name())) == "data") {
+        for (const pugi::xml_node child : root.children())
+          if (child.type() == pugi::node_element) data.append_copy(child);
+      } else if (root) {
+        data.append_copy(root);
+      }
+    }
+  }
   pugi::xml_node nacm;
   for (const pugi::xml_node child : data.children()) {
     const std::string_view name = child.name();
@@ -1040,6 +1053,11 @@ DangdOperationalData::DataResult DangdOperationalData::AugmentDataXml(
 void DangdOperationalData::SetAppliedConfigurationProvider(
     std::function<std::string()> provider) {
   applied_configuration_provider_ = std::move(provider);
+}
+
+void DangdOperationalData::SetCoreOperationalDataProvider(
+    std::function<std::string()> provider) {
+  core_operational_data_provider_ = std::move(provider);
 }
 
 std::vector<std::string> DangdOperationalData::Capabilities() const {
@@ -1135,6 +1153,8 @@ Application::Application(
       child.print(output, "", pugi::format_raw);
     return "<data>" + output.str() + "</data>";
   });
+  operational_.SetCoreOperationalDataProvider(
+      [this] { return backend_.PeerTransactionOperationalXml(); });
   server_.SetRecoveryAuditSink(
       [this](const yang::netconf::RecoveryAuditRecord& record) {
         std::lock_guard lock(recovery_audit_mutex_);
@@ -1319,6 +1339,7 @@ LoadResult Application::LoadWithStateFileLock(
     add_import("ietf-netconf-monitoring", std::string("2010-10-04"));
     add_import("ietf-netconf-nmda", std::string("2019-01-07"));
     add_import("dangd-reconciliation", std::string("2026-08-23"));
+    add_import("dangd-peer-transactions", std::string("2026-10-02"));
     // RFC 9644 publishes reusable groupings rather than top-level datastore
     // nodes.  Import all three modules so their complete dependency closure is
     // visible through YANG Library and get-schema as import-only modules.
@@ -1368,6 +1389,7 @@ LoadResult Application::LoadWithStateFileLock(
       root_module_name,          "ietf-netconf-acm", "ietf-yang-library",
       "ietf-netconf-monitoring", "ietf-netconf",     "ietf-netconf-nmda",
       "dangd-reconciliation",    "ietf-keystore"};
+  implemented.insert("dangd-peer-transactions");
   for (const PluginYangSource& plugin_source : plugins->yang_sources()) {
     if (plugin_source.role != DANG_YANG_IMPORT_ONLY_V1)
       implemented.insert(plugin_source.module_name);

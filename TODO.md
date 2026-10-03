@@ -169,8 +169,11 @@ stays in this file with its remaining work rewritten precisely.
   stages and each TLS wait while leaving rollback and recovery free to finish.
   Hostname resolution and every address attempt now share that connection
   budget, with a fail-closed cap on uncancellable platform resolver workers.
-  Add fail-closed degraded-peer policy, NACM/observability, `dangctl` integration,
-  and Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.
+  The generic `dangd-peer-transactions` operational model now reports
+  lifecycle, counters, and per-participant progress without private transaction
+  material, and protects the whole subtree with default-deny NACM. Add
+  fail-closed degraded-peer policy, `dangctl` integration, packaging, and
+  Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.
   See [`docs/PEER_TRANSACTIONS.md`](docs/PEER_TRANSACTIONS.md).
 
 - [ ] Define client-visible handling for a standards-compliant NETCONF result
