@@ -936,8 +936,13 @@ feature. Native ECMP weights are not represented, and routes supplied only as
 an unresolved Linux nexthop-object ID are omitted pending object expansion.
 The operational `local-only` leaf is derived from Linux `RT_SCOPE_HOST` or
 FreeBSD `RTF_LOCAL`, rather than being reported as false for every native
-route. Native local, blackhole, and error-reject routes are represented with
-the RFC 8431 `receive`, `discard`, and `discard-with-error` special nexthops.
+route. Neither portable backend can safely create those kernel-owned receive
+semantics, so configuration, `route-add`, and `route-update` reject
+`local-only=true` before native mutation at the exact attribute path. This
+closes the prior gap where the value was accepted but installed as an ordinary
+forwarding route. Native local, blackhole, and error-reject routes are
+represented with the RFC 8431 `receive`, `discard`, and `discard-with-error`
+special nexthops.
 Because portable native mutation for those kernel-owned route types is not
 implemented, route delete/update rejects them with reserved error code 0 and
 whole-RIB deletion fails before applying any partial change.
@@ -945,11 +950,13 @@ The provider implements `route-add` for its portable route subset with
 per-member success/failure accounting and optional RFC-shaped failure detail.
 `route-delete` resolves prefix requests against live kernel state and deletes
 only an unambiguous observed match. Prefix-selected `route-update` replaces a
-portable base nexthop or route attributes and restores the observed before-image
-when installation fails. `rib-add` validates Linux logical tables or existing
-FreeBSD FIBs and rejects unsupported RPF enforcement; `rib-delete` uses a
-compensated plan to empty the observed RIB. `nh-add` and `nh-delete` allocate
-and remove portable base nexthops in a thread-safe, per-RIB process registry.
+portable base nexthop or supported route attributes, rejects an
+unrepresentable local-only replacement before deleting the original, and
+restores the observed before-image when installation fails. `rib-add` validates
+Linux logical tables or existing FreeBSD FIBs and rejects unsupported RPF
+enforcement; `rib-delete` uses a compensated plan to empty the observed RIB.
+`nh-add` and `nh-delete` allocate and remove portable base nexthops in a
+thread-safe, per-RIB process registry.
 Live `nh-add` validates the RIB identity and nexthop family against the active
 platform mapping before allocation or persistence; an unknown or wrong-family
 name returns a modeled failure without consuming an identifier or writing data.

@@ -8,6 +8,21 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded RFC 8431 `local-only` configuration hardening in the external RIB
+  provider. Datastore preparation, `route-add`, and `route-update` now reject
+  `local-only=true` before Linux or FreeBSD mutation because the portable
+  backend cannot safely create the corresponding kernel-owned receive route.
+  Genuine native local routes remain published as read-only operational state.
+  Parser, platform, RPC, and loadable-provider tests cover the exact model path,
+  and the complete Linux and FreeBSD suites pass.
+
+- Reconfirmed the FRR 10.7 conditional-backend boundary on Linux and FreeBSD.
+  RIP and RIPng remain the only usable protocol backends with completed peer
+  state and RPC evidence; BFD still advertises a schema without applying data,
+  while the other installed protocol daemons do not register with mgmtd. The
+  TODO now treats further protocol interactions as gated on a newly usable
+  backend rather than implying an untested current daemon.
+
 - Closed the external production plugin command-execution audit. The FreeBSD
   RFC 7317 NTP provider now replaces its last `std::system()` call with
   `posix_spawn(3)` of the absolute service(8) path and fixed base-ntpd argv,

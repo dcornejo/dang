@@ -64,11 +64,12 @@ stays in this file with its remaining work rewritten precisely.
   the sterile private LAN also proves RIP and RIPng neighbor discovery and a
   learned `/32` or `/128` route in each platform's operational tree. Their
   `clear-rip-route` and `clear-ripng-route` RPCs remove and then relearn those
-  routes with either platform acting as the clear endpoint. Extend learned-state
-  and RPC evidence to each remaining applicable protocol,
-  complete notification behavior, then exercise every newly advertised daemon
-  end to end on both platforms without attaching production or management
-  interfaces.
+  routes with either platform acting as the clear endpoint. This exhausts the
+  usable conditional protocol backends currently registered by FRR 10.7; BFD
+  remains an advertised no-op and the other installed protocol daemons do not
+  register their models. Complete notification behavior, then re-run inventory
+  on each FRR update and exercise every newly usable daemon end to end on both
+  platforms without attaching production or management interfaces.
 - [ ] Complete RFC 8431 after the external ABI-v8 plugin wired its strict
   portable route parser, delta planner, and transaction-safe native execution
   into one reversible `routing` action and native Linux/FreeBSD route observation:
@@ -81,9 +82,12 @@ stays in this file with its remaining work rewritten precisely.
   registrations now remain visible in operational state before their first
   route or nexthop and after restart. Linux ECMP observations now preserve
   each native base-nexthop path without emitting invalid empty nexthops;
-  weights and nexthop-object-ID expansion remain absent. Complete the remaining
-  kernel route-kind and RFC attribute fidelity, then advertise and test the
-  module end to end.
+  weights and nexthop-object-ID expansion remain absent. Configured routes and
+  imperative RPCs now reject `local-only=true` before mutation instead of
+  misrepresenting an ordinary forwarding route as a kernel-owned receive path;
+  real native local routes remain observable read-only state. Complete the
+  remaining kernel route-kind and RFC attribute fidelity, then advertise and
+  test the module end to end.
 - [ ] Implement and document a separately packaged RFC 9249 NTP plugin using
   the pinned `ietf-ntp@2022-07-05` module. Cover configuration and NMDA
   operational state for NTPv4 and the model's NTPv3 compatibility, including
