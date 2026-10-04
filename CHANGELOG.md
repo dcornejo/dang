@@ -8,6 +8,19 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Included the portable Internet address declarations directly in the TLS
+  transport. Linux supplied the IPv6 address type transitively, while FreeBSD
+  correctly required `<netinet/in.h>`; clean FreeBSD builds no longer fail on
+  `in6_addr`.
+
+- Closed the generic degraded-peer policy gap with an explicit fail-closed
+  contract. A plugin health-verification rejection during normal peer-aware
+  backend preparation cancels every attempted remote confirmed commit before
+  local apply, records no COMMIT decision, removes the PREPARED journal after
+  successful cancellation, and leaves local running state unchanged. A
+  backend regression exercises the complete boundary; no permissive degraded
+  mode is provided.
+
 - Moved the incomplete FRR-native provider to the lowest roadmap priority and
   made BGP a hard support gate. Existing transaction, state, reconciliation,
   drift, RIP, and RIPng work remains as an experimental foundation, but the

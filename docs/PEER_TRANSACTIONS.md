@@ -294,10 +294,17 @@ version-1 snapshot compatibility.
 
 Pair-wide management still requires:
 
-- policy for unreachable or degraded peers, defaulting to rejection;
 - packaging and Linux/FreeBSD interoperability tests; and
 - CLI support that submits the logical change through dangd rather than
   bypassing NETCONF validation, authorization, ordering, and rollback.
+
+The degraded-peer policy is deliberately fail-closed and has no permissive
+mode. A missing, unreachable, stale, disconnected, interrupted, incorrectly
+scoped, or otherwise plugin-rejected participant fails verification before
+local apply. The coordinator then cancels every attempted remote confirmed
+commit in reverse apply order, records no COMMIT decision, removes the PREPARED
+journal after successful cancellation, and leaves the local running state
+unchanged. Backend regression coverage exercises this complete boundary.
 
 Core observability is available at
 `dangd-peer-transactions:peer-transactions`. It reports the current or last
@@ -310,7 +317,7 @@ identities retain emergency visibility, and other operators require an explicit
 NACM read rule. This is core transaction state and has no plugin-specific
 branches or provider-dependent interpretation.
 
-Until those operational policies and multi-host evidence are complete,
+Until packaging, CLI integration, and multi-host evidence are complete,
 pair-wide atomicity must not be advertised as production-ready.
 
 The production preparation path currently imposes a deliberate one-group

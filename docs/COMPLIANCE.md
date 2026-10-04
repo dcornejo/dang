@@ -135,10 +135,16 @@ invokes this lifecycle: remote preparation and verification precede local
 apply, the marker and new running tree become durable before COMMIT selection,
 and pre-persistence failure cancels remote work. A failed post-persistence
 decision write retains PREPARED for startup recovery. Pair-wide atomicity
-remains unadvertised until the remaining execution policy and multi-host
-evidence are complete. Transactions affecting several peer groups are
+remains unadvertised until packaging, CLI integration, and multi-host evidence
+are complete. Transactions affecting several peer groups are
 currently rejected before mutation with `peer-group-limit`; dangd does not
 sequence independent group journals and misrepresent them as atomic.
+Unreachable or degraded participants have one fail-closed policy: any
+transport failure or plugin health-verification rejection cancels every
+attempted remote confirmed commit before local apply, records no COMMIT
+decision, and leaves the local running state unchanged. There is no permissive
+degraded-commit mode. Backend regression coverage verifies journal cleanup,
+reverse cancellation, unchanged local state, and the absence of confirmation.
 Forward progress has a shared configurable monotonic deadline that is shorter
 than each remote confirmed-commit rollback window and dynamically bounds every
 TLS operation. Expiry rolls back before the decision and preserves durable
@@ -156,9 +162,9 @@ entire container carries `nacm:default-deny-all`; ordinary users therefore see
 none of it without an explicit read rule, while host-configured recovery users
 retain diagnostic access. Private endpoint, credential, transaction-id,
 proposal-digest, and persistent-token material is never modeled. This closes
-the core observability and authorization part of the pair-wide integration
-gap; degraded-peer policy, packaging, CLI integration, and multi-host platform
-evidence remain.
+the core observability, authorization, and fail-closed degraded-peer policy
+parts of the pair-wide integration gap; packaging, CLI integration, and
+multi-host platform evidence remain.
 
 Dangd also has a host-configured authenticated participant context for its
 generic multi-server transaction machinery. A configured peer-controller

@@ -87,6 +87,17 @@ class FakePluginRuntime final : public PluginRuntime {
   std::optional<yang::config::ValidationFinding> VerifyPeer(
       const PluginPeerVerification& verification) override {
     events_->push_back("plugin verify " + verification.participant_id);
+    if (fail_verify_) {
+      yang::config::ValidationFinding finding;
+      finding.code = yang::config::ValidationCode::kInvalidValue;
+      finding.state = yang::config::FindingState::kInvalid;
+      finding.message = "injected degraded peer health";
+      finding.module_name = "alpha";
+      finding.instance_path = "/alpha:alpha";
+      finding.netconf_error_tag = "operation-failed";
+      finding.netconf_error_app_tag = "peer-health-degraded";
+      return finding;
+    }
     return std::nullopt;
   }
   std::string ReconciliationData(
@@ -120,10 +131,12 @@ class FakePluginRuntime final : public PluginRuntime {
   }
 
   void set_fail_apply(bool fail) { fail_apply_ = fail; }
+  void set_fail_verify(bool fail) { fail_verify_ = fail; }
 
  private:
   std::vector<std::string>* events_;
   bool fail_apply_ = false;
+  bool fail_verify_ = false;
   std::vector<PluginYangSource> sources_;
   std::vector<PluginManifest> manifests_;
 };
@@ -250,6 +263,51 @@ TEST(EnglishConfigurationBackendTest,
   EXPECT_NE(operational.find("<aborted>1</aborted>"), std::string::npos)
       << operational;
   EXPECT_NE(operational.find("<progress>applied</progress>"), std::string::npos)
+      << operational;
+}
+
+TEST(EnglishConfigurationBackendTest,
+     DegradedPeerVerificationCancelsRemoteWorkBeforeLocalApply) {
+  auto fixture = BuildFixture();
+  ASSERT_TRUE(fixture.has_value());
+  std::vector<std::string> events;
+  FakePluginRuntime plugins(&events);
+  plugins.set_fail_verify(true);
+  const auto journal = std::filesystem::temp_directory_path() /
+                       "dangd-backend-peer-degraded-test.json";
+  std::error_code ignored;
+  std::filesystem::remove(journal, ignored);
+  unsigned token = 0;
+  EnglishConfigurationBackend backend(
+      fixture->before, &plugins, nullptr, false, Targets(), journal, true,
+      FakeParticipantFactory(&events),
+      [&token] { return "token-" + std::to_string(++token); });
+  const auto changes = yang::config::DiffConfigDocuments(
+      fixture->schema, fixture->before, fixture->after);
+
+  const auto error = backend.PrepareReplacement(
+      fixture->schema, fixture->before, fixture->after, changes);
+
+  ASSERT_TRUE(error.has_value());
+  EXPECT_EQ(error->netconf_error_app_tag, "peer-prepare-failed");
+  EXPECT_NE(error->message.find("injected degraded peer health"),
+            std::string::npos);
+  EXPECT_FALSE(std::filesystem::exists(journal));
+  EXPECT_EQ(std::ranges::find(events, "plugin apply"), events.end());
+  EXPECT_NE(std::ranges::find(events, "remote cancel pair/standby"),
+            events.end());
+  EXPECT_NE(std::ranges::find(events, "remote cancel pair/primary"),
+            events.end());
+  EXPECT_EQ(std::ranges::find_if(events,
+                                 [](const std::string& event) {
+                                   return event.starts_with("remote confirm");
+                                 }),
+            events.end());
+  EXPECT_NE(backend.WorkingXml().find("old"), std::string::npos);
+  const std::string operational = backend.PeerTransactionOperationalXml();
+  EXPECT_NE(operational.find("<phase>aborted</phase>"), std::string::npos)
+      << operational;
+  EXPECT_NE(operational.find("<aborted>1</aborted>"), std::string::npos)
       << operational;
 }
 
