@@ -737,10 +737,14 @@ shutdown; no service command or shell is involved. Linux NTP lifecycle uses
 the systemd manager's sd-bus API, subscribes before enqueueing each chrony job,
 waits for its correlated `JobRemoved` signal under a bounded timeout, and
 accepts only a `done` result. Reload-or-restart ensures rollback can restore an
-enabled service after a stop. FreeBSD NTP lifecycle still uses one fixed
-host-owned rc.d command through `std::system()`; it contains no modeled data,
-but remains an explicit audited variance pending determination of the safest
-supported FreeBSD service boundary.
+enabled service after a stop. FreeBSD base ntpd has no service-manager library
+or socket API, so its documented service(8)/rc.d lifecycle remains a narrow
+process boundary. The provider invokes the absolute `/usr/sbin/service` path
+through `posix_spawn(3)` with only the fixed `ntpd onerestart` or
+`ntpd onestop` argv, never a shell or modeled input. It reports spawn, wait,
+exit-status, and signal failures. Native lifecycle coverage verifies start and
+stop and restores the exact initial service state. The collection-wide source
+scan and complete Linux and FreeBSD suites close the command-execution audit.
 
 RADIUS, configurable NTP/DNS ports, `$0$` password replacement,
 resolver-manager integration, and exact reply-before-power-transition

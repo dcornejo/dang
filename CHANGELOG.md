@@ -8,6 +8,15 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Closed the external production plugin command-execution audit. The FreeBSD
+  RFC 7317 NTP provider now replaces its last `std::system()` call with
+  `posix_spawn(3)` of the absolute service(8) path and fixed base-ntpd argv,
+  with explicit spawn, wait, exit-status, and signal diagnostics. The
+  documented rc.d process boundary is required because base ntpd exposes no
+  service-manager library or socket API; it accepts no modeled input and never
+  invokes a shell. Full Linux and FreeBSD suites, including live NTP lifecycle
+  and state restoration, pass after the final source inventory.
+
 - Recorded the external RFC 7317 provider's replacement of Linux NTP service
   commands with the systemd manager's sd-bus API. The provider now waits for
   the correlated unit-job completion, rejects non-`done` results, bounds the
