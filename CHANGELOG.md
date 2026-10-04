@@ -8,6 +8,15 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Added a guarded file-based configuration workflow to `dangctl`. The client
+  now accepts `--edit-config FILE` with a merge, replace, or none default
+  operation, requires the standard candidate and validate capabilities, and
+  performs lock, edit, validate, commit, unlock, and close through dangd. It
+  discards and unlocks after pre-commit RPC errors, reports attributed NETCONF
+  errors, and treats a lost commit reply as outcome-unknown rather than
+  replaying it. Unsafe XML is rejected before any connection. Mutual-TLS tests
+  cover successful commit and rejected-edit cleanup.
+
 - Included the portable Internet address declarations directly in the TLS
   transport. Linux supplied the IPv6 address type transitively, while FreeBSD
   correctly required `<netinet/in.h>`; clean FreeBSD builds no longer fail on

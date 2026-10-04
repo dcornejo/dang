@@ -146,6 +146,142 @@ TEST(DangdTlsTransportTest, ExchangesAuthenticatedNetconfRpcOverMutualTls) {
             std::string::npos);
 }
 
+TEST(DangdTlsTransportTest,
+     AppliesGuardedConfigurationTransactionThroughDangd) {
+  const std::filesystem::path source = DANG_TEST_SOURCE_DIR;
+  ApplicationOptions application_options{
+      .model = source / "dangd/examples/appliance.yang",
+      .search_paths = {source / "dangd/models"},
+      .configuration = source / "dangd/examples/config.xml",
+      .nacm_configuration = source / "dangd/examples/nacm.xml"};
+  auto loaded = Application::Load(application_options);
+  ASSERT_NE(loaded.application, nullptr);
+
+  const std::filesystem::path certificates = source / "dangd/testdata/tls";
+  const std::uint16_t port = AvailableLoopbackPort();
+  ASSERT_NE(port, 0);
+  std::ostringstream server_diagnostics;
+  int server_result = -1;
+  std::thread server([&] {
+    server_result = RunTlsServer(
+        *loaded.application,
+        {.address = "127.0.0.1",
+         .port = port,
+         .certificate = certificates / "server-cert.pem",
+         .private_key = certificates / "server-key.pem",
+         .trust_anchor = certificates / "ca-cert.pem",
+         .maximum_connections = 1},
+        server_diagnostics);
+  });
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  TlsClientOptions client_options{
+      .host = "localhost",
+      .port = port,
+      .certificate = certificates / "alice-cert.pem",
+      .private_key = certificates / "alice-key.pem",
+      .trust_anchor = certificates / "ca-cert.pem"};
+  std::ostringstream output;
+  std::ostringstream client_diagnostics;
+  const int client_result = RunTlsConfigurationTransaction(
+      client_options,
+      R"xml(<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+        <system xmlns="urn:example:appliance">
+          <hostname>guarded-cli</hostname>
+        </system>
+      </config>)xml",
+      EditDefaultOperation::kReplace, output, client_diagnostics);
+  server.join();
+
+  EXPECT_EQ(client_result, 0) << client_diagnostics.str();
+  EXPECT_EQ(server_result, 0) << server_diagnostics.str();
+  EXPECT_NE(output.str().find("LOCK REPLY"), std::string::npos);
+  EXPECT_NE(output.str().find("VALIDATE REPLY"), std::string::npos);
+  EXPECT_NE(output.str().find("COMMIT REPLY"), std::string::npos);
+  EXPECT_NE(loaded.application->datastores()
+                .Read(yang::netconf::Datastore::kRunning)
+                .ToXml()
+                .find("guarded-cli"),
+            std::string::npos);
+}
+
+TEST(DangdTlsTransportTest,
+     GuardedConfigurationTransactionDiscardsRejectedEdit) {
+  const std::filesystem::path source = DANG_TEST_SOURCE_DIR;
+  ApplicationOptions application_options{
+      .model = source / "dangd/examples/appliance.yang",
+      .search_paths = {source / "dangd/models"},
+      .configuration = source / "dangd/examples/config.xml",
+      .nacm_configuration = source / "dangd/examples/nacm.xml"};
+  auto loaded = Application::Load(application_options);
+  ASSERT_NE(loaded.application, nullptr);
+
+  const std::filesystem::path certificates = source / "dangd/testdata/tls";
+  const std::uint16_t port = AvailableLoopbackPort();
+  ASSERT_NE(port, 0);
+  std::ostringstream server_diagnostics;
+  int server_result = -1;
+  std::thread server([&] {
+    server_result = RunTlsServer(
+        *loaded.application,
+        {.address = "127.0.0.1",
+         .port = port,
+         .certificate = certificates / "server-cert.pem",
+         .private_key = certificates / "server-key.pem",
+         .trust_anchor = certificates / "ca-cert.pem",
+         .maximum_connections = 1},
+        server_diagnostics);
+  });
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  TlsClientOptions client_options{
+      .host = "localhost",
+      .port = port,
+      .certificate = certificates / "alice-cert.pem",
+      .private_key = certificates / "alice-key.pem",
+      .trust_anchor = certificates / "ca-cert.pem"};
+  std::ostringstream output;
+  std::ostringstream client_diagnostics;
+  const int client_result = RunTlsConfigurationTransaction(
+      client_options,
+      R"xml(<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+        <unknown xmlns="urn:example:appliance">rejected</unknown>
+      </config>)xml",
+      EditDefaultOperation::kMerge, output, client_diagnostics);
+  server.join();
+
+  EXPECT_NE(client_result, 0);
+  EXPECT_EQ(server_result, 0) << server_diagnostics.str();
+  EXPECT_NE(client_diagnostics.str().find("EDIT-CONFIG failed"),
+            std::string::npos)
+      << client_diagnostics.str();
+  EXPECT_NE(output.str().find("DISCARD-CHANGES REPLY"), std::string::npos);
+  const std::string running = loaded.application->datastores()
+                                  .Read(yang::netconf::Datastore::kRunning)
+                                  .ToXml();
+  EXPECT_NE(running.find("edge-1"), std::string::npos);
+  EXPECT_EQ(running.find("rejected"), std::string::npos);
+}
+
+TEST(DangdTlsTransportTest,
+     GuardedConfigurationTransactionRejectsUnsafeInputBeforeConnecting) {
+  std::ostringstream output;
+  std::ostringstream diagnostics;
+  const int result = RunTlsConfigurationTransaction(
+      {},
+      R"xml(<!DOCTYPE config [<!ENTITY injected "value">]>
+      <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+        <system xmlns="urn:example:appliance">&injected;</system>
+      </config>)xml",
+      EditDefaultOperation::kMerge, output, diagnostics);
+
+  EXPECT_NE(result, 0);
+  EXPECT_TRUE(output.str().empty());
+  EXPECT_NE(diagnostics.str().find("safe NETCONF <config>"),
+            std::string::npos)
+      << diagnostics.str();
+}
+
 TEST(DangdTlsTransportTest, ReusesAuthenticatedSessionAcrossCandidateRpcs) {
   const std::filesystem::path source = DANG_TEST_SOURCE_DIR;
   ApplicationOptions application_options{

@@ -55,6 +55,9 @@ struct TlsClientOptions {
   std::optional<std::chrono::steady_clock::time_point> deadline;
 };
 
+/** NETCONF default-operation used by the dangctl configuration workflow. */
+enum class EditDefaultOperation { kMerge, kReplace, kNone };
+
 /** Authenticated server hello and reply returned by one NETCONF RPC. */
 struct TlsRpcExchange {
   std::string server_hello;
@@ -129,6 +132,18 @@ class TlsRpcSession {
 [[nodiscard]] int RunTlsClient(const TlsClientOptions& options,
                                std::istream& input, std::ostream& output,
                                std::ostream& diagnostics);
+
+/**
+ * Applies one configuration document through a guarded candidate transaction.
+ *
+ * The workflow requires :candidate and :validate, then locks candidate, sends
+ * edit-config, validates, commits, and unlocks. A pre-commit RPC error triggers
+ * best-effort discard-changes and unlock on the same authenticated session.
+ */
+[[nodiscard]] int RunTlsConfigurationTransaction(
+    const TlsClientOptions& options, std::string_view configuration_xml,
+    EditDefaultOperation default_operation, std::ostream& output,
+    std::ostream& diagnostics);
 
 /**
  * Executes one byte-bounded NETCONF RPC over a fresh mutual-TLS session.

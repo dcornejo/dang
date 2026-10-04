@@ -127,6 +127,26 @@ Paste one XML RPC and then enter a blank line. For example:
 The client frames the request and displays the decoded reply. SSH and
 supervised stdio examples are in the [dangd guide](dangd/README.md).
 
+To apply a configuration file through the same protected NETCONF path, use the
+guarded transaction mode:
+
+```sh
+./build/dangctl \
+  --host localhost --port 6513 \
+  --cert dangd/testdata/tls/alice-cert.pem \
+  --key dangd/testdata/tls/alice-key.pem \
+  --ca dangd/testdata/tls/ca-cert.pem \
+  --edit-config dangd/examples/config.xml \
+  --default-operation replace
+```
+
+The input must be one NETCONF `<config>` document. `dangctl` locks candidate,
+edits it, validates it, commits it, and unlocks it. This keeps NACM, schema
+validation, plugin ordering, peer coordination, persistence, and rollback in
+dangd rather than reimplementing them in the client. `merge` is the default;
+`replace` and `none` are explicit alternatives. Use `--edit-config -` to read
+the configuration from standard input.
+
 ## Device plugins
 
 Plugins declare the YANG modules they implement and participate in a two-phase

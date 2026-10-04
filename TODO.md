@@ -127,8 +127,11 @@ stays in this file with its remaining work rewritten precisely.
   material, and protects the whole subtree with default-deny NACM. Degraded or
   unreachable peers now have one fail-closed policy: verifier rejection
   cancels all attempted remote work before local apply, records no COMMIT, and
-  leaves local state unchanged. Add `dangctl` integration, packaging, and
-  Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.
+  leaves local state unchanged. The guarded `dangctl --edit-config` workflow
+  now submits configuration through candidate lock, edit, validate, commit,
+  and unlock, so it reaches this same generic path without plugin awareness.
+  Add packaging and Linux/FreeBSD multi-host evidence before advertising
+  pair-wide atomicity.
   See [`docs/PEER_TRANSACTIONS.md`](docs/PEER_TRANSACTIONS.md).
 
 - [ ] Define client-visible handling for a standards-compliant NETCONF result

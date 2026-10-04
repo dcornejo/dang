@@ -17,8 +17,8 @@ participant transport and automatic startup recovery are also implemented.
 The ordinary NETCONF commit path now binds the peer journal to the durable
 local datastore snapshot, rejects multi-group proposals before mutation, and
 publishes NACM-protected generic operational state. Dangd does not advertise
-pair-wide commit support yet because degraded-peer policy, packaging, CLI
-integration, and Linux/FreeBSD multi-host evidence remain incomplete.
+pair-wide commit support yet because packaging and Linux/FreeBSD multi-host
+evidence remain incomplete.
 
 ## Plugin planning contract
 
@@ -294,9 +294,15 @@ version-1 snapshot compatibility.
 
 Pair-wide management still requires:
 
-- packaging and Linux/FreeBSD interoperability tests; and
-- CLI support that submits the logical change through dangd rather than
-  bypassing NETCONF validation, authorization, ordering, and rollback.
+- packaging and Linux/FreeBSD interoperability tests.
+
+The guarded `dangctl --edit-config` workflow submits the logical change through
+the normal authenticated NETCONF endpoint. It locks candidate, applies the
+selected edit default, validates, commits, and unlocks. Consequently the CLI
+does not bypass NACM, YANG validation, plugin planning, peer coordination,
+durability, ordering, or rollback. A pre-commit RPC error causes best-effort
+discard and unlock; a lost commit reply is reported as outcome-unknown and is
+not replayed automatically.
 
 The degraded-peer policy is deliberately fail-closed and has no permissive
 mode. A missing, unreachable, stale, disconnected, interrupted, incorrectly
@@ -317,8 +323,8 @@ identities retain emergency visibility, and other operators require an explicit
 NACM read rule. This is core transaction state and has no plugin-specific
 branches or provider-dependent interpretation.
 
-Until packaging, CLI integration, and multi-host evidence are complete,
-pair-wide atomicity must not be advertised as production-ready.
+Until packaging and multi-host evidence are complete, pair-wide atomicity must
+not be advertised as production-ready.
 
 The production preparation path currently imposes a deliberate one-group
 limit. If affected plugins compose more than one group, the whole NETCONF

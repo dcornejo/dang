@@ -135,8 +135,8 @@ invokes this lifecycle: remote preparation and verification precede local
 apply, the marker and new running tree become durable before COMMIT selection,
 and pre-persistence failure cancels remote work. A failed post-persistence
 decision write retains PREPARED for startup recovery. Pair-wide atomicity
-remains unadvertised until packaging, CLI integration, and multi-host evidence
-are complete. Transactions affecting several peer groups are
+remains unadvertised until packaging and multi-host evidence are complete.
+Transactions affecting several peer groups are
 currently rejected before mutation with `peer-group-limit`; dangd does not
 sequence independent group journals and misrepresent them as atomic.
 Unreachable or degraded participants have one fail-closed policy: any
@@ -162,9 +162,12 @@ entire container carries `nacm:default-deny-all`; ordinary users therefore see
 none of it without an explicit read rule, while host-configured recovery users
 retain diagnostic access. Private endpoint, credential, transaction-id,
 proposal-digest, and persistent-token material is never modeled. This closes
-the core observability, authorization, and fail-closed degraded-peer policy
-parts of the pair-wide integration gap; packaging, CLI integration, and
-multi-host platform evidence remain.
+the core observability, authorization, fail-closed degraded-peer policy, and
+guarded CLI parts of the pair-wide integration gap; packaging and multi-host
+platform evidence remain. `dangctl --edit-config` uses only standard NETCONF
+candidate locking, edit, validation, commit, and unlock operations against
+dangd, so it receives the same NACM, YANG, plugin, ordering, peer-transaction,
+durability, and rollback protections as any other authenticated client.
 
 Dangd also has a host-configured authenticated participant context for its
 generic multi-server transaction machinery. A configured peer-controller

@@ -16,7 +16,9 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <ostream>
 #include <ranges>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -506,6 +508,99 @@ bool HelloHasCapability(std::string_view xml, std::string_view capability) {
     }
   }
   return false;
+}
+
+bool NetconfReplyIsOk(std::string_view xml) {
+  pugi::xml_document parsed;
+  if (!yang::ParseUntrustedXml(xml, &parsed).ok) return false;
+  pugi::xml_node result;
+  for (const pugi::xml_node child : parsed.document_element().children()) {
+    if (child.type() != pugi::node_element) continue;
+    if (result) return false;
+    result = child;
+  }
+  return result && XmlLocalName(result.name()) == "ok" &&
+         XmlNamespace(result) ==
+             "urn:ietf:params:xml:ns:netconf:base:1.0";
+}
+
+std::optional<std::string> NetconfRpcError(std::string_view xml) {
+  pugi::xml_document parsed;
+  if (!yang::ParseUntrustedXml(xml, &parsed).ok) return std::nullopt;
+  for (const pugi::xml_node child : parsed.document_element().children()) {
+    if (child.type() != pugi::node_element ||
+        XmlLocalName(child.name()) != "rpc-error" ||
+        XmlNamespace(child) !=
+            "urn:ietf:params:xml:ns:netconf:base:1.0")
+      continue;
+    std::string tag;
+    std::string app_tag;
+    std::string path;
+    std::string message;
+    for (const pugi::xml_node detail : child.children()) {
+      if (detail.type() != pugi::node_element ||
+          XmlNamespace(detail) !=
+              "urn:ietf:params:xml:ns:netconf:base:1.0")
+        continue;
+      const std::string_view name = XmlLocalName(detail.name());
+      if (name == "error-tag") tag = detail.text().as_string();
+      if (name == "error-app-tag") app_tag = detail.text().as_string();
+      if (name == "error-path") path = detail.text().as_string();
+      if (name == "error-message") message = detail.text().as_string();
+    }
+    std::string summary = tag.empty() ? "NETCONF rpc-error" : tag;
+    if (!app_tag.empty()) summary += "/" + app_tag;
+    if (!path.empty()) summary += " at " + path;
+    if (!message.empty()) summary += ": " + message;
+    return summary;
+  }
+  return std::nullopt;
+}
+
+std::string SimpleRpc(std::string_view message_id,
+                      std::string_view operation) {
+  pugi::xml_document document;
+  pugi::xml_node rpc = document.append_child("rpc");
+  rpc.append_attribute("xmlns") =
+      "urn:ietf:params:xml:ns:netconf:base:1.0";
+  rpc.append_attribute("message-id") = std::string(message_id).c_str();
+  pugi::xml_node request = rpc.append_child(std::string(operation).c_str());
+  if (operation == "lock" || operation == "unlock")
+    request.append_child("target").append_child("candidate");
+  std::ostringstream output;
+  document.print(output, "", pugi::format_raw);
+  return output.str();
+}
+
+std::optional<std::string> EditConfigRpc(
+    std::string_view configuration_xml,
+    EditDefaultOperation default_operation) {
+  pugi::xml_document configuration;
+  if (!yang::ParseUntrustedXml(configuration_xml, &configuration).ok)
+    return std::nullopt;
+  const pugi::xml_node config = configuration.document_element();
+  if (!config || XmlLocalName(config.name()) != "config" ||
+      XmlNamespace(config) !=
+          "urn:ietf:params:xml:ns:netconf:base:1.0")
+    return std::nullopt;
+
+  pugi::xml_document document;
+  pugi::xml_node rpc = document.append_child("rpc");
+  rpc.append_attribute("xmlns") =
+      "urn:ietf:params:xml:ns:netconf:base:1.0";
+  rpc.append_attribute("message-id") = "dangctl-edit";
+  pugi::xml_node edit = rpc.append_child("edit-config");
+  edit.append_child("target").append_child("candidate");
+  const char* operation = "merge";
+  if (default_operation == EditDefaultOperation::kReplace)
+    operation = "replace";
+  else if (default_operation == EditDefaultOperation::kNone)
+    operation = "none";
+  edit.append_child("default-operation").text() = operation;
+  edit.append_copy(config);
+  std::ostringstream output;
+  document.print(output, "", pugi::format_raw);
+  return output.str();
 }
 
 class OpenSslStream final : public yang::netconf::SecureByteStream {
@@ -1109,6 +1204,117 @@ int RunTlsClient(const TlsClientOptions& options, std::istream& input,
     diagnostics << "dangctl: " << error << '\n';
     return 1;
   }
+  return 0;
+}
+
+int RunTlsConfigurationTransaction(
+    const TlsClientOptions& options, std::string_view configuration_xml,
+    EditDefaultOperation default_operation, std::ostream& output,
+    std::ostream& diagnostics) {
+  const auto edit = EditConfigRpc(configuration_xml, default_operation);
+  if (!edit) {
+    diagnostics << "dangctl: configuration must be a safe NETCONF <config> "
+                   "document\n";
+    return 1;
+  }
+
+  constexpr std::array<std::string_view, 2> capabilities = {
+      "urn:ietf:params:netconf:capability:candidate:1.0",
+      "urn:ietf:params:netconf:capability:validate:1.1"};
+  std::string error;
+  auto session = TlsRpcSession::Connect(options, &error, capabilities);
+  if (!session) {
+    diagnostics << "dangctl: " << error << '\n';
+    return 1;
+  }
+  output << "SERVER HELLO\n" << session->server_hello() << "\n\n";
+
+  enum class RpcResult { kOk, kRpcError, kTransportError };
+  const auto execute = [&](std::string_view stage,
+                           std::string_view rpc) -> RpcResult {
+    const auto reply = session->Execute(rpc, &error);
+    if (!reply) {
+      diagnostics << "dangctl: " << stage << " transport failed: " << error
+                  << '\n';
+      return RpcResult::kTransportError;
+    }
+    output << stage << " REPLY\n" << *reply << "\n\n";
+    if (const auto rpc_error = NetconfRpcError(*reply)) {
+      diagnostics << "dangctl: " << stage << " failed: " << *rpc_error
+                  << '\n';
+      return RpcResult::kRpcError;
+    }
+    if (!NetconfReplyIsOk(*reply)) {
+      diagnostics << "dangctl: " << stage
+                  << " returned neither <ok> nor <rpc-error>\n";
+      return RpcResult::kRpcError;
+    }
+    return RpcResult::kOk;
+  };
+
+  const std::string lock = SimpleRpc("dangctl-lock", "lock");
+  if (execute("LOCK", lock) != RpcResult::kOk) {
+    session->Close();
+    return 1;
+  }
+
+  const auto abort_before_commit = [&] {
+    (void)execute("DISCARD-CHANGES",
+                  SimpleRpc("dangctl-discard", "discard-changes"));
+    (void)execute("UNLOCK", SimpleRpc("dangctl-unlock", "unlock"));
+    session->Close();
+  };
+  const auto stop_before_commit = [&](RpcResult result) {
+    if (result == RpcResult::kRpcError)
+      abort_before_commit();
+    else
+      session->Close();
+  };
+  const RpcResult edited = execute("EDIT-CONFIG", *edit);
+  if (edited != RpcResult::kOk) {
+    stop_before_commit(edited);
+    return 1;
+  }
+  const RpcResult validated = execute("VALIDATE", R"xml(<rpc
+      xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+      message-id="dangctl-validate"><validate><source><candidate/>
+      </source></validate></rpc>)xml");
+  if (validated != RpcResult::kOk) {
+    stop_before_commit(validated);
+    return 1;
+  }
+
+  const RpcResult committed = execute(
+      "COMMIT", R"xml(<rpc
+      xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+      message-id="dangctl-commit"><commit/></rpc>)xml");
+  if (committed != RpcResult::kOk) {
+    if (committed == RpcResult::kRpcError)
+      abort_before_commit();
+    else {
+      diagnostics << "dangctl: commit outcome is unknown; do not replay the "
+                     "transaction without reading running state\n";
+      session->Close();
+    }
+    return 1;
+  }
+
+  if (execute("UNLOCK", SimpleRpc("dangctl-unlock", "unlock")) !=
+      RpcResult::kOk) {
+    diagnostics << "dangctl: configuration committed, but candidate unlock "
+                   "did not complete\n";
+    session->Close();
+    return 1;
+  }
+  if (execute("CLOSE-SESSION",
+              SimpleRpc("dangctl-close", "close-session")) !=
+      RpcResult::kOk) {
+    diagnostics << "dangctl: configuration committed, but graceful session "
+                   "close did not complete\n";
+    session->Close();
+    return 1;
+  }
+  session->Close();
   return 0;
 }
 

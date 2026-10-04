@@ -161,8 +161,9 @@ entry point now composes generic plugin candidates during normal NETCONF
 commit, prepares and verifies one resolved group, crosses the local durable
 snapshot boundary, and then selects the group decision. The external Kea
 provider supplies the first candidates and health verifier. Pair-wide atomicity
-is not advertised until degraded-peer policy, packaging, CLI integration, and
-Linux/FreeBSD multi-host evidence are complete.
+is not advertised until packaging and Linux/FreeBSD multi-host evidence are
+complete. The generic guarded `dangctl --edit-config` workflow supplies the
+operator path without adding Kea-specific behavior to dangd.
 
 ## Embedded SSH server example
 
@@ -257,6 +258,28 @@ The client prints the server hello. Paste one XML RPC, then enter a blank line:
 `dangctl` frames the document, sends it over TLS, and prints the decoded
 `rpc-reply`. It negotiates NETCONF base 1.0 so the interactive boundary remains
 easy to see. End the session with `<close-session/>` or EOF.
+
+For a guarded non-interactive configuration transaction, pass a NETCONF
+`<config>` document instead of hand-writing the RPC sequence:
+
+```sh
+./build/dangctl \
+  --host localhost --port 6513 \
+  --cert dangd/testdata/tls/alice-cert.pem \
+  --key dangd/testdata/tls/alice-key.pem \
+  --ca dangd/testdata/tls/ca-cert.pem \
+  --edit-config dangd/examples/config.xml \
+  --default-operation replace
+```
+
+The client requires the standard `:candidate` and `:validate` capabilities,
+then performs lock, edit-config, validate, commit, unlock, and close-session on
+one authenticated session. `merge` is the default operation; `replace` and
+`none` are also accepted, and `--edit-config -` reads standard input. Any
+pre-commit RPC error triggers best-effort discard-changes and unlock. If the
+commit reply is lost, `dangctl` reports the outcome as unknown and does not
+automatically replay a possibly successful commit. All model-, plugin-, and
+peer-specific behavior remains inside dangd's generic commit contracts.
 
 The listener requires TLS 1.2 or newer, a trusted client certificate, and one
 safe value in the configured username field. The client requires a trusted

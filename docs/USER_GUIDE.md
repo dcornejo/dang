@@ -588,6 +588,17 @@ It connects the included `dangctl` paste-and-reply client to `dangd`, maps a
 verified client certificate identity into NACM, and clearly identifies the
 test-only trust material and production limitations.
 
+`dangctl` also accepts `--edit-config FILE` for a guarded configuration
+transaction. The file must contain one NETCONF `<config>` document. The client
+requires `:candidate` and `:validate`, locks candidate, applies the edit,
+validates, commits, unlocks, and closes the session. `--default-operation`
+accepts `merge` (the default), `replace`, or `none`; a file name of `-` reads
+standard input. Pre-commit RPC errors cause best-effort discard and unlock,
+while a lost commit reply is reported as outcome-unknown and is not replayed.
+Because the transaction is submitted to dangd as ordinary authenticated
+NETCONF, it receives the same NACM, schema, plugin, peer-transaction,
+persistence, and rollback protections as every other client.
+
 ## Where to go next
 
 - [Configuration validation](CONFIG_VALIDATION.md)
