@@ -81,8 +81,12 @@ stays in this file with its remaining work rewritten precisely.
   including direct observation of every mapped FreeBSD FIB. Durable empty RIB
   registrations now remain visible in operational state before their first
   route or nexthop and after restart. Linux ECMP observations now preserve
-  each native base-nexthop path without emitting invalid empty nexthops;
-  weights and nexthop-object-ID expansion remain absent. Configured routes and
+  each native base-nexthop path without emitting invalid empty nexthops,
+  including recursive expansion of simple and grouped kernel nexthop-object
+  IDs through `RTM_GETNEXTHOP`; native weights remain absent until the optional
+  load-balance feature is implemented end to end. Object-backed routes remain
+  operational/read-only because the base model view cannot preserve the object
+  ID and group topology required for exact rollback. Configured routes and
   imperative RPCs now reject `local-only=true` before mutation instead of
   misrepresenting an ordinary forwarding route as a kernel-owned receive path;
   real native local routes remain observable read-only state. Complete the

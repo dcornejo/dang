@@ -932,8 +932,17 @@ Linux rtnetlink multipath routes are expanded into separate stable route-list
 entries for each native base nexthop, including its gateway/interface identity
 and dead-path installed state. This avoids schema-invalid empty nexthops while
 preserving parallel paths without advertising the optional RFC load-balance
-feature. Native ECMP weights are not represented, and routes supplied only as
-an unresolved Linux nexthop-object ID are omitted pending object expansion.
+feature. Routes supplied through Linux `RTA_NH_ID` are joined with a native
+`RTM_GETNEXTHOP` inventory. Simple objects and recursively referenced groups
+expand to the same base gateway/interface or discard representation, while
+missing, cyclic, encapsulated, FDB, wrong-family, and interrupted results are
+omitted or fail closed instead of producing partial XML. A native namespace
+test covers a real weighted two-member object group. Native ECMP weights remain
+unrepresented until the optional load-balance feature is implemented end to
+end. Object-backed routes are published as operational/read-only because the
+base view cannot retain the native ID and group topology necessary to recreate
+the exact kernel object relationship during rollback; mutation therefore fails
+closed rather than installing an approximation.
 The operational `local-only` leaf is derived from Linux `RT_SCOPE_HOST` or
 FreeBSD `RTF_LOCAL`, rather than being reported as false for every native
 route. Neither portable backend can safely create those kernel-owned receive

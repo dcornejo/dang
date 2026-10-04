@@ -8,6 +8,17 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded Linux RFC 8431 nexthop-object expansion in the external RIB
+  provider. Routes carrying `RTA_NH_ID` now join against an
+  `RTM_GETNEXTHOP` inventory, recursively resolving simple and grouped objects
+  into the already supported base gateway/interface view. Invalid, missing,
+  cyclic, encapsulated, FDB, wrong-family, and interrupted cases cannot produce
+  partial schema-invalid routes. The isolated namespace suite covers a real
+  weighted two-member object group and verifies that object-backed routes stay
+  operational/read-only when their native topology cannot survive rollback;
+  native weights remain an explicit gap pending complete support for the
+  optional load-balance feature.
+
 - Recorded RFC 8431 `local-only` configuration hardening in the external RIB
   provider. Datastore preparation, `route-add`, and `route-update` now reject
   `local-only=true` before Linux or FreeBSD mutation because the portable
