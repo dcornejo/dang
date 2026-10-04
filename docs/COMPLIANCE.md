@@ -506,7 +506,17 @@ advertised. External interoperability testing remains.
 
 ### FRRouting native models
 
-Status: **partial external-provider implementation**.
+Status: **deferred incomplete external-provider implementation**.
+
+Project policy now requires BGP for any supported FRR offering. The existing
+provider work remains available as an experimental foundation, but successful
+RIP, RIPng, zebra, and staticd behavior does not make the FRR package complete
+or supported. Completion requires native BGP configuration and operational
+state through the same programmatic mgmtd contract, with atomic transactions,
+exact rollback, reconciliation, drift handling, packaging, and real IPv4/IPv6
+peer tests on Linux and FreeBSD. CLI execution is not an acceptable substitute.
+Until running bgpd registers a usable `frr-bgp` schema and backend, FRR work is
+the lowest-priority deferred item.
 
 The separately packaged `dang-frr` provider publishes the runtime-matched
 schema closure for `frr-routing`, `frr-zebra`, and `frr-staticd`, plus live
@@ -659,7 +669,10 @@ mgmtd dispatch removes a learned route on both Linux and FreeBSD, and the route
 is subsequently relearned from the held peer.
 FRR 10.7.1 installs the complete BGP source family, but its live library
 omits `frr-bgp` and running bgpd registers no mgmtd backend; the provider does
-not advertise that unavailable runtime capability.
+not advertise that unavailable runtime capability. Because BGP is now a hard
+completion requirement, this upstream limitation prevents the project from
+claiming the FRR provider as a supported offering, regardless of the narrower
+protocol evidence above.
 
 The FRR-native and RFC 8431 RIB providers cannot be installed together through
 the supported packages. Debian declares symmetric conflicts. FreeBSD packages

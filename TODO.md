@@ -15,61 +15,6 @@ stays in this file with its remaining work rewritten precisely.
 
 ### Standards and models
 
-- [ ] Complete the top-priority, separately packaged FRR provider. Its initial
-  Linux/FreeBSD transaction evidence covers `frr-routing`, `frr-zebra`, and
-  `frr-staticd`; portable configuration plumbing also covers live
-  `frr-interface` and `frr-vrf` parents. The external plugin now publishes the
-  runtime-matched native import-and-submodule schema closure, uses the
-  programmatic `mgmtd` frontend protocol, exports ABI v8, claims the ABI-v7
-  `routing` resource domain, validates in disposable sessions, commits
-  atomically, restores the before-image on rollback, and publishes live
-  owned top-level and augmented protocol operational XML through native mgmtd
-  `GET_DATA`. It reads the managed running roots back after apply for ABI-v6
-  applied-state reconciliation and compares later running reads to detect
-  out-of-band changes during operational retrieval, while a read-only watcher
-  emits deduplicated ABI-v8 drift events through host schema and NACM checks.
-  Live parent roots participate in the same transaction so interface-level
-  zebra, RIP, and IS-IS configuration cannot escape commit or rollback. The
-  public native mgmtd RPC codec and generic `frr-zebra` dispatch are wired
-  and covered by portable correlated-session tests. An active FRR 10.5.1 zebra
-  validation backend registers configuration and operational paths but no
-  `/frr-zebra` RPC path, and rejects `get-vrf-info` as unimplemented. Re-run
-  successful live RPC interoperability when an FRR backend registers the
-  modeled RPC subtree. FRR 10.7.1 ships the complete `frr-bgp` source family,
-  but its live RFC 8525 library omits `frr-bgp` and running bgpd registers no
-  mgmtd backend; add BGP only after upstream exposes a native configuration and
-  operational path. The native notification codec now builds
-  bounded `NOTIFY_SELECT` requests and validates modeled XML `NOTIFY` frames;
-  the transport/session layer supports one-way selection, safe idle waits,
-  resumed unsolicited reads, and session attribution. The plugin-owned reader
-  now conditionally loads, selects, bounds, and forwards `frr-isisd`/`frr-ripd`
-  events only when FRR's live library implements the module. Live Linux RIP
-  validation found and fixed exact-selector and separate-root ownership gaps,
-  then reached FRR 10.7.1's `assure_notify_msg_cache()` assertion after ripd
-  emitted the modeled event. Re-run successful Linux/FreeBSD delivery after
-  upstream mgmtd can encode top-level notifications. The runtime gate now
-  supports BFD, EIGRP, OSPFv2, Pathd, PIM, RIP, RIPng, IS-IS, and VRRP model
-  ownership, standalone roots, parent augments, operational reads, and modeled
-  RPC dispatch. A read-only Linux/FreeBSD inventory now starts each installed
-  optional daemon with mgmtd and zebra in a disposable pathspace and reports
-  actual live module registration without creating interfaces, addresses, or
-  routes; it passes independently on both Linux and both FreeBSD validation
-  hosts. YANG Library advertisement does not prove backend ownership: the BFD
-  behavioral test on all four hosts found that mgmtd accepts but drops a profile
-  because `bfdd` registers no backend. Post-commit readback now rejects this
-  silent no-op and leaves rollback available. Re-test BFD when upstream exposes
-  its backend. RIP and RIPng interface-free instance configuration, committed
-  readback, basic instance visibility through native operational `GET_DATA`,
-  and exact rollback now pass on Linux and FreeBSD. Two-peer native testing on
-  the sterile private LAN also proves RIP and RIPng neighbor discovery and a
-  learned `/32` or `/128` route in each platform's operational tree. Their
-  `clear-rip-route` and `clear-ripng-route` RPCs remove and then relearn those
-  routes with either platform acting as the clear endpoint. This exhausts the
-  usable conditional protocol backends currently registered by FRR 10.7; BFD
-  remains an advertised no-op and the other installed protocol daemons do not
-  register their models. Complete notification behavior, then re-run inventory
-  on each FRR update and exercise every newly usable daemon end to end on both
-  platforms without attaching production or management interfaces.
 - [ ] Complete RFC 8431 after the external ABI-v8 plugin wired its strict
   portable route parser, delta planner, and transaction-safe native execution
   into one reversible `routing` action and native Linux/FreeBSD route observation:
@@ -238,3 +183,22 @@ stays in this file with its remaining work rewritten precisely.
   integration, and rollback. Validate both direct `vppcom` use and any POSIX
   compatibility/interposition layer against isolated VPP loopbacks before
   permitting private-LAN traffic.
+
+### Deferred — lowest priority
+
+- [ ] Complete the separately packaged FRR-native provider only when BGP can
+  be supported as a first-class protocol. The existing provider retains its
+  tested transaction, rollback, reconciliation, drift, operational, RPC,
+  notification, schema-inventory, RIP, and RIPng work, but it is not considered
+  a complete or supported FRR offering without native BGP configuration and
+  operational state through the contracted programmatic `mgmtd` interface.
+  Installed `frr-bgp` YANG sources are insufficient: a running bgpd must expose
+  its implemented schema and usable backend in the live RFC 8525 library and
+  mgmtd. Once upstream provides that boundary, add the complete BGP schema
+  closure, owned and augmented roots, atomic apply/readback/rollback, state,
+  RPC and notification handling, restart/drift behavior, packaging, and real
+  IPv4/IPv6 peer and route-policy tests on both Linux and FreeBSD. Do not
+  substitute CLI execution or claim partial FRR product support. Revisit other
+  upstream-gated daemon and notification gaps as part of that deferred effort;
+  current detailed evidence and variances remain in `docs/COMPLIANCE.md` and
+  the external provider guide.

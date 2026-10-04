@@ -8,6 +8,13 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Moved the incomplete FRR-native provider to the lowest roadmap priority and
+  made BGP a hard support gate. Existing transaction, state, reconciliation,
+  drift, RIP, and RIPng work remains as an experimental foundation, but the
+  project will not claim an FRR offering until running bgpd exposes a usable
+  native `frr-bgp` mgmtd backend and complete Linux/FreeBSD BGP behavior passes.
+  CLI execution is explicitly not an acceptable substitute.
+
 - Recorded Linux RFC 8431 nexthop-object expansion in the external RIB
   provider. Routes carrying `RTA_NH_ID` now join against an
   `RTM_GETNEXTHOP` inventory, recursively resolving simple and grouped objects
