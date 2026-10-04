@@ -8,6 +8,12 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Validated the native `dangd` packages as the host half of the external Kea
+  deployment. Fresh Debian and FreeBSD packages install beside the matching
+  `dangd-plugin-kea` package, load the packaged provider through the installed
+  worker, and accept the packaged example with `dangd --check`. The temporary
+  validation installations are removed afterward.
+
 - Added a guarded file-based configuration workflow to `dangctl`. The client
   now accepts `--edit-config FILE` with a merge, replace, or none default
   operation, requires the standard candidate and validate capabilities, and

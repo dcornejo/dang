@@ -16,9 +16,10 @@ contract, including isolated-worker transport, while the authenticated
 participant transport and automatic startup recovery are also implemented.
 The ordinary NETCONF commit path now binds the peer journal to the durable
 local datastore snapshot, rejects multi-group proposals before mutation, and
-publishes NACM-protected generic operational state. Dangd does not advertise
-pair-wide commit support yet because packaging and Linux/FreeBSD multi-host
-evidence remain incomplete.
+publishes NACM-protected generic operational state. Native Debian and FreeBSD
+packages now pass installation and packaged-plugin load checks. Dangd does not
+advertise pair-wide commit support yet because Linux/FreeBSD multi-host
+evidence remains incomplete.
 
 ## Plugin planning contract
 
@@ -292,9 +293,8 @@ exposing transaction secrets. An unmarked PREPARED journal retains conservative
 cancellation behavior, while unmarked COMMIT remains authoritative for
 version-1 snapshot compatibility.
 
-Pair-wide management still requires:
-
-- packaging and Linux/FreeBSD interoperability tests.
+Pair-wide management still requires Linux/FreeBSD multi-host interoperability
+tests.
 
 The guarded `dangctl --edit-config` workflow submits the logical change through
 the normal authenticated NETCONF endpoint. It locks candidate, applies the
@@ -323,8 +323,8 @@ identities retain emergency visibility, and other operators require an explicit
 NACM read rule. This is core transaction state and has no plugin-specific
 branches or provider-dependent interpretation.
 
-Until packaging and multi-host evidence are complete, pair-wide atomicity must
-not be advertised as production-ready.
+Until multi-host evidence is complete, pair-wide atomicity must not be
+advertised as production-ready.
 
 The production preparation path currently imposes a deliberate one-group
 limit. If affected plugins compose more than one group, the whole NETCONF

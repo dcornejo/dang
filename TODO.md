@@ -130,8 +130,9 @@ stays in this file with its remaining work rewritten precisely.
   leaves local state unchanged. The guarded `dangctl --edit-config` workflow
   now submits configuration through candidate lock, edit, validate, commit,
   and unlock, so it reaches this same generic path without plugin awareness.
-  Add packaging and Linux/FreeBSD multi-host evidence before advertising
-  pair-wide atomicity.
+  Native Debian and FreeBSD packages now build, install, load the packaged Kea
+  plugin through the normal worker, and pass a packaged `dangd --check` run.
+  Add Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.
   See [`docs/PEER_TRANSACTIONS.md`](docs/PEER_TRANSACTIONS.md).
 
 - [ ] Define client-visible handling for a standards-compliant NETCONF result

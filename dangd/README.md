@@ -160,10 +160,11 @@ stateful mutual-TLS participant adapter are described in
 entry point now composes generic plugin candidates during normal NETCONF
 commit, prepares and verifies one resolved group, crosses the local durable
 snapshot boundary, and then selects the group decision. The external Kea
-provider supplies the first candidates and health verifier. Pair-wide atomicity
-is not advertised until packaging and Linux/FreeBSD multi-host evidence are
-complete. The generic guarded `dangctl --edit-config` workflow supplies the
-operator path without adding Kea-specific behavior to dangd.
+provider supplies the first candidates and health verifier. Native Debian and
+FreeBSD package installation has been validated, but pair-wide atomicity is not
+advertised until Linux/FreeBSD multi-host evidence is complete. The generic
+guarded `dangctl --edit-config` workflow supplies the operator path without
+adding Kea-specific behavior to dangd.
 
 ## Embedded SSH server example
 
