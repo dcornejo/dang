@@ -625,7 +625,8 @@ std::vector<PluginPeerCandidate> PluginManager::PeerCandidates(
       }
       result.push_back(
           {plugin.name, std::move(*group), std::move(*participant),
-           candidate.role, candidate.confirmed_timeout_seconds,
+           candidate.local != 0, candidate.role,
+           candidate.confirmed_timeout_seconds,
            std::move(*module), std::move(*configuration),
            std::move(*context)});
     }
@@ -648,9 +649,20 @@ std::optional<yang::config::ValidationFinding> PluginManager::VerifyPeer(
       verification.running_reply_xml.c_str(),
       verification.operational_reply_xml.c_str()};
   DangPluginErrorV1 error{};
-  if (!found->verify_peer(found->api->context, found->prepared, &request,
-                          &error))
-    return PluginFinding(found->name, error, "peer verification failed");
+  const int accepted = found->verify_peer(found->api->context, found->prepared,
+                                           &request, &error);
+  if (accepted != 1) {
+    auto finding =
+        PluginFinding(found->name, error, "peer verification failed");
+    if (accepted == -1) {
+      finding.state = yang::config::FindingState::kIndeterminate;
+      finding.netconf_error_app_tag = "peer-verification-pending";
+    } else if (accepted != 0) {
+      finding.message = "plugin " + found->name +
+          ": peer verifier returned an invalid status";
+    }
+    return finding;
+  }
   return std::nullopt;
 }
 

@@ -275,6 +275,8 @@ typedef enum DangPeerTransactionRoleV1 {
 typedef struct DangPeerCandidateV1 {
   const char* group_id;
   const char* participant_id;
+  /** Nonzero when this candidate is owned by the contributing local host. */
+  uint32_t local;
   uint32_t role;
   uint32_t confirmed_timeout_seconds;
   const char* module_name;
@@ -298,7 +300,11 @@ typedef struct DangPeerVerificationV1 {
  * Planning callbacks inspect the already prepared transaction. Returned
  * strings are borrowed and copied before the callback returns. The verifier
  * receives authenticated replies but no endpoint, credential, session, or
- * transport object; those remain exclusively owned by dangd.
+ * transport object; those remain exclusively owned by dangd. A verifier
+ * returns one when the peer is accepted, zero for permanent rejection, or
+ * minus one when correct configuration has not yet converged. Dangd retries a
+ * pending verifier with fresh authenticated readback until the transaction's
+ * existing deadline; it never retries permanent rejection.
  */
 typedef struct DangPluginV9 {
   DangPluginV8 v8;

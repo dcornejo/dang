@@ -207,6 +207,13 @@ TEST(PluginWorkerClientTest, CopiesAndVerifiesPeerTransactionContract) {
       .running_reply_xml = "<rpc-reply><data/></rpc-reply>",
       .operational_reply_xml = "<rpc-reply><data>ready</data></rpc-reply>"};
   EXPECT_TRUE(client->VerifyPeer(verification).ok());
+  verification.operational_reply_xml =
+      "<rpc-reply><data>waiting</data></rpc-reply>";
+  const auto pending = client->VerifyPeer(verification);
+  ASSERT_FALSE(pending.ok());
+  ASSERT_TRUE(pending.finding.has_value());
+  EXPECT_EQ(pending.finding->netconf_error_app_tag,
+            "peer-verification-pending");
   verification.operational_reply_xml = "<rpc-reply><data/></rpc-reply>";
   const auto rejected = client->VerifyPeer(verification);
   ASSERT_FALSE(rejected.ok());

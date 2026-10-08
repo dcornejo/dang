@@ -157,7 +157,12 @@ PeerParticipantFactory FakeParticipantFactory(
         .verify =
             [events, id, verify = std::move(options.verify_replies)] {
               events->push_back("remote verify " + id);
-              return verify("<rpc-reply/>", "<rpc-reply/>");
+              const auto decision =
+                  verify("<rpc-reply/>", "<rpc-reply/>");
+              return decision.disposition ==
+                             PeerVerificationDecision::Disposition::kAccepted
+                  ? std::optional<std::string>{}
+                  : std::optional<std::string>{decision.message};
             },
         .confirm = [operation] { return operation("remote confirm"); },
         .cancel = [operation] { return operation("remote cancel"); },

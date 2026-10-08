@@ -50,11 +50,13 @@ protected:
                 {.participant_id = "primary",
                  .role = DANG_PEER_PRIMARY_V1,
                  .confirmed_timeout_seconds = 90,
+                 .module_namespaces = {"urn:test:primary"},
                  .candidate_configuration = "<config><primary/></config>",
                  .verifiers = {{"provider-a", "{\"member\":\"primary\"}"}}},
                 {.participant_id = "standby",
                  .role = DANG_PEER_STANDBY_V1,
                  .confirmed_timeout_seconds = 90,
+                 .module_namespaces = {"urn:test:standby"},
                  .candidate_configuration = "<config><standby/></config>",
                  .verifiers = {{"provider-a", "{\"member\":\"standby\"}"}}}}};
   }
@@ -95,8 +97,12 @@ FakeParticipant(TlsPeerTransactionOptions options,
           .verify =
               [state, record] {
                 record("verify");
-                return state->options.verify_replies("<running/>",
-                                                     "<operational/>");
+                const auto decision = state->options.verify_replies(
+                    "<running/>", "<operational/>");
+                return decision.disposition ==
+                               PeerVerificationDecision::Disposition::kAccepted
+                    ? std::optional<std::string>{}
+                    : std::optional<std::string>{decision.message};
               },
           .confirm =
               [record] {
@@ -158,6 +164,42 @@ TEST_F(PeerTransactionControllerTest,
                 "verify:test-group/standby", "verify:test-group/primary",
                 "confirm:test-group/standby", "confirm:test-group/primary",
                 "release:test-group/standby", "release:test-group/primary"}));
+}
+
+TEST_F(PeerTransactionControllerTest,
+       ExcludesLocalParticipantFromRemoteTransaction) {
+  auto group = Group();
+  group.participants.front().local = true;
+  std::vector<std::string> events;
+  std::vector<TlsPeerTransactionOptions> captured;
+  unsigned token = 0;
+  PeerTransactionController controller(
+      {Targets().back()},
+      [](const PluginPeerVerification &)
+          -> std::optional<yang::config::ValidationFinding> {
+        return std::nullopt;
+      },
+      [&](TlsPeerTransactionOptions options) {
+        return FakeParticipant(std::move(options), &events, &captured);
+      },
+      [&]() -> std::optional<std::string> {
+        return "persistent-" + std::to_string(++token);
+      });
+
+  const auto journal_path = directory_ / "remote-only.json";
+  const PeerTransactionResult result = controller.Execute(
+      group, journal_path, "transaction-local-primary", "sha256:proposal");
+
+  EXPECT_TRUE(result.ok()) << result.message;
+  EXPECT_FALSE(std::filesystem::exists(journal_path));
+  ASSERT_EQ(captured.size(), 1u);
+  EXPECT_EQ(captured.front().id, "test-group/standby");
+  EXPECT_EQ(events,
+            (std::vector<std::string>{"prepare:test-group/standby",
+                                      "apply:test-group/standby",
+                                      "verify:test-group/standby",
+                                      "confirm:test-group/standby",
+                                      "release:test-group/standby"}));
 }
 
 TEST_F(PeerTransactionControllerTest,

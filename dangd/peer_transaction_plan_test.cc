@@ -37,10 +37,11 @@ std::optional<yang::config::RuntimeSchema> Schema() {
 
 PluginPeerCandidate Candidate(std::string provider, std::string participant,
                               std::uint32_t role, std::string module,
-                              std::string body) {
+                              std::string body, bool local = false) {
   return {std::move(provider),
           "pair",
           std::move(participant),
+          local,
           role,
           60,
           std::move(module),
@@ -77,8 +78,53 @@ TEST(PeerTransactionPlanTest, ComposesNonOverlappingCompleteModuleImages) {
               std::string::npos);
     EXPECT_NE(participant.candidate_configuration.find("urn:test:beta"),
               std::string::npos);
+    EXPECT_EQ(participant.module_namespaces,
+              (std::vector<std::string>{"urn:test:alpha", "urn:test:beta"}));
     EXPECT_EQ(participant.verifiers.size(), 2u);
   }
+}
+
+TEST(PeerTransactionPlanTest, CarriesOneAgreedLocalParticipant) {
+  const auto schema = Schema();
+  ASSERT_TRUE(schema.has_value());
+  auto contributions = CompletePlan();
+  for (auto& contribution : contributions) {
+    if (contribution.participant_id == "primary") contribution.local = true;
+  }
+
+  const auto composed = ComposePeerTransactionPlan(*schema, contributions);
+
+  ASSERT_FALSE(composed.error.has_value()) << composed.error->message;
+  ASSERT_EQ(composed.groups.size(), 1u);
+  ASSERT_EQ(composed.groups.front().participants.size(), 2u);
+  EXPECT_TRUE(composed.groups.front().participants.front().local);
+  EXPECT_FALSE(composed.groups.front().participants.back().local);
+}
+
+TEST(PeerTransactionPlanTest, RejectsDisagreementAboutLocalOwnership) {
+  const auto schema = Schema();
+  ASSERT_TRUE(schema.has_value());
+  auto contributions = CompletePlan();
+  contributions.front().local = true;
+
+  const auto composed = ComposePeerTransactionPlan(*schema, contributions);
+
+  ASSERT_TRUE(composed.error.has_value());
+  EXPECT_NE(composed.error->message.find("disagree on local participant"),
+            std::string::npos);
+}
+
+TEST(PeerTransactionPlanTest, RejectsSeveralLocalParticipants) {
+  const auto schema = Schema();
+  ASSERT_TRUE(schema.has_value());
+  auto contributions = CompletePlan();
+  for (auto& contribution : contributions) contribution.local = true;
+
+  const auto composed = ComposePeerTransactionPlan(*schema, contributions);
+
+  ASSERT_TRUE(composed.error.has_value());
+  EXPECT_NE(composed.error->message.find("more than one local participant"),
+            std::string::npos);
 }
 
 TEST(PeerTransactionPlanTest, RejectsOverlappingModuleOwnership) {

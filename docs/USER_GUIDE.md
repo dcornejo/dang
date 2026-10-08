@@ -435,15 +435,25 @@ cannot also be a NACM recovery user. Duplicate, padded, control-containing,
 malformed UTF-8, or oversized identities fail startup.
 
 On a normal NETCONF commit, affected plugins contribute complete peer images
-and opaque verification contexts through the public contract. Dangd composes
-and validates them, prepares every remote candidate, applies persistent
-confirmed commits standby-first, and verifies authenticated readback. It then
+and opaque verification contexts through the public contract. They also agree
+which participant is local. Dangd composes and validates the images, prepares
+every remote candidate while preserving unrelated modules, applies persistent
+confirmed commits standby-first, and verifies authenticated readback. A plugin
+may report that correctly configured service state is still converging; dangd
+then obtains fresh readback until acceptance or the original deadline. It then
 applies the local plugin transaction and saves the new local snapshot with the
 matching recovery marker. Only after that save succeeds does it durably select
 the peer COMMIT decision and confirm the remotes. A local apply or snapshot
 failure cancels remote work. A finalization failure retains both records and
 blocks further changes until restart completes recovery. Startup hydration
 does not originate a distributed change.
+
+The supported production initiation shape currently requires the local
+participant to be the primary. Send the configuration change to that member;
+all remote standbys reach verified PREPARED before local apply. A request sent
+to a locally owned standby fails before mutation with
+`peer-local-standby-unsupported`. Proposals affecting more than one independent
+group likewise fail with `peer-group-limit`.
 
 The journal normally does not exist. Version 2 first records PREPARED before
 any remote mutation, then atomically changes it to COMMIT before permanent

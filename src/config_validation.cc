@@ -2014,6 +2014,20 @@ EffectiveDataView EffectiveDataView::Build(const RuntimeSchema& schema,
   return result;
 }
 
+EffectiveDataView EffectiveDataView::WithPlaceholder(
+    RuntimeSchemaNodeId schema, std::optional<EffectiveNodeId> parent,
+    EffectiveNodeId* placeholder) const {
+  EffectiveDataView result = *this;
+  *placeholder = static_cast<EffectiveNodeId>(result.nodes_.size());
+  result.nodes_.push_back(
+      {*placeholder, schema, parent, std::nullopt, std::nullopt, {}});
+  if (parent)
+    result.nodes_.at(*parent).children.push_back(*placeholder);
+  else
+    result.roots_.push_back(*placeholder);
+  return result;
+}
+
 ConfigParseResult ParseDatastoreXml(const RuntimeSchema& schema, std::string_view xml,
                                     const ConfigParseOptions& options) {
   pugi::xml_document document;
@@ -2199,6 +2213,41 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
                                            : FindingState::kIndeterminate;
   };
   std::vector<std::string> paths(request.document.size());
+  const auto when_applies = [&](RuntimeSchemaNodeId schema_id,
+                                std::optional<ConfigNodeId> data_parent) {
+    const RuntimeSchemaNode& node = request.schema.Get(schema_id);
+    if (std::ranges::none_of(
+            node.xpath_constraints, [](const RuntimeXPathConstraint& value) {
+              return value.kind == semantic::XPathConstraintKind::kWhen;
+            }))
+      return true;
+
+    const std::optional<EffectiveNodeId> parent =
+        data_parent ? effective_for_explicit.at(*data_parent) : std::nullopt;
+    EffectiveNodeId synthetic = kInvalidEffectiveNodeId;
+    const EffectiveDataView hypothetical =
+        effective.WithPlaceholder(schema_id, parent, &synthetic);
+
+    bool applies = true;
+    for (const RuntimeXPathConstraint& constraint : node.xpath_constraints) {
+      if (constraint.kind != semantic::XPathConstraintKind::kWhen) continue;
+      const auto context = FindRelatedEffectiveNode(
+          hypothetical, synthetic, constraint.context_schema);
+      if (!context) continue;
+      const RuntimeXPathEvaluator evaluator(request.schema, hypothetical,
+                                            request.document, constraint,
+                                            complete, synthetic);
+      const XPathRuntimeValue value = evaluator.Evaluate(
+          "boolean(" + constraint.expression + ")", *context);
+      if (!value.indeterminate && value.kind != XPathRuntimeKind::kInvalid &&
+          !value.boolean) {
+        applies = false;
+        break;
+      }
+    }
+
+    return applies;
+  };
   std::function<void(const std::vector<RuntimeSchemaNodeId>&, const std::vector<ConfigNodeId>&,
                      Coverage, std::string_view,
                      std::optional<ConfigNodeId>)> validate_children;
@@ -2244,7 +2293,8 @@ ValidationResult ConfigValidator::Validate(const ValidationRequest& request) con
               });
         }
       }
-      if (node.mandatory && count == 0 && active_case)
+      if (node.mandatory && count == 0 && active_case &&
+          when_applies(schema_id, data_parent))
         result.findings.push_back(Finding(ValidationCode::kMissingMandatoryNode,
             omission_state(collection_coverage), "mandatory data node is absent", path,
             "missing-element", node.module_name));

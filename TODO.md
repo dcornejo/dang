@@ -61,79 +61,15 @@ stays in this file with its remaining work rewritten precisely.
 
 ### Datastore architecture
 
-- [ ] Integrate the transport-neutral peer transaction coordinator into a
-  production pair-wide commit path. The core state machine now prepares every
-  peer before mutation, applies standbys before the primary, verifies all
-  participants, records a durable commit decision before confirmation, rolls
-  back pre-decision failures in reverse order, and resumes lost confirmations
-  without contradicting that decision. A bounded programmatic mutual-TLS
-  client now performs authenticated persistent-commit confirmation with
-  hostname, capability, namespace, and reply-correlation checks. A private
-  versioned `--peer-recovery` file now validates exact generic
-  group-and-participant-to-endpoint and trust mappings at startup and reload,
-  with unambiguous host-owned journal identities across multiple groups.
-  Startup and reload now use those
-  mappings to resume durable pending confirmations and proceed only after the
-  journal is complete. The stateful mutual-TLS participant now maps prepare to
-  candidate lock, complete replacement, and validation; maps apply to a
-  persistent confirmed commit; supplies authenticated running and operational
-  readback to a health callback; and implements confirmation, reconnecting
-  idempotent cancellation, unlock, and close. Live two-peer commit and live
-  rollback tests cover the complete adapter. The external Kea provider now
-  supplies a strict verifier for authenticated running and operational
-  replies, including full managed-image comparison, configured HA identity
-  binding, stable states, exact scopes, reachability, interruption, and
-  freshness. That provider now also supplies complete two-member hot-standby
-  module images and routes authenticated readback through its opaque verifier
-  context. ABI v9 carries those transport-neutral contributions through
-  supervised workers, and the core composes several plugins' non-overlapping
-  images with full-schema validation during normal backend preparation,
-  aborting before mutation on any planning failure. Every composed participant
-  must now resolve to its exact core-owned authenticated endpoint during the
-  same preflight; missing mappings abort all plugin state before mutation.
-  The generic production controller now converts one group into authenticated
-  TLS participants, routes readback to the retained plugin verifiers, creates
-  cryptographically random persistent tokens and the crash-safe journal, and
-  invokes the tested state machine. A repeatable host-owned peer-controller
-  identity now marks authenticated participant operations as already
-  coordinated, suppresses only nested peer discovery, and durably preserves
-  that context for confirmed-commit rollback. The generic backend lifecycle
-  now separates successful replacement from post-persistence finalization and
-  aborts retained work before persistence compensation. The version-2 peer
-  journal now records PREPARED before network mutation and startup can safely
-  resume either cancellation or COMMIT confirmation. The generic datastore
-  contract now brackets backend finalization with a version-2 snapshot recovery
-  marker containing an opaque kind, transaction identity, and proposal digest;
-  it retains that marker if finalization or the durable clear fails and refuses
-  automatic backend activation until the host resolves it. Startup now loads
-  the validated snapshot first, requires exact marker/journal identity and
-  digest agreement, advances matching PREPARED state to COMMIT, confirms it,
-  durably clears the marker, and rejects mismatched or orphaned records. Normal
-  preparation now rejects any transaction affecting more than one peer group
-  before endpoint resolution or plugin mutation, providing an explicit safe
-  limit until an atomic multi-group journal is designed. The coordinator and
-  controller now expose explicit prepare, commit, and abort stages: verified
-  remote confirmed commits can remain journaled as PREPARED while the local
-  datastore crosses its durable snapshot boundary. The generic backend now
-  invokes that staged API for ordinary NETCONF commits, publishes the exact
-  marker before finalization, cancels on local apply or persistence failure,
-  and retains PREPARED for restart if selecting COMMIT fails after local
-  durability. A shared configurable monotonic deadline now bounds all forward
-  stages and each TLS wait while leaving rollback and recovery free to finish.
-  Hostname resolution and every address attempt now share that connection
-  budget, with a fail-closed cap on uncancellable platform resolver workers.
-  The generic `dangd-peer-transactions` operational model now reports
-  lifecycle, counters, and per-participant progress without private transaction
-  material, and protects the whole subtree with default-deny NACM. Degraded or
-  unreachable peers now have one fail-closed policy: verifier rejection
-  cancels all attempted remote work before local apply, records no COMMIT, and
-  leaves local state unchanged. The guarded `dangctl --edit-config` workflow
-  now submits configuration through candidate lock, edit, validate, commit,
-  and unlock, so it reaches this same generic path without plugin awareness.
-  Native Debian and FreeBSD packages now build, install, load the packaged Kea
-  plugin through the normal worker, and pass a packaged `dangd --check` run.
-  Add Linux/FreeBSD multi-host evidence before advertising pair-wide atomicity.
-  See [`docs/PEER_TRANSACTIONS.md`](docs/PEER_TRANSACTIONS.md).
+- [ ] Extend the generic peer-transaction journal from one affected group to
+  an atomic decision covering several independent groups. The current
+  production path rejects such proposals with `peer-group-limit` before any
+  endpoint resolution or mutation.
+- [ ] Support safe initiation when the local participant is a standby. The
+  implemented production ordering supports a locally owned primary: every
+  remote standby reaches verified PREPARED before local apply. A local standby
+  currently fails explicitly with `peer-local-standby-unsupported` rather than
+  applying the standby before an unreachable remote primary.
 
 - [ ] Define client-visible handling for a standards-compliant NETCONF result
   that exceeds the configured reply ceiling. Internal provider paging protects

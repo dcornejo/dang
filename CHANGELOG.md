@@ -8,6 +8,24 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Completed the generic production peer-transaction path for locally owned
+  primaries. ABI v9 now marks the one local participant, composes authoritative
+  module-scoped images while preserving unrelated remote configuration,
+  retries explicitly pending plugin verification with fresh authenticated
+  readback, and excludes the local member from remote TLS and journal state.
+  Remote candidates are discarded before unlock, detailed NETCONF errors retain
+  tag, application tag, message, and path, and the proposal digest binds module
+  namespaces plus local ownership. Bidirectional Linux/FreeBSD Kea HA evidence
+  covers successful NETCONF commits, convergence, unavailable-peer rollback,
+  DHCPv4/DHCPv6 service, failover, replication, and recovery.
+
+- Corrected complete-tree validation of mandatory nodes guarded by `when`.
+  The validator now evaluates a missing mandatory node in its hypothetical
+  effective-data context, so a false condition suppresses the requirement while
+  true or indeterminate conditions remain fail-closed. This fixes valid
+  plaintext Kea HA listener configuration without weakening conditional
+  mandatory enforcement.
+
 - Validated the native `dangd` packages as the host half of the external Kea
   deployment. Fresh Debian and FreeBSD packages install beside the matching
   `dangd-plugin-kea` package, load the packaged provider through the installed

@@ -17,6 +17,14 @@
 
 namespace dangd {
 
+/** Result of checking one authenticated peer readback. */
+struct PeerVerificationDecision {
+  /** Whether verification succeeded, needs fresh readback, or failed. */
+  enum class Disposition { kAccepted, kPending, kRejected };
+  Disposition disposition = Disposition::kRejected;
+  std::string message;
+};
+
 /** Complete transport plan for one participant in a new peer transaction. */
 struct TlsPeerTransactionOptions {
   /** Stable identity stored in the durable group journal. */
@@ -25,7 +33,9 @@ struct TlsPeerTransactionOptions {
   PeerTransactionRole role = PeerTransactionRole::kStandby;
   /** Authenticated peer endpoint and credentials. */
   TlsClientOptions transport;
-  /** Complete NETCONF `<config>` image copied into the remote candidate. */
+  /** Module namespaces authoritatively replaced by this transaction. */
+  std::vector<std::string> module_namespaces;
+  /** Complete images for those modules under a NETCONF `<config>` root. */
   std::string candidate_configuration;
   /** Unique RFC 6241 persistent confirmed-commit token. */
   std::string persistent_commit_id;
@@ -33,8 +43,8 @@ struct TlsPeerTransactionOptions {
   std::uint32_t confirmed_timeout_seconds = 60;
   /** Shared forward-progress deadline for the complete peer transaction. */
   std::optional<std::chrono::steady_clock::time_point> deadline;
-  /** Validates authenticated running `<get-config>` and operational `<get>`. */
-  std::function<std::optional<std::string>(std::string_view, std::string_view)>
+  /** Validates authenticated readback and may request bounded convergence. */
+  std::function<PeerVerificationDecision(std::string_view, std::string_view)>
       verify_replies;
 };
 

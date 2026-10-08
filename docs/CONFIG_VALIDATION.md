@@ -46,7 +46,9 @@ node resolves fragments whose schema parent has multiple context instances.
 - configuration versus state-data classification;
 - singleton multiplicity, list key presence, and duplicate list keys;
 - scalar lexical spaces and effective type restrictions;
-- mandatory nodes/choices, choice exclusivity, and min/max bounds;
+- mandatory nodes/choices, choice exclusivity, and min/max bounds; a missing
+  node guarded by `when` is evaluated in its hypothetical effective-data
+  context and is required only when that condition applies;
 - descendant-leaf `unique`, including virtual defaults under non-presence
   containers;
 - identityref QName resolution and derived-identity membership;

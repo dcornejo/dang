@@ -114,6 +114,7 @@ Json PeerCandidates(dangd::PluginManager& manager) {
         {{"provider", candidate.provider},
          {"group_id", candidate.group_id},
          {"participant_id", candidate.participant_id},
+         {"local", candidate.local},
          {"role", candidate.role},
          {"confirmed_timeout_seconds", candidate.confirmed_timeout_seconds},
          {"module_name", candidate.module_name},

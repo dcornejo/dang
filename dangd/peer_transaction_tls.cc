@@ -6,8 +6,10 @@
 #include <array>
 #include <memory>
 #include <pugixml.hpp>
+#include <set>
 #include <sstream>
 #include <string_view>
+#include <thread>
 #include <utility>
 
 #include "yang/xml_security.h"
@@ -98,6 +100,39 @@ std::optional<std::string> RpcErrorTag(std::string_view reply) {
       return child.text().as_string();
   }
   return std::nullopt;
+}
+
+std::string RpcErrorDetail(std::string_view reply) {
+  pugi::xml_document parsed;
+  if (!yang::ParseUntrustedXml(reply, &parsed).ok) return {};
+  pugi::xml_node error;
+  for (const pugi::xml_node child : parsed.document_element().children()) {
+    if (child.type() == pugi::node_element &&
+        LocalName(child.name()) == "rpc-error" &&
+        Namespace(child) == kNetconfNamespace && !error) {
+      error = child;
+    }
+  }
+  if (!error) return {};
+  std::string tag;
+  std::string app_tag;
+  std::string message;
+  std::string path;
+  for (const pugi::xml_node child : error.children()) {
+    if (child.type() != pugi::node_element ||
+        Namespace(child) != kNetconfNamespace)
+      continue;
+    const std::string_view name = LocalName(child.name());
+    if (name == "error-tag") tag = child.text().as_string();
+    if (name == "error-app-tag") app_tag = child.text().as_string();
+    if (name == "error-message") message = child.text().as_string();
+    if (name == "error-path") path = child.text().as_string();
+  }
+  std::string detail = tag;
+  if (!app_tag.empty()) detail += (detail.empty() ? "" : "/") + app_tag;
+  if (!message.empty()) detail += (detail.empty() ? "" : ": ") + message;
+  if (!path.empty()) detail += " at " + path;
+  return detail.empty() ? std::string{} : " (" + detail + ")";
 }
 
 std::string Rpc(std::string_view message_id, std::string_view operation) {
@@ -230,11 +265,64 @@ ValidateOptions(const TlsPeerTransactionOptions &options,
   if (!root || LocalName(root.name()) != "config" ||
       Namespace(root) != kNetconfNamespace)
     return "candidate configuration must have the NETCONF config root";
+  if (options.module_namespaces.empty())
+    return "candidate module namespace set is empty";
+  std::set<std::string> namespaces;
+  for (const std::string& value : options.module_namespaces) {
+    if (value.empty() || value.size() > 1024 ||
+        value.find('\0') != std::string::npos ||
+        !namespaces.insert(value).second) {
+      return "candidate module namespaces must be unique and bounded";
+    }
+  }
+  for (const pugi::xml_node child : root.children()) {
+    if (child.type() == pugi::node_element &&
+        !namespaces.contains(Namespace(child))) {
+      return "candidate contains data outside its declared module namespaces";
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<std::string> BuildCompleteCandidate(
+    std::string_view running_reply, const pugi::xml_document& module_images,
+    const std::vector<std::string>& module_namespaces,
+    pugi::xml_document* candidate) {
+  pugi::xml_document running;
+  if (!yang::ParseUntrustedXml(running_reply, &running).ok)
+    return "peer running configuration reply is not safe well-formed XML";
+  const pugi::xml_node reply = running.document_element();
+  if (!reply || LocalName(reply.name()) != "rpc-reply" ||
+      Namespace(reply) != kNetconfNamespace)
+    return "peer running configuration reply has the wrong root";
+  pugi::xml_node data;
+  for (const pugi::xml_node child : reply.children()) {
+    if (child.type() != pugi::node_element) continue;
+    if (LocalName(child.name()) != "data" ||
+        Namespace(child) != kNetconfNamespace || data)
+      return "peer running configuration reply has invalid content";
+    data = child;
+  }
+  if (!data) return "peer running configuration reply has no data";
+
+  const std::set<std::string> replaced(module_namespaces.begin(),
+                                       module_namespaces.end());
+  pugi::xml_node config = candidate->append_child("config");
+  config.append_attribute("xmlns") = kNetconfNamespace.data();
+  for (const pugi::xml_node child : data.children()) {
+    if (child.type() == pugi::node_element &&
+        !replaced.contains(Namespace(child)))
+      config.append_copy(child);
+  }
+  for (const pugi::xml_node child :
+       module_images.document_element().children()) {
+    if (child.type() == pugi::node_element) config.append_copy(child);
+  }
   return std::nullopt;
 }
 
 std::string CopyCandidateRpc(std::string_view message_id,
-                             const pugi::xml_document &candidate) {
+                             const pugi::xml_document& candidate) {
   pugi::xml_document document;
   pugi::xml_node rpc = document.append_child("rpc");
   rpc.append_attribute("xmlns") = kNetconfNamespace.data();
@@ -319,15 +407,32 @@ MakeTlsTransactionParticipant(TlsPeerTransactionOptions options) {
             return result;
           state->locked = true;
         }
+        if (const auto timeout_error = state->ApplyTimeout())
+          return timeout_error;
+        const auto running = state->session->Execute(
+            Rpc(state->NextMessageId("baseline"),
+                "<get-config><source><running/></source></get-config>"),
+            &error);
+        if (!running) return error;
+        if (ReplyIsOk(*running) || RpcErrorTag(*running))
+          return "peer rejected running configuration baseline" +
+                 (RpcErrorTag(*running)
+                      ? " (" + *RpcErrorTag(*running) + ")"
+                      : "");
+        pugi::xml_document complete_candidate;
+        if (const auto build_error = BuildCompleteCandidate(
+                *running, candidate, state->options.module_namespaces,
+                &complete_candidate))
+          return *build_error;
         const std::string copy =
-            CopyCandidateRpc(state->NextMessageId("copy"), candidate);
+            CopyCandidateRpc(state->NextMessageId("copy"), complete_candidate);
         if (const auto timeout_error = state->ApplyTimeout())
           return timeout_error;
         const auto copied = state->session->Execute(copy, &error);
         if (!copied)
           return error;
         if (!ReplyIsOk(*copied))
-          return "peer rejected complete candidate replacement" +
+          return "peer rejected module-preserving candidate replacement" +
                  (RpcErrorTag(*copied) ? " (" + *RpcErrorTag(*copied) + ")"
                                        : "");
         if (const auto result = state->Execute(
@@ -355,31 +460,45 @@ MakeTlsTransactionParticipant(TlsPeerTransactionOptions options) {
       .verify = [state]() -> std::optional<std::string> {
         if (!state->applied || !state->session)
           return "participant has no applied confirmed commit";
-        std::string error;
-        if (const auto timeout_error = state->ApplyTimeout())
-          return timeout_error;
-        const auto running = state->session->Execute(
-            Rpc(state->NextMessageId("verify"),
-                "<get-config><source><running/></source></get-config>"),
-            &error);
-        if (!running)
-          return error;
-        if (ReplyIsOk(*running) || RpcErrorTag(*running))
-          return "peer rejected running configuration read" +
-                 (RpcErrorTag(*running) ? " (" + *RpcErrorTag(*running) + ")"
-                                        : "");
-        if (const auto timeout_error = state->ApplyTimeout())
-          return timeout_error;
-        const auto operational = state->session->Execute(
-            Rpc(state->NextMessageId("health"), "<get/>"), &error);
-        if (!operational)
-          return error;
-        if (ReplyIsOk(*operational) || RpcErrorTag(*operational))
-          return "peer rejected operational health read" +
-                 (RpcErrorTag(*operational)
-                      ? " (" + *RpcErrorTag(*operational) + ")"
-                      : "");
-        return state->options.verify_replies(*running, *operational);
+        const auto verification_deadline = state->options.deadline.value_or(
+            std::chrono::steady_clock::now() + std::chrono::seconds(5));
+        for (;;) {
+          std::string error;
+          if (const auto timeout_error = state->ApplyTimeout())
+            return timeout_error;
+          const auto running = state->session->Execute(
+              Rpc(state->NextMessageId("verify"),
+                  "<get-config><source><running/></source></get-config>"),
+              &error);
+          if (!running)
+            return error;
+          if (ReplyIsOk(*running) || RpcErrorTag(*running))
+            return "peer rejected running configuration read" +
+                   RpcErrorDetail(*running);
+          if (const auto timeout_error = state->ApplyTimeout())
+            return timeout_error;
+          const auto operational = state->session->Execute(
+              Rpc(state->NextMessageId("health"), "<get/>"), &error);
+          if (!operational)
+            return error;
+          if (ReplyIsOk(*operational) || RpcErrorTag(*operational))
+            return "peer rejected operational health read" +
+                   RpcErrorDetail(*operational);
+          PeerVerificationDecision decision =
+              state->options.verify_replies(*running, *operational);
+          if (decision.disposition ==
+              PeerVerificationDecision::Disposition::kAccepted)
+            return std::nullopt;
+          if (decision.disposition ==
+              PeerVerificationDecision::Disposition::kRejected)
+            return decision.message.empty() ? "peer verification rejected"
+                                            : decision.message;
+          if (std::chrono::steady_clock::now() >= verification_deadline)
+            return decision.message.empty()
+                ? "peer verification did not converge before the deadline"
+                : decision.message;
+          std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
       },
       .confirm = [state]() -> std::optional<std::string> {
         if (state->confirmed)
@@ -401,6 +520,12 @@ MakeTlsTransactionParticipant(TlsPeerTransactionOptions options) {
             if (!state->session)
               return;
             if (state->locked) {
+              // A failed prepare can leave a module-preserving replacement in
+              // candidate even though running was never changed. Always reset
+              // that private workspace before releasing its lock; after a
+              // confirmed transaction this is an idempotent no-op.
+              (void)state->Execute("discard candidate", "<discard-changes/>",
+                                   false);
               (void)state->Execute(
                   "candidate unlock",
                   "<unlock><target><candidate/></target></unlock>", false);

@@ -381,6 +381,7 @@ PluginWorkerPeerCandidatesResult PluginWorkerClient::PeerCandidates() {
           value.at("provider").get<std::string>(),
           value.at("group_id").get<std::string>(),
           value.at("participant_id").get<std::string>(),
+          value.at("local").get<bool>(),
           value.at("role").get<std::uint32_t>(),
           value.at("confirmed_timeout_seconds").get<std::uint32_t>(),
           value.at("module_name").get<std::string>(),

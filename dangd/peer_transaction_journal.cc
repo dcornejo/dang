@@ -33,8 +33,8 @@ std::optional<std::string> ValidateState(const PeerJournalState &state) {
     return "peer journal transaction identity is empty or too long";
   if (state.proposal_digest.empty() || state.proposal_digest.size() > 256)
     return "peer journal proposal digest is empty or too long";
-  if (state.participants.size() < 2 || state.participants.size() > 256)
-    return "peer journal requires between two and 256 participants";
+  if (state.participants.empty() || state.participants.size() > 256)
+    return "peer journal requires between one and 256 remote participants";
   std::set<std::string> ids;
   std::size_t primary_count = 0;
   for (const PeerJournalParticipant &participant : state.participants) {
@@ -50,8 +50,10 @@ std::optional<std::string> ValidateState(const PeerJournalState &state) {
     if (participant.role == PeerTransactionRole::kPrimary)
       ++primary_count;
   }
-  if (primary_count != 1)
-    return "peer journal requires exactly one primary participant";
+  // The group's primary may be the local, unjournaled participant. The file
+  // records only remote confirmed commits, so zero remote primaries is valid.
+  if (primary_count > 1)
+    return "peer journal has more than one primary participant";
   if (state.decision == PeerJournalDecision::kPrepared &&
       std::ranges::any_of(state.participants,
                           [](const PeerJournalParticipant &participant) {

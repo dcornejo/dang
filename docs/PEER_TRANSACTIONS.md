@@ -17,16 +17,18 @@ participant transport and automatic startup recovery are also implemented.
 The ordinary NETCONF commit path now binds the peer journal to the durable
 local datastore snapshot, rejects multi-group proposals before mutation, and
 publishes NACM-protected generic operational state. Native Debian and FreeBSD
-packages now pass installation and packaged-plugin load checks. Dangd does not
-advertise pair-wide commit support yet because Linux/FreeBSD multi-host
-evidence remains incomplete.
+packages pass installation and packaged-plugin load checks. The guarded
+Linux/FreeBSD Kea interaction now proves pair-wide commits and failure recovery
+in both primary-host directions on an isolated network.
 
 ## Plugin planning contract
 
 Plugins never open peer connections. For each affected prepared transaction,
 ABI v9 returns a set of stable group/participant identities, participant roles,
-confirmed-commit timeouts, complete module-scoped `<config>` images, and opaque
-JSON verification contexts. Dangd generically composes contributions from
+local-ownership markers, confirmed-commit timeouts, complete module-scoped
+`<config>` images, and opaque JSON verification contexts. Contributors must
+agree on local ownership and at most one participant may be local. Dangd
+generically composes contributions from
 several plugins. It requires the same complete module set on every participant,
 one owner for each module image, consistent roles/timeouts, at least two peers,
 and exactly one primary. Every fragment is checked against its claimed module;
@@ -45,6 +47,13 @@ context. The core retains exclusive ownership of endpoint mappings, trust,
 credentials, sessions, NETCONF ordering, journaling, and recovery. This is the
 only supported seam: plugins may not depend on daemon-private APIs or require
 module-specific logic in dangd.
+
+A verifier returns accepted, permanently rejected, or pending. Pending means
+the authoritative configuration matches but service state is still converging;
+dangd waits briefly, obtains fresh authenticated running and operational
+replies, and invokes every verifier again under the original transaction
+deadline. Permanent rejection is never retried. Expiry remains fail-closed and
+causes the ordinary pre-decision cancellation path.
 
 ## Required participant operations
 
@@ -109,8 +118,13 @@ roll back after the group has already chosen commit.
 Prepare uses a stable participant-id order so concurrent coordinators can use
 the same lock order. Apply and verification place every standby before the
 single primary to preserve service where the provider supports that ordering.
-The coordinator rejects duplicate identities and groups without exactly one
-primary.
+The local participant is applied by the outer backend rather than opened as a
+peer TLS session or written into the peer journal. Therefore the supported
+production initiation shape is one local primary with every remote standby
+verified first. A locally owned standby fails before mutation with
+`peer-local-standby-unsupported`. The coordinator rejects duplicate identities,
+multiple local participants, contributor disagreement, and groups without
+exactly one primary.
 
 `PeerTransactionFileJournal` implements the private recovery record. Its
 versioned JSON contains PREPARED or COMMIT, a bounded transaction identity and
@@ -166,24 +180,35 @@ client.
 `MakeTlsTransactionParticipant` maps the complete coordinator contract onto a
 single reusable authenticated session. Before sending any RPC it requires the
 candidate 1.0, validate 1.1, and confirmed-commit 1.1 capabilities. Preparation
-locks candidate, uses `<copy-config>` with a complete safe `<config>` image,
-and validates candidate. Apply starts a bounded persistent confirmed commit.
+locks candidate, reads running, removes every top-level node in the contributed
+module namespaces, inserts the authoritative module images, and uses
+`<copy-config>` with that reconstructed complete candidate. Unrelated system,
+NACM, and other-module configuration is preserved, including when a contributed
+module intentionally becomes empty. Apply starts a bounded persistent confirmed
+commit.
 Verification retrieves both authoritative running configuration and the
 combined configuration/operational view, then passes both authenticated replies
-to a provider-supplied configuration and service-health callback. Confirmation uses
-the persistent token; pre-decision cancellation also uses that token and
+to provider-supplied configuration and service-health callbacks. An explicitly
+pending result is re-read until accepted or the shared deadline. Confirmation
+uses the persistent token; pre-decision cancellation also uses that token and
 reconnects when an ambiguous transport failure closed the original session.
 Cancellation treats an already absent pending commit as the required rolled-
-back state. Release attempts candidate unlock and close-session, then closes
-the TLS resources idempotently. Persistent tokens are built with the XML API,
+back state. Release discards candidate, attempts unlock and close-session, then
+closes the TLS resources idempotently. Persistent tokens are built with the XML
+API,
 including tokens containing XML metacharacters.
 
 The adapter has live coverage for successful two-peer durable coordination on
-two independent mutual-TLS servers. That test proves complete candidate
-replacement, authenticated running and operational readback, journal decision
-and acknowledgements, permanent confirmation, cleanup, and final running state. A
-separate live failure-path test proves confirmed-commit cancellation restores
-the previous running configuration and that repeated cancellation is harmless.
+two independent mutual-TLS servers. That test proves module-preserving candidate
+replacement, authenticated running and operational readback, pending-verifier
+retry, journal decision and acknowledgements, permanent confirmation, cleanup,
+and final running state. A separate live failure-path test proves confirmed-
+commit cancellation restores the previous running configuration and that
+repeated cancellation is harmless. The external guarded interaction adds a
+real Kea 3.2 Linux/FreeBSD pair: each host is made primary in turn, the local
+primary initiates a standard NETCONF commit, both daemons retain the new image,
+and an unavailable standby rejects the next proposal without changing either
+image. DHCPv4/DHCPv6 allocation, replication, failover, and recovery then pass.
 
 `--peer-recovery FILE` supplies the stable target mapping as a private,
 versioned JSON document. Version 2 binds the exact `(group-id,
@@ -323,8 +348,9 @@ identities retain emergency visibility, and other operators require an explicit
 NACM read rule. This is core transaction state and has no plugin-specific
 branches or provider-dependent interpretation.
 
-Until multi-host evidence is complete, pair-wide atomicity must not be
-advertised as production-ready.
+Pair-wide atomicity may be advertised only for the documented one-group,
+locally owned primary topology. Local-standby initiation and transactions that
+affect several independent groups remain explicit pre-mutation rejections.
 
 The production preparation path currently imposes a deliberate one-group
 limit. If affected plugins compose more than one group, the whole NETCONF

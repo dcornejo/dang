@@ -26,6 +26,11 @@ std::optional<RuntimeSchema> CompileSchema(VectorDiagnosticSink* diagnostics) {
     container system {
       leaf hostname { type string { length "1..32"; } mandatory true; }
       leaf enabled { type boolean; }
+      leaf conditional-required {
+        when "../enabled = 'true'";
+        type string;
+        mandatory true;
+      }
       leaf guarded {
         when "../enabled = 'true'";
         type string;
@@ -431,6 +436,35 @@ TEST(ConfigValidationTest, EvaluatesMustAndWhenWithDeclaredErrors) {
   ASSERT_NE(must, result.findings.end());
   EXPECT_EQ(must->message, "guarded value is too short");
   EXPECT_EQ(must->netconf_error_app_tag, "guarded-too-short");
+}
+
+TEST(ConfigValidationTest, AppliesMandatoryOnlyWhenItsWhenConditionIsTrue) {
+  VectorDiagnosticSink diagnostics;
+  auto schema = CompileSchema(&diagnostics);
+  ASSERT_TRUE(schema);
+  const auto validate = [&](std::string_view enabled,
+                            std::string_view conditional) {
+    auto parsed = ParseDatastoreXml(
+        *schema,
+        "<system xmlns='urn:device'><hostname>x</hostname><enabled>" +
+            std::string(enabled) + "</enabled>" + std::string(conditional) +
+            "<tcp-port>830</tcp-port><interface><name>en0</name>"
+            "</interface></system>");
+    EXPECT_TRUE(parsed.document.has_value());
+    return parsed.document
+               ? ConfigValidator().Validate({*schema, *parsed.document})
+               : ValidationResult{};
+  };
+
+  EXPECT_TRUE(validate("false", "").valid);
+  const ValidationResult missing = validate("true", "");
+  EXPECT_FALSE(missing.valid);
+  EXPECT_TRUE(HasCode(missing.findings,
+                      ValidationCode::kMissingMandatoryNode));
+  EXPECT_TRUE(validate(
+                  "true",
+                  "<conditional-required>present</conditional-required>")
+                  .valid);
 }
 
 TEST(ConfigValidationTest, EvaluatesDynamicPredicateContextAndDescendants) {

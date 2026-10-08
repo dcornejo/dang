@@ -22,8 +22,11 @@ struct PeerPlanVerifier {
 /** Complete candidate and verifier set for one stable peer identity. */
 struct PeerPlanParticipant {
   std::string participant_id;
+  bool local = false;
   std::uint32_t role = DANG_PEER_STANDBY_V1;
   std::uint32_t confirmed_timeout_seconds = 0;
+  /** Namespaces whose complete module images replace remote running data. */
+  std::vector<std::string> module_namespaces;
   std::string candidate_configuration;
   std::vector<PeerPlanVerifier> verifiers;
 };

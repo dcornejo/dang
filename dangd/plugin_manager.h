@@ -50,6 +50,7 @@ struct PluginPeerCandidate {
   std::string provider;
   std::string group_id;
   std::string participant_id;
+  bool local = false;
   std::uint32_t role = DANG_PEER_STANDBY_V1;
   std::uint32_t confirmed_timeout_seconds = 0;
   std::string module_name;

@@ -115,11 +115,13 @@ and TLS I/O waits and message sizes are bounded; DNS resolution and a total
 wall-clock session deadline remain host integration boundaries.
 
 The peer transaction adapter retains one such session from candidate lock
-through complete candidate replacement, validation, persistent confirmed
-commit, authenticated running and operational readback, confirmation or
-cancellation, unlock, and close-session. If an apply reply is lost and the transport closes, the
-pre-decision cancellation path reconnects with the same authenticated endpoint
-and persistent token so the coordinator can still establish rollback.
+through module-preserving candidate reconstruction, validation, persistent
+confirmed commit, authenticated running and operational readback (including
+fresh reads while a verifier reports pending convergence), confirmation or
+cancellation, discard, unlock, and close-session. If an apply reply is lost and
+the transport closes, the pre-decision cancellation path reconnects with the
+same authenticated endpoint and persistent token so the coordinator can still
+establish rollback.
 
 `--username-map AUTHENTICATED=LOCAL` applies an exact mapping after certificate
 field selection. Repeat it for several identities. Without

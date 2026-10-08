@@ -151,7 +151,9 @@ ABI v9 keeps peer topology policy in plugins without giving a plugin transport
 authority. After ordinary `prepare` and `validate`, an affected plugin may
 return complete module-scoped candidates keyed by stable group and participant
 identifiers. Every participant in a group must receive the same module set.
-Dangd rejects duplicate module contributions, mixed roles or timeouts,
+Each contribution also marks whether the participant belongs to this host;
+all contributors must agree and a group has at most one local member. Dangd
+rejects duplicate module contributions, mixed roles, ownership or timeouts,
 cross-module XML, incomplete participant coverage, invalid composed data,
 groups smaller than two, and groups without exactly one primary. Only after
 this generic composition succeeds may the core resolve participant identifiers
@@ -160,13 +162,13 @@ through its endpoint/trust configuration and open sessions.
 The running backend performs that generic collection and composition as part
 of normal commit preparation. It queries only affected plugins, aborts all
 retained preparations if candidate retrieval or composition fails, and reaches
-no hardware apply in that case. The core now resolves every composed identity
-through its private endpoint map, and the generic transaction controller can
-bind one group to TLS participants, plugin verifiers, secure tokens, and the
-durable journal. Remote execution remains disabled until the NETCONF commit
-lifecycle couples its new post-persistence finalization phase to a
-crash-recoverable pending marker and the distributed decision, with NACM policy
-and operator-visible reporting. The core now supplies an authenticated
+no hardware apply in that case. The core resolves every remote identity through
+its private endpoint map and binds one group to TLS participants, plugin
+verifiers, secure tokens, and the durable journal. The local member is executed
+by the outer backend and is never opened as a peer or written into that journal.
+The production path currently supports a local primary, after every remote
+standby is verified; local-standby initiation fails explicitly before mutation.
+The core supplies an authenticated
 participant context that suppresses nested peer discovery for explicitly
 configured controller identities. Plugins neither receive nor inspect that
 context: they run their ordinary local prepare, validate, apply, and rollback
@@ -183,7 +185,11 @@ validates the resulting candidate against the full schema. The plugin's opaque
 JSON verification context is returned only to that same plugin along with
 authenticated running and operational replies. Endpoint addresses,
 credentials, TLS objects, RPC sequencing, durable decisions, and recovery are
-never exposed through the ABI. A plugin must not include dangd-private headers
+never exposed through the ABI. A verifier returns one for acceptance, zero for
+permanent rejection, or minus one while correct configuration is still
+converging. Pending verification obtains fresh authenticated readback under the
+existing transaction deadline and remains fail-closed if it never succeeds. A
+plugin must not include dangd-private headers
 or rely on an undocumented daemon behavior.
 
 ## Build and entry point

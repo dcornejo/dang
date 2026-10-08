@@ -157,6 +157,7 @@ TEST(PeerTransactionTlsTest, RejectsExpiredTransactionBeforeConnecting) {
       {.id = "expired-peer",
        .role = PeerTransactionRole::kPrimary,
        .transport = {.host = "unreachable.invalid", .port = 6513},
+       .module_namespaces = {"urn:example:appliance"},
        .candidate_configuration =
            "<config xmlns='urn:ietf:params:xml:ns:netconf:base:1.0'/>",
        .persistent_commit_id = "expired-token",
@@ -164,7 +165,8 @@ TEST(PeerTransactionTlsTest, RejectsExpiredTransactionBeforeConnecting) {
        .deadline =
            std::chrono::steady_clock::now() - std::chrono::milliseconds(1),
        .verify_replies = [](std::string_view, std::string_view) {
-         return std::optional<std::string>{};
+         return PeerVerificationDecision{
+             PeerVerificationDecision::Disposition::kAccepted, {}};
        }});
 
   const auto error = participant.prepare();
@@ -227,6 +229,7 @@ TEST(PeerTransactionTlsTest,
                                std::uint16_t port, std::string hostname,
                                std::string token) {
     const std::string expected = ">" + hostname + "</";
+    const auto verification_attempts = std::make_shared<int>(0);
     return MakeTlsTransactionParticipant(
         {.id = std::move(id),
          .role = role,
@@ -235,20 +238,30 @@ TEST(PeerTransactionTlsTest,
                        .certificate = certificates / "alice-cert.pem",
                        .private_key = certificates / "alice-key.pem",
                        .trust_anchor = certificates / "ca-cert.pem"},
+         .module_namespaces = {"urn:example:appliance"},
          .candidate_configuration =
              "<config xmlns='urn:ietf:params:xml:ns:netconf:base:1.0'>"
              "<system xmlns='urn:example:appliance'><hostname>" +
              hostname + "</hostname></system></config>",
          .persistent_commit_id = std::move(token),
          .confirmed_timeout_seconds = 60,
-         .verify_replies = [expected](std::string_view running,
-                                      std::string_view operational)
-             -> std::optional<std::string> {
+         .verify_replies = [expected, verification_attempts](
+                               std::string_view running,
+                               std::string_view operational) {
+           if ((*verification_attempts)++ == 0)
+             return PeerVerificationDecision{
+                 PeerVerificationDecision::Disposition::kPending,
+                 "peer state is still converging"};
            if (running.find(expected) == std::string_view::npos)
-             return "authenticated running readback has the wrong hostname";
+             return PeerVerificationDecision{
+                 PeerVerificationDecision::Disposition::kRejected,
+                 "authenticated running readback has the wrong hostname"};
            if (operational.find(expected) == std::string_view::npos)
-             return "authenticated operational readback has the wrong hostname";
-           return std::nullopt;
+             return PeerVerificationDecision{
+                 PeerVerificationDecision::Disposition::kRejected,
+                 "authenticated operational readback has the wrong hostname"};
+           return PeerVerificationDecision{
+               PeerVerificationDecision::Disposition::kAccepted, {}};
          }});
   };
   std::vector<PeerTransactionParticipant> peers;
@@ -290,6 +303,16 @@ TEST(PeerTransactionTlsTest,
                 .ToXml()
                 .find("standby-live"),
             std::string::npos);
+  EXPECT_NE(primary.application->datastores()
+                .Read(yang::netconf::Datastore::kRunning)
+                .ToXml()
+                .find("enable-nacm"),
+            std::string::npos);
+  EXPECT_NE(standby.application->datastores()
+                .Read(yang::netconf::Datastore::kRunning)
+                .ToXml()
+                .find("enable-nacm"),
+            std::string::npos);
   std::filesystem::remove_all(temporary, cleanup_error);
 }
 
@@ -329,6 +352,7 @@ TEST(PeerTransactionTlsTest,
                      .certificate = certificates / "alice-cert.pem",
                      .private_key = certificates / "alice-key.pem",
                      .trust_anchor = certificates / "ca-cert.pem"},
+       .module_namespaces = {"urn:example:appliance"},
        .candidate_configuration = R"xml(
         <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
           <system xmlns="urn:example:appliance">
@@ -338,7 +362,8 @@ TEST(PeerTransactionTlsTest,
        .persistent_commit_id = "cancel-token<&",
        .confirmed_timeout_seconds = 60,
        .verify_replies = [](std::string_view, std::string_view) {
-         return std::nullopt;
+         return PeerVerificationDecision{
+             PeerVerificationDecision::Disposition::kAccepted, {}};
        }});
   const auto prepared = peer.prepare();
   const auto applied = prepared ? std::optional<std::string>{"not attempted"}
@@ -366,10 +391,12 @@ TEST(PeerTransactionTlsTest, RejectsInvalidCandidateBeforeConnecting) {
   PeerTransactionParticipant peer = MakeTlsTransactionParticipant(
       {.id = "invalid-peer",
        .role = PeerTransactionRole::kPrimary,
+       .module_namespaces = {"urn:example:appliance"},
        .candidate_configuration = "<config><broken></config>",
        .persistent_commit_id = "invalid-token",
        .verify_replies = [](std::string_view, std::string_view) {
-         return std::nullopt;
+         return PeerVerificationDecision{
+             PeerVerificationDecision::Disposition::kAccepted, {}};
        }});
   const auto error = peer.prepare();
   ASSERT_TRUE(error);

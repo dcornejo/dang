@@ -30,6 +30,7 @@ yang::config::ValidationFinding Failure(std::string provider,
 }
 
 struct ParticipantBuilder {
+  std::optional<bool> local;
   std::uint32_t role = 0;
   std::uint32_t timeout = 0;
   pugi::xml_document document;
@@ -42,6 +43,22 @@ struct ParticipantBuilder {
     root.append_attribute("xmlns") = kNetconfNamespace.data();
   }
 };
+
+std::optional<std::string> ModuleNamespace(
+    const yang::config::RuntimeSchema& schema, std::string_view module_name) {
+  std::optional<std::string> result;
+  for (std::size_t index = 0; index < schema.size(); ++index) {
+    const auto& node = schema.Get(
+        static_cast<yang::config::RuntimeSchemaNodeId>(index));
+    if (node.module_name != module_name) continue;
+    if (!result) {
+      result = node.name.namespace_uri;
+    } else if (*result != node.name.namespace_uri) {
+      return std::nullopt;
+    }
+  }
+  return result;
+}
 
 }  // namespace
 
@@ -63,6 +80,14 @@ ComposePeerTransactionResult ComposePeerTransactionPlan(
     const ParticipantKey key{contribution.group_id,
                              contribution.participant_id};
     ParticipantBuilder& participant = participants[key];
+    if (!participant.local) {
+      participant.local = contribution.local;
+    } else if (*participant.local != contribution.local) {
+      result.error = Failure(
+          contribution.provider,
+          "peer contributors disagree on local participant ownership");
+      return result;
+    }
     if (participant.role == 0) {
       participant.role = contribution.role;
       participant.timeout = contribution.confirmed_timeout_seconds;
@@ -138,6 +163,7 @@ ComposePeerTransactionResult ComposePeerTransactionPlan(
       return result;
     }
     std::size_t primaries = 0;
+    std::size_t locals = 0;
     ComposedPeerTransactionGroup group{.group_id = group_id};
     for (const ParticipantKey& key : keys) {
       ParticipantBuilder& builder = participants.at(key);
@@ -148,6 +174,7 @@ ComposePeerTransactionResult ComposePeerTransactionPlan(
         return result;
       }
       if (builder.role == DANG_PEER_PRIMARY_V1) ++primaries;
+      if (builder.local.value_or(false)) ++locals;
       std::ostringstream serialized;
       builder.document.save(serialized, "", pugi::format_raw);
       std::string candidate = serialized.str();
@@ -162,8 +189,23 @@ ComposePeerTransactionResult ComposePeerTransactionPlan(
         result.error->netconf_error_app_tag = "peer-plan-invalid";
         return result;
       }
-      PeerPlanParticipant output{
-          key.second, builder.role, builder.timeout, std::move(candidate), {}};
+      PeerPlanParticipant output{.participant_id = key.second,
+                                 .local = builder.local.value_or(false),
+                                 .role = builder.role,
+                                 .confirmed_timeout_seconds = builder.timeout,
+                                 .module_namespaces = {},
+                                 .candidate_configuration =
+                                     std::move(candidate)};
+      for (const std::string& module : builder.modules) {
+        const auto module_namespace = ModuleNamespace(schema, module);
+        if (!module_namespace || module_namespace->empty()) {
+          result.error = Failure(
+              group_id, "peer module " + module +
+                            " has no unique data namespace");
+          return result;
+        }
+        output.module_namespaces.push_back(*module_namespace);
+      }
       for (auto& [provider, context] : builder.verifiers)
         output.verifiers.push_back({provider, context});
       group.participants.push_back(std::move(output));
@@ -171,6 +213,11 @@ ComposePeerTransactionResult ComposePeerTransactionPlan(
     if (primaries != 1) {
       result.error = Failure(
           group_id, "peer transaction group requires exactly one primary");
+      return result;
+    }
+    if (locals > 1) {
+      result.error = Failure(
+          group_id, "peer transaction group has more than one local participant");
       return result;
     }
     result.groups.push_back(std::move(group));

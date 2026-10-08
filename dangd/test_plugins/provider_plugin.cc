@@ -174,6 +174,7 @@ int PeerCandidateAt(void*, void* opaque, size_t index,
                         : multiple_groups && index >= 2 ? "second-group"
                                                         : "test-group",
                 primary ? "primary" : "standby",
+                false,
                 primary ? DANG_PEER_PRIMARY_V1 : DANG_PEER_STANDBY_V1,
                 60, "dangd-test-provider", kConfiguration,
                 "{\"expected_status\":\"ready\"}"};
@@ -182,6 +183,12 @@ int PeerCandidateAt(void*, void* opaque, size_t index,
 
 int VerifyPeer(void*, void*, const DangPeerVerificationV1* verification,
                DangPluginErrorV1* error) {
+  if (verification &&
+      std::string_view(verification->operational_reply_xml).find("waiting") !=
+          std::string_view::npos) {
+    if (error) error->message = "peer is still converging";
+    return -1;
+  }
   if (!verification ||
       std::string_view(verification->verification_context_json) !=
           "{\"expected_status\":\"ready\"}" ||

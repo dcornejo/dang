@@ -103,15 +103,22 @@ void AppendDigestField(std::string_view value, std::string* material) {
 std::optional<std::string> PeerProposalDigest(
     const ComposedPeerTransactionGroup& group) {
   std::string material;
-  AppendDigestField("dangd-peer-proposal-v1", &material);
+  AppendDigestField("dangd-peer-proposal-v2", &material);
   AppendDigestField(group.group_id, &material);
   AppendDigestField(std::to_string(group.participants.size()), &material);
   for (const PeerPlanParticipant& participant : group.participants) {
     AppendDigestField("participant", &material);
     AppendDigestField(participant.participant_id, &material);
+    AppendDigestField(participant.local ? "local" : "remote", &material);
     AppendDigestField(std::to_string(participant.role), &material);
     AppendDigestField(std::to_string(participant.confirmed_timeout_seconds),
                       &material);
+    AppendDigestField(std::to_string(participant.module_namespaces.size()),
+                      &material);
+    for (const std::string& module_namespace :
+         participant.module_namespaces) {
+      AppendDigestField(module_namespace, &material);
+    }
     AppendDigestField(participant.candidate_configuration, &material);
     AppendDigestField(std::to_string(participant.verifiers.size()), &material);
     for (const PeerPlanVerifier& verifier : participant.verifiers) {
@@ -346,6 +353,20 @@ EnglishConfigurationBackend::PrepareReplacement(
       }
       for (const ComposedPeerTransactionGroup& group : composed.groups) {
         for (const PeerPlanParticipant& participant : group.participants) {
+          if (participant.local) {
+            if (participant.role != DANG_PEER_PRIMARY_V1) {
+              yang::config::ValidationFinding finding;
+              finding.message =
+                  "local standby initiation is not yet hardware-order safe";
+              finding.module_name = "dangd";
+              finding.netconf_error_tag = "operation-not-supported";
+              finding.netconf_error_app_tag =
+                  "peer-local-standby-unsupported";
+              plugins_->Abort();
+              return finding;
+            }
+            continue;
+          }
           const std::string identity =
               PeerIdentity(group.group_id, participant.participant_id);
           if (peer_targets_.contains(identity)) continue;

@@ -65,6 +65,7 @@ PeerTransactionControllerPrepareResult PeerTransactionController::Prepare(
     return {.result = std::move(failed)};
   }
   for (const PeerPlanParticipant& participant : group.participants) {
+    if (participant.local) continue;
     if (std::chrono::seconds(participant.confirmed_timeout_seconds) <=
         total_timeout_) {
       failed.message =
@@ -92,6 +93,7 @@ PeerTransactionControllerPrepareResult PeerTransactionController::Prepare(
                                  .proposal_digest = proposal_digest};
   journal_state.participants.reserve(group.participants.size());
   for (const PeerPlanParticipant& planned : group.participants) {
+    if (planned.local) continue;
     const std::string identity =
         PeerIdentity(group.group_id, planned.participant_id);
     const auto target = targets.find(identity);
@@ -128,6 +130,7 @@ PeerTransactionControllerPrepareResult PeerTransactionController::Prepare(
         .id = material.identity,
         .role = role,
         .transport = material.target->transport,
+        .module_namespaces = planned.module_namespaces,
         .candidate_configuration = planned.candidate_configuration,
         .persistent_commit_id = material.persistent_id,
         .confirmed_timeout_seconds = planned.confirmed_timeout_seconds,
@@ -136,9 +139,10 @@ PeerTransactionControllerPrepareResult PeerTransactionController::Prepare(
             [verify_peer, verifiers, group_id = group.group_id,
              participant_id = planned.participant_id](
                 std::string_view running,
-                std::string_view operational) -> std::optional<std::string> {
+                std::string_view operational) -> PeerVerificationDecision {
           if (!verify_peer && !verifiers.empty())
-            return "peer verifier callback is unavailable";
+            return {PeerVerificationDecision::Disposition::kRejected,
+                    "peer verifier callback is unavailable"};
           for (const PeerPlanVerifier& verifier : verifiers) {
             const auto finding = verify_peer(PluginPeerVerification{
                 .provider = verifier.provider,
@@ -153,10 +157,15 @@ PeerTransactionControllerPrepareResult PeerTransactionController::Prepare(
                   " rejected peer verification: " + finding->message;
               if (!finding->instance_path.empty())
                 message += " at " + finding->instance_path;
-              return message;
+              return {
+                  finding->netconf_error_app_tag ==
+                          "peer-verification-pending"
+                      ? PeerVerificationDecision::Disposition::kPending
+                      : PeerVerificationDecision::Disposition::kRejected,
+                  std::move(message)};
             }
           }
-          return std::nullopt;
+          return {PeerVerificationDecision::Disposition::kAccepted, {}};
         },
     }));
   }

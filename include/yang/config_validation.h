@@ -247,6 +247,16 @@ class EffectiveDataView {
     return roots_;
   }
   [[nodiscard]] std::size_t size() const noexcept { return nodes_.size(); }
+  /**
+   * Returns a copy with one valueless node used to evaluate an absent `when`.
+   *
+   * @param schema Runtime node represented by the placeholder.
+   * @param parent Effective parent, or no value for a top-level node.
+   * @param placeholder Receives the new effective-node identity.
+   */
+  [[nodiscard]] EffectiveDataView WithPlaceholder(
+      RuntimeSchemaNodeId schema, std::optional<EffectiveNodeId> parent,
+      EffectiveNodeId* placeholder) const;
 
  private:
   std::vector<EffectiveNode> nodes_;

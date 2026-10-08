@@ -135,8 +135,13 @@ invokes this lifecycle: remote preparation and verification precede local
 apply, the marker and new running tree become durable before COMMIT selection,
 and pre-persistence failure cancels remote work. A failed post-persistence
 decision write retains PREPARED for startup recovery. Native Debian and
-FreeBSD package installation is validated; pair-wide atomicity remains
-unadvertised until multi-host evidence is complete.
+FreeBSD package installation is validated. Guarded Linux/FreeBSD Kea 3.2
+evidence now exercises standard NETCONF pair-wide commits with either host
+assigned the primary role, authenticated convergence, unavailable-standby
+rejection with unchanged state, DHCPv4/DHCPv6 allocation, replication,
+automatic failover, and recovery. The supported initiation shape is a local
+primary with remote standbys; a local standby fails before mutation until safe
+ordering for that case is implemented.
 Transactions affecting several peer groups are
 currently rejected before mutation with `peer-group-limit`; dangd does not
 sequence independent group journals and misrepresent them as atomic.
@@ -164,8 +169,9 @@ none of it without an explicit read rule, while host-configured recovery users
 retain diagnostic access. Private endpoint, credential, transaction-id,
 proposal-digest, and persistent-token material is never modeled. This closes
 the core observability, authorization, fail-closed degraded-peer policy,
-guarded CLI, and native packaging parts of the pair-wide integration gap;
-multi-host platform evidence remains. `dangctl --edit-config` uses only
+guarded CLI, native packaging, and cross-platform evidence parts of the
+documented one-group/local-primary pair-wide integration path. `dangctl
+--edit-config` uses only
 standard NETCONF candidate locking, edit, validation, commit, and unlock
 operations against dangd, so it receives the same NACM, YANG, plugin, ordering,
 peer-transaction, durability, and rollback protections as any other

@@ -34,8 +34,8 @@ std::vector<std::size_t> ApplyOrder(
 
 std::optional<std::string> ValidateParticipants(
     const std::vector<Participant>& participants, bool require_all_callbacks) {
-  if (participants.size() < 2)
-    return "peer transaction requires at least two participants";
+  if (participants.empty())
+    return "peer transaction requires at least one remote participant";
   std::set<std::string> ids;
   std::size_t primary_count = 0;
   for (const Participant& participant : participants) {
@@ -52,15 +52,17 @@ std::optional<std::string> ValidateParticipants(
       return participant.id + ": peer transaction callbacks are incomplete";
     }
   }
-  if (primary_count != 1)
-    return "peer transaction requires exactly one primary participant";
+  // The composed group has exactly one primary, but that primary can be the
+  // local participant and is deliberately absent from this remote subset.
+  if (primary_count > 1)
+    return "remote peer transaction has more than one primary participant";
   return std::nullopt;
 }
 
 std::optional<std::string> ValidateAbortParticipants(
     const std::vector<Participant>& participants) {
-  if (participants.size() < 2)
-    return "peer transaction requires at least two participants";
+  if (participants.empty())
+    return "peer transaction requires at least one remote participant";
   std::set<std::string> ids;
   std::size_t primary_count = 0;
   for (const Participant& participant : participants) {
@@ -72,8 +74,8 @@ std::optional<std::string> ValidateAbortParticipants(
       return participant.id +
              ": peer transaction cancellation callback is incomplete";
   }
-  if (primary_count != 1)
-    return "peer transaction requires exactly one primary participant";
+  if (primary_count > 1)
+    return "remote peer transaction has more than one primary participant";
   return std::nullopt;
 }
 
