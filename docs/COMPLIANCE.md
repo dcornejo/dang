@@ -963,7 +963,12 @@ Linux rtnetlink multipath routes are expanded into separate stable route-list
 entries for each native base nexthop, including its gateway/interface identity
 and dead-path installed state. This avoids schema-invalid empty nexthops while
 preserving parallel paths without advertising the optional RFC load-balance
-feature. Routes supplied through Linux `RTA_NH_ID` are joined with a native
+feature. A dead member carries the exact RFC-defined `unresolved-nexthop`
+reason in operational route status. Later native installed-state transitions
+emit `resolved-nexthop` or `unresolved-nexthop` in `route-change`; additions,
+removals, and property changes whose cause is unavailable omit the optional
+reason list instead of claiming an inferred cause. Routes supplied through
+Linux `RTA_NH_ID` are joined with a native
 `RTM_GETNEXTHOP` inventory. Simple objects and recursively referenced groups
 expand to the same base gateway/interface or discard representation, while
 missing, cyclic, encapsulated, FDB, wrong-family, and interrupted results are

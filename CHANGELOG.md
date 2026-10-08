@@ -8,6 +8,12 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded the external RFC 8431 provider's exact native nexthop transition
+  reasons. Dead Linux multipath members now expose `unresolved-nexthop` in
+  operational state, and installed-state transitions carry the corresponding
+  resolved or unresolved reason in notifications without guessing causes for
+  other route changes.
+
 - Recorded the external RFC 8431 provider's fail-closed repeated-route
   behavior. `route-add` now reports the standard error code 1 from live
   inventory, rejects duplicate native destination keys, and uses exclusive

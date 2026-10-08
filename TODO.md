@@ -41,7 +41,9 @@ stays in this file with its remaining work rewritten precisely.
   kernel-owned. `route-add` now inventories the live RIB, returns RFC error
   code 1 for repeated destinations, uses exclusive native creation, and
   rejects modeled destination-key collisions before they can overwrite or
-  collapse routes.
+  collapse routes. Native nexthop installed-state transitions now preserve the
+  exact RFC `resolved-nexthop` and `unresolved-nexthop` reasons in operational
+  state and notifications without inventing reasons for unrelated changes.
   Complete the remaining kernel route-kind and RFC attribute fidelity, then
   advertise and test the module end to end.
 - [ ] Implement and document a separately packaged RFC 9249 NTP plugin using
