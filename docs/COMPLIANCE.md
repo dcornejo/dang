@@ -1001,18 +1001,21 @@ unrepresentable local-only replacement before deleting the original, and
 restores the observed before-image when installation fails. `rib-add` validates
 Linux logical tables or existing FreeBSD FIBs and rejects unsupported RPF
 enforcement; `rib-delete` uses a compensated plan to empty the observed RIB.
-`nh-add` and `nh-delete` allocate and remove portable base nexthops in a
-thread-safe, per-RIB process registry.
+`nh-add` and `nh-delete` allocate and remove portable gateway, interface,
+combined gateway/interface, `discard`, and `discard-with-error` base nexthops
+in a thread-safe, per-RIB process registry. Kernel-owned `receive` is not
+available as a reusable configured object.
 Live `nh-add` validates the RIB identity and nexthop family against the active
 platform mapping before allocation or persistence; an unknown or wrong-family
 name returns a modeled failure without consuming an identifier or writing data.
 The registry now restores its private atomic sidecar at startup and makes
 `nh-add`/`nh-delete` durable before acknowledgement; corrupt recovery state and
 write failures fail closed, with object mutation rolled back on write failure.
-`rib-add` also persists the modeled RIB address family. Interface-only reusable
-nexthops consume that explicit context and therefore appear in operational data
-before any native route exists; an absent or conflicting family fails as a
-modeled operation rather than being inferred from host interface state.
+`rib-add` also persists the modeled RIB address family. Interface-only and
+special reusable nexthops consume that explicit context and therefore appear
+in operational data before any native route exists; an absent or conflicting
+family fails as a modeled operation rather than being inferred from host
+interface state.
 The durable RIB registration itself is now published even when it has no native
 route or reusable nexthop, and it reappears after restart. Native observation
 and registry capture use one imperative-RPC serialization epoch so an
@@ -1025,8 +1028,9 @@ reports any compensation failure. Its identifiers are represented in live
 operational RIB state.
 Durable and datastore route-to-nexthop binding identities include the modeled
 `route-index`, so parallel routes sharing a RIB, family, and prefix retain
-independent references through reconciliation and restart. Version-2 sidecars
-persist this key; version-1 sidecars remain readable as index-zero bindings.
+independent references through reconciliation and restart. Version-3 sidecars
+also retain the reusable special identity; version 2 introduced the modeled
+route index, and version-1 and version-2 sidecars remain readable.
 Configuration commits, `route-add`, and prefix-selected `route-update` resolve
 identifiers through `nexthop-ref` with per-RIB isolation, while reference
 lifetime is enforced across datastore prepare, apply, rollback, and release.
@@ -1048,8 +1052,9 @@ The second RFC notification,
 `nexthop-resolution-status-change`, joins reusable imperative and datastore
 bindings with installed native routes and emits transitions containing the
 complete supported base nexthop. Resolution requires the bound RIB, family,
-prefix, and every supplied gateway/interface component to match an installed
-path; an unrelated parallel path cannot produce a false resolved transition.
+prefix, and every supplied gateway, interface, or special component to match
+an installed path; an unrelated parallel path cannot produce a false resolved
+transition.
 This resolution definition is deliberately
 limited to the portable reusable-nexthop subset. Complete state fidelity and
 end-to-end interoperability evidence remain before a substantial RFC 8431

@@ -36,7 +36,9 @@ stays in this file with its remaining work rewritten precisely.
   misrepresenting an ordinary forwarding route as a kernel-owned receive path;
   real native local routes remain observable read-only state. Direct `discard`
   and `discard-with-error` nexthops are configurable, observable, and
-  reversible on both native backends, while `receive` remains kernel-owned.
+  reversible on both native backends, including durable reusable `nh-add`
+  objects and exact `nexthop-ref` resolution, while `receive` remains
+  kernel-owned.
   Complete the remaining kernel route-kind and RFC attribute fidelity, then
   advertise and test the module end to end.
 - [ ] Implement and document a separately packaged RFC 9249 NTP plugin using

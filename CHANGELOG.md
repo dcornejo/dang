@@ -8,6 +8,13 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Updated the RFC 8431 compliance ledger and roadmap after the external RIB
+  provider extended durable reusable `nh-add` objects and exact
+  `nexthop-ref` resolution to writable `discard` and `discard-with-error`
+  nexthops. The documentation records version-3 private persistence,
+  special-aware resolution notifications, backward readability, and the
+  continued kernel ownership of `receive`.
+
 - Updated the RFC 8431 compliance ledger and roadmap for the external RIB
   provider's writable, reversible `discard` and `discard-with-error` direct
   nexthops on Linux and FreeBSD. The documentation retains kernel-owned
