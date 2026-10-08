@@ -8,6 +8,13 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded the external RFC 8431 provider's fail-closed repeated-route
+  behavior. `route-add` now reports the standard error code 1 from live
+  inventory, rejects duplicate native destination keys, and uses exclusive
+  Linux and FreeBSD creation so an existing route cannot be silently replaced
+  across the final race window. FreeBSD safety and operational polling now
+  cover every kernel FIB, including unaliased built-in RIB names.
+
 - Updated the RFC 8431 compliance ledger and roadmap after the external RIB
   provider extended durable reusable `nh-add` objects and exact
   `nexthop-ref` resolution to writable `discard` and `discard-with-error`

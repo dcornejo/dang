@@ -946,8 +946,9 @@ against that contract before restoring the registry. Incompatible legacy
 numeric state fails startup with an explicit family-qualified migration error
 rather than entering service with ambiguous operational identities.
 Operational and notification reads translate native names back to their unique
-modeled names, and FreeBSD polls FIB 0 plus each configured mapped FIB
-independently. FreeBSD interface-only nexthops now use the selected native
+modeled names, and FreeBSD polls every kernel FIB independently, including
+unaliased RIBs addressed through the built-in family-qualified names. FreeBSD
+interface-only nexthops now use the selected native
 interface index directly and work on unnumbered or multihomed interfaces
 without guessing a local gateway address. The provider publishes partial observed operational data
 by reading Linux rtnetlink or FreeBSD `NET_RT_DUMP` directly. It emits IPv4/IPv6
@@ -994,6 +995,12 @@ an old gateway, interface, reference, or special identity from surviving the
 replacement.
 The provider implements `route-add` for its portable route subset with
 per-member success/failure accounting and optional RFC-shaped failure detail.
+It reads the live modeled inventory before mutation and returns the RFC-defined
+error code 1 for an existing RIB/family/destination or for a duplicate that
+succeeded earlier in the same batch. Datastore preparation rejects two route
+indexes that collapse onto that native key. The final Linux and FreeBSD create
+request is exclusive, closing the inventory-to-apply race without replacing
+an independently created route.
 `route-delete` resolves prefix requests against live kernel state and deletes
 only an unambiguous observed match. Prefix-selected `route-update` replaces a
 portable base nexthop or supported route attributes, rejects an

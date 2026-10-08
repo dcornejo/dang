@@ -23,7 +23,7 @@ stays in this file with its remaining work rewritten precisely.
   nexthop resolution transitions are implemented through ABI v8; explicit
   family-aware modeled-name mappings now cover dual-stack Linux tables and
   FreeBSD FIBs without duplicate RFC list keys,
-  including direct observation of every mapped FreeBSD FIB. Durable empty RIB
+  including direct observation of every FreeBSD FIB. Durable empty RIB
   registrations now remain visible in operational state before their first
   route or nexthop and after restart. Linux ECMP observations now preserve
   each native base-nexthop path without emitting invalid empty nexthops,
@@ -38,7 +38,10 @@ stays in this file with its remaining work rewritten precisely.
   and `discard-with-error` nexthops are configurable, observable, and
   reversible on both native backends, including durable reusable `nh-add`
   objects and exact `nexthop-ref` resolution, while `receive` remains
-  kernel-owned.
+  kernel-owned. `route-add` now inventories the live RIB, returns RFC error
+  code 1 for repeated destinations, uses exclusive native creation, and
+  rejects modeled destination-key collisions before they can overwrite or
+  collapse routes.
   Complete the remaining kernel route-kind and RFC attribute fidelity, then
   advertise and test the module end to end.
 - [ ] Implement and document a separately packaged RFC 9249 NTP plugin using
