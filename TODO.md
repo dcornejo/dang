@@ -34,9 +34,11 @@ stays in this file with its remaining work rewritten precisely.
   ID and group topology required for exact rollback. Configured routes and
   imperative RPCs now reject `local-only=true` before mutation instead of
   misrepresenting an ordinary forwarding route as a kernel-owned receive path;
-  real native local routes remain observable read-only state. Complete the
-  remaining kernel route-kind and RFC attribute fidelity, then advertise and
-  test the module end to end.
+  real native local routes remain observable read-only state. Direct `discard`
+  and `discard-with-error` nexthops are configurable, observable, and
+  reversible on both native backends, while `receive` remains kernel-owned.
+  Complete the remaining kernel route-kind and RFC attribute fidelity, then
+  advertise and test the module end to end.
 - [ ] Implement and document a separately packaged RFC 9249 NTP plugin using
   the pinned `ietf-ntp@2022-07-05` module. Cover configuration and NMDA
   operational state for NTPv4 and the model's NTPv3 compatibility, including

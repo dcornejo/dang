@@ -982,9 +982,16 @@ closes the prior gap where the value was accepted but installed as an ordinary
 forwarding route. Native local, blackhole, and error-reject routes are
 represented with the RFC 8431 `receive`, `discard`, and `discard-with-error`
 special nexthops.
-Because portable native mutation for those kernel-owned route types is not
-implemented, route delete/update rejects them with reserved error code 0 and
-whole-RIB deletion fails before applying any partial change.
+Direct `discard` and `discard-with-error` nexthops are accepted by
+configuration, `route-add`, and `route-update`; they are installed, observed,
+deleted, and reversibly compensated through acknowledged native route-netlink
+operations on Linux and FreeBSD. FreeBSD uses the selected address family's
+standard loopback gateway as an unmodeled native requirement. The `receive`
+identity remains kernel-owned: route delete/update rejects it with reserved
+error code 0 and whole-RIB deletion fails before applying any partial change.
+Changing a route's base nexthop replaces the complete YANG choice, preventing
+an old gateway, interface, reference, or special identity from surviving the
+replacement.
 The provider implements `route-add` for its portable route subset with
 per-member success/failure accounting and optional RFC-shaped failure detail.
 `route-delete` resolves prefix requests against live kernel state and deletes

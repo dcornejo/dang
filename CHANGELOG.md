@@ -8,6 +8,12 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Updated the RFC 8431 compliance ledger and roadmap for the external RIB
+  provider's writable, reversible `discard` and `discard-with-error` direct
+  nexthops on Linux and FreeBSD. The documentation retains kernel-owned
+  `receive` routes and the remaining route-kind and attribute fidelity as
+  explicit boundaries.
+
 - Completed the generic production peer-transaction path for locally owned
   primaries. ABI v9 now marks the one local participant, composes authoritative
   module-scoped images while preserving unrelated remote configuration,
