@@ -33,9 +33,10 @@ stays in this file with its remaining work rewritten precisely.
   changes reach the generic tracker. The portable parser now accepts the
   feature-enabled `nexthop-lb` structure, validates and canonicalizes its
   reusable members and 1-through-99 weights, and retains every member binding
-  for the datastore route. Native execution and rollback, operational XML,
-  and feature advertisement remain before the optional load-balance feature is
-  complete. Object-backed routes remain
+  for the datastore route. Exact Linux and FreeBSD native execution plus
+  compensated plugin rollback are implemented and covered by isolated live
+  tests. Weighted operational XML and feature advertisement remain before the
+  optional load-balance feature is complete. Object-backed routes remain
   operational/read-only because the base model view cannot preserve the object
   ID and group topology required for exact rollback. Configured routes and
   imperative RPCs now reject `local-only=true` before mutation instead of

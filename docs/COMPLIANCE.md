@@ -967,8 +967,10 @@ The feature-enabled portable parser now accepts the RFC `nexthop-lb` list,
 resolves every member against the reusable-nexthop registry in the selected
 RIB, canonicalizes member order, enforces the schema's 1-through-99 weight
 range, and retains all member bindings for the datastore route lifetime. Both
-native validators still reject that form at its exact modeled path before any
-hardware plan is produced.
+native validators accept the resolved portable form. Linux writes the complete
+member set in one bounded `RTA_MULTIPATH` request. FreeBSD uses acknowledged
+per-path requests and reverses completed members if a later request fails; the
+plugin action retains the exact modeled route for transaction rollback.
 It does not yet represent every kernel route kind or every RFC
 8431 attribute.
 Linux rtnetlink multipath routes are expanded into separate stable route-list
@@ -988,10 +990,12 @@ omitted or fail closed instead of producing partial XML. A native namespace
 test covers a real weighted two-member object group; a FreeBSD VNET test covers
 two equal-metric paths on separate interfaces. Both require exact weights 2
 and 3 from the native observer. The portable parser and reference-lifetime
-layer now preserve the modeled weighted members, but those values are not yet
-serialized as operational load-balance XML, applied natively, or rollback-safe.
-The optional load-balance feature therefore remains unadvertised until it is
-implemented end to end. Object-backed routes are
+layer now preserve the modeled weighted members, apply them natively, and roll
+them back through the ordinary plugin transaction. A second isolated test on
+each platform drives that lifecycle through the loadable ABI provider and its
+reusable-nexthop registry. Those values are not yet serialized as operational
+load-balance XML. The optional load-balance feature therefore remains
+unadvertised until that final projection is implemented. Object-backed routes are
 published as operational/read-only because the
 base view cannot retain the native ID and group topology necessary to recreate
 the exact kernel object relationship during rollback; mutation therefore fails
