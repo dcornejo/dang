@@ -8,6 +8,13 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded completion of the external RFC 8431 provider's optional
+  `nexthop-load-balance` feature. Managed weighted routes now round-trip with
+  their durable route index and reusable-nexthop IDs; external native ECMP
+  routes use deterministic snapshot-local IDs. Exact weighted operational XML,
+  feature advertisement, direct schema validation, and isolated Linux and
+  FreeBSD apply/readback/rollback tests close the load-balance roadmap item.
+
 - Recorded the external RFC 8431 provider's reversible native weighted-route
   support. Feature-enabled `nexthop-lb` configuration now resolves and retains
   every reusable member, applies exact weights with Linux `RTA_MULTIPATH` or

@@ -973,13 +973,17 @@ per-path requests and reverses completed members if a later request fails; the
 plugin action retains the exact modeled route for transaction rollback.
 It does not yet represent every kernel route kind or every RFC
 8431 attribute.
-Linux rtnetlink multipath routes are expanded into separate stable route-list
-entries for each native base nexthop, including its gateway/interface identity
-and dead-path installed state. This avoids schema-invalid empty nexthops while
-preserving parallel paths without advertising the optional RFC load-balance
-feature. A dead member carries the exact RFC-defined `unresolved-nexthop`
-reason in operational route status. Later native installed-state transitions
-emit `resolved-nexthop` or `unresolved-nexthop` in `route-change`; additions,
+Linux rtnetlink and FreeBSD multipath paths for one destination are projected
+as one stable route-list entry with the feature-enabled RFC
+`nexthop-load-balance` structure. Managed routes retain their configured route
+index and durable reusable-nexthop IDs. External routes have no datastore
+identity, so deterministic snapshot-local member IDs are published above the
+durable registry range. Exact native weights in the schema's 1-through-99
+range are retained; unrepresentable weights remain separate base routes rather
+than producing invalid XML. A dead member carries the exact RFC-defined
+`unresolved-nexthop` reason in operational route status. Later native
+installed-state transitions emit `resolved-nexthop` or
+`unresolved-nexthop` in `route-change`; additions,
 removals, and property changes whose cause is unavailable omit the optional
 reason list instead of claiming an inferred cause. Routes supplied through
 Linux `RTA_NH_ID` are joined with a native
@@ -993,9 +997,10 @@ and 3 from the native observer. The portable parser and reference-lifetime
 layer now preserve the modeled weighted members, apply them natively, and roll
 them back through the ordinary plugin transaction. A second isolated test on
 each platform drives that lifecycle through the loadable ABI provider and its
-reusable-nexthop registry. Those values are not yet serialized as operational
-load-balance XML. The optional load-balance feature therefore remains
-unadvertised until that final projection is implemented. Object-backed routes are
+reusable-nexthop registry, requires durable IDs and exact weights in operational
+XML, and verifies their removal after rollback. The feature-enabled fixture
+passes direct YANG validation, so the plugin advertises
+`nexthop-load-balance`. Object-backed routes are
 published as operational/read-only because the
 base view cannot retain the native ID and group topology necessary to recreate
 the exact kernel object relationship during rollback; mutation therefore fails

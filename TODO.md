@@ -35,11 +35,13 @@ stays in this file with its remaining work rewritten precisely.
   reusable members and 1-through-99 weights, and retains every member binding
   for the datastore route. Exact Linux and FreeBSD native execution plus
   compensated plugin rollback are implemented and covered by isolated live
-  tests. Weighted operational XML and feature advertisement remain before the
-  optional load-balance feature is complete. Object-backed routes remain
-  operational/read-only because the base model view cannot preserve the object
-  ID and group topology required for exact rollback. Configured routes and
-  imperative RPCs now reject `local-only=true` before mutation instead of
+  tests. Weighted operational XML now preserves one modeled route, exact
+  weights, and durable managed member identities; external native groups use
+  deterministic snapshot-local identities. The plugin advertises the optional
+  feature after direct schema and native round-trip validation. Object-backed
+  routes remain operational/read-only because the base model view cannot
+  preserve the object ID and group topology required for exact rollback.
+  Configured routes and imperative RPCs now reject `local-only=true` before mutation instead of
   misrepresenting an ordinary forwarding route as a kernel-owned receive path;
   real native local routes remain observable read-only state. Direct `discard`
   and `discard-with-error` nexthops are configurable, observable, and
