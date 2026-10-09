@@ -8,6 +8,13 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded the external RFC 8431 provider's native ECMP weight foundation.
+  Linux classic multipath and persistent nexthop groups plus FreeBSD ECMP paths
+  now retain exact weights in the internal observation contract, and
+  weight-only changes reach the generic tracker. The compliance ledger keeps
+  XML exposure, writable load balancing, rollback, and feature advertisement
+  open until the optional model feature is implemented end to end.
+
 - Recorded the external RFC 8431 provider's corrected FreeBSD route-preference
   fidelity. Observation now reads the native route metric written through
   `NL_RTA_PRIORITY` instead of conflating it with the separate ECMP path

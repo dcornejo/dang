@@ -958,8 +958,11 @@ inactive;
 gateway-plus-interface nexthops use the RFC-defined combined address-family
 container and both IPv4 and IPv6 forms pass direct YANG operational-data
 validation. Linux `RTA_PRIORITY` and FreeBSD `rmx_metric` carry RFC 8431
-route preference in both mutation and observation. FreeBSD `rmx_weight` is a
-distinct ECMP path weight and is no longer misreported as route preference.
+route preference in both mutation and observation. The internal observation
+contract now preserves native ECMP weights independently: Linux decodes
+classic multipath and complete two-byte nexthop-group weights, and FreeBSD
+reads `rmx_weight`. Weight-only changes reach the generic route tracker without
+changing route identity.
 It does not yet represent every kernel route kind or every RFC
 8431 attribute.
 Linux rtnetlink multipath routes are expanded into separate stable route-list
@@ -976,9 +979,12 @@ Linux `RTA_NH_ID` are joined with a native
 expand to the same base gateway/interface or discard representation, while
 missing, cyclic, encapsulated, FDB, wrong-family, and interrupted results are
 omitted or fail closed instead of producing partial XML. A native namespace
-test covers a real weighted two-member object group. Native ECMP weights remain
-unrepresented until the optional load-balance feature is implemented end to
-end. Object-backed routes are published as operational/read-only because the
+test covers a real weighted two-member object group; a FreeBSD VNET test covers
+two equal-metric paths on separate interfaces. Both require exact weights 2
+and 3 from the native observer. Those internal values are not yet serialized,
+writable, or rollback-safe, so the optional load-balance feature remains
+unadvertised until it is implemented end to end. Object-backed routes are
+published as operational/read-only because the
 base view cannot retain the native ID and group topology necessary to recreate
 the exact kernel object relationship during rollback; mutation therefore fails
 closed rather than installing an approximation.

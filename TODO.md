@@ -28,8 +28,11 @@ stays in this file with its remaining work rewritten precisely.
   route or nexthop and after restart. Linux ECMP observations now preserve
   each native base-nexthop path without emitting invalid empty nexthops,
   including recursive expansion of simple and grouped kernel nexthop-object
-  IDs through `RTM_GETNEXTHOP`; native weights remain absent until the optional
-  load-balance feature is implemented end to end. Object-backed routes remain
+  IDs through `RTM_GETNEXTHOP`. Native Linux and FreeBSD weights are now
+  preserved exactly in the internal observation contract and weight-only
+  changes reach the generic tracker, but the values remain absent from XML and
+  configuration until the optional load-balance feature is implemented end to
+  end. Object-backed routes remain
   operational/read-only because the base model view cannot preserve the object
   ID and group topology required for exact rollback. Configured routes and
   imperative RPCs now reject `local-only=true` before mutation instead of
