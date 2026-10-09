@@ -8,6 +8,14 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded the external RFC 8431 provider's portable weighted-nexthop
+  foundation. It now parses and canonicalizes feature-enabled `nexthop-lb`
+  configuration, resolves every member through the reusable-nexthop registry,
+  and retains several member bindings for one datastore route. Native Linux
+  and FreeBSD validation still rejects that form at its modeled path, and the
+  optional feature remains unadvertised pending exact mutation, rollback, and
+  operational projection.
+
 - Recorded the external RFC 8431 provider's native ECMP weight foundation.
   Linux classic multipath and persistent nexthop groups plus FreeBSD ECMP paths
   now retain exact weights in the internal observation contract, and

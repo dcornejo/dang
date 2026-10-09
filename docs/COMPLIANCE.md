@@ -963,6 +963,12 @@ contract now preserves native ECMP weights independently: Linux decodes
 classic multipath and complete two-byte nexthop-group weights, and FreeBSD
 reads `rmx_weight`. Weight-only changes reach the generic route tracker without
 changing route identity.
+The feature-enabled portable parser now accepts the RFC `nexthop-lb` list,
+resolves every member against the reusable-nexthop registry in the selected
+RIB, canonicalizes member order, enforces the schema's 1-through-99 weight
+range, and retains all member bindings for the datastore route lifetime. Both
+native validators still reject that form at its exact modeled path before any
+hardware plan is produced.
 It does not yet represent every kernel route kind or every RFC
 8431 attribute.
 Linux rtnetlink multipath routes are expanded into separate stable route-list
@@ -981,9 +987,11 @@ missing, cyclic, encapsulated, FDB, wrong-family, and interrupted results are
 omitted or fail closed instead of producing partial XML. A native namespace
 test covers a real weighted two-member object group; a FreeBSD VNET test covers
 two equal-metric paths on separate interfaces. Both require exact weights 2
-and 3 from the native observer. Those internal values are not yet serialized,
-writable, or rollback-safe, so the optional load-balance feature remains
-unadvertised until it is implemented end to end. Object-backed routes are
+and 3 from the native observer. The portable parser and reference-lifetime
+layer now preserve the modeled weighted members, but those values are not yet
+serialized as operational load-balance XML, applied natively, or rollback-safe.
+The optional load-balance feature therefore remains unadvertised until it is
+implemented end to end. Object-backed routes are
 published as operational/read-only because the
 base view cannot retain the native ID and group topology necessary to recreate
 the exact kernel object relationship during rollback; mutation therefore fails
