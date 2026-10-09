@@ -8,6 +8,11 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded the external RFC 8431 provider's corrected FreeBSD route-preference
+  fidelity. Observation now reads the native route metric written through
+  `NL_RTA_PRIORITY` instead of conflating it with the separate ECMP path
+  weight, and native Linux/FreeBSD lifecycle tests require exact readback.
+
 - Recorded the external RFC 8431 provider's exact native nexthop transition
   reasons. Dead Linux multipath members now expose `unresolved-nexthop` in
   operational state, and installed-state transitions carry the corresponding

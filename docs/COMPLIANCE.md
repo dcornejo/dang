@@ -957,7 +957,10 @@ installed observations are active and explicitly uninstalled observations are
 inactive;
 gateway-plus-interface nexthops use the RFC-defined combined address-family
 container and both IPv4 and IPv6 forms pass direct YANG operational-data
-validation. It does not yet represent every kernel route kind or every RFC
+validation. Linux `RTA_PRIORITY` and FreeBSD `rmx_metric` carry RFC 8431
+route preference in both mutation and observation. FreeBSD `rmx_weight` is a
+distinct ECMP path weight and is no longer misreported as route preference.
+It does not yet represent every kernel route kind or every RFC
 8431 attribute.
 Linux rtnetlink multipath routes are expanded into separate stable route-list
 entries for each native base nexthop, including its gateway/interface identity

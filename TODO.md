@@ -44,6 +44,8 @@ stays in this file with its remaining work rewritten precisely.
   collapse routes. Native nexthop installed-state transitions now preserve the
   exact RFC `resolved-nexthop` and `unresolved-nexthop` reasons in operational
   state and notifications without inventing reasons for unrelated changes.
+  FreeBSD route preference now round-trips through its distinct native metric
+  rather than being conflated with an ECMP path weight.
   Complete the remaining kernel route-kind and RFC attribute fidelity, then
   advertise and test the module end to end.
 - [ ] Implement and document a separately packaged RFC 9249 NTP plugin using
