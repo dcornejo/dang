@@ -8,6 +8,12 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded the hardened RFC 8431 provider boundary and stronger external
+  interoperability evidence. Unsupported routing-instance and RIB controls
+  now fail at their modeled paths, and isolated Linux and FreeBSD NETCONF
+  sessions configure an RFC 8343/8344 interface together with a gateway route
+  that references it through the generic multi-plugin contract.
+
 - Compiled every plugin-supplied import-only module into the effective semantic
   context while continuing to suppress its own data and operation nodes.
   Standalone identity libraries that import an implemented base module can now

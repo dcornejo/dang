@@ -65,8 +65,13 @@ stays in this file with its remaining work rewritten precisely.
   The supported slice now passes one real candidate lock/edit/validate/commit,
   operational read, delete/commit, unlock, and close session through dangd and
   supervised interface/RIB plugin workers on isolated Linux and FreeBSD
-  kernels. Complete the remaining kernel route-kind and RFC attribute fidelity,
-  then broaden the end-to-end matrix across the remaining modeled operations.
+  kernels. That transaction configures an RFC 8343/8344 interface and an RFC
+  8431 gateway route whose outgoing-interface leafref targets it, exercising
+  generic two-plugin validation and apply ordering. Unsupported instance
+  membership, router ID, lookup limit, enabled RPF, and datastore-created
+  nexthop IDs fail closed rather than being ignored. Complete the remaining
+  kernel route-kind fidelity, then broaden the end-to-end matrix across the
+  remaining modeled operations.
 - [ ] Implement and document a separately packaged RFC 9249 NTP plugin using
   the pinned `ietf-ntp@2022-07-05` module. Cover configuration and NMDA
   operational state for NTPv4 and the model's NTPv3 compatibility, including

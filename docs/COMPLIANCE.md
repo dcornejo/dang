@@ -1018,12 +1018,20 @@ closed rather than installing an approximation.
 The supported route slice also passes an actual NETCONF candidate lifecycle on
 both isolated native platforms. Dangd loads independent RFC 8343/8344 and
 RFC 8431 plugin workers, then lock, edit, validate, commit, operational get,
-delete, second commit, unlock, and close all succeed. The interface provider
-publishes system-created interfaces in the NMDA `/interfaces` tree, satisfying
-RFC 8431 `interface-ref` leafrefs through generic operational composition; the
-test finishes with the Linux table or FreeBSD FIB empty. This is stronger than
-direct plugin or backend invocation but remains evidence for the documented
-portable slice rather than a claim that every RFC 8431 node is implemented.
+delete, second commit, unlock, and close all succeed. The candidate configures
+the disposable interface and a gateway route whose RFC 8431
+`outgoing-interface` leafref targets it. The operational reply must retain the
+interface reference, gateway, and route index, and the test finishes with the
+Linux table or FreeBSD FIB empty. This exercises generic cross-plugin schema
+validation and transaction ordering rather than any provider-specific dangd
+logic. It remains evidence for the documented portable slice rather than a
+claim that every RFC 8431 node is implemented.
+Routing-instance interface membership, router ID, lookup limit, enabled RPF
+checks, and datastore-created reusable-nexthop identifiers are not implemented;
+the provider now rejects each at its exact modeled path instead of accepting a
+configuration it cannot enforce. An explicit false `ip-rpf-check` is a valid
+no-op, and reusable objects remain available through the modeled `nh-add`
+operation.
 The operational `local-only` leaf is derived from Linux `RT_SCOPE_HOST` or
 FreeBSD `RTF_LOCAL`, rather than being reported as false for every native
 route. Neither portable backend can safely create those kernel-owned receive
