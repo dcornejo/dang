@@ -424,10 +424,14 @@ the features enabled for an implemented module; `dangd` rejects unknown names
 and publishes the accepted set in YANG Library.
 
 `dangd` copies every descriptor and source before completing plugin discovery.
-It combines implemented plugin modules with core modules and the root model,
+It combines every supplied module with core modules and the root model,
 resolves the complete import/include closure, and compiles one effective
-schema. Startup fails on invalid YANG, unresolved imports, incompatible
-revisions, duplicate implementation ownership, or invalid deviations.
+semantic context. Import-only modules contribute typedefs, groupings,
+identities, and derived-identity relationships even when they import an
+implemented base module that does not import them in return. Their own data,
+RPC, action, and notification nodes are excluded from the runtime schema.
+Startup fails on invalid YANG, unresolved imports, incompatible revisions,
+duplicate implementation ownership, or invalid deviations.
 
 The resulting inventory is returned by NETCONF `<get>` under
 `/ietf-yang-library:yang-library`. It includes implemented and import-only

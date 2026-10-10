@@ -7,6 +7,12 @@
 
 ### Added
 
+- Added schema-composition coverage for reverse-only import dependencies.
+  Import-only plugin modules now participate in type and identity resolution,
+  including identities derived from an implemented module, while their own
+  data, RPC, action, and notification nodes remain unimplemented. This is a
+  generic plugin-contract behavior and contains no provider-specific logic.
+
 - Added the built-in `dangd-peer-transactions` operational model for generic
   multi-host commit diagnosis. It publishes coordination availability, the
   current or most recent lifecycle phase, process-lifetime outcome counters,

@@ -1015,6 +1015,39 @@ TEST(DangdApplicationTest, LoadsPluginModelAndRejectsPluginInvalidCommit) {
             std::string::npos);
 }
 
+TEST(DangdApplicationTest, ResolvesIdentityFromImportOnlyPluginModule) {
+  TemporaryInputs inputs;
+  auto options = Options(inputs);
+  options.plugins = {DANG_TEST_PROVIDER_PLUGIN_PATH};
+  auto loaded = Application::Load(options);
+  ASSERT_NE(loaded.application, nullptr)
+      << testing::PrintToString(loaded.errors);
+
+  // The identity library imports the implemented model in order to derive
+  // from its base identity. The implemented model intentionally does not
+  // import the library, matching IANA identity libraries such as
+  // iana-if-type and proving that reverse-only imports remain visible.
+  yang::netconf::RpcSessionContext session{1, "alice", "alice", {}};
+  const auto edit = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="1">
+      <edit-config><target><candidate/></target><config>
+        <provider-settings xmlns="urn:dangd:test:provider"
+            xmlns:types="urn:dangd:test:provider:types">
+          <mode-kind>types:guarded</mode-kind>
+        </provider-settings>
+      </config></edit-config>
+    </rpc>)xml");
+  ASSERT_NE(edit.xml.find("<ok/>"), std::string::npos) << edit.xml;
+  const auto validate = loaded.application->server().Process(session, R"xml(
+    <rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="2">
+      <validate><source><candidate/></source></validate>
+    </rpc>)xml");
+  EXPECT_NE(validate.xml.find("<ok/>"), std::string::npos) << validate.xml;
+
+  EXPECT_FALSE(loaded.application->schema().FindRoot(
+      {"urn:dangd:test:provider:types", "unexpected-data"}));
+}
+
 TEST(DangdApplicationTest, ActivatesInitialAndRestoredPluginConfiguration) {
   TemporaryInputs inputs;
   auto options = Options(inputs);

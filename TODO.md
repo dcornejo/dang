@@ -62,8 +62,11 @@ stays in this file with its remaining work rewritten precisely.
   state and notifications without inventing reasons for unrelated changes.
   FreeBSD route preference now round-trips through its distinct native metric
   rather than being conflated with an ECMP path weight.
-  Complete the remaining kernel route-kind and RFC attribute fidelity, then
-  advertise and test the module end to end.
+  The supported slice now passes one real candidate lock/edit/validate/commit,
+  operational read, delete/commit, unlock, and close session through dangd and
+  supervised interface/RIB plugin workers on isolated Linux and FreeBSD
+  kernels. Complete the remaining kernel route-kind and RFC attribute fidelity,
+  then broaden the end-to-end matrix across the remaining modeled operations.
 - [ ] Implement and document a separately packaged RFC 9249 NTP plugin using
   the pinned `ietf-ntp@2022-07-05` module. Cover configuration and NMDA
   operational state for NTPv4 and the model's NTPv3 compatibility, including

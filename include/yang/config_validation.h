@@ -8,6 +8,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -163,6 +164,13 @@ class RuntimeSchemaBuilder {
  public:
   [[nodiscard]] static RuntimeSchema FromCompilation(
       const Compilation& compilation);
+  /**
+   * Lowers only data and operation nodes owned by implemented modules while
+   * retaining imported type and identity definitions for value validation.
+   */
+  [[nodiscard]] static RuntimeSchema FromCompilation(
+      const Compilation& compilation,
+      const std::set<std::string>& implemented_modules);
   /** Compiles source-equivalent RFC 7950 YIN into the same runtime schema. */
   [[nodiscard]] static std::optional<RuntimeSchema> FromYin(
       const pugi::xml_document& yin, ModuleSourceRepository& repository,

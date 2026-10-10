@@ -1346,10 +1346,12 @@ LoadResult Application::LoadWithStateFileLock(
     add_import("ietf-ssh-common", std::string("2024-10-10"));
     add_import("ietf-ssh-client", std::string("2024-10-10"));
     add_import("ietf-ssh-server", std::string("2024-10-10"));
-    for (const PluginYangSource& plugin_source : plugins->yang_sources()) {
-      if (plugin_source.role != DANG_YANG_IMPORT_ONLY_V1)
-        add_import(plugin_source.module_name, plugin_source.revision);
-    }
+    // Every supplied source belongs to the schema module set. Import-only
+    // sources must participate in semantic resolution even when no
+    // implemented module imports them in the forward direction: identity
+    // libraries commonly import a base module and add derived identities.
+    for (const PluginYangSource& plugin_source : plugins->yang_sources())
+      add_import(plugin_source.module_name, plugin_source.revision);
     aggregate << "}";
     diagnostics = {};
     auto aggregate_source = yang::SourceFile::Create(
@@ -1383,8 +1385,6 @@ LoadResult Application::LoadWithStateFileLock(
       return result;
     }
   }
-  auto schema =
-      yang::config::RuntimeSchemaBuilder::FromCompilation(*compilation);
   std::set<std::string> implemented{
       root_module_name,          "ietf-netconf-acm", "ietf-yang-library",
       "ietf-netconf-monitoring", "ietf-netconf",     "ietf-netconf-nmda",
@@ -1394,6 +1394,8 @@ LoadResult Application::LoadWithStateFileLock(
     if (plugin_source.role != DANG_YANG_IMPORT_ONLY_V1)
       implemented.insert(plugin_source.module_name);
   }
+  auto schema = yang::config::RuntimeSchemaBuilder::FromCompilation(
+      *compilation, implemented);
   const std::string yang_library_xml =
       BuildYangLibraryXml(*compilation, implemented, plugins->yang_sources());
   auto model_sources = BuildModelSources(*compilation);

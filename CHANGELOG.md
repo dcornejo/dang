@@ -8,6 +8,14 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Compiled every plugin-supplied import-only module into the effective semantic
+  context while continuing to suppress its own data and operation nodes.
+  Standalone identity libraries that import an implemented base module can now
+  contribute derived identityref values even when the implemented module does
+  not import them in return. A reverse-only import regression covers this
+  generic contract, and external Linux/FreeBSD RFC 8431 NETCONF sessions prove
+  it with the official `iana-if-type` module.
+
 - Recorded consistent RFC 8431 operational and notification projection in the
   external RIB plugin. Native polling now restores managed route indexes and
   collapses representable ECMP members before route-change tracking, yielding

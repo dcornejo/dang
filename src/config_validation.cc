@@ -1398,7 +1398,14 @@ bool RuntimeSchema::IdentityIsDerivedFrom(
              identity_derivations_.end();
 }
 
-RuntimeSchema RuntimeSchemaBuilder::FromCompilation(const Compilation& compilation) {
+RuntimeSchema RuntimeSchemaBuilder::FromCompilation(
+    const Compilation& compilation) {
+  return FromCompilation(compilation, {});
+}
+
+RuntimeSchema RuntimeSchemaBuilder::FromCompilation(
+    const Compilation& compilation,
+    const std::set<std::string>& implemented_modules) {
   RuntimeSchema result;
   const auto has_nacm_annotation = [&](const semantic::SchemaNode& node,
                                        std::string_view name) {
@@ -1455,7 +1462,13 @@ RuntimeSchema RuntimeSchemaBuilder::FromCompilation(const Compilation& compilati
       node.config = source.effective_config;
       node.mandatory = source.mandatory;
       node.presence_container = source.presence_container;
-      node.supported = source.supported;
+      // Import-only modules remain in the semantic compilation so their
+      // typedefs and identities can constrain implemented modules.  Their own
+      // data, RPC, action, and notification nodes are not server capabilities.
+      node.supported =
+          source.supported &&
+          (implemented_modules.empty() ||
+           implemented_modules.contains(source.name.module));
       node.nacm_default_deny_all =
           has_nacm_annotation(source, "default-deny-all");
       node.nacm_default_deny_write =

@@ -519,6 +519,14 @@ nodes, and source retrieval. Feature enablement and datastore membership are
 fixed inputs to each rebuilt application; dynamic datastores are not
 advertised. External interoperability testing remains.
 
+Import-only plugin modules participate fully in semantic type and identity
+resolution but do not contribute their own data or operation nodes. This
+includes the reverse-only identity-library pattern in which the import-only
+module imports an implemented base module to derive additional identities.
+An application regression verifies both derived identityref acceptance and
+data-node suppression; isolated Linux and FreeBSD RFC 8431 sessions exercise
+the same contract with `iana-if-type`.
+
 ## Example management models
 
 ### FRRouting native models
@@ -1007,6 +1015,15 @@ published as operational/read-only because the
 base view cannot retain the native ID and group topology necessary to recreate
 the exact kernel object relationship during rollback; mutation therefore fails
 closed rather than installing an approximation.
+The supported route slice also passes an actual NETCONF candidate lifecycle on
+both isolated native platforms. Dangd loads independent RFC 8343/8344 and
+RFC 8431 plugin workers, then lock, edit, validate, commit, operational get,
+delete, second commit, unlock, and close all succeed. The interface provider
+publishes system-created interfaces in the NMDA `/interfaces` tree, satisfying
+RFC 8431 `interface-ref` leafrefs through generic operational composition; the
+test finishes with the Linux table or FreeBSD FIB empty. This is stronger than
+direct plugin or backend invocation but remains evidence for the documented
+portable slice rather than a claim that every RFC 8431 node is implemented.
 The operational `local-only` leaf is derived from Linux `RT_SCOPE_HOST` or
 FreeBSD `RTF_LOCAL`, rather than being reported as false for every native
 route. Neither portable backend can safely create those kernel-owned receive

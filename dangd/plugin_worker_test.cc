@@ -394,7 +394,7 @@ TEST(PluginWorkerRuntimeTest, LoadsDiscoveryAndRoutesOperations) {
       &errors);
   ASSERT_NE(runtime, nullptr) << testing::PrintToString(errors);
   EXPECT_EQ(runtime->manifests().size(), 2u);
-  EXPECT_EQ(runtime->yang_sources().size(), 2u);
+  EXPECT_EQ(runtime->yang_sources().size(), 3u);
   EXPECT_EQ(runtime->manifests().front().resource_domains,
             std::vector<std::string>{"routing"});
   const auto events = runtime->Notifications();

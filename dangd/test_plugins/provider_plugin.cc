@@ -15,25 +15,51 @@ constexpr char kModel[] = R"yang(module dangd-test-provider {
   namespace "urn:dangd:test:provider";
   prefix provider;
   revision "2026-08-20" { description "Plugin integration test model."; }
+  identity provider-mode;
   container provider-settings {
     leaf mode { type string; default "normal"; }
+    leaf mode-kind { type identityref { base provider-mode; } }
   }
   rpc provider-status { output { leaf status { type string; } } }
   notification provider-event { leaf status { type string; } }
+})yang";
+
+constexpr char kIdentityLibrary[] = R"yang(module dangd-test-provider-types {
+  yang-version 1.1;
+  namespace "urn:dangd:test:provider:types";
+  prefix provider-types;
+  import dangd-test-provider { prefix provider; }
+  revision "2026-10-10" {
+    description "Import-only identities used by schema composition tests.";
+  }
+  identity guarded { base provider:provider-mode; }
+  container unexpected-data {
+    description
+      "A sentinel proving import-only data nodes are not implemented.";
+  }
 })yang";
 
 std::atomic<bool> notification_pending{true};
 
 struct Prepared { std::string before; std::string proposed; };
 
-size_t SourceCount(void*) { return 1; }
+size_t SourceCount(void*) { return 2; }
 int SourceAt(void*, size_t index, DangYangSourceV1* source,
              DangPluginErrorV1*) {
-  if (index != 0 || !source) return 0;
-  *source = {"dangd-test-provider", "2026-08-20", kModel,
-             std::strlen(kModel), "test:provider", DANG_YANG_IMPLEMENTED_V1,
-             nullptr, 0};
-  return 1;
+  if (!source) return 0;
+  if (index == 0) {
+    *source = {"dangd-test-provider", "2026-08-20", kModel,
+               std::strlen(kModel), "test:provider", DANG_YANG_IMPLEMENTED_V1,
+               nullptr, 0};
+    return 1;
+  }
+  if (index == 1) {
+    *source = {"dangd-test-provider-types", "2026-10-10", kIdentityLibrary,
+               std::strlen(kIdentityLibrary), "test:provider-types",
+               DANG_YANG_IMPORT_ONLY_V1, nullptr, 0};
+    return 1;
+  }
+  return 0;
 }
 size_t ResourceDomainCount(void*) { return 1; }
 const char* ResourceDomainAt(void*, size_t index) {
