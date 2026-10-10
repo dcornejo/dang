@@ -8,6 +8,15 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded ordinary RFC 8431 route-identity fidelity in the external plugin.
+  Exact native matches to dangd's reconciled applied configuration now recover
+  their modeled `route-index`, while unmanaged routes retain deterministic
+  synthetic identities. Resolved reusable routes also expose the modeled
+  nexthop ID, sharing policy, and expanded definition. The plugin keeps this
+  applied-route view transient and obtains it solely through the generic
+  reconciliation contract, preserving dangd's datastore authority and its
+  lack of per-plugin behavior.
+
 - Recorded completion of the external RFC 8431 provider's optional
   `nexthop-load-balance` feature. Managed weighted routes now round-trip with
   their durable route index and reusable-nexthop IDs; external native ECMP

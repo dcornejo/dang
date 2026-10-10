@@ -952,7 +952,9 @@ interface-only nexthops now use the selected native
 interface index directly and work on unnumbered or multihomed interfaces
 without guessing a local gateway address. The provider publishes partial observed operational data
 by reading Linux rtnetlink or FreeBSD `NET_RT_DUMP` directly. It emits IPv4/IPv6
-unicast routes with coherent status and deterministic synthetic indexes:
+unicast routes with coherent status. Exact native matches to dangd's
+reconciled applied configuration recover their modeled `route-index`, while
+unmanaged external routes receive deterministic synthetic indexes:
 installed observations are active and explicitly uninstalled observations are
 inactive;
 gateway-plus-interface nexthops use the RFC-defined combined address-family
@@ -1074,7 +1076,13 @@ identifiers through `nexthop-ref` with per-RIB isolation, while reference
 lifetime is enforced across datastore prepare, apply, rollback, and release.
 The ABI-v6 applied-configuration reconciliation callback rebuilds the exact
 datastore-owned reference set, so restored snapshots do not depend on stale
-pre-restart counters.
+pre-restart counters. That same generic callback now retains a transient copy
+of the applied route identities for operational correlation; it is rebuilt
+from dangd's authoritative datastore and is not independently persisted.
+Uniquely matching ordinary native routes publish their configured
+`route-index`. A resolved reusable route additionally publishes its modeled
+`nexthop-id`, sharing policy, and expanded base definition rather than losing
+the relationship during native readback.
 Imperative route add/update operations also retain bindings, and successful
 route or RIB deletion releases them durably. The provider now uses ABI v8 to
 publish bounded `route-change` events after successful durable imperative
