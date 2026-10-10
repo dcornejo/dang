@@ -8,6 +8,14 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded consistent RFC 8431 operational and notification projection in the
+  external RIB plugin. Native polling now restores managed route indexes and
+  collapses representable ECMP members before route-change tracking, yielding
+  one modeled weighted-route transition instead of synthetic per-path events.
+  Reusable-nexthop resolution continues to inspect the uncollapsed native
+  paths. This remains entirely within the plugin and the generic reconciliation
+  contract; dangd has no RIB-specific behavior.
+
 - Recorded ordinary RFC 8431 route-identity fidelity in the external plugin.
   Exact native matches to dangd's reconciled applied configuration now recover
   their modeled `route-index`, while unmanaged routes retain deterministic

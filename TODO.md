@@ -45,7 +45,9 @@ stays in this file with its remaining work rewritten precisely.
   native readback through the generic reconciliation callback; resolved
   reusable routes also publish their modeled nexthop ID, sharing policy, and
   expanded definition. Unmanaged external routes retain deterministic
-  synthetic indexes.
+  synthetic indexes. Native notification polling now uses that same modeled
+  projection, so managed indexes remain stable and one representable ECMP
+  route produces one route-level change rather than per-path synthetic events.
   Configured routes and imperative RPCs now reject `local-only=true` before mutation instead of
   misrepresenting an ordinary forwarding route as a kernel-owned receive path;
   real native local routes remain observable read-only state. Direct `discard`

@@ -1088,19 +1088,22 @@ route or RIB deletion releases them durably. The provider now uses ABI v8 to
 publish bounded `route-change` events after successful durable imperative
 operations and after datastore applied-state reconciliation; tentative or
 compensated changes do not produce success events. Notification draining also
-compares native route snapshots after a quiet initial baseline, reporting
-external additions, removals, and property changes while managed operations
-advance the baseline to avoid duplicates. Its identity includes gateway,
-interface, and special-nexthop data in addition to RIB, family, and prefix, so
-multiple paths for one prefix are tracked independently. Modeled versus native
-synthetic route-index differences are ignored during managed confirmation.
+compares native route snapshots after a quiet initial baseline. It applies the
+same identity restoration and weighted-route projection as operational
+retrieval before change tracking, so managed indexes remain stable and one
+representable ECMP route produces one route-level transition rather than
+synthetic per-path events. External base-path identity includes gateway,
+interface, and special-nexthop data in addition to RIB, family, and prefix
+before representable ECMP paths are collapsed. Managed operations advance this
+modeled baseline to avoid duplicate kernel-confirmation events.
 The second RFC notification,
 `nexthop-resolution-status-change`, joins reusable imperative and datastore
 bindings with installed native routes and emits transitions containing the
 complete supported base nexthop. Resolution requires the bound RIB, family,
 prefix, and every supplied gateway, interface, or special component to match
 an installed path; an unrelated parallel path cannot produce a false resolved
-transition.
+transition. Resolution deliberately evaluates the uncollapsed native paths
+even though route-change tracking uses the modeled weighted projection.
 This resolution definition is deliberately
 limited to the portable reusable-nexthop subset. Complete state fidelity and
 end-to-end interoperability evidence remain before a substantial RFC 8431
