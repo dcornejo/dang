@@ -1074,9 +1074,14 @@ match. Portable nexthop selection compares an exact gateway, interface,
 combined, special, durable-reference, or complete weighted load-balance
 identity and applies one replacement to every match. Weighted selectors resolve
 their member IDs and match the entire order-independent identity-and-weight set
-after native ECMP projection; partial-set matching is not permitted. All three selectors reject an unrepresentable local-only
-replacement before deleting the original and restore each observed before-image
-when installation fails. Vendor-selected updates remain unsupported. `rib-add` validates
+after native ECMP projection; partial-set matching is not permitted. All three
+selectors reject an unrepresentable local-only replacement before deleting the
+original and restore each observed before-image when installation fails. The
+optional `route-vendor-attributes` feature is not advertised: RFC 8431 defines
+an empty extension grouping with no portable match or replacement identity.
+Direct calls fail closed at the vendor selector path; support requires a
+concrete vendor augmentation before feature enablement.
+`rib-add` validates
 Linux logical tables or existing FreeBSD FIBs and rejects unsupported RPF
 enforcement; `rib-delete` uses a compensated plan to empty the observed RIB.
 `nh-add` and `nh-delete` allocate and remove portable gateway, interface,

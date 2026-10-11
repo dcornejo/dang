@@ -73,10 +73,12 @@ stays in this file with its remaining work rewritten precisely.
   `route-update` now applies one portable replacement to every exact
   `route-preference`/`local-only` match in the named RIB with the same per-route
   rollback semantics as prefix selection. Exact portable base-nexthop and
-  complete weighted load-balance-set selection are also complete. Finish
-  vendor-selected updates plus the remaining kernel route-kind fidelity. The native
-  end-to-end matrix now covers every implemented imperative RPC, including
-  duplicate-route reporting and the safe FreeBSD whole-FIB refusal.
+  complete weighted load-balance-set selection are also complete. The optional
+  vendor-attribute selector is intentionally not advertised because RFC 8431's
+  grouping is empty; a future augmented model must define its semantics first.
+  Finish the remaining kernel route-kind fidelity. The native end-to-end
+  matrix now covers every implemented imperative RPC, including duplicate-route
+  reporting and the safe FreeBSD whole-FIB refusal.
 - [ ] Implement and document a separately packaged RFC 9249 NTP plugin using
   the pinned `ietf-ntp@2022-07-05` module. Cover configuration and NMDA
   operational state for NTPv4 and the model's NTPv3 compatibility, including

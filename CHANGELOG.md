@@ -8,6 +8,10 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded that RFC 8431 vendor-selected updates are an intentionally
+  unadvertised extension boundary, not missing portable behavior. The standard
+  grouping is empty, and direct plugin calls now reject it explicitly.
+
 - Recorded completion of the external RFC 8431 provider's portable weighted
   load-balance selector. Exact complete-set matching is implemented entirely
   in the plugin using dangd's existing generic operation contract.
