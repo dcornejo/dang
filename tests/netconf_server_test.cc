@@ -152,6 +152,19 @@ std::optional<ServerFixture> BuildServerFixture(
       input { leaf count { type uint16; mandatory true; } }
       output { leaf result { type string; } }
     }
+    rpc select {
+      input {
+        choice selector {
+          mandatory true;
+          case by-name { leaf name { type string; mandatory true; } }
+          case by-id { leaf id { type uint32; mandatory true; } }
+        }
+      }
+      output {
+        leaf result { type string; mandatory true; }
+        leaf detail { type string; mandatory true; }
+      }
+    }
   })yang", *diagnostics);
   if (!source) return std::nullopt;
   InMemoryModuleRepository repository;
@@ -289,6 +302,44 @@ TEST(NetconfServerTest, AuthorizesAndDispatchesSchemaRpc) {
       <ping xmlns="urn:rpc-test"><count>not-a-number</count></ping>
     </rpc>)xml");
   EXPECT_NE(invalid.xml.find("invalid-value"), std::string::npos) << invalid.xml;
+  EXPECT_TRUE(operations.called.empty());
+}
+
+TEST(NetconfServerTest, ValidatesRpcChoicesAndMultiElementOutputFragments) {
+  VectorDiagnosticSink diagnostics;
+  auto fixture = BuildServerFixture(&diagnostics);
+  ASSERT_TRUE(fixture);
+  DatastoreManager stores(fixture->schema, fixture->initial);
+  NacmPolicy nacm;
+  nacm.set_exec_default(AccessAction::kPermit);
+  nacm.set_read_default(AccessAction::kPermit);
+  RecordingOperationProvider operations;
+  operations.rpc_output =
+      R"xml(<result xmlns="urn:rpc-test">selected</result>
+             <detail xmlns="urn:rpc-test">by name</detail>)xml";
+  NetconfServer server(stores, &nacm, nullptr, nullptr, std::nullopt, nullptr,
+                       &operations);
+  const auto request = [](std::string_view input) {
+    return "<rpc xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\" "
+           "message-id=\"choice\"><select xmlns=\"urn:rpc-test\">" +
+           std::string(input) + "</select></rpc>";
+  };
+
+  const RpcResponse selected =
+      server.Process("alice", request("<name>edge-1</name>"));
+  EXPECT_EQ(operations.called, "rpc:select");
+  EXPECT_NE(selected.xml.find("selected"), std::string::npos) << selected.xml;
+  EXPECT_NE(selected.xml.find("by name"), std::string::npos) << selected.xml;
+
+  operations.called.clear();
+  const RpcResponse absent = server.Process("alice", request(""));
+  EXPECT_NE(absent.xml.find("missing-choice"), std::string::npos) << absent.xml;
+  EXPECT_TRUE(operations.called.empty());
+
+  const RpcResponse conflict = server.Process(
+      "alice", request("<name>edge-1</name><id>7</id>"));
+  EXPECT_NE(conflict.xml.find("bad-element"), std::string::npos)
+      << conflict.xml;
   EXPECT_TRUE(operations.called.empty());
 }
 

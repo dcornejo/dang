@@ -403,7 +403,7 @@ TEST(DangdApplicationTest, RetrievesAndEditsConventionalNmdaDatastores) {
         <negated-origin-filter>or:unknown</negated-origin-filter>
       </get-data>
     </rpc>)xml");
-  EXPECT_NE(conflicting_origins.xml.find("invalid-value"), std::string::npos)
+  EXPECT_NE(conflicting_origins.xml.find("bad-element"), std::string::npos)
       << conflicting_origins.xml;
 
   const auto edit = loaded.application->server().Process(session, R"xml(

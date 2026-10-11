@@ -462,11 +462,15 @@ schema node, `input_xml` is a self-contained request element, and
 verified read access to every ancestor data instance.
 
 Return application output as one self-contained XML fragment through
-`DangOperationResultV1.output_xml`. The string is borrowed only for the
-duration of the callback and is copied immediately. `dangd` applies NACM read
-filtering in the operation's output-schema context before serializing the RPC
-reply. Invalid or incomplete output is rejected as a plugin failure. Return
-zero and populate
+`DangOperationResultV1.output_xml`. The fragment contains the modeled output
+child elements directly, in schema order; do not invent an `output` wrapper.
+Operations with several output leaves or containers therefore return several
+sibling elements, each with an explicit or otherwise locally resolvable XML
+namespace. The string is borrowed only for the duration of the callback and is
+copied immediately. `dangd` applies YANG type, cardinality, mandatory-choice,
+case-exclusivity, and selected-case validation, then NACM read filtering in the
+operation's output-schema context before serializing the RPC reply. Invalid or
+incomplete output is rejected as a plugin failure. Return zero and populate
 `DangPluginErrorV1` for an application failure. A plugin that owns a module but
 does not provide `invoke` receives `operation-not-supported` for that module's
 RPCs and actions.

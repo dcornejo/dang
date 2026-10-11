@@ -14,6 +14,7 @@
 #include <map>
 #include <optional>
 #include <ranges>
+#include <set>
 #include <sstream>
 
 #include <pugixml.hpp>
@@ -597,6 +598,67 @@ std::optional<config::RuntimeSchemaNodeId> FindNamedSchema(
       ? std::nullopt : std::optional<config::RuntimeSchemaNodeId>(*found);
 }
 
+bool SchemaContains(const config::RuntimeSchema& schema,
+                    config::RuntimeSchemaNodeId ancestor,
+                    config::RuntimeSchemaNodeId candidate) {
+  if (ancestor == candidate) return true;
+  return std::ranges::any_of(
+      schema.Get(ancestor).children,
+      [&](config::RuntimeSchemaNodeId child) {
+        return SchemaContains(schema, child, candidate);
+      });
+}
+
+bool CaseIsActive(
+    const config::RuntimeSchema& schema,
+    config::RuntimeSchemaNodeId case_id,
+    const std::map<config::RuntimeSchemaNodeId, std::size_t>& counts) {
+  return std::ranges::any_of(counts, [&](const auto& entry) {
+    return entry.second != 0 && SchemaContains(schema, case_id, entry.first);
+  });
+}
+
+bool ChoiceContextIsActive(
+    const config::RuntimeSchema& schema,
+    config::RuntimeSchemaNodeId node_id,
+    const std::map<config::RuntimeSchemaNodeId, std::size_t>& counts) {
+  std::optional<config::RuntimeSchemaNodeId> parent =
+      schema.Get(node_id).parent;
+  while (parent) {
+    const config::RuntimeSchemaNode& ancestor = schema.Get(*parent);
+    if (ancestor.kind == semantic::SchemaNodeKind::kCase &&
+        !CaseIsActive(schema, *parent, counts)) {
+      return false;
+    }
+    if (ancestor.kind != semantic::SchemaNodeKind::kChoice &&
+        ancestor.kind != semantic::SchemaNodeKind::kCase) {
+      break;
+    }
+    parent = ancestor.parent;
+  }
+  return true;
+}
+
+std::set<config::RuntimeSchemaNodeId> VisibleChoices(
+    const config::RuntimeSchema& schema,
+    std::span<const config::RuntimeSchemaNodeId> visible) {
+  std::set<config::RuntimeSchemaNodeId> choices;
+  for (config::RuntimeSchemaNodeId id : visible) {
+    std::optional<config::RuntimeSchemaNodeId> parent = schema.Get(id).parent;
+    while (parent) {
+      const config::RuntimeSchemaNode& ancestor = schema.Get(*parent);
+      if (ancestor.kind == semantic::SchemaNodeKind::kChoice)
+        choices.insert(*parent);
+      if (ancestor.kind != semantic::SchemaNodeKind::kChoice &&
+          ancestor.kind != semantic::SchemaNodeKind::kCase) {
+        break;
+      }
+      parent = ancestor.parent;
+    }
+  }
+  return choices;
+}
+
 TransactionResult ValidateOperationData(
     const config::RuntimeSchema& schema,
     config::RuntimeSchemaNodeId operation, semantic::SchemaNodeKind io_kind,
@@ -657,11 +719,14 @@ TransactionResult ValidateOperationData(
     for (config::RuntimeSchemaNodeId id : allowed) {
       const config::RuntimeSchemaNode& metadata = schema.Get(id);
       const std::size_t count = counts[id];
+      const bool context_active =
+          ChoiceContextIsActive(schema, id, counts);
       if ((metadata.kind != semantic::SchemaNodeKind::kList &&
            metadata.kind != semantic::SchemaNodeKind::kLeafList && count > 1) ||
           (metadata.max_elements && count > *metadata.max_elements) ||
-          (metadata.min_elements && count < *metadata.min_elements) ||
-          (metadata.mandatory && count == 0)) {
+          (context_active && metadata.min_elements &&
+           count < *metadata.min_elements) ||
+          (context_active && metadata.mandatory && count == 0)) {
         config::ValidationFinding finding;
         finding.message = count == 0
             ? "mandatory operation " + std::string(direction) + " is absent"
@@ -672,6 +737,36 @@ TransactionResult ValidateOperationData(
         finding.module_name = metadata.module_name;
         finding.netconf_error_tag = count == 0 ? "missing-element"
                                                : "invalid-value";
+        findings.push_back(std::move(finding));
+      }
+    }
+    for (config::RuntimeSchemaNodeId choice_id :
+         VisibleChoices(schema, allowed)) {
+      const config::RuntimeSchemaNode& choice = schema.Get(choice_id);
+      if (!choice.supported ||
+          !ChoiceContextIsActive(schema, choice_id, counts)) {
+        continue;
+      }
+      std::vector<config::RuntimeSchemaNodeId> active_cases;
+      for (config::RuntimeSchemaNodeId child : choice.children) {
+        if (schema.Get(child).kind == semantic::SchemaNodeKind::kCase &&
+            CaseIsActive(schema, child, counts)) {
+          active_cases.push_back(child);
+        }
+      }
+      if (active_cases.size() > 1 ||
+          (choice.mandatory && active_cases.empty())) {
+        config::ValidationFinding finding;
+        finding.message = active_cases.empty()
+            ? "no case of a mandatory operation " + std::string(direction) +
+                  " choice is present"
+            : "operation " + std::string(direction) +
+                  " contains data from multiple choice cases";
+        finding.instance_path = std::string(parent_path) + "/{" +
+            choice.name.namespace_uri + "}" + choice.name.local_name;
+        finding.module_name = choice.module_name;
+        finding.netconf_error_tag = active_cases.empty() ? "missing-choice"
+                                                         : "bad-element";
         findings.push_back(std::move(finding));
       }
     }
@@ -695,7 +790,13 @@ TransactionResult ValidateOperationOutput(
                                  semantic::SchemaNodeKind::kOutput,
                                  output.document_element());
   }
-  const UntrustedXmlResult parsed = ParseUntrustedXml(output_xml, &output);
+  UntrustedXmlPolicy policy;
+  // RFC 7950 operation output is a sequence of output child elements, not an
+  // artificial container element.  A plugin therefore returns an XML
+  // fragment when its operation has more than one output child.
+  policy.require_single_document_element = false;
+  const UntrustedXmlResult parsed =
+      ParseUntrustedXml(output_xml, &output, policy);
   if (!parsed.ok)
     return ProtocolFailure("plugin returned invalid operation output: " +
                                parsed.message,
@@ -711,7 +812,9 @@ std::string FilterOperationOutput(
     config::RuntimeSchemaNodeId operation, std::string_view base_path,
     std::string_view output_xml) {
   pugi::xml_document document;
-  if (!ParseUntrustedXml(output_xml, &document).ok) return {};
+  UntrustedXmlPolicy policy;
+  policy.require_single_document_element = false;
+  if (!ParseUntrustedXml(output_xml, &document, policy).ok) return {};
   std::function<void(pugi::xml_node,
                      const std::vector<config::RuntimeSchemaNodeId>&,
                      std::string_view)> filter;

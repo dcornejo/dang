@@ -8,6 +8,13 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Corrected generic YANG RPC and action validation across `choice`/`case`
+  boundaries. Mandatory nodes and `min-elements` are enforced only for the
+  selected case, conflicting cases and absent mandatory choices receive their
+  modeled NETCONF errors, and plugin output may contain the sibling XML
+  elements defined by an operation's output statement. The fragment parser
+  retains the existing UTF-8, DTD/entity, size, depth, and node-count checks.
+
 - Recorded the hardened RFC 8431 provider boundary and stronger external
   interoperability evidence. Unsupported routing-instance and RIB controls
   now fail at their modeled paths, and isolated Linux and FreeBSD NETCONF

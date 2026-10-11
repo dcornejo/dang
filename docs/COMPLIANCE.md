@@ -95,6 +95,12 @@ candidate and startup datastores, locks, edit operations and options,
 commit/discard, confirmed commit and rollback, copy/delete configuration,
 session cleanup, `close-session`, `kill-session`, subtree and XPath filters,
 schema-aware errors, and host-supplied URL access.
+Schema-defined RPC and action input/output is validated with transparent YANG
+`choice` and `case` handling: only selected-case cardinality is mandatory,
+conflicting cases and absent mandatory choices fail with schema-aware errors,
+and an operation output statement is accepted as its modeled sequence of XML
+child elements rather than requiring a non-modeled wrapper. Untrusted fragment
+parsing retains the normal character, entity, size, depth, and node limits.
 
 Known boundaries and optional omissions:
 
