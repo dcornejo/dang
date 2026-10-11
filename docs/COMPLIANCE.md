@@ -816,9 +816,20 @@ module name, or NTP-specific branch in dangd. The external plugin guide records
 an explicit remove-and-replace operator migration sequence rather than silently
 translating between models with different feature sets.
 
-Configuration parsing, transaction planning, native Linux and FreeBSD apply
-and rollback, feature advertisement, NMDA clock/association/statistics state,
-and `statistics-reset` remain unimplemented. Accordingly, RFC 9249 is not
+The external provider now has a side-effect-free parser for the top-level
+presence and listener, local reference clock, non-deprecated symmetric
+authentication, RFC 8519 ACL bindings, and unicast server/peer configuration.
+It normalizes identity prefixes and system-ordered lists, validates key
+references, fails closed on augmented or interface-mode content, and reports
+the exact model path. Its deterministic English delta planner redacts key
+bytes and encodes service-stop, association-removal, prerequisite, association-
+addition, and service-start dependencies explicitly.
+
+Loadable plugin transaction integration, native Linux and FreeBSD apply and
+rollback, interface broadcast/multicast/manycast modes, feature advertisement,
+NMDA clock/association/statistics state, and `statistics-reset` remain
+unimplemented. RFC 9249 itself contains no VRF configuration node; VRF binding
+would require a separately pinned augmentation. Accordingly, RFC 9249 is not
 currently advertised in YANG Library and no runtime compliance is claimed.
 
 ## RFC 9644 SSH client and server groupings

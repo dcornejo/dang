@@ -8,6 +8,14 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded the external RFC 9249 provider's first implementation layer. Its
+  platform-neutral parser now covers the portable listener, reference-clock,
+  modern authentication, ACL-binding, and unicast surface, and its English
+  delta plan carries explicit stop/remove/prerequisite/add/start dependencies
+  without disclosing key material. Interface modes remain fail-closed. The
+  standards review also corrected the roadmap: RFC 9249 itself defines no VRF
+  node, so VRF support requires a separately selected augmentation.
+
 - Recorded the RFC 9249 NTP provider foundation in the external plugin
   collection: the authoritative pinned schema closure validates directly, the
   RFC 7317 provider now claims the generic exclusive `ntp` resource domain,

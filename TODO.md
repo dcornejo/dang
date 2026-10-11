@@ -87,13 +87,18 @@ stays in this file with its remaining work rewritten precisely.
   the pinned `ietf-ntp@2022-07-05` module. The authoritative schema and import
   closure, direct interoperability test, operator migration procedure, generic
   exclusive `ntp` resource-domain policy, and RFC 7317 provider/package claim
-  are complete. Next add the side-effect-free parser and transaction plan,
-  followed by native Linux and FreeBSD adapters. Cover configuration and NMDA
+  are complete. The side-effect-free parser and dependency-ordered transaction
+  plan now cover listener, reference-clock, modern symmetric authentication,
+  ACL binding, and unicast server/peer configuration. Next wrap them in the
+  loadable transaction lifecycle, then add native Linux and FreeBSD adapters.
+  Cover configuration and NMDA
   operational state for NTPv4 and the model's NTPv3 compatibility, including
-  supported association modes, authentication, access rules, interfaces, VRF
-  binding, clock state, association state, statistics, and the statistics-reset
-  RPC. Prefer native programmatic daemon APIs and record daemon-specific
-  unsupported features and standards variances in the compliance ledger.
+  supported association modes, authentication, access rules, interfaces,
+  clock state, association state, statistics, and the statistics-reset RPC.
+  RFC 9249 has no VRF node; select and pin a separate augmentation before
+  claiming VRF binding. Prefer native programmatic daemon APIs and record
+  daemon-specific unsupported features and standards variances in the
+  compliance ledger.
 - [ ] Complete RFC 9642 beyond the implemented central cleartext symmetric-key
   slice: add asymmetric key-pair verification, genuinely hidden and encrypted
   key representations, encryption and zeroization beyond the private snapshot
