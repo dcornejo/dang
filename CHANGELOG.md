@@ -8,6 +8,10 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded completion of the external RFC 8431 provider's portable weighted
+  load-balance selector. Exact complete-set matching is implemented entirely
+  in the plugin using dangd's existing generic operation contract.
+
 - Recorded the external RFC 8431 provider's portable base-nexthop-selected
   `route-update`, including the remaining load-balance-wide and vendor selector
   boundary. The implementation continues to use only dangd's generic operation

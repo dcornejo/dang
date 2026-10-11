@@ -1070,12 +1070,13 @@ only an unambiguous observed match. Prefix-selected `route-update` replaces a
 portable base nexthop or supported route attributes. Attribute-selected
 `route-update` matches the complete portable `route-preference`/`local-only`
 pair within the named RIB and applies one supported replacement to every
-match. Portable base-nexthop selection compares an exact gateway, interface,
-combined, special, or durable-reference identity and applies one replacement
-to every match. All three selectors reject an unrepresentable local-only
+match. Portable nexthop selection compares an exact gateway, interface,
+combined, special, durable-reference, or complete weighted load-balance
+identity and applies one replacement to every match. Weighted selectors resolve
+their member IDs and match the entire order-independent identity-and-weight set
+after native ECMP projection; partial-set matching is not permitted. All three selectors reject an unrepresentable local-only
 replacement before deleting the original and restore each observed before-image
-when installation fails. Load-balance-wide and vendor-selected updates remain
-unsupported. `rib-add` validates
+when installation fails. Vendor-selected updates remain unsupported. `rib-add` validates
 Linux logical tables or existing FreeBSD FIBs and rejects unsupported RPF
 enforcement; `rib-delete` uses a compensated plan to empty the observed RIB.
 `nh-add` and `nh-delete` allocate and remove portable gateway, interface,
