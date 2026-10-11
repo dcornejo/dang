@@ -8,6 +8,10 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded complete handling of RFC 8431's concrete base route attributes and
+  fail-closed parsing for augmented address-family or vendor content. Empty
+  standard extension containers remain valid no-ops.
+
 - Recorded that RFC 8431 vendor-selected updates are an intentionally
   unadvertised extension boundary, not missing portable behavior. The standard
   grouping is empty, and direct plugin calls now reject it explicitly.

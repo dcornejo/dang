@@ -76,9 +76,13 @@ stays in this file with its remaining work rewritten precisely.
   complete weighted load-balance-set selection are also complete. The optional
   vendor-attribute selector is intentionally not advertised because RFC 8431's
   grouping is empty; a future augmented model must define its semantics first.
-  Finish the remaining kernel route-kind fidelity. The native end-to-end
-  matrix now covers every implemented imperative RPC, including duplicate-route
-  reporting and the safe FreeBSD whole-FIB refusal.
+  Concrete base route attributes are complete: preference round-trips, and
+  local-only is observed but unsafe to configure. Augmented attribute content
+  now fails closed. Define explicit cross-platform capability designs before
+  adding the remaining non-portable source, MPLS, MAC, interface-match, chain,
+  replication, protection, tunnel, RIB-lookup, or MAC-nexthop forms. The native
+  end-to-end matrix covers every implemented imperative RPC, including
+  duplicate-route reporting and the safe FreeBSD whole-FIB refusal.
 - [ ] Implement and document a separately packaged RFC 9249 NTP plugin using
   the pinned `ietf-ntp@2022-07-05` module. Cover configuration and NMDA
   operational state for NTPv4 and the model's NTPv3 compatibility, including

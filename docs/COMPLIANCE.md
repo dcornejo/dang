@@ -987,8 +987,14 @@ native validators accept the resolved portable form. Linux writes the complete
 member set in one bounded `RTA_MULTIPATH` request. FreeBSD uses acknowledged
 per-path requests and reverses completed members if a later request fails; the
 plugin action retains the exact modeled route for transaction rollback.
-It does not yet represent every kernel route kind or every RFC
-8431 attribute.
+The two concrete base route attributes are covered: route preference
+round-trips on both kernels, and local-only is derived from native state while
+unsafe configuration is rejected. The address-family attribute cases and
+vendor grouping are empty extension points. Empty standard containers are
+accepted, but augmented content fails at its exact path rather than being
+silently ignored. Source-specific, MPLS, MAC, interface-match, chained,
+replicated, protected, tunnel, RIB-lookup, and MAC-nexthop forms do not have a
+common exact Linux/FreeBSD mapping and remain unadvertised capability work.
 Linux rtnetlink and FreeBSD multipath paths for one destination are projected
 as one stable route-list entry with the feature-enabled RFC
 `nexthop-load-balance` structure. Managed routes retain their configured route
