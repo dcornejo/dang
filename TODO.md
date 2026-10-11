@@ -84,15 +84,16 @@ stays in this file with its remaining work rewritten precisely.
   end-to-end matrix covers every implemented imperative RPC, including
   duplicate-route reporting and the safe FreeBSD whole-FIB refusal.
 - [ ] Implement and document a separately packaged RFC 9249 NTP plugin using
-  the pinned `ietf-ntp@2022-07-05` module. Cover configuration and NMDA
+  the pinned `ietf-ntp@2022-07-05` module. The authoritative schema and import
+  closure, direct interoperability test, operator migration procedure, generic
+  exclusive `ntp` resource-domain policy, and RFC 7317 provider/package claim
+  are complete. Next add the side-effect-free parser and transaction plan,
+  followed by native Linux and FreeBSD adapters. Cover configuration and NMDA
   operational state for NTPv4 and the model's NTPv3 compatibility, including
   supported association modes, authentication, access rules, interfaces, VRF
-  binding, clock state, association state, and statistics. Prefer native
-  programmatic daemon APIs, validate on Linux and FreeBSD, and define an
-  explicit resource-ownership and migration policy against the RFC 7317
-  `system` plugin so the two packages cannot concurrently manage the same NTP
-  service or configuration files. Record daemon-specific unsupported features
-  and standards variances in the compliance ledger.
+  binding, clock state, association state, statistics, and the statistics-reset
+  RPC. Prefer native programmatic daemon APIs and record daemon-specific
+  unsupported features and standards variances in the compliance ledger.
 - [ ] Complete RFC 9642 beyond the implemented central cleartext symmetric-key
   slice: add asymmetric key-pair verification, genuinely hidden and encrypted
   key representations, encryption and zeroization beyond the private snapshot

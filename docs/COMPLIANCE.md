@@ -797,6 +797,30 @@ the narrower PAM, operational ABI, and date-time limitations. Dangd does not
 contain special knowledge of this provider; it is loaded and governed through
 the same public plugin contract as other models.
 
+### RFC 9249 — Network Time Protocol
+
+Status: **schema and ownership foundation; provider implementation pending**.
+
+The external plugin collection pins the authoritative
+`ietf-ntp@2022-07-05` module and its RFC 8519 ACL, packet-field, ethertype, and
+RFC 8294 routing-type imports. Its direct yanglint test loads those modules
+together with the pinned RFC 7317, RFC 8343, and dangd library revisions, so
+the model's mutual exclusion with `/system/ntp` is checked in one schema
+context. The model source is not yet advertised by a loadable plugin.
+
+RFC 7317 `/system/ntp` and RFC 9249 `/ntp` control the same native service.
+The existing system provider and its native package now claim the generic
+exclusive `ntp` resource domain; the future RFC 9249 provider must make the
+same claim. This uses the public ABI-v7 contract and requires no provider name,
+module name, or NTP-specific branch in dangd. The external plugin guide records
+an explicit remove-and-replace operator migration sequence rather than silently
+translating between models with different feature sets.
+
+Configuration parsing, transaction planning, native Linux and FreeBSD apply
+and rollback, feature advertisement, NMDA clock/association/statistics state,
+and `statistics-reset` remain unimplemented. Accordingly, RFC 9249 is not
+currently advertised in YANG Library and no runtime compliance is claimed.
+
 ## RFC 9644 SSH client and server groupings
 
 Status: **published as a complete import-only schema family**.

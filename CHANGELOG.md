@@ -8,6 +8,13 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded the RFC 9249 NTP provider foundation in the external plugin
+  collection: the authoritative pinned schema closure validates directly, the
+  RFC 7317 provider now claims the generic exclusive `ntp` resource domain,
+  its package carries the same ownership marker, and an explicit operator
+  migration procedure prevents two model surfaces from controlling one native
+  daemon. Dangd remains unaware of both provider identities.
+
 - Recorded complete handling of RFC 8431's concrete base route attributes and
   fail-closed parsing for augmented address-family or vendor content. Empty
   standard extension containers remain valid no-ops.
