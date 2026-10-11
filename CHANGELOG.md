@@ -8,6 +8,11 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded the external RFC 8431 provider's portable base-nexthop-selected
+  `route-update`, including the remaining load-balance-wide and vendor selector
+  boundary. The implementation continues to use only dangd's generic operation
+  and plugin transaction contracts.
+
 - Recorded the external RFC 8431 provider's attribute-selected `route-update`.
   Exact portable attribute matches now share the established per-route native
   transaction, rollback, durability, and notification behavior on Linux and

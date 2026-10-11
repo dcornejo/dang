@@ -1070,9 +1070,12 @@ only an unambiguous observed match. Prefix-selected `route-update` replaces a
 portable base nexthop or supported route attributes. Attribute-selected
 `route-update` matches the complete portable `route-preference`/`local-only`
 pair within the named RIB and applies one supported replacement to every
-match. Both reject an unrepresentable local-only replacement before deleting
-the original and restore each observed before-image when installation fails.
-Nexthop-selected and vendor-selected updates remain unsupported. `rib-add` validates
+match. Portable base-nexthop selection compares an exact gateway, interface,
+combined, special, or durable-reference identity and applies one replacement
+to every match. All three selectors reject an unrepresentable local-only
+replacement before deleting the original and restore each observed before-image
+when installation fails. Load-balance-wide and vendor-selected updates remain
+unsupported. `rib-add` validates
 Linux logical tables or existing FreeBSD FIBs and rejects unsupported RPF
 enforcement; `rib-delete` uses a compensated plan to empty the observed RIB.
 `nh-add` and `nh-delete` allocate and remove portable gateway, interface,
@@ -1105,7 +1108,7 @@ Durable and datastore route-to-nexthop binding identities include the modeled
 independent references through reconciliation and restart. Version-3 sidecars
 also retain the reusable special identity; version 2 introduced the modeled
 route index, and version-1 and version-2 sidecars remain readable.
-Configuration commits, `route-add`, and both supported `route-update` selectors resolve
+Configuration commits, `route-add`, and all supported `route-update` selectors resolve
 identifiers through `nexthop-ref` with per-RIB isolation, while reference
 lifetime is enforced across datastore prepare, apply, rollback, and release.
 The ABI-v6 applied-configuration reconciliation callback rebuilds the exact
