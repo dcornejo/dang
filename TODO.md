@@ -69,8 +69,11 @@ stays in this file with its remaining work rewritten precisely.
   8431 gateway route whose outgoing-interface leafref targets it, exercising
   generic two-plugin validation and apply ordering. Unsupported instance
   membership, router ID, lookup limit, enabled RPF, and datastore-created
-  nexthop IDs fail closed rather than being ignored. Complete the remaining
-  kernel route-kind fidelity and unsupported RFC attributes. The native
+  nexthop IDs fail closed rather than being ignored. Attribute-selected
+  `route-update` now applies one portable replacement to every exact
+  `route-preference`/`local-only` match in the named RIB with the same per-route
+  rollback semantics as prefix selection. Complete nexthop- and vendor-selected
+  updates plus the remaining kernel route-kind fidelity. The native
   end-to-end matrix now covers every implemented imperative RPC, including
   duplicate-route reporting and the safe FreeBSD whole-FIB refusal.
 - [ ] Implement and document a separately packaged RFC 9249 NTP plugin using

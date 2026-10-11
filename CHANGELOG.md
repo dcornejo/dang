@@ -8,6 +8,11 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded the external RFC 8431 provider's attribute-selected `route-update`.
+  Exact portable attribute matches now share the established per-route native
+  transaction, rollback, durability, and notification behavior on Linux and
+  FreeBSD, without adding any provider awareness to dangd.
+
 - Corrected generic YANG RPC and action validation across `choice`/`case`
   boundaries. Mandatory nodes and `min-elements` are enforced only for the
   selected case, conflicting cases and absent mandatory choices receive their
