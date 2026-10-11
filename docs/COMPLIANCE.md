@@ -1139,6 +1139,13 @@ This resolution definition is deliberately
 limited to the portable reusable-nexthop subset. Complete state fidelity and
 end-to-end interoperability evidence remain before a substantial RFC 8431
 claim; in particular, not every kernel route kind or RFC route attribute is
+supported. The implemented imperative surface is nevertheless covered through
+one real NETCONF session on each native backend: RIB registration/deletion,
+reusable-nexthop creation/deletion, route add/update/delete, duplicate-route
+error code 1, and operational preference readback. Linux deletes its isolated
+table; FreeBSD FIB 0 returns a modeled refusal rather than touching immutable
+connected routes. This is plugin behavior reached only through the generic
+operation contract; dangd contains no RFC 8431-specific dispatch.
 represented.
 
 Linux and FreeBSD route mutation use bounded, sequenced route-netlink requests

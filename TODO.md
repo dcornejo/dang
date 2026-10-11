@@ -70,8 +70,9 @@ stays in this file with its remaining work rewritten precisely.
   generic two-plugin validation and apply ordering. Unsupported instance
   membership, router ID, lookup limit, enabled RPF, and datastore-created
   nexthop IDs fail closed rather than being ignored. Complete the remaining
-  kernel route-kind fidelity, then broaden the end-to-end matrix across the
-  remaining modeled operations.
+  kernel route-kind fidelity and unsupported RFC attributes. The native
+  end-to-end matrix now covers every implemented imperative RPC, including
+  duplicate-route reporting and the safe FreeBSD whole-FIB refusal.
 - [ ] Implement and document a separately packaged RFC 9249 NTP plugin using
   the pinned `ietf-ntp@2022-07-05` module. Cover configuration and NMDA
   operational state for NTPv4 and the model's NTPv3 compatibility, including

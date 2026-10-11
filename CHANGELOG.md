@@ -15,6 +15,12 @@ and releases follow Semantic Versioning.
   elements defined by an operation's output statement. The fragment parser
   retains the existing UTF-8, DTD/entity, size, depth, and node-count checks.
 
+- Recorded native Linux and FreeBSD NETCONF evidence for every currently
+  implemented RFC 8431 imperative RPC. The matrix covers RIB and reusable
+  nexthop lifecycle, route add/update/delete, duplicate-route error code 1,
+  and operational preference readback while preserving the generic operation
+  contract and FreeBSD's safe refusal to delete immutable FIB 0 routes.
+
 - Recorded the hardened RFC 8431 provider boundary and stronger external
   interoperability evidence. Unsupported routing-instance and RIB controls
   now fail at their modeled paths, and isolated Linux and FreeBSD NETCONF
