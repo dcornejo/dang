@@ -101,7 +101,9 @@ stays in this file with its remaining work rewritten precisely.
   adapters are still non-mutating and the plugin is intentionally not installed
   or packaged. A tested POSIX per-file replacement/rollback primitive now
   preserves bytes and metadata, detects external edits and retains compensation
-  state after post-rename sync failure. Next integrate two-file installation, systemd D-Bus
+  state after post-rename sync failure. The chrony pair now has ordered
+  installation/removal, automatic compensation and retryable rollback failure
+  state. Next integrate these file transactions with systemd D-Bus
   acknowledgement, rollback, and readback on Linux; then implement the FreeBSD
   translation and lifecycle before enabling production installation.
   Cover configuration and NMDA

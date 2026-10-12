@@ -868,8 +868,11 @@ A portable POSIX file-replacement helper now captures and restores bytes,
 ownership, permissions and original absence, with atomic per-file rename and
 file/directory synchronization. Tests cover unsafe file kinds, outside edits,
 and compensation after a post-rename sync failure. The helper is not yet
-connected to daemon actions and does not provide two-file atomicity or durable
-transaction recovery; native service acknowledgement remains pending.
+connected to daemon actions. A two-file coordinator now captures both images,
+orders installation/removal, compensates partial failures, and retains retryable
+state if compensation fails. This requires an acknowledged stopped service
+during mutation and recovery. Two-file atomicity and durable transaction
+recovery are not provided; native service acknowledgement remains pending.
 
 Native Linux chrony and FreeBSD ntpd apply and rollback, interface
 broadcast/multicast/manycast modes, production feature advertisement, NMDA

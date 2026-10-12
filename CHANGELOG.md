@@ -8,6 +8,11 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded the external NTP provider's ordered two-file chrony transaction.
+  Partial failure compensates the fragment and key file; failed compensation
+  retains retryable recovery state. Service lifecycle integration and durable
+  crash recovery remain pending, with no change to the compliance claim.
+
 - Recorded the external NTP provider's POSIX managed-file rollback helper.
   It preserves prior bytes and metadata and retains compensation state after
   a post-rename durability error. Native adapter integration, two-file
