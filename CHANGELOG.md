@@ -8,6 +8,13 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded the external RFC 9249 provider's native-adapter contract and strict
+  daemon selection. Prepared transactions now retain per-action before-image
+  and acknowledgement checkpoints, while `auto` selects only chrony on Linux
+  or base ntpd on FreeBSD. Unknown and cross-platform choices fail during
+  prepare. The selected adapters remain non-mutating and make no new compliance
+  claim until acknowledged apply, rollback, and operational readback exist.
+
 - Recorded the external RFC 7317 provider's ABI completeness fix. Its existing
   atomic platform update is now exposed as one reversible ABI-v4 action and
   its complete `system-state` image is explicitly published through ABI v5,

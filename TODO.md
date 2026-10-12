@@ -93,9 +93,12 @@ stays in this file with its remaining work rewritten precisely.
   plugin now embeds the model closure, advertises only the portable parser-
   backed features, claims the `ntp` resource domain, exposes ordered generic
   hardware actions, and fails closed at apply, rollback, and operational
-  publication. It is intentionally not installed or packaged. Next define and
-  implement native Linux and FreeBSD adapter contracts, then enable production
-  installation.
+  publication. A typed adapter contract now retains per-action native
+  before-image/acknowledgement checkpoints and selects only chrony on Linux or
+  base ntpd on FreeBSD; invalid choices fail during prepare. The adapters are
+  still non-mutating and the plugin is intentionally not installed or
+  packaged. Next implement acknowledged native apply, rollback, and readback
+  for both selected daemons, then enable production installation.
   Cover configuration and NMDA
   operational state for NTPv4 and the model's NTPv3 compatibility, including
   supported association modes, authentication, access rules, interfaces,

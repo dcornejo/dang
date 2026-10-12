@@ -838,10 +838,21 @@ only `ntp-port`, `authentication`, `hex-key-string`, and
 provider owns the leafref target. Its runtime model closure includes the pinned
 `ietf-interfaces` and `ietf-system` imports and passes a real dangd startup
 schema check. Apply, rollback, and operational publication fail closed because
-native adapters do not exist, and the target is deliberately absent from
-install and package components.
+the selected native adapters are not functional yet, and the target is
+deliberately absent from install and package components.
 
-Native Linux and FreeBSD apply and rollback, interface
+The native boundary and daemon-selection policy are now explicit. Every
+prepared transaction owns one typed adapter and a checkpoint for each ordered
+action; checkpoints distinguish captured before-images from acknowledged
+native application so compensation cannot claim to reverse an action that did
+not complete. Unset or `auto` selection chooses chrony only on Linux and base
+ntpd only on FreeBSD. An explicit daemon from the other platform, or an unknown
+daemon, fails at `/ietf-ntp:ntp` during prepare. The current platform adapters
+advertise neither configuration nor operational readiness and continue to
+reject every mutation/readback request, so this contract does not increase the
+RFC compliance claim.
+
+Native Linux chrony and FreeBSD ntpd apply and rollback, interface
 broadcast/multicast/manycast modes, production feature advertisement, NMDA
 clock/association/statistics state, and `statistics-reset` remain
 unimplemented. RFC 9249 itself contains no VRF configuration node; VRF binding
