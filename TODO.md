@@ -118,7 +118,10 @@ stays in this file with its remaining work rewritten precisely.
   deployment remains closed. Descriptor-based file/directory/binary trust
   checks and exact structured systemd ExecStart validation now run before
   capture/activation in the live test path. Permission-refusal and valid live
-  tests pass. Next validate complete unit policy and running-process identity,
+  tests pass. Additional unit-policy and pidfd/procfs process-identity checks
+  now pass native Linux build/live validation: auxiliary drop-ins and unrelated
+  processes are rejected, while the valid isolated service serves NTP and
+  rolls back correctly. Next define production deployment selection and
   expand readback on Linux and implement the FreeBSD
   translation and lifecycle before enabling production installation.
   Cover configuration and NMDA

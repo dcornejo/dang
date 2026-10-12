@@ -8,6 +8,12 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded natively validated unit-policy and running-process identity checks
+  for the external NTP provider. Portable tests and native Linux build/live
+  verification pass, including auxiliary drop-in and unrelated-process refusal
+  before mutation, valid live NTP replies and rollback. No new production
+  compliance claim is made.
+
 - Recorded external NTP deployment trust and native systemd ExecStart checks.
   Descriptor-based ownership/permission checks and exact dedicated argv run
   before capture/activation; loaded live tests reject unsafe permissions before

@@ -907,6 +907,13 @@ permissions and hard-linked files; private keys cannot be group/other-readable.
 The loaded live test proves permission refusals before mutation and successful
 NTP/rollback after correction. Full unit policy (including auxiliary commands
 and drop-ins), running-process identity and production selection remain pending.
+Additional service-policy and pidfd/procfs identity checks now pass native
+Linux build/live validation. They inspect auxiliary commands/drop-ins, environment and
+filesystem overrides, extended start flags, service definition trust, live
+executable/argv/UIDs and stable MainPID. A native auxiliary-command drop-in and
+an unrelated process are refused, while the valid isolated daemon still serves
+NTP and compensates correctly. This narrows the deployment gap; the production
+compliance claim remains unchanged.
 The checks do not lock against privileged concurrent changes; operational
 publication/normal installation remain closed.
 
