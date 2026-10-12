@@ -103,7 +103,10 @@ stays in this file with its remaining work rewritten precisely.
   preserves bytes and metadata, detects external edits and retains compensation
   state after post-rename sync failure. The chrony pair now has ordered
   installation/removal, automatic compensation and retryable rollback failure
-  state. Next integrate these file transactions with systemd D-Bus
+  state. A service-bracket coordinator now tests acknowledged stop before
+  changes, activation failure compensation, initial service-state restoration
+  and retry after recovery failure through an injected service boundary.
+  Next implement its native systemd D-Bus boundary and ABI action wiring for
   acknowledgement, rollback, and readback on Linux; then implement the FreeBSD
   translation and lifecycle before enabling production installation.
   Cover configuration and NMDA

@@ -874,6 +874,14 @@ state if compensation fails. This requires an acknowledged stopped service
 during mutation and recovery. Two-file atomicity and durable transaction
 recovery are not provided; native service acknowledgement remains pending.
 
+The service-bracket coordinator is now implemented and tested with an injected
+service boundary and real temporary files. It requires acknowledged stopped
+state before changes, compensates failed activation by stopping again before
+file restoration, restores the initial service state, and retains retryable
+recovery state on failure. A file-recovery failure prevents service activation.
+Native systemd acknowledgement and plugin hardware-action wiring are still
+pending; these tests do not constitute live daemon apply/readback evidence.
+
 Native Linux chrony and FreeBSD ntpd apply and rollback, interface
 broadcast/multicast/manycast modes, production feature advertisement, NMDA
 clock/association/statistics state, and `statistics-reset` remain

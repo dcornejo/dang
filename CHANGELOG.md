@@ -8,6 +8,12 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded the external NTP provider's tested service-bracket transaction.
+  Injected service outcomes and real files cover stopped-state requirements,
+  activation-failure compensation, initial-state restoration and retained
+  recovery checkpoints. Native service implementation and ABI wiring remain
+  pending, with the runtime compliance claim unchanged.
+
 - Recorded the external NTP provider's ordered two-file chrony transaction.
   Partial failure compensates the fragment and key file; failed compensation
   retains retryable recovery state. Service lifecycle integration and durable
