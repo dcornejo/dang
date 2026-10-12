@@ -8,6 +8,12 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded RFC 9249 ordered hardware-action integration through a disposable
+  Linux test boundary. Native loaded-plugin success and failed-activation
+  tests restore original files and service state. Production ownership/include
+  checks and chronyd configuration/readback remain pending; runtime compliance
+  and installation readiness are unchanged.
+
 - Recorded the shared native systemd service boundary for external RFC 9249 and
   RFC 7317 providers. Disposable-unit tests validated acknowledged jobs and
   observed state, including inactive unit readback and failed activation.

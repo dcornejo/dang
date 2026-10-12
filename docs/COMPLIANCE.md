@@ -883,8 +883,13 @@ Native systemd acknowledgement now uses a shared sd-bus helper also consumed
 by RFC 7317. Disposable Linux units validated exact job completion and observed
 state for start, reload/restart, stop, repeated stop and failed start. Inactive
 units are loaded/retained for readback after systemd garbage collection. Plugin
-hardware-action wiring remains pending; these service tests do not constitute
-live chronyd configuration/readback evidence.
+hardware-action wiring now executes staged stop/install/activate only through
+an explicit disposable Linux file/service test boundary. Loaded ABI-v7 tests
+verify apply/rollback and failed activation compensation, restoring original
+files and service state. Skipped/replayed steps fail and shared rollback runs
+once across reverse callbacks. Ordinary deployment remains closed pending
+ownership/include preflight; these tests do not constitute live chronyd
+configuration/readback evidence. Operational readiness remains false.
 
 Native Linux chrony and FreeBSD ntpd apply and rollback, interface
 broadcast/multicast/manycast modes, production feature advertisement, NMDA
