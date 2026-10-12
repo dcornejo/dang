@@ -99,7 +99,9 @@ stays in this file with its remaining work rewritten precisely.
   side-effect-free chrony translator for the supported configuration and key
   images, with daemon-specific semantic gaps rejected during validation. The
   adapters are still non-mutating and the plugin is intentionally not installed
-  or packaged. Next implement atomic file installation, systemd D-Bus
+  or packaged. A tested POSIX per-file replacement/rollback primitive now
+  preserves bytes and metadata, detects external edits and retains compensation
+  state after post-rename sync failure. Next integrate two-file installation, systemd D-Bus
   acknowledgement, rollback, and readback on Linux; then implement the FreeBSD
   translation and lifecycle before enabling production installation.
   Cover configuration and NMDA

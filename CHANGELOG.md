@@ -8,6 +8,11 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded the external NTP provider's POSIX managed-file rollback helper.
+  It preserves prior bytes and metadata and retains compensation state after
+  a post-rename durability error. Native adapter integration, two-file
+  compensation and service acknowledgement remain pending.
+
 - Recorded the external RFC 9249 provider's Linux chrony translation boundary.
   Proposed configuration is now rendered and daemon-specific semantic gaps are
   rejected during validation without host mutation or secret-bearing errors.

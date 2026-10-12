@@ -864,6 +864,13 @@ chrony cannot represent as a local reference. No files or services are changed
 and no key bytes are included in diagnostics; this narrows the implementation
 gap without changing the runtime compliance status.
 
+A portable POSIX file-replacement helper now captures and restores bytes,
+ownership, permissions and original absence, with atomic per-file rename and
+file/directory synchronization. Tests cover unsafe file kinds, outside edits,
+and compensation after a post-rename sync failure. The helper is not yet
+connected to daemon actions and does not provide two-file atomicity or durable
+transaction recovery; native service acknowledgement remains pending.
+
 Native Linux chrony and FreeBSD ntpd apply and rollback, interface
 broadcast/multicast/manycast modes, production feature advertisement, NMDA
 clock/association/statistics state, and `statistics-reset` remain
