@@ -8,6 +8,13 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded the external RFC 9249 provider's Linux chrony translation boundary.
+  Proposed configuration is now rendered and daemon-specific semantic gaps are
+  rejected during validation without host mutation or secret-bearing errors.
+  Native file installation, service acknowledgement, rollback, operational
+  readback, and all FreeBSD translation remain pending, so the compliance
+  claim is unchanged.
+
 - Recorded the external RFC 9249 provider's native-adapter contract and strict
   daemon selection. Prepared transactions now retain per-action before-image
   and acknowledgement checkpoints, while `auto` selects only chrony on Linux

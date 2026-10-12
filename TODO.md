@@ -95,10 +95,13 @@ stays in this file with its remaining work rewritten precisely.
   hardware actions, and fails closed at apply, rollback, and operational
   publication. A typed adapter contract now retains per-action native
   before-image/acknowledgement checkpoints and selects only chrony on Linux or
-  base ntpd on FreeBSD; invalid choices fail during prepare. The adapters are
-  still non-mutating and the plugin is intentionally not installed or
-  packaged. Next implement acknowledged native apply, rollback, and readback
-  for both selected daemons, then enable production installation.
+  base ntpd on FreeBSD; invalid choices fail during prepare. Linux now has a
+  side-effect-free chrony translator for the supported configuration and key
+  images, with daemon-specific semantic gaps rejected during validation. The
+  adapters are still non-mutating and the plugin is intentionally not installed
+  or packaged. Next implement atomic file installation, systemd D-Bus
+  acknowledgement, rollback, and readback on Linux; then implement the FreeBSD
+  translation and lifecycle before enabling production installation.
   Cover configuration and NMDA
   operational state for NTPv4 and the model's NTPv3 compatibility, including
   supported association modes, authentication, access rules, interfaces,

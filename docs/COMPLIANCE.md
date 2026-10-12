@@ -852,6 +852,18 @@ advertise neither configuration nor operational readiness and continue to
 reject every mutation/readback request, so this contract does not increase the
 RFC compliance claim.
 
+The Linux adapter now performs a side-effect-free translation of the proposed
+tree into a deterministic chrony include fragment and separate symmetric-key
+file image. It covers listener port, local-reference stratum, and
+unambiguous AES-CMAC keys, and unicast server/peer associations. Validation
+fails at the exact model path for association-specific source interfaces,
+peer burst modes, untrusted association keys, unsupported ACL mappings,
+modeled HMAC identities (chrony's legacy SHA MACs are not HMAC),
+AES-CMAC keys whose size cannot select AES128 or AES256, and stratum 16, which
+chrony cannot represent as a local reference. No files or services are changed
+and no key bytes are included in diagnostics; this narrows the implementation
+gap without changing the runtime compliance status.
+
 Native Linux chrony and FreeBSD ntpd apply and rollback, interface
 broadcast/multicast/manycast modes, production feature advertisement, NMDA
 clock/association/statistics state, and `statistics-reset` remain
