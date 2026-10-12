@@ -879,8 +879,12 @@ service boundary and real temporary files. It requires acknowledged stopped
 state before changes, compensates failed activation by stopping again before
 file restoration, restores the initial service state, and retains retryable
 recovery state on failure. A file-recovery failure prevents service activation.
-Native systemd acknowledgement and plugin hardware-action wiring are still
-pending; these tests do not constitute live daemon apply/readback evidence.
+Native systemd acknowledgement now uses a shared sd-bus helper also consumed
+by RFC 7317. Disposable Linux units validated exact job completion and observed
+state for start, reload/restart, stop, repeated stop and failed start. Inactive
+units are loaded/retained for readback after systemd garbage collection. Plugin
+hardware-action wiring remains pending; these service tests do not constitute
+live chronyd configuration/readback evidence.
 
 Native Linux chrony and FreeBSD ntpd apply and rollback, interface
 broadcast/multicast/manycast modes, production feature advertisement, NMDA

@@ -8,6 +8,11 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded the shared native systemd service boundary for external RFC 9249 and
+  RFC 7317 providers. Disposable-unit tests validated acknowledged jobs and
+  observed state, including inactive unit readback and failed activation.
+  RFC 9249 ABI action wiring and chronyd configuration/readback remain pending.
+
 - Recorded the external NTP provider's tested service-bracket transaction.
   Injected service outcomes and real files cover stopped-state requirements,
   activation-failure compensation, initial-state restoration and retained

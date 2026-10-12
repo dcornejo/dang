@@ -106,7 +106,9 @@ stays in this file with its remaining work rewritten precisely.
   state. A service-bracket coordinator now tests acknowledged stop before
   changes, activation failure compensation, initial service-state restoration
   and retry after recovery failure through an injected service boundary.
-  Next implement its native systemd D-Bus boundary and ABI action wiring for
+  A native systemd D-Bus service boundary is now shared with RFC 7317 and
+  validated on disposable Linux units, including failed starts and inactive
+  unit readback. Next implement ABI action wiring and isolated chronyd tests for
   acknowledgement, rollback, and readback on Linux; then implement the FreeBSD
   translation and lifecycle before enabling production installation.
   Cover configuration and NMDA
