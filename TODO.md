@@ -89,8 +89,13 @@ stays in this file with its remaining work rewritten precisely.
   exclusive `ntp` resource-domain policy, and RFC 7317 provider/package claim
   are complete. The side-effect-free parser and dependency-ordered transaction
   plan now cover listener, reference-clock, modern symmetric authentication,
-  ACL binding, and unicast server/peer configuration. Next wrap them in the
-  loadable transaction lifecycle, then add native Linux and FreeBSD adapters.
+  ACL binding, and unicast server/peer configuration. A development-only ABI-v7
+  plugin now embeds the model closure, advertises only the portable parser-
+  backed features, claims the `ntp` resource domain, exposes ordered generic
+  hardware actions, and fails closed at apply, rollback, and operational
+  publication. It is intentionally not installed or packaged. Next define and
+  implement native Linux and FreeBSD adapter contracts, then enable production
+  installation.
   Cover configuration and NMDA
   operational state for NTPv4 and the model's NTPv3 compatibility, including
   supported association modes, authentication, access rules, interfaces,

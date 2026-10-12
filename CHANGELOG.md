@@ -8,6 +8,21 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded the external RFC 7317 provider's ABI completeness fix. Its existing
+  atomic platform update is now exposed as one reversible ABI-v4 action and
+  its complete `system-state` image is explicitly published through ABI v5,
+  allowing real dangd loading and generic `ntp` resource-domain collision
+  enforcement.
+
+- Recorded the external RFC 9249 provider's development ABI-v7 integration.
+  It now exposes its pinned model closure, conservative feature set, `ntp`
+  resource ownership, and dependency-ordered hardware actions through the
+  generic plugin contract. Its complete runtime closure includes the canonical
+  `ietf-interfaces` and `ietf-system` imports. Apply, rollback, and operational
+  publication remain deliberately unavailable, and the target is neither
+  installed nor packaged until native Linux and FreeBSD adapters can
+  acknowledge, report, and reverse changes.
+
 - Recorded the external RFC 9249 provider's first implementation layer. Its
   platform-neutral parser now covers the portable listener, reference-clock,
   modern authentication, ACL-binding, and unicast surface, and its English

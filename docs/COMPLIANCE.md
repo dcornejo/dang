@@ -793,28 +793,33 @@ scan and complete Linux and FreeBSD suites close the command-execution audit.
 RADIUS, configurable NTP/DNS ports, `$0$` password replacement,
 resolver-manager integration, and exact reply-before-power-transition
 sequencing are not implemented. The external plugin guide records these and
-the narrower PAM, operational ABI, and date-time limitations. Dangd does not
-contain special knowledge of this provider; it is loaded and governed through
-the same public plugin contract as other models.
+the narrower PAM and date-time limitations. The provider exposes its atomic
+platform update as a reversible ABI-v4 action and marks its complete
+`system-state` publication through ABI v5. Dangd does not contain special
+knowledge of this provider; it is loaded and governed through the same public
+plugin contract as other models.
 
 ### RFC 9249 — Network Time Protocol
 
-Status: **schema and ownership foundation; provider implementation pending**.
+Status: **development transaction provider; native implementation pending**.
 
 The external plugin collection pins the authoritative
 `ietf-ntp@2022-07-05` module and its RFC 8519 ACL, packet-field, ethertype, and
 RFC 8294 routing-type imports. Its direct yanglint test loads those modules
 together with the pinned RFC 7317, RFC 8343, and dangd library revisions, so
 the model's mutual exclusion with `/system/ntp` is checked in one schema
-context. The model source is not yet advertised by a loadable plugin.
+context. A development-only loadable target also returns the canonical pinned
+RFC 7317 and RFC 8343 sources as import-only modules so its runtime closure is
+self-contained. The target advertises the model only when explicitly loaded;
+normal installation and packages omit it.
 
 RFC 7317 `/system/ntp` and RFC 9249 `/ntp` control the same native service.
-The existing system provider and its native package now claim the generic
-exclusive `ntp` resource domain; the future RFC 9249 provider must make the
-same claim. This uses the public ABI-v7 contract and requires no provider name,
-module name, or NTP-specific branch in dangd. The external plugin guide records
-an explicit remove-and-replace operator migration sequence rather than silently
-translating between models with different feature sets.
+The existing system provider and the development RFC 9249 provider both claim
+the generic exclusive `ntp` resource domain. This uses the public ABI-v7
+contract and requires no provider name, module name, or NTP-specific branch in
+dangd. The external plugin guide records an explicit remove-and-replace
+operator migration sequence rather than silently translating between models
+with different feature sets.
 
 The external provider now has a side-effect-free parser for the top-level
 presence and listener, local reference clock, non-deprecated symmetric
@@ -825,12 +830,24 @@ the exact model path. Its deterministic English delta planner redacts key
 bytes and encodes service-stop, association-removal, prerequisite, association-
 addition, and service-start dependencies explicitly.
 
-Loadable plugin transaction integration, native Linux and FreeBSD apply and
-rollback, interface broadcast/multicast/manycast modes, feature advertisement,
-NMDA clock/association/statistics state, and `statistics-reset` remain
+A development-only ABI-v7 target embeds the pinned source closure, claims the
+generic `ntp` resource domain, retains and validates transactions, and exposes
+those dependencies through the generic hardware-action contract. It enables
+only `ntp-port`, `authentication`, `hex-key-string`, and
+`unicast-configuration`; `access-rules` remains disabled until an RFC 8519 ACL
+provider owns the leafref target. Its runtime model closure includes the pinned
+`ietf-interfaces` and `ietf-system` imports and passes a real dangd startup
+schema check. Apply, rollback, and operational publication fail closed because
+native adapters do not exist, and the target is deliberately absent from
+install and package components.
+
+Native Linux and FreeBSD apply and rollback, interface
+broadcast/multicast/manycast modes, production feature advertisement, NMDA
+clock/association/statistics state, and `statistics-reset` remain
 unimplemented. RFC 9249 itself contains no VRF configuration node; VRF binding
-would require a separately pinned augmentation. Accordingly, RFC 9249 is not
-currently advertised in YANG Library and no runtime compliance is claimed.
+would require a separately pinned augmentation. Accordingly, normal
+installations do not advertise RFC 9249 in YANG Library and no runtime
+compliance is claimed.
 
 ## RFC 9644 SSH client and server groupings
 
