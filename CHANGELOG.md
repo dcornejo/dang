@@ -8,6 +8,12 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded external NTP deployment trust and native systemd ExecStart checks.
+  Descriptor-based ownership/permission checks and exact dedicated argv run
+  before capture/activation; loaded live tests reject unsafe permissions before
+  mutation and pass NTP/rollback after correction. Full unit policy, process
+  identity, operational publication and production selection remain pending.
+
 - Recorded external NTP wrapper ownership preflight and isolated chronyd 4.8
   evidence. Native ABI tests reject a competing source before mutation,
   receive a correlated NTPv4 reply on the configured port at local stratum 8,

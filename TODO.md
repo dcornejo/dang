@@ -115,8 +115,11 @@ stays in this file with its remaining work rewritten precisely.
   sources/includes/keys/policy. An isolated chronyd 4.8 test verifies a real
   correlated NTPv4 response on the managed port at local stratum 8, competing
   source refusal before mutation, and file/service rollback. Ordinary
-  deployment remains closed. Next verify the native service command line and
-  file/directory ownership, then expand readback on Linux and implement the FreeBSD
+  deployment remains closed. Descriptor-based file/directory/binary trust
+  checks and exact structured systemd ExecStart validation now run before
+  capture/activation in the live test path. Permission-refusal and valid live
+  tests pass. Next validate complete unit policy and running-process identity,
+  expand readback on Linux and implement the FreeBSD
   translation and lifecycle before enabling production installation.
   Cover configuration and NMDA
   operational state for NTPv4 and the model's NTPv3 compatibility, including

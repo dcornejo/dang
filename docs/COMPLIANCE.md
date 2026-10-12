@@ -900,8 +900,15 @@ and local clock, and returns a correlated NTPv4 reply at stratum 8. ABI rollback
 restores original files and inactive service state. Clock adjustments are
 disabled with `-x` and CAP_SYS_TIME is removed. This is real daemon evidence
 for one configured slice, not complete NMDA readback or full model coverage.
-Production service command-line and file/directory ownership verification
-remain pending, and operational publication/normal installation remain closed.
+Descriptor-based file/directory/executable trust verification and exact
+configured systemd ExecStart validation now run in the live test path before
+capture and activation. Paths reject symbolic links, unsafe ownership/write
+permissions and hard-linked files; private keys cannot be group/other-readable.
+The loaded live test proves permission refusals before mutation and successful
+NTP/rollback after correction. Full unit policy (including auxiliary commands
+and drop-ins), running-process identity and production selection remain pending.
+The checks do not lock against privileged concurrent changes; operational
+publication/normal installation remain closed.
 
 Production Linux chrony and FreeBSD ntpd apply and rollback, interface
 broadcast/multicast/manycast modes, production feature advertisement, NMDA
