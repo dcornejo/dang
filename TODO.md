@@ -111,9 +111,12 @@ stays in this file with its remaining work rewritten precisely.
   unit readback. Ordered ABI actions now execute staged stop/install/activate
   through an explicit disposable Linux test boundary; loaded-plugin success
   and activation-failure tests restore files and initial service state.
-  Ordinary deployment remains closed. Next implement ownership/include
-  preflight and isolated chronyd tests for
-  acknowledgement, rollback, and readback on Linux; then implement the FreeBSD
+  A conservative dedicated-wrapper text preflight now rejects competing
+  sources/includes/keys/policy. An isolated chronyd 4.8 test verifies a real
+  correlated NTPv4 response on the managed port at local stratum 8, competing
+  source refusal before mutation, and file/service rollback. Ordinary
+  deployment remains closed. Next verify the native service command line and
+  file/directory ownership, then expand readback on Linux and implement the FreeBSD
   translation and lifecycle before enabling production installation.
   Cover configuration and NMDA
   operational state for NTPv4 and the model's NTPv3 compatibility, including

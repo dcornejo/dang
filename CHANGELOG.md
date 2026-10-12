@@ -8,6 +8,12 @@ and releases follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Recorded external NTP wrapper ownership preflight and isolated chronyd 4.8
+  evidence. Native ABI tests reject a competing source before mutation,
+  receive a correlated NTPv4 reply on the configured port at local stratum 8,
+  and restore files/service state. Production command-line/ownership checks
+  and full operational publication remain pending.
+
 - Recorded RFC 9249 ordered hardware-action integration through a disposable
   Linux test boundary. Native loaded-plugin success and failed-activation
   tests restore original files and service state. Production ownership/include

@@ -837,8 +837,8 @@ only `ntp-port`, `authentication`, `hex-key-string`, and
 `unicast-configuration`; `access-rules` remains disabled until an RFC 8519 ACL
 provider owns the leafref target. Its runtime model closure includes the pinned
 `ietf-interfaces` and `ietf-system` imports and passes a real dangd startup
-schema check. Apply, rollback, and operational publication fail closed because
-the selected native adapters are not functional yet, and the target is
+schema check. Ordinary apply/rollback and operational publication remain
+closed; the native Linux action path is restricted to disposable tests. The target is
 deliberately absent from install and package components.
 
 The native boundary and daemon-selection policy are now explicit. Every
@@ -891,7 +891,19 @@ once across reverse callbacks. Ordinary deployment remains closed pending
 ownership/include preflight; these tests do not constitute live chronyd
 configuration/readback evidence. Operational readiness remains false.
 
-Native Linux chrony and FreeBSD ntpd apply and rollback, interface
+A dedicated-wrapper text preflight now requires one literal managed include
+and rejects competing time sources, source directories, keys, listener/local
+clock policy and alternate includes. Loopback bind/access directives are
+accepted only in disposable tests. An isolated chronyd 4.8 native ABI test
+rejects a competing source before mutation, consumes the rendered UDP port
+and local clock, and returns a correlated NTPv4 reply at stratum 8. ABI rollback
+restores original files and inactive service state. Clock adjustments are
+disabled with `-x` and CAP_SYS_TIME is removed. This is real daemon evidence
+for one configured slice, not complete NMDA readback or full model coverage.
+Production service command-line and file/directory ownership verification
+remain pending, and operational publication/normal installation remain closed.
+
+Production Linux chrony and FreeBSD ntpd apply and rollback, interface
 broadcast/multicast/manycast modes, production feature advertisement, NMDA
 clock/association/statistics state, and `statistics-reset` remain
 unimplemented. RFC 9249 itself contains no VRF configuration node; VRF binding
