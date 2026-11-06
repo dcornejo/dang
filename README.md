@@ -3,6 +3,8 @@
 
 # dangd NETCONF server
 
+[![CI](https://github.com/dcornejo/dang/actions/workflows/ci.yml/badge.svg)](https://github.com/dcornejo/dang/actions/workflows/ci.yml)
+
 `dangd` is a model-driven NETCONF configuration server. It loads YANG models,
 validates device configuration, exposes standard NETCONF datastores, enforces
 NACM access control, persists configuration, and coordinates device plugins so
@@ -15,6 +17,14 @@ interactive mutual-TLS NETCONF session.
 The project is under active development. Consult the
 [remaining work](TODO.md) and [standards compliance ledger](docs/COMPLIANCE.md)
 before treating it as a production-ready or fully conforming implementation.
+
+## Development approach
+
+This project is developed with LLM assistance (ChatGPT) under the maintainer's
+direction. Generated code is held to the same standard as any other
+contribution: it must come with thorough tests, and before it is committed it
+must build and pass the test suite on Linux and FreeBSD virtual machines. See
+[Testing and validation](#testing-and-validation) for what is checked, and where.
 
 ## What dangd provides
 
@@ -161,6 +171,31 @@ discovery, configuration parsing, native platform application, exact rollback,
 and live Linux link, address, and neighbor state. See the
 [plugin author guide](docs/DANGD_PLUGINS.md) for the ABI contract and practical
 implementation expectations.
+
+## Testing and validation
+
+- **Unit and protocol tests.** `ctest` runs dozens of test programs covering the
+  YANG lexer, parser, schema and validator, XPath, NACM, NETCONF framing,
+  datastores, transport, persistence, notifications, XML security, and the
+  `dangd` server itself.
+- **Continuous integration.** [`ci.yml`](.github/workflows/ci.yml) runs on every
+  push and pull request: a Release build, the full test suite, installation, and
+  an installed-package consumer build on Ubuntu and macOS; a separate AddressSanitizer
+  and UndefinedBehaviorSanitizer job (`cmake --preset sanitizers`); and a Doxygen
+  documentation build. Tagged releases run
+  [`release.yml`](.github/workflows/release.yml), which rebuilds and tests,
+  produces reproducible source archives, and signs provenance attestations.
+- **Fuzz targets.** libFuzzer targets cover the YANG frontend, NACM, and the
+  NETCONF protocol, with a deterministic smoke driver
+  (`cmake --preset fuzzers`).
+- **Interoperability checks.** Scripts in [`tests/interoperability`](tests/interoperability/README.md)
+  exercise `dangd` against ncclient, sysrepo (NACM), and yanglint.
+- **Native Linux and FreeBSD validation.** GitHub-hosted runners do not cover
+  FreeBSD, and many device behaviors can only be proven on a real operating
+  system. Before a change is committed it is built and tested on Linux and
+  FreeBSD virtual machines. The evidence, including the Debian and
+  FreeBSD guests used, is recorded in the
+  [standards compliance ledger](docs/COMPLIANCE.md).
 
 ## Documentation map
 
